@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Number Blast (test version)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Figtree:wght@400;600;700&display=swap">
+<style>
+/* Layout: one phone-width column. Brand + streak/coins, scoreboard with the big target, chalkboard board,
+   tray of three pieces, tools, and a bottom menu (Quests, Sums, Daily/Endless, Help) like Spellburst. */
+:root{
+  --bg:#eef2ec; --fg:#1d2a26; --muted:#5d6e68; --panel:#ffffff; --line:#cfdad4;
+  --board:#1f3b33; --slot:#2a4a41; --slot-hi:#36594e;
+  --accent:#e5484d; --accent-fg:#ffffff; --gold:#ffd23f; --ok:#2f9e6a; --over:#ff5d5d;
+  --n1:#ff6b6b; --n2:#ff9f43; --n3:#ffd23f; --n4:#7bd389; --n5:#3ec1d3;
+  --n6:#5b8def; --n7:#a07cf0; --n8:#f06bc6; --n9:#c9a27a;
+  --tile-ink:#1b1f2b;
+  --display:"Baloo 2","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --tabh:62px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1715; --fg:#e9f1ed; --muted:#9db0a9; --panel:#17221f; --line:#2a3a35;
+  --board:#0b1f1a; --slot:#1b3830; --slot-hi:#25483d; --accent:#ff6b6f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1715; --fg:#e9f1ed; --muted:#9db0a9; --panel:#17221f; --line:#2a3a35;
+  --board:#0b1f1a; --slot:#1b3830; --slot-hi:#25483d; --accent:#ff6b6f; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16px calc(var(--tabh) + 12px + env(safe-area-inset-bottom,0px));
+  -webkit-user-select:none;user-select:none;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+.app{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:80}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{font-family:var(--display);font-weight:800;font-size:1.35rem;line-height:1;margin:0}
+.brand span{color:var(--accent)}
+.brand small{display:block;font-family:var(--body);font-weight:600;font-size:.62rem;color:var(--muted);letter-spacing:.04em}
+.pills{display:flex;gap:6px}
+.pill{font:700 .9rem var(--body);border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:.35em .75em;cursor:pointer;display:inline-flex;align-items:center;gap:.3em}
+.pill .plus{color:var(--accent);font-weight:800}
+.bump{animation:bump .35s ease-out}
+@keyframes bump{40%{transform:scale(1.18)}}
+
+.scores{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.lvl{font-family:var(--display);font-weight:800;font-size:1.05rem;line-height:1.1}
+.lvl small,.score small{display:block;font-family:var(--body);font-weight:600;font-size:.7rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.target{display:flex;flex-direction:column;align-items:center;line-height:1}
+.target span{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.target b{font-family:var(--display);font-weight:800;font-size:2.9rem;color:var(--accent);line-height:.95}
+.target.newt b{animation:newt 1.2s ease-out}
+@keyframes newt{20%{transform:scale(1.5)}}
+.score{text-align:right;font-family:var(--display);font-weight:800;font-size:1.4rem;font-variant-numeric:tabular-nums}
+.bar{height:9px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:6px;transition:width .4s ease}
+.chainline{min-height:1.2em;text-align:center;font-weight:700;font-size:.85rem;color:var(--ok)}
+.hint{min-height:2.6em;display:block;text-align:center;font-weight:600;font-size:.92rem;padding:0 4px;margin:0}
+.hint.tut{background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:6px 10px}
+.tut-skip{font:600 .8rem var(--body);background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:2px 4px}
+
+.boardwrap{position:relative;align-self:center;width:min(100%,max(250px,calc(100dvh - 415px)))}
+@media (max-height:700px){.foot{display:none}.brand small{display:none}}
+.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:4px;padding:6px;background:var(--board);border-radius:14px;touch-action:none;aspect-ratio:1/1;width:100%}
+.cell{min-width:0;min-height:0;border-radius:7px;background:var(--slot);position:relative;display:flex;align-items:center;justify-content:center}
+.cell.ghost{background:var(--slot-hi);outline:2px dashed rgba(255,255,255,.35);outline-offset:-3px}
+.cell.target-cell{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{background:var(--slot-hi);box-shadow:0 0 0 3px var(--gold) inset}}
+.tile{width:100%;height:100%;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-weight:800;color:var(--tile-ink);font-size:clamp(1rem,5.6vw,1.7rem);line-height:1;
+  box-shadow:inset 0 -4px 0 rgba(0,0,0,.18),inset 0 2px 0 rgba(255,255,255,.45);position:relative}
+.tile.land{animation:land .18s ease-out}
+@keyframes land{0%{transform:scale(1.15)}100%{transform:scale(1)}}
+.tile.glow{outline:3px solid var(--gold);outline-offset:-1px;box-shadow:0 0 14px var(--gold)}
+.tile.toomuch{outline:3px solid var(--over);outline-offset:-1px}
+.tile.pop{animation:pop .3s ease-in forwards}
+@keyframes pop{40%{transform:scale(1.25)}100%{transform:scale(0);opacity:0}}
+.tile.star{background:conic-gradient(var(--n1),var(--n3),var(--n4),var(--n5),var(--n7),var(--n1))}
+.tile .bomb{position:absolute;top:1px;right:2px;font-size:.5em}
+.cell.erasable .tile{animation:wob .5s ease-in-out infinite}
+@keyframes wob{25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
+.shake1{animation:shake .3s}
+.shake2{animation:shake .45s 2}
+@keyframes shake{20%{transform:translate(-5px,2px)}40%{transform:translate(5px,-2px)}60%{transform:translate(-3px,1px)}80%{transform:translate(3px,0)}}
+
+.toast{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;white-space:pre-line;text-align:center;
+  background:rgba(12,24,20,.86);color:#fff;font-weight:700;font-size:.95rem;line-height:1.3;padding:.55em 1em;border-radius:14px;max-width:92%;
+  animation:toast var(--toast-ms,1300ms) ease-out forwards}
+.toast.big{font-family:var(--display);font-weight:800;font-size:1.35rem;line-height:1.15;color:var(--gold)}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}10%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}18%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}
+
+.over{position:absolute;inset:0;z-index:7;background:rgba(10,20,16,.82);border-radius:14px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;padding:14px}
+.over[hidden]{display:none}
+.over h2{font-family:var(--display);font-weight:800;font-size:2rem;margin:0;line-height:1}
+.over p{margin:6px 0}
+.over .big{font-family:var(--display);font-weight:800;font-size:2.4rem;color:var(--gold);line-height:1;margin:6px 0}
+.over .row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+
+.tray{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;touch-action:none}
+.slot{height:clamp(78px,12dvh,110px);display:flex;align-items:center;justify-content:center;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:grab}
+.slot.cant{opacity:.35}
+.slot.used{visibility:hidden}
+.piece{display:grid;gap:3px}
+.piece .tile{font-size:1.05rem;border-radius:6px}
+.float{position:fixed;left:0;top:0;pointer-events:none;z-index:50;display:grid;gap:4px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.3))}
+.float .tile{font-size:clamp(1rem,5.6vw,1.7rem)}
+
+.tools{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
+button{font-family:var(--body)}
+.tool{font-weight:700;font-size:.9rem;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:.5em .95em;cursor:pointer;display:inline-flex;align-items:center;gap:.4em}
+.tool.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tool .n{font-variant-numeric:tabular-nums;background:var(--line);color:var(--fg);border-radius:999px;padding:0 .45em;font-size:.8rem}
+.tool.empty{opacity:.55}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--panel);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
+.tab{flex:1;max-width:110px;height:var(--tabh);background:none;border:none;color:var(--fg);font-weight:700;font-size:.75rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative}
+.tab .ti{font-size:1.3rem;line-height:1}
+.tab[aria-expanded="true"]{color:var(--accent)}
+.tab .dot{position:absolute;top:9px;right:calc(50% - 20px);width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--panel)}
+.tab .dot[hidden]{display:none}
+
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,20,16,.5);display:flex;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.modal[hidden]{display:none}
+.modal.dock{z-index:35;background:rgba(10,20,16,.25)}
+.sheet{background:var(--panel);color:var(--fg);border-radius:18px;padding:18px;max-width:420px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.3);user-select:text;-webkit-user-select:text}
+.sheet h3{font-family:var(--display);font-weight:800;font-size:1.5rem;margin:0 0 6px;line-height:1.1}
+.sheet h4{margin:14px 0 6px;font-size:.95rem}
+.sheet p{margin:0 0 8px;color:var(--muted);line-height:1.45}
+.btns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.btn{font-weight:700;font-size:1rem;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);padding:.7em 1.2em;cursor:pointer;text-decoration:none;text-align:center;display:inline-block}
+.btn.plain,.btn.ghost{background:var(--panel);color:var(--fg);border-color:var(--line)}
+.btn.ad::before{content:"▶ "}
+.btn:disabled{opacity:.45;cursor:default}
+.over .btn{font-size:.9rem;padding:.6em 1em}
+.over .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.35)}
+.adbox{background:var(--bg);border-radius:14px;padding:18px;text-align:center;color:var(--muted)}
+.adbox .count{display:block;font-family:var(--display);font-weight:800;font-size:2.4rem;color:var(--accent)}
+.qlist{list-style:none;margin:0;padding:0}
+.qlist li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+.g-text{font-weight:700}
+.g-reward{font-weight:700;color:var(--ok);font-size:.85rem;white-space:nowrap}
+.g-prog{font-weight:800;font-family:var(--display);white-space:nowrap}
+.g-sub{grid-column:1/-1;font-size:.8rem;color:var(--muted)}
+.qbar{grid-column:1/-1;height:7px;border-radius:5px;background:var(--line);overflow:hidden}
+.qbar i{display:block;height:100%;background:var(--ok)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:.25em .7em;font-weight:700;font-size:.85rem;font-variant-numeric:tabular-nums}
+.chip.long{border-color:var(--gold)}
+.helpbody ul{padding-left:1.1em;margin:6px 0;line-height:1.5}
+.helpbody li{margin-bottom:6px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.85rem}
+.cal .dow{font-weight:700;color:var(--muted)}
+.cal .d{padding:6px 0;border-radius:8px;background:var(--bg)}
+.cal .d.on{background:#ffe7c2}
+.cal .d.today{outline:2px solid var(--accent)}
+.cal .blank{background:none}
+.shop-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.shop-row .what{font-weight:700}
+.shop-row .what small{display:block;font-weight:400;color:var(--muted)}
+.shop-row .btn{min-width:5.5rem;padding:.5em 1em;font-size:.9rem}
+.offer{background:#fff3c2;color:#5a4300!important;border-radius:10px;padding:8px 10px;font-weight:700}
+.linkbtn{background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:.85rem}
+.foot{text-align:center;font-size:.7rem;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="app">
+  <div class="top">
+    <h1 class="brand">Number <span>Blast</span><small>by Bright Harbor Games</small></h1>
+    <div class="pills">
+      <button class="pill" id="streakbtn" type="button" aria-label="Daily streak">🔥 <b id="streakn">0</b></button>
+      <button class="pill" id="coinpill" type="button" aria-label="Coins, open the shop">🪙 <b id="coinn">0</b> <span class="plus" aria-hidden="true">+</span></button>
+    </div>
+  </div>
+  <div class="scores">
+    <div class="lvl" id="lvl"><small>Level</small>1</div>
+    <div class="target" id="targetbox"><span>Make</span><b id="target">10</b></div>
+    <div class="score" id="score"><small>Score</small>0</div>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="chainline" id="chain" aria-live="polite"></div>
+  <p class="hint" id="hint"></p>
+  <div class="boardwrap" id="boardwrap"><div class="board" id="board" aria-label="Game board"></div><div class="over" id="over" hidden></div></div>
+  <div class="tray" id="tray"></div>
+  <div class="tools">
+    <button id="eraser" class="tool" type="button" aria-pressed="false">Eraser <span class="n" id="eraserN">0</span></button>
+    <button id="shuffle" class="tool" type="button">Shuffle <span class="n" id="shuffleN">0</span></button>
+    <button id="sound" class="tool" type="button" aria-pressed="true">🔊</button>
+  </div>
+  <div class="foot">Number Blast test version · ads and purchases are samples · <a href="mailto:support@playbrightharbor.com?subject=Number%20Blast%20feedback" style="color:inherit;font-weight:700">Send feedback</a></div>
+</div>
+
+<nav class="tabbar" aria-label="Menu">
+  <button id="tab-quests" class="tab" type="button"><span class="ti" aria-hidden="true">🎯</span>Quests<i class="dot" id="questdot" hidden></i></button>
+  <button id="tab-sums" class="tab" type="button"><span class="ti" aria-hidden="true">📒</span>Sums</button>
+  <button id="tab-mode" class="tab" type="button"><span class="ti" aria-hidden="true" id="mode-icon">📅</span><span id="mode-label">Daily</span></button>
+  <button id="tab-help" class="tab" type="button"><span class="ti" aria-hidden="true">❓</span>Help</button>
+</nav>
+<template id="help-tpl">
+  <h3>How to play</h3>
+  <a class="btn plain" id="feedback" href="#">✉️ Send feedback or ideas</a>
+  <div class="helpbody">
+    <ul>
+      <li><b>Goal:</b> drag number blocks onto the board. When touching blocks in a row or column add up to <b>exactly</b> the big target number, they blast.</li>
+      <li>The whole group counts, from one gap to the next. If a group goes over the target it stays stuck, so watch where you drop. While you drag, <b>gold</b> means it will blast and <b>red</b> means it's too much.</li>
+      <li><b>Longer sums score more:</b> 2 blocks x1, 3 blocks x2, 4 blocks x3, 5 or more x4. So 2 + 3 + 5 beats 4 + 6.</li>
+      <li><b>Combos:</b> one drop that blasts two sums (a row and a column) adds 50% for each extra sum.</li>
+      <li><b>Chains:</b> blast again within 2 drops of your last blast and it scores more: x1.5, then x2, up to x3.</li>
+      <li>From level 3, special blocks appear. A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the 8 blocks around it.</li>
+      <li><b>🎯 Quests</b> give you three small missions at a time. Finish one to win an eraser, a shuffle or coins. Tap Quests at the bottom to see them, plus your big lifetime goals.</li>
+      <li>Every different sum you blast goes into your <b>📒 sum book</b>. Can you find every way to make 10?</li>
+      <li>A sum of 4 or more blocks earns an <b>eraser</b> (hold up to 3). Every 8 blasts earns a <b>shuffle</b> (hold up to 3).</li>
+      <li><b>Levels:</b> score enough points and you get a fresh board. The target grows from 10 to 12, then 15, then mixes it up. Levels get slowly harder.</li>
+      <li><b>Coins:</b> earn them by finishing levels, quests and your daily streak. Spend them on erasers, shuffles or a second chance.</li>
+      <li><b>Daily streak:</b> blast at least one sum every day to grow your streak and earn more coins each day. Tap the 🔥 to see your calendar.</li>
+      <li>You get three new pieces once all three are used. The game ends when no piece fits and you have no erasers or shuffles left.</li>
+      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces today. Switching between them keeps your place in each.</li>
+    </ul>
+    <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
+  </div>
+</template>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
+<script>
+(function(){
+const N=8, $=id=>document.getElementById(id);
+const boardEl=$('board'), trayEl=$('tray');
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+
+// ---------- random + days ----------
+function mulberry(a){
+  const next=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  next.seed=()=>a;   // lets a saved game pick up the same piece sequence
+  return next;
+}
+function hash(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+const dayKey=(off=0)=>{const d=new Date();d.setDate(d.getDate()+off);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+const dailyNo=()=>Math.round((new Date(dayKey()+"T00:00")-new Date("2026-10-11T00:00"))/864e5)+1;
+
+// ---------- state ----------
+let mode="endless", level=1, levelBase=0, score=0, best=0, T=10, board=Array(N*N).fill(null), tray=[null,null,null],
+    erasers=0, shuffles=0, toShuffle=0, chain=0, chainMoves=0, continued=false, levelsSinceAd=0,
+    over=false, busy=false, erasing=false, tut=null, rng=mulberry(1), lastV=0, blastsGame=0, bestRun=null;
+const MAX_ERASERS=3, MAX_SHUFFLES=3, BLASTS_PER_SHUFFLE=8, CHAIN_MOVES=2, CHAIN_MAX=4;
+const ri=(a,b)=>a+Math.floor(rng()*(b-a+1));
+// Points to clear a level: 60, then 30 more each level.
+const goalFor=l=>60+30*(l-1);
+const levelPts=()=>score-levelBase;
+function targetFor(l){ if(l<=3)return 10; if(l<=6)return 12; if(l<=9)return 15; const r=mulberry(l*7919)(); return l<=14?13+Math.floor(r*8):15+Math.floor(r*11); }
+const mult=len=>len>=5?4:len>=4?3:len>=3?2:1;
+const chainMult=()=>1+0.5*chain;
+
+// ---------- pieces ----------
+const SH={
+  one:[[0,0]], h2:[[0,0],[0,1]], v2:[[0,0],[1,0]], h3:[[0,0],[0,1],[0,2]], v3:[[0,0],[1,0],[2,0]],
+  l1:[[0,0],[1,0],[1,1]], l2:[[0,0],[0,1],[1,0]], l3:[[0,0],[0,1],[1,1]], l4:[[0,1],[1,0],[1,1]],
+  h4:[[0,0],[0,1],[0,2],[0,3]], v4:[[0,0],[1,0],[2,0],[3,0]], sq:[[0,0],[0,1],[1,0],[1,1]], t1:[[0,0],[0,1],[0,2],[1,1]], t2:[[0,1],[1,0],[1,1],[1,2]]
+};
+function shapePool(l){
+  if(l<=3) return ['one','one','one','h2','v2','h2','v2','h3','v3'];
+  if(l<=6) return ['one','one','h2','v2','h2','v2','h3','v3','l1','l2','l3','l4'];
+  if(l<=9) return ['one','h2','v2','h3','v3','h3','v3','l1','l2','l3','l4'];
+  // 4-block pieces ease in from level 10, so the board starts to feel tight
+  if(l<=14) return ['one','h2','v2','h3','v3','h3','v3','l1','l2','l3','l4','h4','v4','sq'];
+  return ['h2','v2','h3','v3','l1','l2','l3','l4','h4','v4','sq','t1','t2'];
+}
+function genValue(){
+  const maxV=Math.min(9,T-1);
+  // Helper numbers pair with a block already on the board; they get rarer as levels go up.
+  // The Daily Board pairs with the last number dealt instead, so everyone gets the exact same pieces.
+  const help=mode==='daily'?0.4:Math.max(0.1,0.5-0.04*Math.max(0,level-3));
+  if(rng()<help){
+    if(mode==='daily'){ if(lastV&&T-lastV>=1&&T-lastV<=9) return lastV=T-lastV; }
+    else{ const opts=board.filter(t=>t&&!t.star&&T-t.v>=1&&T-t.v<=9); if(opts.length) return T-opts[ri(0,opts.length-1)].v; }
+  }
+  if(T>12&&rng()<0.5) return lastV=ri(3,maxV);   // bigger targets lean on middle numbers so 3-block sums happen
+  return lastV=ri(1,maxV);
+}
+function pieceSelfBlasts(cells){
+  const b=Array(N*N).fill(null);
+  cells.forEach(c=>b[(c.r+2)*N+c.c+2]=c.t);
+  return findRuns(b).length>0;
+}
+function genPiece(){
+  const pool=shapePool(level);
+  for(let tries=0;tries<30;tries++){
+    const name=pool[ri(0,pool.length-1)];
+    const cells=SH[name].map(([r,c])=>({r,c,t:{v:genValue(),star:false,bomb:false}}));
+    if(level>=3&&name==='one'&&rng()<0.10) cells[0].t={v:null,star:true,bomb:false};
+    else if(level>=3&&rng()<0.06) cells[ri(0,cells.length-1)].t.bomb=true;
+    if(!pieceSelfBlasts(cells)) return {cells};
+  }
+  return {cells:[{r:0,c:0,t:{v:1,star:false,bomb:false}}]};
+}
+const newTray=()=>{tray=[genPiece(),genPiece(),genPiece()]};
+
+// ---------- rules ----------
+// A blast happens when a whole group of touching blocks in a row or column
+// (from one gap to the next) adds up to exactly the target.
+function lineIdx(dir,k){const a=[];for(let i=0;i<N;i++)a.push(dir==='r'?k*N+i:i*N+k);return a}
+function groups(b,each){
+  for(const dir of ['r','c'])for(let k=0;k<N;k++){
+    const line=lineIdx(dir,k);let i=0;
+    while(i<N){
+      if(!b[line[i]]){i++;continue}
+      let j=i,sum=0,stars=0;
+      while(j<N&&b[line[j]]){const t=b[line[j]];if(t.star)stars++;else sum+=t.v;j++}
+      if(j-i>=2)each(line.slice(i,j),dir,sum,stars);
+      i=j;
+    }
+  }
+}
+const hits=(sum,stars)=>stars===0?sum===T:(T-sum>=stars&&T-sum<=9*stars);
+function findRuns(b){const runs=[];groups(b,(cells,dir,sum,stars)=>{if(hits(sum,stars))runs.push({cells,dir})});return runs}
+function tooMuch(b,touched){const out=new Set();groups(b,(cells,dir,sum,stars)=>{if(sum+stars>T&&cells.some(k=>touched.has(k)))cells.forEach(k=>out.add(k))});return out}
+function fitsAt(p,r,c){return p.cells.every(x=>{const rr=r+x.r,cc=c+x.c;return rr>=0&&cc>=0&&rr<N&&cc<N&&!board[rr*N+cc]})}
+function canFit(p){for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(fitsAt(p,r,c))return true;return false}
+// The numbers in a blasted sum, with a single star filled in as the number it stood for.
+function runValues(cells){
+  const ts=cells.map(k=>board[k]), stars=ts.filter(t=>t.star).length;
+  if(stars>1)return null;
+  const sum=ts.reduce((a,t)=>a+(t.star?0:t.v),0);
+  return ts.map(t=>t.star?T-sum:t.v);
+}
+
+// ---------- sum book: every different way you've made each target ----------
+let book=store.get('nb-book',{});
+const sumKey=vals=>vals.slice().sort((a,b)=>a-b).join('+');
+function addToBook(vals){
+  if(!vals)return false;
+  const k=sumKey(vals), list=book[T]||(book[T]=[]);
+  if(list.includes(k))return false;
+  list.push(k);store.set('nb-book',book);return true;
+}
+// How many ways a target can be made from 2 to 8 numbers between 1 and 9 (order doesn't matter).
+const waysMemo={};
+function ways(t){
+  if(waysMemo[t]!=null)return waysMemo[t];
+  const f=(rem,maxPart,parts)=>{if(rem===0)return parts>=2?1:0;if(parts===8)return 0;let n=0;for(let p=Math.min(9,maxPart,rem);p>=1;p--)n+=f(rem-p,p,parts+1);return n};
+  return waysMemo[t]=f(t,9,0);
+}
+
+// ---------- milestones and lifetime stats ----------
+const BLAST_MILESTONES=[100,500,1000,2500,5000,10000];
+const LEVEL_MILESTONES={10:50,25:100,50:250,100:500};
+let stats=store.get('nb-stats',{blasts:0,longest:0,longestSum:'',topLevel:1,bestCombo:0});
+function milestones(runs,valsList){
+  const out=[],before=stats.blasts;
+  stats.blasts+=runs.length;
+  for(const m of BLAST_MILESTONES)if(before<m&&stats.blasts>=m){addCoins(50);out.push([`🏅 ${m.toLocaleString()} sums blasted!\n+50 🪙`,true])}
+  runs.forEach((r,i)=>{
+    if(r.cells.length>stats.longest){
+      // Early sums would all be records, so only celebrate once there's something to beat.
+      if(stats.longest>=4)out.push([`🏆 Longest sum ever!\n${valsList[i]?valsList[i].join(' + '):r.cells.length+' blocks'}`,true]);
+      stats.longest=r.cells.length;stats.longestSum=valsList[i]?valsList[i].join(' + ')+' = '+T:'';
+    }
+  });
+  stats.bestCombo=Math.max(stats.bestCombo,runs.length);
+  store.set('nb-stats',stats);
+  return out;
+}
+function levelMilestone(){
+  const won=LEVEL_MILESTONES[level];
+  if(mode!=='endless'||!won||store.get('nb-level-ms-'+level,false))return;
+  store.set('nb-level-ms-'+level,true);addCoins(won);
+  later(()=>toast(`🏅 Level ${level}!\n+${won} 🪙`,true,READ_MS),1700);
+}
+
+// ---------- quests: three small missions at a time, each pays a reward ----------
+const GOALS=[
+  {id:'len3',text:'Blast a sum of 3 blocks',test:e=>e.len>=3},
+  {id:'len4',text:'Blast a sum of 4 blocks',test:e=>e.len>=4,after:2},
+  {id:'len5',text:'Blast a sum of 5 blocks',test:e=>e.len>=5,after:6},
+  {id:'down',text:'Blast a sum going down',test:e=>e.dir==='c'},
+  {id:'across',text:'Blast a sum going across',test:e=>e.dir==='r'},
+  {id:'combo',text:'Blast 2 sums with one drop',test:e=>e.combo>1},
+  {id:'chain',text:'Reach a x2 chain',test:e=>e.chainX>=2},
+  {id:'one',text:'Use a 1 in a sum',test:e=>!!e.vals&&e.vals.includes(1)},
+  {id:'odd',text:'Blast a sum of only odd numbers',test:e=>!!e.vals&&e.vals.every(v=>v%2===1)},
+  {id:'star',text:'Use a ★ star',test:e=>e.star,after:3},
+  {id:'bomb',text:'Set off a 💣 bomb',test:e=>e.bomb,after:3},
+  {id:'five',text:'Blast 5 sums',need:5,test:()=>true},
+  {id:'ten',text:'Blast 10 sums',need:10,test:()=>true},
+  {id:'new',text:'Find a new way to make the target',test:e=>e.isNew},
+];
+const REWARDS=['eraser','shuffle','coins'];
+const REWARD_TEXT={eraser:'+1 eraser',shuffle:'+1 shuffle',coins:'+15 coins'};
+let goals=[],goalCount=0;
+function newGoal(exclude){
+  const pool=GOALS.filter(g=>!exclude.includes(g.id)&&(!g.after||level>=g.after));
+  const g=pool[Math.floor(Math.random()*pool.length)];
+  return {...g,prog:0,need:g.need||1,reward:REWARDS[goalCount++%3]};
+}
+function resetGoals(){goalCount=0;goals=['len3','down','five'].map(id=>{const g=GOALS.find(x=>x.id===id);return {...g,prog:0,need:g.need||1,reward:REWARDS[goalCount++%3]}})}
+function checkGoals(e){
+  const done=[];
+  goals=goals.map(g=>{
+    if(!g.test(e))return g;
+    const prog=g.prog+1;
+    if(prog<g.need)return {...g,prog};
+    done.push(g);
+    if(g.reward==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);
+    else if(g.reward==='shuffle')shuffles=Math.min(MAX_SHUFFLES,shuffles+1);
+    else addCoins(15);
+    return newGoal(goals.map(x=>x.id));
+  });
+  return done;
+}
+
+// ---------- coins ----------
+let coins=store.get('nb-coins',0);
+function renderCoins(){$('coinn').textContent=coins.toLocaleString()}
+function bumpEl(el){el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump')}
+function addCoins(n){coins+=n;store.set('nb-coins',coins);renderCoins();bumpEl($('coinpill'))}
+function spendCoins(n){if(coins<n)return false;coins-=n;store.set('nb-coins',coins);renderCoins();return true}
+
+// ---------- daily streak: blast one sum a day ----------
+let streak=store.get('nb-streak',{n:0,best:0,last:null,days:[]});
+const streakAlive=()=>streak.last===dayKey()||streak.last===dayKey(-1);
+function renderStreak(){$('streakn').textContent=streakAlive()?streak.n:0}
+function markPlayed(){
+  if(streak.last===dayKey())return null;
+  streak.n=streak.last===dayKey(-1)?streak.n+1:1;
+  streak.best=Math.max(streak.best,streak.n);streak.last=dayKey();
+  streak.days=[...streak.days.filter(d=>d>=dayKey(-62)),dayKey()];
+  const bonus=5*Math.min(streak.n,7);
+  store.set('nb-streak',streak);renderStreak();addCoins(bonus);
+  return [`🔥 Day ${streak.n} streak!\n+${bonus} 🪙`,false];
+}
+const STREAK_SAVE_COST=100;
+function checkStreakAtRisk(){
+  if(!streak.last||streak.n<2||streak.last!==dayKey(-2))return;
+  const lastSave=store.get('nb-streak-saved',null);
+  if(lastSave&&lastSave>dayKey(-7))return;
+  openSheet(`<h3>Save your streak?</h3><p>You missed yesterday. Your <b>${streak.n}-day streak</b> will reset unless you save it.</p>
+    <div class="btns"><button class="btn ad" id="ss-ad">Save it: watch an ad</button><button class="btn plain" id="ss-coins" ${coins<STREAK_SAVE_COST?'disabled':''}>Save it: ${STREAK_SAVE_COST} 🪙</button><button class="btn plain" id="ss-no">Let it reset</button></div>`);
+  const save=()=>{streak.last=dayKey(-1);store.set('nb-streak-saved',dayKey());store.set('nb-streak',streak);renderStreak();toast(`🔥 ${streak.n}-day streak saved!`,false,READ_MS)};
+  $('ss-ad').onclick=()=>watchAd(save);
+  $('ss-coins').onclick=()=>{if(spendCoins(STREAK_SAVE_COST)){closeSheet();save()}};
+  $('ss-no').onclick=closeSheet;
+}
+function showCalendar(){
+  const now=new Date(),y=now.getFullYear(),m=now.getMonth(),first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();
+  const played=new Set(streak.days),key=d=>`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  let cells='SMTWTFS'.split('').map(d=>`<div class="dow">${d}</div>`).join('')+'<div class="d blank"></div>'.repeat(first);
+  for(let d=1;d<=days;d++)cells+=`<div class="d${played.has(key(d))?' on':''}${key(d)===dayKey()?' today':''}">${played.has(key(d))?'🔥':d}</div>`;
+  openSheet(`<h3>🔥 ${streakAlive()?streak.n:0}-day streak</h3><p>Best: ${streak.best} days. Blast one sum a day to keep it going. Longer streaks earn more coins, up to 35 a day.</p>
+    <p><b>${now.toLocaleString(undefined,{month:'long',year:'numeric'})}</b></p><div class="cal">${cells}</div>
+    <div class="btns"><button class="btn" id="cal-ok">Got it</button></div>`);
+  $('cal-ok').onclick=closeSheet;
+}
+
+// ---------- feel: particles, shake, sound, haptics ----------
+const fx=$('fx'),fxc=fx.getContext('2d');
+let parts=[],fxRunning=false;
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function sizeFx(){const d=devicePixelRatio||1;fx.width=innerWidth*d;fx.height=innerHeight*d;fxc.setTransform(d,0,0,d,0,0)}
+sizeFx();addEventListener('resize',sizeFx);
+const numColor=v=>getComputedStyle(document.documentElement).getPropertyValue('--n'+v).trim()||'#ffd23f';
+const GOLD='#ffd23f';
+function burst(x,y,colors,n=14,power=1){
+  if(reduceMotion)return;
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=(2+Math.random()*4)*power;
+    parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-2*power,life:1,size:4+Math.random()*6,color:colors[i%colors.length],rot:Math.random()*6,vr:(Math.random()-.5)*.4})}
+  if(!fxRunning){fxRunning=true;requestAnimationFrame(tickFx)}
+}
+function tickFx(){
+  fxc.clearRect(0,0,innerWidth,innerHeight);parts=parts.filter(p=>p.life>0);
+  for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=.25;p.vx*=.98;p.life-=.02;p.rot+=p.vr;
+    fxc.save();fxc.globalAlpha=Math.max(0,p.life);fxc.translate(p.x,p.y);fxc.rotate(p.rot);fxc.fillStyle=p.color;fxc.fillRect(-p.size/2,-p.size/2,p.size,p.size*.7);fxc.restore()}
+  if(parts.length)requestAnimationFrame(tickFx);else{fxRunning=false;fxc.clearRect(0,0,innerWidth,innerHeight)}
+}
+function shake(n){if(reduceMotion)return;const w=$('boardwrap');w.classList.remove('shake1','shake2');void w.offsetWidth;w.classList.add(n>1?'shake2':'shake1')}
+function fireworks(){const r=boardEl.getBoundingClientRect();for(let i=0;i<6;i++)setTimeout(()=>burst(r.left+r.width*(.15+Math.random()*.7),r.top+r.height*(.1+Math.random()*.5),[numColor(1+i),GOLD,'#ffffff'],34,1.5),i*170)}
+let actx=null,muted=store.get('nb-muted',false);
+function audio(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(actx.state==='suspended')actx.resume();return actx}
+function tone(freq,dur=.12,type='sine',vol=.15,delay=0,slide=0){
+  if(muted)return;const a=audio();if(!a)return;
+  const t0=a.currentTime+delay,o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(freq,t0);
+  if(slide)o.frequency.exponentialRampToValueAtTime(freq*slide,t0+dur);
+  g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(vol,t0+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g).connect(a.destination);o.start(t0);o.stop(t0+dur+.03);
+}
+const SCALE=[0,2,4,7,9,12,14,16,19];
+const SFX={
+  place:()=>tone(196,.09,'triangle',.14,0,.6),
+  pop:k=>tone(523.25*2**(SCALE[Math.min(k,8)]/12),.16,'triangle',.15),
+  big:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,.3,'square',.05,i*.08)),
+  erase:()=>tone(700,.28,'sawtooth',.05,0,.25),
+  shuffle:()=>[392,494,587,698,784].forEach((f,i)=>tone(f,.07,'triangle',.09,i*.04)),
+  boom:()=>{tone(110,.6,'sawtooth',.22,0,.25);tone(55,.7,'square',.18,.02,.5);tone(1800,.15,'sawtooth',.05,0,.2)},
+  over:()=>[392,330,262,196].forEach((f,i)=>tone(f,.4,'triangle',.12,i*.22)),
+};
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+document.addEventListener('pointerdown',()=>{if(!muted)audio()},{once:true});
+
+// ---------- messages over the board ----------
+const READ_MS=2800, CASH_MS=2200, EXTRA_MS=1800;
+let pending=[];
+function later(fn,ms){pending.push(setTimeout(fn,ms))}
+function clearPending(){pending.forEach(clearTimeout);pending=[];document.querySelectorAll('.toast').forEach(t=>t.remove())}
+function toast(text,big=false,ms=0){
+  const t=document.createElement('div');t.className='toast'+(big?' big':'');t.textContent=text;
+  const life=ms||(big?1600:1300);t.style.setProperty('--toast-ms',life+'ms');
+  $('boardwrap').appendChild(t);setTimeout(()=>t.remove(),life);
+}
+
+// ---------- rendering ----------
+function tileHTML(t){
+  if(!t)return '';
+  if(t.star)return '<div class="tile star">★</div>';
+  return `<div class="tile" style="background:var(--n${t.v})">${t.v}${t.bomb?'<span class="bomb">💣</span>':''}</div>`;
+}
+function buildBoard(){boardEl.innerHTML='';for(let i=0;i<N*N;i++){const d=document.createElement('div');d.className='cell';d.dataset.i=i;boardEl.appendChild(d)}}
+const tutCell=()=>tut?LESSONS[tut.step].cell:-1;
+function renderBoard(pv){
+  const cells=boardEl.children;
+  for(let i=0;i<N*N;i++){
+    const el=cells[i],t=board[i];let cls='cell',html=tileHTML(t);
+    if(pv&&pv.ghost.has(i)){html=tileHTML(pv.tiles.get(i));cls+=' ghost'}
+    if(i===tutCell()&&!t&&!(pv&&pv.ghost.has(i)))cls+=' target-cell';
+    if(erasing&&t)cls+=' erasable';
+    el.className=cls;
+    if(el._h!==html){el.innerHTML=html;el._h=html}
+    const tile=el.firstElementChild;
+    if(tile){tile.classList.toggle('glow',!!(pv&&pv.glow.has(i)));tile.classList.toggle('toomuch',!!(pv&&pv.much.has(i)&&!pv.glow.has(i)))}
+  }
+}
+function pieceSize(p){return {rows:Math.max(...p.cells.map(c=>c.r))+1,cols:Math.max(...p.cells.map(c=>c.c))+1}}
+function pieceEl(p,size,cls){
+  const {rows,cols}=pieceSize(p),el=document.createElement('div');el.className=cls;
+  el.style.gridTemplateColumns=`repeat(${cols},${size}px)`;el.style.gridTemplateRows=`repeat(${rows},${size}px)`;
+  p.cells.forEach(x=>{const w=document.createElement('div');w.style.gridRow=x.r+1;w.style.gridColumn=x.c+1;w.innerHTML=tileHTML(x.t);el.appendChild(w)});
+  return el;
+}
+function renderTray(){
+  trayEl.innerHTML='';
+  tray.forEach((p,i)=>{
+    const s=document.createElement('div');s.className='slot';s.dataset.i=i;trayEl.appendChild(s);
+    if(!p){s.classList.add('used');return}
+    if(!canFit(p))s.classList.add('cant');
+    const {rows,cols}=pieceSize(p),box=s.getBoundingClientRect();
+    const size=Math.max(16,Math.min(32,Math.floor((Math.min(box.width,box.height)-16)/Math.max(rows,cols,2))-3));
+    s.appendChild(pieceEl(p,size,'piece'));
+    s.addEventListener('pointerdown',e=>startDrag(i,e,s));
+  });
+}
+function renderHUD(){
+  $('target').textContent=T;
+  if(tut){$('lvl').innerHTML='<small>Lesson</small>'+(tut.step+1)+' of 3';$('bar').style.width=(tut.step/3*100)+'%'}
+  else{$('lvl').innerHTML=`<small>${mode==='daily'?'Daily #'+dailyNo():'Endless'}</small>Level ${level}`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
+  $('score').innerHTML=(tut?'<small>Score</small>':`<small>${Math.min(levelPts(),goalFor(level))} / ${goalFor(level)}</small>`)+score.toLocaleString();
+  $('eraserN').textContent=erasers;$('shuffleN').textContent=shuffles;
+  $('eraser').classList.toggle('on',erasing);$('eraser').setAttribute('aria-pressed',erasing);
+  $('eraser').classList.toggle('empty',!erasers&&!erasing);$('shuffle').classList.toggle('empty',!shuffles);
+  $('eraser').disabled=$('shuffle').disabled=!!tut;
+  $('chain').textContent=chain&&!tut?`🔗 Chain! Next blast x${chainMult()}, if it comes within ${chainMoves===1?'1 drop':chainMoves+' drops'}`:'';
+}
+function renderAll(){renderBoard();renderTray();renderHUD();renderCoins();renderStreak()}
+
+let specialSeen=store.get('nb-special-seen',false), justTutored=false, levelStartHint=false;
+function setHint(){
+  const h=$('hint');h.classList.toggle('tut',!!tut);
+  if(tut){h.innerHTML=LESSONS[tut.step].hint+' <button type="button" class="tut-skip" id="tut-skip">Skip tutorial</button>';return}
+  if(justTutored)h.innerHTML=`Your turn! Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.`;
+  else if(!specialSeen&&tray.some(p=>p&&p.cells.some(c=>c.t.star||c.t.bomb))){
+    h.innerHTML='Special blocks! A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the blocks around it.';
+    specialSeen=true;store.set('nb-special-seen',true);
+  }
+  else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
+  else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
+}
+
+// ---------- dragging ----------
+let drag=null;
+function cellStep(){const r=boardEl.getBoundingClientRect();const cs=(r.width-12-4*7)/8;return {cs,step:cs+4,r}}
+function startDrag(i,e,slot){
+  if(busy||erasing||over||!$('modal').hidden)return;
+  const p=tray[i];if(!p)return;
+  e.preventDefault();
+  const {cs}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap='4px';document.body.appendChild(fl);
+  const {rows,cols}=pieceSize(p),w=cols*cs+(cols-1)*4,h=rows*cs+(rows-1)*4;
+  drag={i,p,fl,w,h,slot,lift:e.pointerType==='mouse'?h/2:h+cs*.9,pos:null};
+  slot.style.opacity='.25';moveDrag(e);
+  addEventListener('pointermove',moveDrag);addEventListener('pointerup',endDrag);addEventListener('pointercancel',endDrag);
+}
+function moveDrag(e){
+  if(!drag)return;
+  const x=e.clientX-drag.w/2,y=e.clientY-drag.lift;
+  drag.fl.style.transform=`translate(${x}px,${y}px)`;
+  const {step,r}=cellStep(),a={r:Math.round((y-(r.top+6))/step),c:Math.round((x-(r.left+6))/step)};
+  let pos=fitsAt(drag.p,a.r,a.c)?a:null;
+  if(pos&&tut&&(pos.r+drag.p.cells[0].r)*N+pos.c+drag.p.cells[0].c!==tutCell())pos=null;
+  if(JSON.stringify(pos)===JSON.stringify(drag.pos))return;
+  drag.pos=pos;
+  if(!pos)return renderBoard();
+  const b=board.slice(),ghost=new Set(),tiles=new Map();
+  drag.p.cells.forEach(x=>{const k=(pos.r+x.r)*N+pos.c+x.c;b[k]=x.t;ghost.add(k);tiles.set(k,x.t)});
+  const glow=new Set();findRuns(b).forEach(run=>run.cells.forEach(k=>glow.add(k)));
+  renderBoard({ghost,tiles,glow,much:tooMuch(b,ghost)});
+}
+function endDrag(){
+  if(!drag)return;
+  removeEventListener('pointermove',moveDrag);removeEventListener('pointerup',endDrag);removeEventListener('pointercancel',endDrag);
+  const d=drag;drag=null;d.fl.remove();d.slot.style.opacity='';
+  if(d.pos)place(d.i,d.pos);
+  else{renderBoard();if(tut)toast('Drop it on the glowing square')}
+}
+
+// ---------- play ----------
+function place(i,pos){
+  const p=tray[i],placed=[];
+  p.cells.forEach(x=>{const k=(pos.r+x.r)*N+pos.c+x.c;board[k]=x.t;placed.push(k)});
+  tray[i]=null;
+  if(!tut&&chain&&--chainMoves<0)chain=0;          // too many drops since the last blast
+  justTutored=false;levelStartHint=false;
+  renderBoard();renderTray();
+  placed.forEach(k=>{const t=boardEl.children[k].firstElementChild;t&&t.classList.add('land')});
+  SFX.place();buzz(8);
+  if(!blast())finishTurn();
+}
+// Blasts every sum the last drop finished. Bombs in a sum also clear the 8 blocks around them.
+function blast(){
+  const runs=findRuns(board);
+  if(!runs.length)return false;
+  const set=new Set();runs.forEach(r=>r.cells.forEach(k=>set.add(k)));
+  const extra=new Set();
+  [...set].forEach(k=>{if(!board[k].bomb)return;const r=Math.floor(k/N),c=k%N;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const R=r+dr,C=c+dc;if(R>=0&&C>=0&&R<N&&C<N&&board[R*N+C]&&!set.has(R*N+C))extra.add(R*N+C)}});
+  const k=runs.length,comboMult=1+.5*(k-1),chainX=tut?1:chainMult();
+  const base=runs.reduce((a,r)=>a+T*mult(r.cells.length),0);
+  const total=Math.round(base*comboMult*chainX)+extra.size*3;
+  score+=total;
+  const valsList=runs.map(r=>runValues(r.cells));
+  const longest=Math.max(...runs.map(r=>r.cells.length));
+  let earned=false,shuffleEarned=false,newSums=[];const goalsDone=[];
+  if(!tut){
+    chain=Math.min(CHAIN_MAX,chain+1);chainMoves=CHAIN_MOVES;
+    blastsGame+=k;
+    runs.forEach((r,i)=>{
+      const vals=valsList[i],isNew=addToBook(vals);
+      if(isNew)newSums.push(vals);
+      if(r.cells.length>=4&&erasers<MAX_ERASERS){erasers++;earned=true}
+      if(!bestRun||r.cells.length>bestRun.length)bestRun=vals||r.cells.map(()=>'?');
+      goalsDone.push(...checkGoals({len:r.cells.length,dir:r.dir,vals,isNew,combo:k,chainX,
+        star:r.cells.some(c=>board[c].star),bomb:extra.size>0&&r.cells.some(c=>board[c].bomb)}));
+    });
+    toShuffle+=k;
+    while(toShuffle>=BLASTS_PER_SHUFFLE){toShuffle-=BLASTS_PER_SHUFFLE;if(shuffles<MAX_SHUFFLES){shuffles++;shuffleEarned=true}}
+  }
+  // Main message, then the extra news one at a time.
+  const praise=k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
+  const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('\n');
+  toast((praise?praise+'\n':'')+label+`\n+${total}`+(extra.size?`\nBOOM! +${extra.size*3}`:'')+(chainX>1?`\n🔗 Chain x${chainX}`:'')+(earned?'\nEraser earned!':'')+(shuffleEarned?'\nShuffle earned!':''),longest>=4||k>1||extra.size>0,CASH_MS);
+  const extras=[];
+  if(!tut){
+    const s=markPlayed();if(s)extras.push(s);
+    newSums.forEach(v=>{
+      const have=(book[T]||[]).length,all=ways(T);
+      extras.push([`📒 New way to make ${T}!\n${v.join(' + ')}\n${have} of ${all} found`,false]);
+      if(have===all&&!store.get('nb-book-done-'+T,false)){store.set('nb-book-done-'+T,true);addCoins(100);extras.push([`📒 Every way to make ${T}!\n+100 🪙`,true])}
+    });
+    if(goalsDone.length){extras.push([goalsDone.map(g=>'🎯 Quest done: '+REWARD_TEXT[g.reward]).join('\n'),false]);questNews()}
+    extras.push(...milestones(runs,valsList));
+  }
+  extras.forEach(([text,big],i)=>later(()=>toast(text,big,EXTRA_MS),CASH_MS-150+i*(EXTRA_MS-200)));
+  // Effects
+  busy=true;renderHUD();
+  const all=[...set],gap=55;
+  all.forEach((key,n)=>setTimeout(()=>{
+    const el=boardEl.children[key],t=board[key];if(!el||!t)return;
+    const b=el.getBoundingClientRect();el.firstElementChild&&el.firstElementChild.classList.add('pop');
+    burst(b.left+b.width/2,b.top+b.height/2,[t.star?GOLD:numColor(t.v),GOLD,'#ffffff'],10+all.length*2,.7+all.length*.08);
+    SFX.pop(n);buzz(10);
+  },n*gap));
+  const done=all.length*gap;
+  setTimeout(()=>{
+    if(longest>=4||k>1)shake(k>1||longest>=5?2:1);
+    if(longest>=4||k>1)SFX.big();
+    if(longest>=5||k>2)fireworks();
+    if(extra.size){SFX.boom();buzz([40,30,60]);shake(2);
+      extra.forEach(key=>{const el=boardEl.children[key],t=board[key],b=el.getBoundingClientRect();el.firstElementChild&&el.firstElementChild.classList.add('pop');
+        burst(b.left+b.width/2,b.top+b.height/2,[t.star?GOLD:numColor(t.v),'#ff6a3d'],12,1.1)})}
+  },done);
+  setTimeout(()=>{
+    all.forEach(key=>board[key]=null);extra.forEach(key=>board[key]=null);
+    busy=false;
+    if(tut)return nextLesson();
+    finishTurn();
+  },done+(extra.size?450:300));
+  return true;
+}
+function finishTurn(){
+  if(tut){renderAll();setHint();return}
+  if(!over&&levelPts()>=goalFor(level))return levelUp();
+  if(tray.every(p=>!p))newTray();
+  setHint();renderAll();
+  best=Math.max(best,score);store.set(bestKey(),best);
+  saveGame();
+  if(!tray.some(p=>p&&canFit(p))){
+    if(shuffles||erasers){erasing=!shuffles;renderAll();toast(shuffles?'No room!\nTry a shuffle':'No room!\nUse an eraser',false,READ_MS)}
+    else gameOver();
+  }
+}
+const bestKey=()=>mode==='daily'?'nb-best-daily-'+dayKey():'nb-best-endless';
+
+// ---------- levels ----------
+function seedStarters(n){
+  for(let tries=0,placed=0;placed<n&&tries<200;tries++){
+    const k=ri(0,N*N-1);if(board[k])continue;
+    board[k]={v:ri(1,Math.min(9,T-1)),star:false,bomb:false};
+    if(findRuns(board).length)board[k]=null;else placed++;
+  }
+}
+function levelUp(){
+  busy=true;erasing=false;clearPending();
+  if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
+  toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
+  const left=[];board.forEach((t,k)=>t&&left.push(k));
+  left.forEach((k,n)=>setTimeout(()=>{const el=boardEl.children[k].firstElementChild;el&&el.classList.add('pop')},300+n*40));
+  const earned=10+2*level,next=targetFor(level+1);
+  setTimeout(()=>{
+    board=Array(N*N).fill(null);renderBoard();
+    openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
+      <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
+      <div class="btns"><button class="btn ad" id="dbl">Double it: watch an ad</button><button class="btn plain" id="next">Next level</button></div>`,true);
+    const go=n=>{closeSheet();addCoins(n);maybeInterstitial(startNextLevel)};
+    $('dbl').onclick=()=>watchAd(()=>go(earned*2),()=>go(earned));
+    $('next').onclick=()=>go(earned);
+  },900+left.length*40);
+}
+// Sample between-level ad, from level 3 on, every other level, unless ads were removed.
+function maybeInterstitial(then){
+  if(level<3||store.get('nb-noads',false)||++levelsSinceAd<2)return then();
+  levelsSinceAd=0;watchAd(then,then,'Between-level ad',true);
+}
+function startNextLevel(){
+  const oldT=T;
+  level++;levelBase=score;T=targetFor(level);
+  board=Array(N*N).fill(null);if(level<=3)seedStarters(5-level);
+  newTray();busy=false;levelStartHint=true;chain=0;
+  setHint();renderAll();saveGame();
+  if(T!==oldT){toast(`Level ${level}\nNew target: make ${T}!`,true,READ_MS);bumpEl($('targetbox'));$('targetbox').classList.remove('newt');void $('targetbox').offsetWidth;$('targetbox').classList.add('newt')}
+  else toast(`Level ${level}\nScore ${goalFor(level)} to clear it`,false,READ_MS);
+  levelMilestone();
+}
+
+// ---------- game over, second chance, share ----------
+const CONTINUE_COST=60;
+function keepPlaying(){
+  continued=true;over=false;$('over').hidden=true;
+  // Blow up the most crowded 3x3 area.
+  let bestA=null;
+  for(let r=0;r<=N-3;r++)for(let c=0;c<=N-3;c++){let n=0;for(let a=0;a<3;a++)for(let b=0;b<3;b++)if(board[(r+a)*N+c+b])n++;if(!bestA||n>bestA.n)bestA={r,c,n}}
+  const cells=[];for(let a=0;a<3;a++)for(let b=0;b<3;b++){const k=(bestA.r+a)*N+bestA.c+b;if(board[k])cells.push(k)}
+  busy=true;SFX.boom();shake(2);buzz([40,30,60]);
+  cells.forEach(k=>{const el=boardEl.children[k],q=el.getBoundingClientRect();el.firstElementChild&&el.firstElementChild.classList.add('pop');burst(q.left+q.width/2,q.top+q.height/2,['#ff6a3d',GOLD],14,1.2)});
+  setTimeout(()=>{cells.forEach(k=>board[k]=null);busy=false;toast('Keep going!');finishTurn()},450);
+}
+function gameOver(){
+  over=true;clearPending();SFX.over();buzz([30,60,30]);
+  if(mode==='daily')store.set('nb-save-daily',null);else store.set('nb-save-endless',null);
+  store.set('nb-save',null);
+  const sq=['🟥','🟧','🟨','🟩','🟦','🟪'];
+  const share=[
+    mode==='daily'?`Number Blast Daily #${dailyNo()}`:'Number Blast',
+    `⭐ Level ${level} · ${score.toLocaleString()} pts · ${blastsGame} blast${blastsGame===1?'':'s'}`,
+    bestRun?`Best sum: ${bestRun.join(' + ')} ${bestRun.map((_,i)=>sq[i%6]).join('')}`:'',
+    'Play with me!','playbrightharbor.com',
+  ].filter(Boolean).join('\n');
+  const need=goalFor(level)-levelPts(),close=need<=goalFor(level)*.6;
+  $('over').innerHTML=`<div>
+    <h2>${close?'So close!':'Board full'}</h2>
+    <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
+    ${!continued?`<div class="row"><button class="btn ad" id="cont-ad">Keep playing: watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Keep playing: ${CONTINUE_COST} 🪙</button></div>`:''}
+    <div class="big">${score.toLocaleString()}</div>
+    <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
+    <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
+      ${mode==='daily'?'':'<button class="btn ghost" id="todaybtn">Play Daily Board</button>'}</div></div>`;
+  $('over').hidden=false;
+  $('again').onclick=()=>newGame(mode);
+  if(!continued){$('cont-ad').onclick=()=>watchAd(keepPlaying);$('cont-coins').onclick=()=>{if(spendCoins(CONTINUE_COST))keepPlaying()}}
+  if($('todaybtn'))$('todaybtn').onclick=()=>switchMode('daily');
+  $('copy').onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(share):Promise.reject()).then(()=>{$('copy').textContent='Copied! Paste it in a text'},()=>{openSheet(`<h3>Share result</h3><p>Copy this and paste it in a text:</p><p style="white-space:pre-line;color:var(--fg)">${esc(share)}</p><div class="btns"><button class="btn" id="sh-ok">Done</button></div>`);$('sh-ok').onclick=closeSheet})};
+}
+
+// ---------- sheets and sample ads (the real app plays a video ad from an ad network here) ----------
+let sheetLocked=false,openTab=null;
+function openSheet(html,locked=false){
+  sheetLocked=locked;openTab=null;$('sheet').innerHTML=html;
+  const m=$('modal');m.hidden=false;m.classList.remove('dock');m.style.paddingBottom='';$('sheet').style.maxHeight='';$('sheet').scrollTop=0;
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-expanded',false));
+}
+function closeSheet(){
+  sheetLocked=false;openTab=null;const m=$('modal');m.hidden=true;m.classList.remove('dock');m.style.paddingBottom='';$('sheet').style.maxHeight='';
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-expanded',false));
+}
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal'&&!sheetLocked)closeSheet()});
+function watchAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
+  let n=3;
+  openSheet(`<h3>${title}</h3><div class="adbox"><span class="count" id="adn">${n}</span>In the real app, a short video ad plays here.</div>
+    <div class="btns">${forced?'':'<button class="btn plain" id="adskip">Close without reward</button>'}</div>`,true);
+  const iv=setInterval(()=>{const el=$('adn');if(--n>0&&el){el.textContent=n;return}clearInterval(iv);closeSheet();onReward()},1000);
+  if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();onSkip()};
+}
+const POWER_COST=30,FREE_ADS_PER_DAY=5;
+function offerPowerup(kind){
+  const key='nb-free-ads-'+dayKey(),used=store.get(key,0);
+  openSheet(`<h3>Out of ${kind}s</h3><p>${kind==='eraser'?'An eraser deletes any one block.':'A shuffle swaps your pieces for new ones.'}</p>
+    <div class="btns"><button class="btn ad" id="pu-ad" ${used>=FREE_ADS_PER_DAY?'disabled':''}>Get 1 free: watch an ad${used>=FREE_ADS_PER_DAY?' (none left today)':''}</button>
+    <button class="btn plain" id="pu-coins" ${coins<POWER_COST?'disabled':''}>Buy 1 for ${POWER_COST} 🪙</button><button class="btn plain" id="pu-no">Not now</button></div>`);
+  const give=()=>{if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame()};
+  $('pu-ad').onclick=()=>watchAd(()=>{store.set(key,store.get(key,0)+1);give()});
+  $('pu-coins').onclick=()=>{if(spendCoins(POWER_COST)){closeSheet();give()}};
+  $('pu-no').onclick=closeSheet;
+}
+
+// ---------- shop (prices approved for Spellburst; purchases only work in the store apps) ----------
+const REMOVE_ADS='numberblast.removeads';
+const PRODUCTS=[
+  {id:REMOVE_ADS,name:'Remove ads',price:'$3.99',note:'No more between-level ads. Bonus ads stay optional.'},
+  {id:'numberblast.coins.300',name:'300 coins',coins:300,price:'$0.99'},
+  {id:'numberblast.coins.1000',name:'1,000 coins',coins:1000,price:'$2.99',note:'Most popular'},
+  {id:'numberblast.coins.2500',name:'2,500 coins',coins:2500,price:'$4.99'},
+  {id:'numberblast.coins.6000',name:'6,000 coins',coins:6000,price:'$9.99',note:'Best value'},
+];
+const firstBonus=()=>!store.get('nb-bought-coins',false);
+function openShop(){
+  const bonus=firstBonus();
+  const rows=PRODUCTS.filter(p=>!(p.id===REMOVE_ADS&&store.get('nb-noads',false))).map(p=>{
+    const name=bonus&&p.coins?`<s>${p.name}</s> ${(p.coins*2).toLocaleString()} coins`:p.name;
+    return `<div class="shop-row"><div class="what">${name}${p.note?`<small>${p.note}</small>`:''}</div><button class="btn" data-buy="${p.id}">${p.price}</button></div>`}).join('');
+  openSheet(`<h3>Shop</h3>${bonus?'<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>':''}<p>You have ${coins.toLocaleString()} 🪙. Spend coins on erasers, shuffles and second chances.</p>${rows}
+    <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>`);
+  document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>toast('Purchases work in the\niPhone and Android apps.',false,READ_MS));
+  $('shop-close').onclick=closeSheet;
+}
+
+// ---------- bottom menu: Quests, Sums, Daily/Endless, Help ----------
+// Each tab opens a sheet that sits just above the menu; tapping the same tab again closes it.
+function openTabSheet(name,html){
+  openSheet(html);openTab=name;
+  const m=$('modal'),top=document.querySelector('.tabbar').getBoundingClientRect().top;
+  m.classList.add('dock');m.style.paddingBottom=Math.max(8,innerHeight-top+8)+'px';
+  $('sheet').style.maxHeight=Math.max(200,Math.min(top,innerHeight)-24)+'px';
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-expanded',t.id==='tab-'+name));
+}
+function tabClick(name,show){
+  if(openTab===name){closeSheet();return}
+  if(sheetLocked||busy||drag)return;
+  show();
+}
+const nextOf=(list,n)=>list.find(m=>m>n);
+const qbar=(n,need)=>`<span class="qbar"><i style="width:${Math.min(100,100*n/need)}%"></i></span>`;
+function showQuests(){
+  $('questdot').hidden=true;
+  const topLevel=Math.max(stats.topLevel,mode==='endless'?level:1);
+  const nextB=nextOf(BLAST_MILESTONES,stats.blasts),nextL=nextOf(Object.keys(LEVEL_MILESTONES).map(Number),topLevel);
+  const ten=(book[10]||[]).length;
+  openTabSheet('quests',`<h3>🎯 Number Quests</h3><p>Finish a quest to win its prize. A new one takes its place.</p>
+    <ul class="qlist">${goals.map(g=>`<li><span class="g-text">${g.text}</span><span class="g-reward">${REWARD_TEXT[g.reward]}</span>${g.need>1?qbar(g.prog,g.need)+`<span class="g-sub">${g.prog} of ${g.need}</span>`:''}</li>`).join('')}</ul>
+    <h4>🏅 Big goals</h4><ul class="qlist">
+      ${nextB?`<li><span class="g-text">Blast ${nextB.toLocaleString()} sums</span><span class="g-reward">+50 coins</span>${qbar(stats.blasts,nextB)}<span class="g-sub">${stats.blasts.toLocaleString()} so far, across all games</span></li>`:''}
+      ${nextL?`<li><span class="g-text">Reach level ${nextL} in Endless</span><span class="g-reward">+${LEVEL_MILESTONES[nextL]} coins</span>${qbar(topLevel,nextL)}<span class="g-sub">Your best: level ${topLevel}</span></li>`:''}
+      <li><span class="g-text">Find every way to make 10</span><span class="g-reward">${ten>=ways(10)?'Done!':'+100 coins'}</span>${qbar(ten,ways(10))}<span class="g-sub">${ten} of ${ways(10)} in your sum book</span></li>
+      <li><span class="g-text">Keep your daily streak</span><span class="g-prog">🔥 ${streakAlive()?streak.n:0} day${(streakAlive()?streak.n:0)===1?'':'s'}</span><span class="g-sub">Blast one sum a day. Best streak: ${streak.best||0} day${streak.best===1?'':'s'}</span></li>
+      ${stats.longest?`<li><span class="g-text">Longest sum ever</span><span class="g-prog">${stats.longest} blocks</span><span class="g-sub">${esc(stats.longestSum||'')}. Blast a longer one to beat it</span></li>`:''}
+    </ul>`);
+}
+function showSums(){
+  const targets=Object.keys(book).map(Number).filter(t=>book[t].length).sort((a,b)=>(b===T)-(a===T)||a-b);
+  openTabSheet('sums',`<h3>📒 Sum book</h3><p>Every different sum you blast is saved here. Order doesn't matter, so 4 + 6 and 6 + 4 count once. Longest first.</p>
+    ${targets.length?targets.map(t=>{const list=book[t].map(k=>k.split('+').map(Number)).sort((a,b)=>b.length-a.length||sumKey(a).localeCompare(sumKey(b)));
+      return `<h4>Make ${t} · ${list.length} of ${ways(t)} ways${list.length>=ways(t)?' ✓':''}</h4><div class="chips">${list.map(v=>`<span class="chip${v.length>=4?' long':''}">${v.join(' + ')}</span>`).join('')}</div>`}).join('')
+      :'<p>Sums you blast show up here.</p>'}`);
+}
+function showModeSwitch(){
+  const toDaily=mode==='endless',saved=store.get('nb-save-endless',null);
+  openTabSheet('mode',toDaily
+    ?`<h3>📅 Daily Board #${dailyNo()}</h3><p>Everyone gets the same pieces today. Come back tomorrow for a new one.</p><p>Your Endless game is saved, so you can come back to it.</p><div class="btns"><button class="btn" id="go-mode">Play today's board</button></div>`
+    :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily Board is saved too.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
+  $('go-mode').onclick=()=>switchMode(toDaily?'daily':'endless');
+}
+function switchMode(m){
+  if(busy)return;
+  clearPending();if(!over)saveGame();closeSheet();
+  if(!resumeGame('nb-save-'+m,false))newGame(m);
+  toast(m==='daily'?`Daily Board #${dailyNo()}`:`Endless · Level ${level}`,false,READ_MS);
+}
+function showHelp(){
+  openTabSheet('help',document.getElementById('help-tpl').innerHTML);
+  $('feedback').href=`mailto:support@playbrightharbor.com?subject=${encodeURIComponent('Number Blast feedback')}&body=${encodeURIComponent(`What would make Number Blast better?\n\n\n---\nNumber Blast prototype · ${mode==='daily'?'Daily Board':'Endless'} level ${level}`)}`;
+  $('tut-replay').onclick=()=>{if(busy)return;closeSheet();startTutorial()};
+}
+function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'📅';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
+function questNews(){$('questdot').hidden=false;bumpEl($('tab-quests'))}
+$('tab-quests').onclick=()=>tabClick('quests',showQuests);
+$('tab-sums').onclick=()=>tabClick('sums',showSums);
+$('tab-mode').onclick=()=>tabClick('mode',showModeSwitch);
+$('tab-help').onclick=()=>tabClick('help',showHelp);
+$('streakbtn').onclick=showCalendar;
+$('coinpill').onclick=openShop;
+
+// ---------- save and resume ----------
+// Phones can close the app in the background, so the game is saved after every turn and picked up on the next launch.
+function saveGame(){
+  if(tut||over)return;
+  const save={v:3,day:dayKey(),mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,chain,chainMoves,continued,levelsSinceAd,
+    goals:goals.map(g=>({id:g.id,prog:g.prog,need:g.need,reward:g.reward})),goalCount,seed:rng.seed(),lastV,blastsGame,bestRun};
+  store.set('nb-save',save);store.set('nb-save-'+mode,save);
+}
+function resumeGame(key='nb-save',welcome=true){
+  const g=store.get(key,null);
+  if(!g||g.v!==3||(g.mode==='daily'&&g.day!==dayKey()))return false;
+  if(g.goals.some(x=>!GOALS.find(d=>d.id===x.id)))return false;
+  ({mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,chain,chainMoves,continued,levelsSinceAd,goalCount,lastV,blastsGame,bestRun}=g);
+  goals=g.goals.map(x=>({...GOALS.find(d=>d.id===x.id),...x}));
+  rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;$('over').hidden=true;
+  best=Math.max(store.get(bestKey(),0),score);
+  renderModeTab();finishTurn();
+  if(!over&&welcome)toast(`Welcome back!\nLevel ${level} · make ${T}`,false,READ_MS);
+  return true;
+}
+function newGame(m){
+  mode=m;clearPending();
+  rng=mode==='daily'?mulberry(hash('numberblast-'+dayKey())):mulberry(Math.floor(Math.random()*2**31));
+  level=1;levelBase=0;score=0;T=targetFor(1);board=Array(N*N).fill(null);erasers=0;shuffles=0;toShuffle=0;chain=0;chainMoves=0;
+  continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;tut=null;lastV=0;blastsGame=0;bestRun=null;
+  resetGoals();closeSheet();$('over').hidden=true;
+  best=store.get(bestKey(),0);
+  seedStarters(4);newTray();
+  renderModeTab();setHint();renderAll();saveGame();
+}
+
+// ---------- tutorial: three short lessons on scripted boards, then a real level 1 ----------
+const LESSONS=[
+  {tiles:{27:4},cell:28,piece:6,hint:'<b>Lesson 1 of 3: make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
+  {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Lesson 2 of 3: longer sums.</b> Drag the <b>5</b> onto the end. 2 + 3 + 5 = 10 is worth double!'},
+  {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Lesson 3 of 3: combos.</b> Drop the <b>4</b> where it finishes a sum across and down at once.'},
+];
+function startTutorial(){
+  clearPending();closeSheet();$('over').hidden=true;
+  mode='endless';level=1;levelBase=0;score=0;T=10;chain=0;erasers=0;shuffles=0;over=false;busy=false;erasing=false;
+  tut={step:0};loadLesson();
+}
+function loadLesson(){
+  const L=LESSONS[tut.step];board=Array(N*N).fill(null);
+  Object.entries(L.tiles).forEach(([k,v])=>board[+k]={v,star:false,bomb:false});
+  tray=[null,{cells:[{r:0,c:0,t:{v:L.piece,star:false,bomb:false}}]},null];
+  renderModeTab();setHint();renderAll();
+}
+function nextLesson(){
+  if(++tut.step<LESSONS.length)return loadLesson();
+  endTutorial(false);
+}
+function endTutorial(skipped){
+  tut=null;store.set('nb-tutorial-done',true);
+  newGame('endless');
+  if(!skipped){justTutored=true;setHint();toast("You're ready!",true,READ_MS)}
+}
+$('hint').addEventListener('click',e=>{if(e.target.id==='tut-skip'&&tut&&!busy)endTutorial(true)});
+
+// ---------- tools ----------
+$('eraser').onclick=()=>{
+  if(tut||busy||over)return;
+  if(erasing){erasing=false;renderAll();return}
+  if(!erasers)return offerPowerup('eraser');
+  erasing=true;renderAll();toast('Tap a block to erase it');
+};
+boardEl.addEventListener('pointerdown',e=>{
+  if(!erasing||busy)return;const c=e.target.closest('.cell');if(!c)return;const k=+c.dataset.i;if(!board[k])return;
+  board[k]=null;erasers--;erasing=false;SFX.erase();buzz(10);finishTurn();
+});
+$('shuffle').onclick=()=>{
+  if(tut||busy||over)return;
+  if(!shuffles)return offerPowerup('shuffle');
+  shuffles--;erasing=false;newTray();SFX.shuffle();finishTurn();
+};
+function renderSound(){$('sound').textContent=muted?'🔇':'🔊';$('sound').setAttribute('aria-pressed',!muted);$('sound').setAttribute('aria-label',muted?'Sound off':'Sound on')}
+$('sound').onclick=()=>{muted=!muted;store.set('nb-muted',muted);renderSound()};
+addEventListener('resize',()=>{if(!drag)renderTray()});
+
+// ---------- start ----------
+buildBoard();renderSound();
+if(!store.get('nb-tutorial-done',false))startTutorial();
+else if(!resumeGame())newGame('endless');
+checkStreakAtRisk();
+window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
+})();
+</script>
+
+</body>
+</html>
