@@ -105,6 +105,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .tray{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;touch-action:none}
 .slot{height:clamp(78px,12dvh,110px);display:flex;align-items:center;justify-content:center;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:grab}
 .slot.cant{opacity:.35}
+.slot.hinted{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold)}
 .slot.used{visibility:hidden}
 .piece{display:grid;gap:3px}
 .piece .tile{font-size:1.05rem;border-radius:6px}
@@ -117,6 +118,9 @@ button{font-family:var(--body)}
 .tool.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .tool .n{font-variant-numeric:tabular-nums;background:var(--line);color:var(--fg);border-radius:999px;padding:0 .45em;font-size:.8rem}
 .tool.empty{opacity:.55}
+@media (max-width:400px){.tools{gap:6px}.tool{padding:.45em .7em;font-size:.85rem}}
+.tool.nudge{border-color:var(--gold);animation:nudge 1.3s ease-in-out infinite}
+@keyframes nudge{50%{box-shadow:0 0 0 3px var(--gold)}}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--panel);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -196,6 +200,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <div class="tools">
     <button id="eraser" class="tool" type="button" aria-pressed="false">Eraser <span class="n" id="eraserN">0</span></button>
     <button id="shuffle" class="tool" type="button">Shuffle <span class="n" id="shuffleN">0</span></button>
+    <button id="hintbtn" class="tool" type="button">💡 Hint</button>
     <button id="sound" class="tool" type="button" aria-pressed="true">🔊</button>
   </div>
   <div class="foot">Number Blast test version · ads and purchases are samples · <a href="mailto:support@playbrightharbor.com?subject=Number%20Blast%20feedback" style="color:inherit;font-weight:700">Send feedback</a></div>
@@ -216,6 +221,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li>The whole group counts, from one gap to the next. If a group goes over the target it stays stuck, so watch where you drop. While you drag, <b>gold</b> means it will blast and <b>red</b> means it's too much.</li>
       <li><b>Longer sums score more:</b> 2 blocks x1, 3 blocks x2, 4 blocks x3, 5 or more x4. So 2 + 3 + 5 beats 4 + 6.</li>
       <li><b>Combos:</b> one drop that blasts two sums (a row and a column) adds 50% for each extra sum.</li>
+      <li><b>Hint:</b> tap 💡 Hint to see a drop that blasts.</li>
       <li><b>Chains:</b> blast again within 2 drops of your last blast and it scores more: x1.5, then x2, up to x3.</li>
       <li>From level 3, special blocks appear. A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the 8 blocks around it.</li>
       <li><b>🎯 Quests</b> give you three small missions at a time. Finish one to win an eraser, a shuffle or coins. Tap Quests at the bottom to see them, plus your big lifetime goals.</li>
@@ -327,6 +333,11 @@ const hits=(sum,stars)=>stars===0?sum===T:(T-sum>=stars&&T-sum<=9*stars);
 function findRuns(b){const runs=[];groups(b,(cells,dir,sum,stars)=>{if(hits(sum,stars))runs.push({cells,dir})});return runs}
 function tooMuch(b,touched){const out=new Set();groups(b,(cells,dir,sum,stars)=>{if(sum+stars>T&&cells.some(k=>touched.has(k)))cells.forEach(k=>out.add(k))});return out}
 function fitsAt(p,r,c){return p.cells.every(x=>{const rr=r+x.r,cc=c+x.c;return rr>=0&&cc>=0&&rr<N&&cc<N&&!board[rr*N+cc]})}
+// True when some piece in the tray can be dropped somewhere that blasts.
+function canBlast(){
+  return tray.some(p=>{if(!p)return false;for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(!fitsAt(p,r,c))continue;const b=board.slice();p.cells.forEach(x=>b[(r+x.r)*N+c+x.c]=x.t);if(findRuns(b).length)return true}return false});
+}
 function canFit(p){for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(fitsAt(p,r,c))return true;return false}
 // The numbers in a blasted sum, with a single star filled in as the number it stood for.
 // The numbers in a blasted sum, with stars filled in. Two or more stars could stand for several splits,
@@ -587,12 +598,18 @@ function renderAll(){renderBoard();renderTray();renderHUD();renderCoins();render
 let specialSeen=store.get('nb-special-seen',false), justTutored=false, levelStartHint=false;
 function setHint(){
   const h=$('hint');h.classList.toggle('tut',!!tut);
+  // Stuck: nothing in the tray can make the target on a crowded board. Say so, and point at the Eraser (or Shuffle).
+  const stuck=!tut&&!over&&board.filter(Boolean).length>=24&&tray.some(p=>p&&canFit(p))&&!canBlast();
+  const tool=stuck?(erasers?'eraser':shuffles?'shuffle':null):null;
+  $('eraser').classList.toggle('nudge',tool==='eraser');$('shuffle').classList.toggle('nudge',tool==='shuffle');
   if(tut){h.innerHTML=LESSONS[tut.step].hint+' <button type="button" class="tut-skip" id="tut-skip">Skip tutorial</button>';return}
   if(justTutored)h.innerHTML=`Your turn! Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.`;
   else if(!specialSeen&&tray.some(p=>p&&p.cells.some(c=>c.t.star||c.t.bomb))){
     h.innerHTML='Special blocks! A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the blocks around it.';
     specialSeen=true;store.set('nb-special-seen',true);
   }
+  else if(stuck)h.innerHTML=`No piece can make <b>${T}</b> right now. Drop one in any empty spot`+
+    (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
   else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
 }
@@ -602,6 +619,7 @@ let drag=null;
 function cellStep(){const r=boardEl.getBoundingClientRect();const cs=(r.width-12-4*7)/8;return {cs,step:cs+4,r}}
 function startDrag(i,e,slot){
   if(busy||erasing||over||!$('modal').hidden)return;
+  clearHint();
   const p=tray[i];if(!p)return;
   e.preventDefault();
   if(!tut&&!canFit(p)){toast("That piece doesn't fit anywhere");buzz(15);return}
@@ -999,6 +1017,31 @@ boardEl.addEventListener('pointerdown',e=>{
   if(!erasing||busy)return;const c=e.target.closest('.cell');if(!c)return;const k=+c.dataset.i;if(!board[k])return;
   board[k]=null;erasers--;erasing=false;SFX.erase();buzz(10);finishTurn();
 });
+// Hint, like in solitaire: show a drop that blasts for a moment, with the piece ghosted in place.
+let hintTimer=null;
+function bestMove(){
+  let best=null;
+  tray.forEach((p,i)=>{if(!p)return;for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(!fitsAt(p,r,c))continue;const b=board.slice();p.cells.forEach(x=>b[(r+x.r)*N+c+x.c]=x.t);
+    const runs=findRuns(b);if(!runs.length)continue;
+    const n=runs.reduce((a,run)=>a+run.cells.length,0);if(!best||n>best.n)best={i,r,c,n,b,runs}}});
+  return best;
+}
+function clearHint(){
+  if(!hintTimer)return;clearTimeout(hintTimer);hintTimer=null;
+  document.querySelectorAll('.slot.hinted').forEach(s=>s.classList.remove('hinted'));renderBoard();
+}
+$('hintbtn').onclick=()=>{
+  if(tut||busy||over||erasing)return;clearHint();
+  const m=bestMove();
+  if(!m){toast(`No ${T} to make right now.\n`+(erasers?'Try the Eraser.':shuffles?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
+  const ghost=new Set(),tiles=new Map(),glow=new Set();
+  tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
+  m.runs.forEach(run=>run.cells.forEach(k=>glow.add(k)));
+  renderBoard({ghost,tiles,glow,much:new Set()});
+  document.querySelectorAll('.slot')[m.i]?.classList.add('hinted');
+  hintTimer=setTimeout(clearHint,2600);
+};
 $('shuffle').onclick=()=>{
   if(tut||busy||over)return;
   if(!shuffles)return offerPowerup('shuffle');
