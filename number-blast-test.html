@@ -203,7 +203,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
     <button id="hintbtn" class="tool" type="button">💡 Hint</button>
     <button id="sound" class="tool" type="button" aria-pressed="true">🔊</button>
   </div>
-  <div class="foot">Number Blast test version · ads and purchases are samples · <a href="mailto:support@playbrightharbor.com?subject=Number%20Blast%20feedback" style="color:inherit;font-weight:700">Send feedback</a></div>
+  <div class="foot">Number Blast test version · ads and purchases are samples · <a href="https://playbrightharbor.com/feedback.html?game=number-blast" target="_blank" rel="noopener" style="color:inherit;font-weight:700">Send feedback</a> · <a href="https://playbrightharbor.com/insiders.html" target="_blank" rel="noopener" style="color:inherit;font-weight:700">Join Insiders</a></div>
 </div>
 
 <nav class="tabbar" aria-label="Menu">
@@ -214,7 +214,8 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 </nav>
 <template id="help-tpl">
   <h3>How to play</h3>
-  <a class="btn plain" id="feedback" href="#">✉️ Send feedback or ideas</a>
+  <a class="btn plain" id="feedback" href="https://playbrightharbor.com/feedback.html?game=number-blast" target="_blank" rel="noopener">✉️ Send feedback or ideas</a>
+  <a class="btn plain" id="insiders" href="https://playbrightharbor.com/insiders.html" target="_blank" rel="noopener">⭐ Join Insiders: play our next games first</a>
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> drag number blocks onto the board. When touching blocks in a row or column add up to <b>exactly</b> the big target number, they blast.</li>
@@ -520,6 +521,21 @@ const SFX={
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('pointerdown',()=>{if(!muted)audio()},{once:true});
 
+// ---------- analytics ----------
+// Events show where testers stop: each tutorial step, each level reached, and where a session ends.
+// Firebase in the apps; in a browser it goes to Google Analytics only if the page has set it up (gtag).
+function track(name,params={}){
+  try{window.Capacitor?.isNativePlatform?.()&&window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({name,params})}catch{}
+  try{window.gtag?.('event',name,params)}catch{}
+}
+let sessionStart=Date.now(),sessionEnded=false;
+function endSession(){
+  if(sessionEnded)return;sessionEnded=true;
+  track('session_end',{mode,level,score,in_tutorial:!!tut,tutorial_step:tut?tut.step+1:0,board_fill:board.filter(Boolean).length,seconds:Math.round((Date.now()-sessionStart)/1000)});
+}
+addEventListener('pagehide',endSession);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)endSession();else if(sessionEnded){sessionEnded=false;sessionStart=Date.now()}});
+
 // ---------- messages over the board ----------
 const READ_MS=3200, CASH_MS=2400;
 // News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
@@ -759,7 +775,7 @@ function seedStarters(n){
   }
 }
 function levelUp(){
-  busy=true;erasing=false;clearPending(true);
+  busy=true;erasing=false;clearPending(true);track('level_complete',{mode,level});
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
@@ -782,7 +798,7 @@ function maybeInterstitial(then){
 }
 function startNextLevel(){
   const oldT=T;
-  level++;levelBase=score;T=targetFor(level);
+  level++;levelBase=score;T=targetFor(level);track('level_reached',{mode,level,target:T});
   board=Array(N*N).fill(null);if(level<=3)seedStarters(5-level);
   newTray();busy=false;levelStartHint=true;chain=0;
   setHint();renderAll();saveGame();
@@ -794,7 +810,7 @@ function startNextLevel(){
 // ---------- game over, second chance, share ----------
 const CONTINUE_COST=60;
 function keepPlaying(){
-  continued=true;over=false;$('over').hidden=true;
+  track('continue_used',{mode,level});continued=true;over=false;$('over').hidden=true;
   // Blow up the most crowded 3x3 area.
   let bestA=null;
   for(let r=0;r<=N-3;r++)for(let c=0;c<=N-3;c++){let n=0;for(let a=0;a<3;a++)for(let b=0;b<3;b++)if(board[(r+a)*N+c+b])n++;if(!bestA||n>bestA.n)bestA={r,c,n}}
@@ -805,6 +821,7 @@ function keepPlaying(){
 }
 function gameOver(){
   over=true;clearPending();SFX.over();buzz([30,60,30]);
+  track('game_over',{mode,level,score,continued});
   if(mode==='daily')store.set('nb-save-daily',null);else store.set('nb-save-endless',null);
   store.set('nb-save',null);
   const sq=['🟥','🟧','🟨','🟩','🟦','🟪'];
@@ -935,7 +952,6 @@ function switchMode(m){
 }
 function showHelp(){
   openTabSheet('help',document.getElementById('help-tpl').innerHTML);
-  $('feedback').href=`mailto:support@playbrightharbor.com?subject=${encodeURIComponent('Number Blast feedback')}&body=${encodeURIComponent(`What would make Number Blast better?\n\n\n---\nNumber Blast prototype · ${mode==='daily'?'Daily Board':'Endless'} level ${level}`)}`;
   $('tut-replay').onclick=()=>{if(busy)return;closeSheet();startTutorial()};
 }
 function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'📅';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
@@ -968,7 +984,7 @@ function resumeGame(key='nb-save',welcome=true){
   return true;
 }
 function newGame(m){
-  mode=m;clearPending();
+  mode=m;clearPending();track('game_start',{mode:m});
   rng=mode==='daily'?mulberry(hash('numberblast-'+dayKey())):mulberry(Math.floor(Math.random()*2**31));
   level=1;levelBase=0;score=0;T=targetFor(1);board=Array(N*N).fill(null);erasers=0;shuffles=0;toShuffle=0;chain=0;chainMoves=0;
   continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;tut=null;lastV=0;blastsGame=0;bestRun=null;
@@ -990,7 +1006,7 @@ function startTutorial(){
   tut={step:0};loadLesson();
 }
 function loadLesson(){
-  const L=LESSONS[tut.step];board=Array(N*N).fill(null);
+  const L=LESSONS[tut.step];board=Array(N*N).fill(null);track('tutorial_step',{step:tut.step+1});
   Object.entries(L.tiles).forEach(([k,v])=>board[+k]={v,star:false,bomb:false});
   tray=[null,{cells:[{r:0,c:0,t:{v:L.piece,star:false,bomb:false}}]},null];
   renderModeTab();setHint();renderAll();
@@ -1000,6 +1016,7 @@ function nextLesson(){
   endTutorial(false);
 }
 function endTutorial(skipped){
+  track(skipped?'tutorial_skip':'tutorial_complete',skipped?{step:tut.step+1}:{});
   tut=null;store.set('nb-tutorial-done',true);
   newGame('endless');
   if(!skipped){justTutored=true;setHint();news("You're ready!",true)}
@@ -1033,7 +1050,7 @@ function clearHint(){
 }
 $('hintbtn').onclick=()=>{
   if(tut||busy||over||erasing)return;clearHint();
-  const m=bestMove();
+  const m=bestMove();track('hint_used',{level,found:!!m});
   if(!m){toast(`No ${T} to make right now.\n`+(erasers?'Try the Eraser.':shuffles?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
   const ghost=new Set(),tiles=new Map(),glow=new Set();
   tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
