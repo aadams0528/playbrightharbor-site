@@ -89,6 +89,10 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
   background:rgba(12,24,20,.86);color:#fff;font-weight:700;font-size:.95rem;line-height:1.3;padding:.55em 1em;border-radius:14px;max-width:92%;
   animation:toast var(--toast-ms,1300ms) ease-out forwards}
 .toast.big{font-family:var(--display);font-weight:800;font-size:1.35rem;line-height:1.15;color:var(--gold)}
+/* Messages worth reading pop in and hold still, then fade where they are. News (quests, sum book) sits lower so a new blast never covers it. */
+.toast.hold{animation-name:toastHold}
+.toast.news{top:70%}
+@keyframes toastHold{0%{opacity:0;transform:translate(-50%,-30%) scale(.85)}8%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}14%{transform:translate(-50%,-50%) scale(1)}86%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(-50%,-60%)}}
 @keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}10%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}18%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}
 
 .over{position:absolute;inset:0;z-index:7;background:rgba(10,20,16,.82);border-radius:14px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;padding:14px}
@@ -373,7 +377,7 @@ function levelMilestone(){
   const won=LEVEL_MILESTONES[level];
   if(mode!=='endless'||!won||store.get('nb-level-ms-'+level,false))return;
   store.set('nb-level-ms-'+level,true);addCoins(won);
-  later(()=>toast(`🏅 Level ${level}!\n+${won} 🪙`,true,READ_MS),1700);
+  news(`🏅 Level ${level}!\n+${won} 🪙`,true);
 }
 
 // ---------- quests: three small missions at a time, each pays a reward ----------
@@ -445,7 +449,7 @@ function checkStreakAtRisk(){
   if(lastSave&&lastSave>dayKey(-7))return;
   openSheet(`<h3>Save your streak?</h3><p>You missed yesterday. Your <b>${streak.n}-day streak</b> will reset unless you save it.</p>
     <div class="btns"><button class="btn ad" id="ss-ad">Save it: watch an ad</button><button class="btn plain" id="ss-coins" ${coins<STREAK_SAVE_COST?'disabled':''}>Save it: ${STREAK_SAVE_COST} 🪙</button><button class="btn plain" id="ss-no">Let it reset</button></div>`);
-  const save=()=>{streak.last=dayKey(-1);store.set('nb-streak-saved',dayKey());store.set('nb-streak',streak);renderStreak();toast(`🔥 ${streak.n}-day streak saved!`,false,READ_MS)};
+  const save=()=>{streak.last=dayKey(-1);store.set('nb-streak-saved',dayKey());store.set('nb-streak',streak);renderStreak();news(`🔥 ${streak.n}-day streak saved!`)};
   $('ss-ad').onclick=()=>watchAd(save);
   $('ss-coins').onclick=()=>{if(spendCoins(STREAK_SAVE_COST)){closeSheet();save()}};
   $('ss-no').onclick=closeSheet;
@@ -506,12 +510,23 @@ function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('pointerdown',()=>{if(!muted)audio()},{once:true});
 
 // ---------- messages over the board ----------
-const READ_MS=2800, CASH_MS=2200, EXTRA_MS=1800;
-let pending=[];
-function later(fn,ms){pending.push(setTimeout(fn,ms))}
-function clearPending(){pending.forEach(clearTimeout);pending=[];document.querySelectorAll('.toast').forEach(t=>t.remove())}
-function toast(text,big=false,ms=0){
-  const t=document.createElement('div');t.className='toast'+(big?' big':'');t.textContent=text;
+const READ_MS=3200, CASH_MS=2400;
+// News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
+// The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
+let newsQ=[],newsTimer=null;
+function news(text,big=false){newsQ.push([text,big]);if(!newsTimer)nextNews()}
+function nextNews(){
+  newsTimer=null;if(!newsQ.length)return;
+  if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
+  const [text,big]=newsQ.shift();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
+}
+function clearPending(keepNews){
+  if(!keepNews){newsQ=[];clearTimeout(newsTimer);newsTimer=null}
+  document.querySelectorAll(keepNews?'.toast:not(.news)':'.toast').forEach(t=>t.remove());
+}
+function toast(text,big=false,ms=0,lane='main'){
+  if(lane==='main')document.querySelectorAll('.toast.main').forEach(t=>t.remove());  // a newer message replaces the old one
+  const t=document.createElement('div');t.className='toast '+lane+(big?' big':'')+(ms?' hold':'');t.textContent=text;
   const life=ms||(big?1600:1300);t.style.setProperty('--toast-ms',life+'ms');
   $('boardwrap').appendChild(t);setTimeout(()=>t.remove(),life);
 }
@@ -660,7 +675,7 @@ function blast(){
     toShuffle+=k;
     while(toShuffle>=BLASTS_PER_SHUFFLE){toShuffle-=BLASTS_PER_SHUFFLE;if(shuffles<MAX_SHUFFLES){shuffles++;shuffleEarned=true}}
   }
-  // Main message, then the extra news one at a time.
+  // Main message, then the extra news one at a time below it.
   const praise=k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
   const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('\n');
   toast((praise?praise+'\n':'')+label+`\n+${total}`+(extra.size?`\nBOOM! +${extra.size*3}`:'')+(chainX>1?`\n🔗 Chain x${chainX}`:'')+(earned?'\nEraser earned!':'')+(shuffleEarned?'\nShuffle earned!':''),longest>=4||k>1||extra.size>0,CASH_MS);
@@ -676,7 +691,7 @@ function blast(){
     if(goalsDone.length){extras.push([goalsDone.map(g=>'🎯 Quest done: '+REWARD_TEXT[g.reward]).join('\n'),false]);questNews()}
     extras.push(...milestones(runs,valsList));
   }
-  extras.forEach(([text,big],i)=>later(()=>toast(text,big,EXTRA_MS),CASH_MS-150+i*(EXTRA_MS-200)));
+  extras.forEach(([text,big])=>news(text,big));
   // Effects
   busy=true;renderHUD();
   const all=[...set],gap=55;
@@ -726,7 +741,7 @@ function seedStarters(n){
   }
 }
 function levelUp(){
-  busy=true;erasing=false;clearPending();
+  busy=true;erasing=false;clearPending(true);
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
@@ -753,8 +768,8 @@ function startNextLevel(){
   board=Array(N*N).fill(null);if(level<=3)seedStarters(5-level);
   newTray();busy=false;levelStartHint=true;chain=0;
   setHint();renderAll();saveGame();
-  if(T!==oldT){toast(`Level ${level}\nNew target: make ${T}!`,true,READ_MS);bumpEl($('targetbox'));$('targetbox').classList.remove('newt');void $('targetbox').offsetWidth;$('targetbox').classList.add('newt')}
-  else toast(`Level ${level}\nScore ${goalFor(level)} to clear it`,false,READ_MS);
+  if(T!==oldT){news(`Level ${level}\nNew target: make ${T}!`,true);bumpEl($('targetbox'));$('targetbox').classList.remove('newt');void $('targetbox').offsetWidth;$('targetbox').classList.add('newt')}
+  else news(`Level ${level}\nScore ${goalFor(level)} to clear it`);
   levelMilestone();
 }
 
@@ -898,7 +913,7 @@ function switchMode(m){
   if(busy)return;
   clearPending();if(!over)saveGame();closeSheet();
   if(!resumeGame('nb-save-'+m,false))newGame(m);
-  toast(m==='daily'?`Daily Board #${dailyNo()}`:`Endless · Level ${level}`,false,READ_MS);
+  news(m==='daily'?`Daily Board #${dailyNo()}`:`Endless · Level ${level}`);
 }
 function showHelp(){
   openTabSheet('help',document.getElementById('help-tpl').innerHTML);
@@ -931,7 +946,7 @@ function resumeGame(key='nb-save',welcome=true){
   rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;$('over').hidden=true;
   best=Math.max(store.get(bestKey(),0),score);
   renderModeTab();finishTurn();
-  if(!over&&welcome)toast(`Welcome back!\nLevel ${level} · make ${T}`,false,READ_MS);
+  if(!over&&welcome)news(`Welcome back!\nLevel ${level} · make ${T}`);
   return true;
 }
 function newGame(m){
@@ -969,7 +984,7 @@ function nextLesson(){
 function endTutorial(skipped){
   tut=null;store.set('nb-tutorial-done',true);
   newGame('endless');
-  if(!skipped){justTutored=true;setHint();toast("You're ready!",true,READ_MS)}
+  if(!skipped){justTutored=true;setHint();news("You're ready!",true)}
 }
 $('hint').addEventListener('click',e=>{if(e.target.id==='tut-skip'&&tut&&!busy)endTutorial(true)});
 
