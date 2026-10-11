@@ -215,7 +215,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Chains:</b> blast again within 2 drops of your last blast and it scores more: x1.5, then x2, up to x3.</li>
       <li>From level 3, special blocks appear. A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the 8 blocks around it.</li>
       <li><b>🎯 Quests</b> give you three small missions at a time. Finish one to win an eraser, a shuffle or coins. Tap Quests at the bottom to see them, plus your big lifetime goals.</li>
-      <li>Every different sum you blast goes into your <b>📒 sum book</b>. Can you find every way to make 10?</li>
+      <li>Every different sum you blast goes into your <b>📒 sum book</b>. Finding half the ways to make a target pays 50 coins, and all of them 100. Can you find every way to make 10?</li>
       <li>A sum of 4 or more blocks earns an <b>eraser</b> (hold up to 3). Every 8 blasts earns a <b>shuffle</b> (hold up to 3).</li>
       <li><b>Levels:</b> score enough points and you get a fresh board. The target grows from 10 to 12, then 15, then mixes it up. Levels get slowly harder.</li>
       <li><b>Coins:</b> earn them by finishing levels, quests and your daily streak. Spend them on erasers, shuffles or a second chance.</li>
@@ -325,11 +325,12 @@ function tooMuch(b,touched){const out=new Set();groups(b,(cells,dir,sum,stars)=>
 function fitsAt(p,r,c){return p.cells.every(x=>{const rr=r+x.r,cc=c+x.c;return rr>=0&&cc>=0&&rr<N&&cc<N&&!board[rr*N+cc]})}
 function canFit(p){for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(fitsAt(p,r,c))return true;return false}
 // The numbers in a blasted sum, with a single star filled in as the number it stood for.
+// The numbers in a blasted sum, with stars filled in. Two or more stars could stand for several splits,
+// so they take the biggest numbers first (5 + ★ + ★ = 15 counts as 5 + 9 + 1).
 function runValues(cells){
-  const ts=cells.map(k=>board[k]), stars=ts.filter(t=>t.star).length;
-  if(stars>1)return null;
-  const sum=ts.reduce((a,t)=>a+(t.star?0:t.v),0);
-  return ts.map(t=>t.star?T-sum:t.v);
+  const ts=cells.map(k=>board[k]);
+  let stars=ts.filter(t=>t.star).length, rem=T-ts.reduce((a,t)=>a+(t.star?0:t.v),0);
+  return ts.map(t=>{if(!t.star)return t.v;stars--;const v=Math.min(9,rem-stars);rem-=v;return v});
 }
 
 // ---------- sum book: every different way you've made each target ----------
@@ -380,6 +381,7 @@ const GOALS=[
   {id:'len3',text:'Blast a sum of 3 blocks',test:e=>e.len>=3},
   {id:'len4',text:'Blast a sum of 4 blocks',test:e=>e.len>=4,after:2},
   {id:'len5',text:'Blast a sum of 5 blocks',test:e=>e.len>=5,after:6},
+  {id:'len6',text:'Blast a sum of 6 blocks',test:e=>e.len>=6,after:10},
   {id:'down',text:'Blast a sum going down',test:e=>e.dir==='c'},
   {id:'across',text:'Blast a sum going across',test:e=>e.dir==='r'},
   {id:'combo',text:'Blast 2 sums with one drop',test:e=>e.combo>1},
@@ -587,6 +589,7 @@ function startDrag(i,e,slot){
   if(busy||erasing||over||!$('modal').hidden)return;
   const p=tray[i];if(!p)return;
   e.preventDefault();
+  if(!tut&&!canFit(p)){toast("That piece doesn't fit anywhere");buzz(15);return}
   const {cs}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap='4px';document.body.appendChild(fl);
   const {rows,cols}=pieceSize(p),w=cols*cs+(cols-1)*4,h=rows*cs+(rows-1)*4;
   drag={i,p,fl,w,h,slot,lift:e.pointerType==='mouse'?h/2:h+cs*.9,pos:null};
@@ -667,6 +670,7 @@ function blast(){
     newSums.forEach(v=>{
       const have=(book[T]||[]).length,all=ways(T);
       extras.push([`📒 New way to make ${T}!\n${v.join(' + ')}\n${have} of ${all} found`,false]);
+      if(have>=Math.ceil(all/2)&&have<all&&!store.get('nb-book-half-'+T,false)){store.set('nb-book-half-'+T,true);addCoins(50);extras.push([`📒 Halfway! ${have} of ${all} ways to make ${T}\n+50 🪙`,true])}
       if(have===all&&!store.get('nb-book-done-'+T,false)){store.set('nb-book-done-'+T,true);addCoins(100);extras.push([`📒 Every way to make ${T}!\n+100 🪙`,true])}
     });
     if(goalsDone.length){extras.push([goalsDone.map(g=>'🎯 Quest done: '+REWARD_TEXT[g.reward]).join('\n'),false]);questNews()}
@@ -871,7 +875,7 @@ function showQuests(){
     <h4>🏅 Big goals</h4><ul class="qlist">
       ${nextB?`<li><span class="g-text">Blast ${nextB.toLocaleString()} sums</span><span class="g-reward">+50 coins</span>${qbar(stats.blasts,nextB)}<span class="g-sub">${stats.blasts.toLocaleString()} so far, across all games</span></li>`:''}
       ${nextL?`<li><span class="g-text">Reach level ${nextL} in Endless</span><span class="g-reward">+${LEVEL_MILESTONES[nextL]} coins</span>${qbar(topLevel,nextL)}<span class="g-sub">Your best: level ${topLevel}</span></li>`:''}
-      <li><span class="g-text">Find every way to make 10</span><span class="g-reward">${ten>=ways(10)?'Done!':'+100 coins'}</span>${qbar(ten,ways(10))}<span class="g-sub">${ten} of ${ways(10)} in your sum book</span></li>
+      <li><span class="g-text">Find every way to make 10</span><span class="g-reward">${ten>=ways(10)?'Done!':ten>=Math.ceil(ways(10)/2)?'+100 coins':'+50 at halfway'}</span>${qbar(ten,ways(10))}<span class="g-sub">${ten} of ${ways(10)} in your sum book. Halfway pays 50 coins, all of them 100</span></li>
       <li><span class="g-text">Keep your daily streak</span><span class="g-prog">🔥 ${streakAlive()?streak.n:0} day${(streakAlive()?streak.n:0)===1?'':'s'}</span><span class="g-sub">Blast one sum a day. Best streak: ${streak.best||0} day${streak.best===1?'':'s'}</span></li>
       ${stats.longest?`<li><span class="g-text">Longest sum ever</span><span class="g-prog">${stats.longest} blocks</span><span class="g-sub">${esc(stats.longestSum||'')}. Blast a longer one to beat it</span></li>`:''}
     </ul>`);
@@ -994,7 +998,8 @@ buildBoard();renderSound();
 if(!store.get('nb-tutorial-done',false))startTutorial();
 else if(!resumeGame())newGame('endless');
 checkStreakAtRisk();
-window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
+// Test hook for the playtest bot, only when the page is opened with ?test
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
 })();
 </script>
 
