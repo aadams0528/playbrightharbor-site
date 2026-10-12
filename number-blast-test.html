@@ -840,18 +840,27 @@ function gameOver(){
     'Play with me!','playbrightharbor.com',
   ].filter(Boolean).join('\n');
   const need=goalFor(level)-levelPts(),close=need<=goalFor(level)*.6;
+  // Best finished score for this mode (per day for the Daily Board). A new best gets fireworks.
+  const finKey='nb-final-'+(mode==='daily'?'daily-'+dayKey():'endless'),prevFinal=store.get(finKey,0);
+  const newBest=score>prevFinal&&(prevFinal>0||mode==='daily');
+  if(score>prevFinal)store.set(finKey,score);
+  if(newBest){SFX.big();setTimeout(fireworks,250)}
+  const mid=new Date();mid.setHours(24,0,0,0);const mins=Math.max(1,Math.round((mid-Date.now())/60000));
+  const nextDaily=mins>=60?`${Math.floor(mins/60)}h ${mins%60}m`:`${mins}m`;
   $('over').innerHTML=`<div>
-    <h2>${close?'So close!':'Board full'}</h2>
+    <h2>${newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):close?'So close!':'Board full'}</h2>
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
     ${!continued?`<div class="row"><button class="btn ad" id="cont-ad">Keep playing: watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Keep playing: ${CONTINUE_COST} 🪙</button></div>`:''}
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
+    ${mode==='daily'?`<p>New Daily Board in ${nextDaily}</p>`:''}
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
-      ${mode==='daily'?'':'<button class="btn ghost" id="todaybtn">Play Daily Board</button>'}</div></div>`;
+      ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily Board</button>'}</div></div>`;
   $('over').hidden=false;
   $('again').onclick=()=>newGame(mode);
   if(!continued){$('cont-ad').onclick=()=>watchAd(keepPlaying);$('cont-coins').onclick=()=>{if(spendCoins(CONTINUE_COST))keepPlaying()}}
   if($('todaybtn'))$('todaybtn').onclick=()=>switchMode('daily');
+  if($('endlessbtn'))$('endlessbtn').onclick=()=>switchMode('endless');
   $('copy').onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(share):Promise.reject()).then(()=>{$('copy').textContent='Copied! Paste it in a text'},()=>{openSheet(`<h3>Share result</h3><p>Copy this and paste it in a text:</p><p style="white-space:pre-line;color:var(--fg)">${esc(share)}</p><div class="btns"><button class="btn" id="sh-ok">Done</button></div>`);$('sh-ok').onclick=closeSheet})};
 }
 
@@ -1027,7 +1036,13 @@ function endTutorial(skipped){
   track(skipped?'tutorial_skip':'tutorial_complete',skipped?{step:tut.step+1}:{});
   tut=null;store.set('nb-tutorial-done',true);
   newGame('endless');
-  if(!skipped){justTutored=true;setHint();news("You're ready!",true)}
+  if(!skipped){
+    justTutored=true;setHint();SFX.big();fireworks();
+    openSheet(`<h3>🎉 Tutorial done!</h3><p>That was practice. <b>Now the real game starts.</b></p>
+      <p>Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.</p>
+      <div class="btns"><button class="btn" id="tut-go">Start playing</button></div>`,true);
+    $('tut-go').onclick=closeSheet;
+  }
 }
 $('hint').addEventListener('click',e=>{if(e.target.id==='tut-skip'&&tut&&!busy)endTutorial(true)});
 
