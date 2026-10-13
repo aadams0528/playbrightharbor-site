@@ -89,7 +89,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.16 · 91 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.17 · 91 levels</small></div>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
   </div>
@@ -387,6 +387,12 @@ function bloop(){if(!opts.sound)return;try{ac=ac||new (window.AudioContext||wind
   o.type="sine";o.frequency.setValueAtTime(520,t);o.frequency.exponentialRampToValueAtTime(160,t+.09);o.frequency.exponentialRampToValueAtTime(420,t+.2);
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.13,t+.015);g.gain.exponentialRampToValueAtTime(.001,t+.26);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+.3);}catch(e){}}
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
+// water slapping a dam or rock: a short burst of noise swept from bright to dull
+function splishSound(){if(!opts.sound)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const t=ac.currentTime,n=Math.floor(ac.sampleRate*.22),b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  const src=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();src.buffer=b;f.type="bandpass";f.Q.value=1.4;
+  f.frequency.setValueAtTime(2600+Math.random()*600,t);f.frequency.exponentialRampToValueAtTime(700,t+.18);
+  g.gain.setValueAtTime(.16,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);src.connect(f).connect(g).connect(ac.destination);src.start(t);}catch(e){}}
 
 // ---------- input ----------
 // After a stream goes through a tunnel the finger is still on the entry side, so the drag carries on from the far
@@ -433,6 +439,20 @@ function follow(e){
   afterChange(false);
 }
 // Walk the active stream one cell at a time toward cell c, so fast drags don't skip.
+// the stream runs into a dam or rock: water slaps the edge and spray flies back, once per bump
+let lastSplash={cell:-1,t:0};
+function splash(tip,rock){
+  const now=performance.now();if(lastSplash.cell===rock&&now-lastSplash.t<450)return;lastSplash={cell:rock,t:now};
+  const [ax,ay]=C(tip),[bx,by]=C(rock),ux=(bx-ax)/cs,uy=(by-ay)/cs,ex=ax+(bx-ax)*.46,ey=ay+(by-ay)*.46;
+  const water=COLORS[col[active][col[active].length-1]]||"#9fd8ff";
+  for(let k=0;k<20;k++){
+    const foam=k%3===0,side=(Math.random()-.5)*2,back=.6+Math.random()*1.6,up=1.2+Math.random()*2.4;
+    parts.push({x:ex+(-uy)*side*cs*.22,y:ey+ux*side*cs*.22,vx:cs*(-ux*back+(-uy)*side*1.3+(Math.random()-.5)*.6),vy:cs*(-uy*back+ux*side*1.3-up),
+      t0:now+Math.random()*40,life:420+Math.random()*380,c:foam?"#eaf6ff":water,r:cs*(foam?.026+Math.random()*.022:.035+Math.random()*.04),g:7});
+  }
+  parts.push({ring:true,x:ex,y:ey,t0:now,life:520,c:"#dff1ff",ux,uy});
+  splishSound();buzz(12);
+}
 function walkTo(c){
   // finger back on the stream: pull it back to there
   if(paths[active].indexOf(c)>0){paths[active].length=cutPoint(paths[active],c)+1;return "cut";}
@@ -448,6 +468,8 @@ function walkTo(c){
       if(alt<0||!tryStep(G,paths,active,alt)){
         // tell them once why a turn on a crossing doesn't work
         if(!turnTold&&before>1&&paths.some((q,k)=>k!==active&&q.indexOf(tip)>0)){turnTold=true;toast("Streams cross straight over, no turning on a crossing");}
+        const hit=[step,alt].find(x=>x>=0&&G.cells[x].t==="rock");
+        if(hit!==undefined)splash(tip,hit);
         break;}
     }
     sfx.step();
@@ -977,8 +999,12 @@ function draw(now){frameNow=now;
     ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
   // fireworks particles
   parts=parts.filter(q=>now-q.t0<q.life);
-  parts.forEach(q=>{const t=(now-q.t0)/1000;if(t<0)return;const x=q.x+q.vx*t,y=q.y+q.vy*t+cs*1.6*t*t,al=1-(now-q.t0)/q.life;
-    ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=q.c;ctx.globalAlpha=al;ctx.beginPath();ctx.arc(x,y,cs*.045,0,Math.PI*2);ctx.fill();ctx.restore();});
+  parts.forEach(q=>{const t=(now-q.t0)/1000;if(t<0)return;const al=1-(now-q.t0)/q.life;
+    if(q.ring){ // a broken half-ring of foam bulging back from the obstacle
+      const a0=Math.atan2(-q.uy,-q.ux),rr=cs*(.12+.38*(1-al));ctx.save();ctx.strokeStyle=q.c;ctx.globalAlpha=al*.8;ctx.lineWidth=cs*.035*al+1;ctx.lineCap="round";
+      for(let j=-2;j<=2;j++){const a=a0+j*.42;ctx.beginPath();ctx.arc(q.x,q.y,rr*(1+.08*((j*7)%3)),a-.16,a+.16);ctx.stroke();}ctx.restore();return;}
+    const x=q.x+q.vx*t,y=q.y+q.vy*t+cs*(q.g||1.6)*t*t;
+    ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=q.c;ctx.globalAlpha=al;ctx.beginPath();ctx.arc(x,y,q.r||cs*.045,0,Math.PI*2);ctx.fill();ctx.restore();});
   // win shimmer
   if(won){const a=Math.min(1,(now-wonAt)/600);ctx.fillStyle=`rgba(255,240,200,${.12*Math.sin(a*Math.PI)})`;ctx.fillRect(0,0,W,H);}
 }
