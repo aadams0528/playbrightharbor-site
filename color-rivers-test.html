@@ -40,6 +40,15 @@ button:focus-visible{outline:3px solid var(--lantern);outline-offset:2px}
 .tip{display:flex;flex-direction:column;gap:6px;min-height:52px}
 .tip h2{margin:0;font-family:var(--display);font-weight:700;font-size:20px;line-height:1.1;text-wrap:balance}
 .tip p{margin:0;font-size:14.5px;font-weight:700;color:var(--ink-soft);line-height:1.35}
+.coach{display:flex;flex-direction:column;gap:8px;padding:11px 13px;border-radius:14px;background:rgba(255,210,122,.09);border:1.5px solid rgba(255,210,122,.35);animation:coachIn .35s ease}
+.coach .step{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--lantern)}
+.coach .say{font-size:15.5px;font-weight:800;line-height:1.35;color:#eef5fb}
+.coach .row{display:flex;gap:8px;justify-content:flex-end}
+.coach button{border-radius:11px;padding:7px 14px;font-weight:800;font-size:13.5px;border:1.5px solid rgba(255,255,255,.18);background:transparent}
+.coach button.go{background:linear-gradient(180deg,var(--lantern),var(--lantern-deep));color:#2b1a00;border:0}
+.showme{background:none;border:0;padding:0;color:var(--lantern);font-weight:800;font-size:13.5px;text-align:left;text-decoration:underline;text-underline-offset:3px}
+.glow-ink{box-shadow:0 0 0 2px var(--lantern),0 0 18px rgba(255,210,122,.5);border-radius:10px}
+@keyframes coachIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .mix{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--ink-soft);background:rgba(255,255,255,.05);border-radius:999px;padding:3px 9px 3px 5px}
 .tun{width:12px;height:12px;border-radius:50%;display:inline-block;background:radial-gradient(#000308,#123650);border:2px solid #5fe0d0}
@@ -75,6 +84,9 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .lv[disabled]{opacity:.35;cursor:default}
 .chap{display:flex;justify-content:space-between;align-items:baseline;margin:6px 2px -4px;font-family:var(--display);font-size:15px;text-align:left}.chap span{font-size:12px;color:var(--lantern)}
 .chnote{font-size:12px;opacity:.7;margin:-4px 2px 0;text-align:left}
+.adbox{display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 12px;border-radius:14px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 12px,rgba(255,255,255,.02) 12px 24px);border:1.5px dashed rgba(255,255,255,.2)}
+.adbox small{opacity:.7;font-size:12px}.adcount{font-family:var(--display);font-size:30px;color:var(--lantern)}
+.big:disabled{opacity:.45}
 .lv.cur{border-color:var(--lantern)}
 .set{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;font-weight:800;font-size:14.5px}
 .set small{display:block;color:var(--ink-soft);font-weight:700;font-size:12.5px}
@@ -89,7 +101,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.17 · 91 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.19 · 91 levels</small></div>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
   </div>
@@ -97,6 +109,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
   <div class="tip">
     <h2 id="lvTitle">Level 1</h2>
     <p id="lvTip"></p>
+    <div class="coach" id="coach" hidden></div>
     <div class="mix" id="mix"></div>
   </div>
 
@@ -298,7 +311,7 @@ const store={get(k,d){try{const v=localStorage.getItem("cr-"+k);return v==null?d
 // Older saves were keyed by list position; carry them over once by mapping position -> id.
 const ID=i=>LEVELS[i].id,IDX=id=>LEVELS.findIndex(L=>L.id===id);
 let prog=(()=>{
-  const blank={v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0};
+  const blank={v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0,noAds:false,sinceAd:0,lastAd:0,hintDay:"",hintsLeft:0,bonusHints:0};
   const saved=store.get("prog3",null);if(saved)return Object.assign(blank,saved);
   const old=store.get("prog2",null);if(!old)return blank;
   const byId=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>LEVELS[+k]).map(([k,v])=>[ID(+k),v]));
@@ -307,7 +320,15 @@ let prog=(()=>{
 })();
 function saveProg(){store.set("prog3",prog);}
 // Open levels: everything up to one past the furthest level with stars (or all, in tester mode).
-function openCount(){if(prog.all)return LEVELS.length;let far=-1;LEVELS.forEach((L,i)=>{if(prog.stars[L.id])far=i;});return Math.min(LEVELS.length,far+2);}
+function openCount(){if(prog.all)return LEVELS.length;let far=-1;LEVELS.forEach((L,i)=>{if(prog.stars[L.id])far=i;});
+  return Math.min(LEVELS.length,far+1<LEVELS.length&&!gateOK(far+1)?far+1:far+2);}
+// A new chapter opens once the one before has enough stars: 55% of its stars (two stars on most levels). Finishing a
+// level is always possible; the stars are what take thought, or a hint.
+const GOAL_SHARE=.55;
+const chIdx=c=>LEVELS.map((L,i)=>L.ch===c?i:-1).filter(i=>i>=0);
+const chStars=c=>chIdx(c).reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
+const chGoal=c=>Math.ceil(chIdx(c).length*3*GOAL_SHARE);
+function gateOK(i){if(i<=0)return true;const P=LEVELS[i-1].ch;return P===LEVELS[i].ch||!P||chStars(P)>=chGoal(P);}
 let retraces=0,hintsUsed=0,drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null;
 function fireworks(cell,mask){
   const [cx,cy]=C(cell),cols=[COLORS[mask],"#ffffff",COLORS[mask],"#fff2b8"];
@@ -337,6 +358,7 @@ function startLevel(n,keep){
   if(fl.length&&intro("filter","New: color filters"))newTile=performance.now();
   bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
   resize();updateInk();updateStars();updateHintBtn();store.set("cur",ID(n));
+  lesson=null;if(LESSONS[L.name]&&!prog.seen["lesson:"+L.id])startLesson();else renderCoach();
 }
 // Legend chips above the board. The first-mix level starts without the mix chart so the first purple is a surprise; it appears once they mix.
 function renderLegend(){
@@ -543,10 +565,10 @@ function afterChange(released){
   const st=nestStatus(G,paths,col);
   st.forEach((s,k)=>{
     if(s.p>=0&&!lastStatus[k]&&s.ok){sfx.home();buzz(15);}
-    if(s.p>=0&&!s.ok&&released&&lastStatus[k]!=="bad"){sfx.wrong();buzz([20,40,20]);toast(s.denOk===false?`This home is for the ${SHAPES[G.nests[k].den]} critters`:`This nest only takes ${NAMES[G.nests[k].mask]}, not ${NAMES[s.color]}`);}
+    if(s.p>=0&&!s.ok&&released&&lastStatus[k]!=="bad"&&!(lessonStep()&&lessonStep().quiet)){sfx.wrong();buzz([20,40,20]);toast(s.denOk===false?`This home is for the ${SHAPES[G.nests[k].den]} critters`:`This nest only takes ${NAMES[G.nests[k].mask]}, not ${NAMES[s.color]}`);}
   });
   lastStatus=st.map((s,k)=>s.ok?true:(s.p>=0&&(released||lastStatus[k]==="bad")?"bad":false)); // "bad" only counts once the finger lifts, so the refusal is announced
-  if(released&&isWin(G,paths,col))win();
+  if(released&&isWin(G,paths,col)){if(lesson)endLesson(true);win();}else if(released)lessonCheck();
 }
 function crossings(){
   const out=[];
@@ -566,6 +588,7 @@ function win(){
   if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
   prog.stars[id]=Math.max(prog.stars[id]||0,s);prog.total=Object.values(prog.stars).reduce((a,b)=>a+b,0); // total + highest: what leaderboards will rank on
   if(lv+1>(prog.highest||0)){prog.highest=lv+1;prog.highestId=id;}
+  prog.sinceAd=(prog.sinceAd||0)+1;
   saveProg();updateStars();
   const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},1300);
 }
@@ -582,13 +605,13 @@ function askBlock(fresh){
   return `<div class="ask">${check}<b>Could you tell whose critters were whose?</b><div class="row">${opt.map(([k,t])=>`<button data-ans="${k}" class="${a===k?"on":""}">${t}</button>`).join("")}</div></div>`;
 }
 function showWin(s,ink,fresh){
-  const last=lv===LEVELS.length-1,nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
+  const last=lv===LEVELS.length-1,locked=!last&&!prog.all&&!gateOK(lv+1),nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close! Just ${over} ink over par. Three stars at ${G.par}.`:`${ink} ink. Three stars at ${G.par} or less.`; // near-miss drives the retry
-  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${askBlock(fresh)}
-   ${last?`<p>That's every level in this prototype. Thanks for playing!</p><button class="big" id="goLevels">See all levels</button>`:`<button class="big" id="goNext">Next level</button>`}
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${askBlock(fresh)}
+   ${last?`<p>That's every level in this prototype. Thanks for playing!</p><button class="big" id="goLevels">See all levels</button>`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
    <button class="ghost" id="goRetry">Play again for more stars</button>`);
   $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
-  if(last)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();startLevel(lv+1);};
+  if(last||locked)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();goNext();};
   wireAsk();
 }
 function wireAsk(){
@@ -603,7 +626,8 @@ function showLevels(){
   const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}</small></button>`;
   const chapters=CHAPTERS.map(C=>{const ids=LEVELS.map((L,i)=>L.ch===C.id?i:-1).filter(i=>i>=0);
     const got=ids.reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
-    return `<div class="chap"><b>${C.id?`Chapter ${C.id} · `:""}${C.title}</b><span>★ ${got}/${ids.length*3}</span></div>${C.note?`<p class="chnote">${C.note}</p>`:""}<div class="grid">${ids.map(btn).join("")}</div>`;}).join("");
+    const prev=ids.length&&ids[0]>0?LEVELS[ids[0]-1].ch:0,shut=prev&&!prog.all&&!gateOK(ids[0]);
+    return `<div class="chap"><b>${C.id?`Chapter ${C.id} · `:""}${C.title}</b><span>★ ${got}/${ids.length*3}</span></div>${C.note?`<p class="chnote">${C.note}</p>`:""}${shut?`<p class="chnote">🔒 Opens at ★ ${chGoal(prev)} in Chapter ${prev} (you have ${chStars(prev)})</p>`:""}<div class="grid">${ids.map(btn).join("")}</div>`;}).join("");
   openSheet(`<h3>Levels</h3>${chapters}
     ${ans?`<div class="answers"><b>Readability results</b><br>${ans}</div>`:""}
     <button class="ghost" id="close">Close</button>`);
@@ -614,10 +638,14 @@ function showSettings(){
   openSheet(`<h3>Settings</h3>
    <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" aria-label="Critter shapes"></button></div>
    <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" aria-label="Sound"></button></div>
+   <div class="set"><div>Remove ads<small>${prog.noAds?"Ads are off. Thank you!":"No more breaks between levels"}</small></div><button class="ghost" id="tAds" ${prog.noAds?"disabled":""}>${prog.noAds?"Done":ADS.price}</button></div>
+   <div class="set"><div>Lessons<small>See every new-element lesson again</small></div><button class="ghost" id="tLessons">Replay</button></div>
    <p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>
    <button class="ghost" id="close">Close</button>`);
   $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);store.set("opts",opts);};
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);store.set("opts",opts);};
+  $("tAds").onclick=()=>showRemoveAds();
+  $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
 }
 function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;}
@@ -631,12 +659,135 @@ const routeOf=s=>solPath(G,s,LEVELS[lv].sol[s]);
 const onRoute=s=>JSON.stringify(routeOf(s))===JSON.stringify(paths[s]);
 function pruneHints(){hints=hints.filter(s=>!onRoute(s));}
 function nextHint(){for(let s=0;s<G.sources.length;s++)if(!onRoute(s)&&!hints.includes(s))return s;return -1;}
-function updateHintBtn(){const more=won||nextHint()>=0||!hints.length;$("hintBtn").innerHTML=more?"<span>💡</span>Hint":"<span>🙈</span>Hide hints";}
+function updateHintBtn(){const more=won||nextHint()>=0||!hints.length;refillHints();const n=hintsLeft();
+  $("hintBtn").innerHTML=more?(n?`<span>💡</span>Hint · ${n}`:"<span>📺</span>Hint"):"<span>🙈</span>Hide hints";}
 $("hintBtn").onclick=()=>{
   if(won)return;pruneHints();const s=nextHint();
-  if(s>=0){hints.push(s);hintsUsed++;}else hints=[];
-  updateHintBtn();
+  if(s<0){hints=[];updateHintBtn();return;}
+  const give=()=>{hints.push(s);hintsUsed++;updateHintBtn();};
+  if(spendHint())give();else offerHintAd(give);
 };
+// ---------- Lessons ----------
+// A short guided lesson the first time each new element appears (Alan's tester asked for Wordglow-style tutorials).
+// Each step says one thing; "cells" pulse on the board, "demo" loops a ghost finger along a stream's route, and
+// "wait" is what moves it on: the Next button, a stream reaching its nest ("reach:k"), or the level being won.
+// "quiet" holds back the wrong-nest buzz while the lesson is mid-way (a red stream in a purple nest, before blue crosses).
+const LESSONS={
+  "Lead the way":[
+    {say:"These glowing critters live in this den.",cells:["den:0"]},
+    {say:"Their home is the nest of the same color.",cells:["nest:0"]},
+    {say:"Drag from the den to the nest to lead them home. Follow the finger.",demo:0,wait:"win"}],
+  "Two streams":[
+    {say:"Two dens now. Each color goes home to its own nest.",cells:["all:src","all:nest"]},
+    {say:"Careful: streams that cross mix their colors. Keep these two apart."},
+    {say:"Every square of stream uses ink. Use the least ink to earn ★★★.",dom:"ink"},
+    {say:"Your turn. Lead both colors home.",wait:"win"}],
+  "Make purple":[
+    {say:"These nests want purple, but there are only red and blue critters.",cells:["all:nest"]},
+    {say:"Draw red down to a nest. It's still red, so the nest waits.",demo:0,wait:"reach:0",quiet:true},
+    {say:"Now take blue straight across the red stream and watch.",demo:1,wait:"win",quiet:true}],
+  "Odd one out":[
+    {say:"Streams cross straight over each other. They can't turn on a crossing."},
+    {say:"Make two purples, and keep the yellow stream clean.",wait:"win"}],
+  "Bridge":[
+    {say:"This is a bridge.",cells:["all:bridge"]},
+    {say:"Streams that cross on a bridge don't mix. Go straight over it: no turning on a bridge."},
+    {say:"Take blue down over the bridge.",demo:0,wait:"reach:0"},
+    {say:"Now red across it. Nothing mixes!",demo:1,wait:"win"}],
+  "Uh oh, mud":[
+    {say:"Red, yellow and blue all together make mud, and mud never goes home."},
+    {say:"Here yellow and blue make green. Keep red away from the green stream.",wait:"win"}],
+  "Who goes where":[
+    {say:"These nests show whose home they are. Each critter shape has its own home.",cells:["all:nest"]},
+    {say:"Round critters to the round home, square critters to the square home.",wait:"win"}],
+  "Underground":[
+    {say:"A dark pool. A stream that dives in comes up in the matching pool.",cells:["all:tunnel"]},
+    {say:"Drag red into the pool and keep going from the other side.",demo:0,wait:"reach:0"},
+    {say:"Now blue home.",wait:"win"}],
+  "Filters":[
+    {say:"A filter takes one color out of a stream.",cells:["all:filter"]},
+    {say:"Purple through the red filter comes out blue. Make purple, then send it through.",wait:"win"}],
+};
+let lesson=null;
+const lessonKey=()=>"lesson:"+ID(lv);
+const lessonStep=()=>lesson&&lesson.steps[lesson.i];
+function startLesson(){const L=LESSONS[LEVELS[lv].name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
+function endLesson(done){if(!lesson)return;lesson=null;prog.seen[lessonKey()]=1;saveProg();renderCoach();if(done===false)toast("Lesson skipped. Tap \"Show me\" to see it again");}
+function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else renderCoach();}
+function renderCoach(){
+  const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!!LESSONS[LEVELS[lv].name];
+  document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));
+  if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LEVELS[lv].tip;
+    if(has){const b=document.createElement("button");b.className="showme";b.textContent="Show me how";b.onclick=()=>{startLevel(lv);startLesson();};tip.append(document.createElement("br"),b);}return;}
+  tip.hidden=true;el.hidden=false;
+  const last=lesson.i===lesson.steps.length-1;
+  el.innerHTML=`<div class="step">Lesson · ${lesson.i+1} of ${lesson.steps.length}</div><div class="say">${st.say}</div>
+    <div class="row"><button id="lSkip">Skip</button>${st.wait?"":`<button class="go" id="lNext">${last?"Got it":"Next"}</button>`}</div>`;
+  $("lSkip").onclick=()=>endLesson(false);
+  if(!st.wait)$("lNext").onclick=lessonNext;
+}
+// called after every change to the streams
+function lessonCheck(){const st=lessonStep();if(!st||!st.wait)return;
+  if(st.wait.startsWith("reach:")){const k=+st.wait.slice(6),p=paths[k],end=routeOf(k);if(p[p.length-1]===end[end.length-1])lessonNext();}}
+function lessonCells(st){
+  const out=[];(st.cells||[]).forEach(t=>{const [a,b]=t.split(":");
+    if(a==="den")out.push(G.sources[+b].i);else if(a==="nest")out.push(G.nests[+b].i);
+    else if(b==="src")G.sources.forEach(x=>out.push(x.i));else if(b==="nest")G.nests.forEach(x=>out.push(x.i));
+    else G.cells.forEach((c,i)=>{if(c.t===b)out.push(i);});});
+  return out;
+}
+function drawLesson(now){const st=lessonStep();if(!st)return;const t=(now-lesson.t0)/1000;
+  ctx.save();
+  lessonCells(st).forEach(i=>{const [x,y]=C(i),a=(Math.sin(t*4)+1)/2;ctx.strokeStyle=`rgba(255,210,122,${.55+.45*a})`;ctx.lineWidth=cs*.06;ctx.beginPath();ctx.arc(x,y,cs*(.5+.08*a),0,Math.PI*2);ctx.stroke();});
+  if(st.demo!=null&&active<0){
+    const r=routeOf(st.demo),seg=[];for(let k=1;k<r.length;k++){const a=r[k-1],b=r[k];if(Math.abs(a%G.w-b%G.w)+Math.abs(Math.floor(a/G.w)-Math.floor(b/G.w))===1)seg.push([a,b]);}
+    const cyc=.45+seg.length*.28+.9,u=t%cyc,f=Math.min(1,Math.max(0,(u-.45)/(seg.length*.28)));
+    const pt=q=>{const n=q*seg.length,k=Math.min(seg.length-1,Math.floor(n)),[a,b]=seg[k],[ax,ay]=C(a),[bx,by]=C(b),e=n-k;return [ax+(bx-ax)*e,ay+(by-ay)*e];};
+    if(seg.length){
+      ctx.setLineDash([cs*.08,cs*.12]);ctx.strokeStyle="rgba(255,255,255,.35)";ctx.lineWidth=cs*.07;ctx.lineCap="round";ctx.beginPath();
+      for(let q=0;q<=f;q+=.01){const [x,y]=pt(q);q?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();ctx.setLineDash([]);
+      const [x,y]=pt(f),fade=u>cyc-.5?Math.max(0,(cyc-u)/.5):Math.min(1,u/.3),press=u<.45?1-u/.45*.25:.75;
+      ctx.globalAlpha=fade;ctx.fillStyle="rgba(255,255,255,.22)";ctx.beginPath();ctx.arc(x,y,cs*.36,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x,y,cs*.17*press+cs*.04,0,Math.PI*2);ctx.fill();
+      ctx.font=`${Math.round(cs*.62)}px system-ui,"Apple Color Emoji","Segoe UI Emoji"`;ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText("👆",x-cs*.2,y+cs*.02);}
+  }
+  ctx.restore();
+}
+// ---------- Ads and hints ----------
+// Hard rules from the build sheet: ads only BETWEEN levels, never during a puzzle; no lives or energy; everything
+// earnable free. In this prototype the ads are stand-in cards; the phone app plugs AdMob into showAd/showRewarded.
+const ADS={freeLevels:10,every:3,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
+const today=()=>new Date().toISOString().slice(0,10);
+function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hintsLeft=ADS.freeHints;saveProg();}}
+const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0);
+function spendHint(){refillHints();if(prog.hintsLeft>0)prog.hintsLeft--;else if(prog.bonusHints>0)prog.bonusHints--;else return false;saveProg();return true;}
+// between levels: none in the first chapter's worth of levels, then one every few clears, never two close together
+function adDue(){return !prog.noAds&&lv+1>=ADS.freeLevels&&(prog.sinceAd||0)>=ADS.every&&Date.now()-(prog.lastAd||0)>=ADS.gapMs;}
+function goNext(){const go=()=>startLevel(lv+1);if(adDue())showAd(go);else go();}
+function adCard(title,secs,done,extra=""){
+  openSheet(`<h3>${title}</h3><div class="adbox"><b>Ad</b><small>A real video ad plays here in the app</small><div class="adcount" id="adCount">${secs}</div></div>
+    ${extra}<button class="big" id="adDone" disabled>Continue</button>`);
+  let left=secs;const t=setInterval(()=>{left--;const el=$("adCount");if(!el){clearInterval(t);return;}
+    el.textContent=left>0?left:"✓";if(left<=0){clearInterval(t);const b=$("adDone");b.disabled=false;b.onclick=()=>{closeSheet();done();};}},1000);
+  const r=$("adRemove");if(r)r.onclick=()=>{clearInterval(t);showRemoveAds(()=>{closeSheet();done();});};
+}
+function showAd(then){prog.sinceAd=0;prog.lastAd=Date.now();saveProg();
+  adCard("Quick break",5,then,`<button class="ghost" id="adRemove">Remove ads · ${ADS.price}</button>`);}
+function offerHintAd(give){
+  openSheet(`<h3>Out of free hints</h3><p>You get ${ADS.freeHints} free hints a day. Watch a short ad for ${ADS.perAd} more?</p>
+    <button class="big" id="watch">📺 Watch ad for ${ADS.perAd} hints</button><button class="ghost" id="close">Not now</button>`);
+  $("close").onclick=closeSheet;
+  $("watch").onclick=()=>adCard("Thanks for watching",5,()=>{prog.bonusHints=(prog.bonusHints||0)+ADS.perAd;spendHint();give();toast(`Hint shown · ${hintsLeft()} left`);});
+}
+function showRemoveAds(after){
+  if(prog.noAds){toast("Ads are already off");return;}
+  openSheet(`<h3>Remove ads</h3><p>One payment of <b>${ADS.price}</b> turns off the breaks between levels for good. Hint ads stay optional.</p>
+    <p class="chnote">Prototype: no money changes hands. The app will use the App Store or Google Play here.</p>
+    <button class="big" id="buy">Buy · ${ADS.price}</button><button class="ghost" id="close">Not now</button>`);
+  $("buy").onclick=()=>{prog.noAds=true;saveProg();toast("Ads removed. Thank you!");after?after():closeSheet();};
+  $("close").onclick=()=>after?after():closeSheet();
+}
+function gateNote(c,nextCh){return `<p>🔒 <b>${nextCh?nextCh.title:"The next chapter"}</b> opens at ★ ${chGoal(c)} in this chapter. You have ★ ${chStars(c)}. Replay levels for more stars, or use a hint to find the perfect route.</p>`;}
 let taps=0,tapT=0;
 $("brand").addEventListener("click",()=>{const n=performance.now();taps=n-tapT<3000?taps+1:1;tapT=n;if(taps>=5){testerUnlock();taps=0;}});
 // tester builds: 5 taps on the title (up to 3 s apart, so automated clicks count) or a ?unlock=1 / #unlock=1 link
@@ -645,7 +796,7 @@ try{if(/[?&#]unlock=1\b/.test(location.search+location.hash))testerUnlock();}cat
 function toast(t,ms=1900){const el=$("toast");clearTimeout(toastTimer);el.textContent=t;el.classList.add("show");
   toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";},300);},ms);}
 function clearToast(){clearTimeout(toastTimer);const el=$("toast");el.classList.remove("show");el.textContent="";}
-function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at)toast(t);},400);}
+function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at&&!lesson)toast(t);},400);} // a lesson says it better
 
 // ---------- drawing ----------
 const C=(i)=>{const x=i%G.w,y=(i-x)/G.w;return [(x+.5)*cs,(y+.5)*cs];};
@@ -994,6 +1145,7 @@ function draw(now){frameNow=now;
     const blink=((now/1000+k*1.7)%4)<.12;
     critter(cx,cy+Math.sin(now/400+k)*cs*.02,cs*.21,SHAPES[k%SHAPES.length],src.mask,cs*.3,blink);
   });
+  drawLesson(now);
   // active tip
   if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
     ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
