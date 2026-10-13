@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- Color Rivers prototype for testers (unlisted, not linked from the site). Copied from aadams0528/color-rivers src/game.html; replace this file to update. -->
+<title>Color Rivers (test version)</title>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap">
+<style>
+/* Layout: one phone-width column on a night pond. Top bar, level tip, the board is the stage, tools along the bottom. */
+:root{
+  --pond:#0e2236;        /* deep night water */
+  --pond-deep:#081726;
+  --pond-lift:#173550;   /* tiles, cards */
+  --ink:#eef5ff;
+  --ink-soft:#9fb6cc;
+  --lantern:#ffd27a;     /* warm UI accent: stars, buttons */
+  --lantern-deep:#e2a943;
+  --display:"Baloo 2","Nunito",system-ui,sans-serif;
+  --body:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:radial-gradient(120% 80% at 50% 0%,var(--pond-lift) 0%,var(--pond) 45%,var(--pond-deep) 100%) fixed,var(--pond-deep);color:var(--ink);font-family:var(--body);margin:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+#app{max-width:460px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:10px;padding-inline:16px;padding-block:10px 14px;box-sizing:border-box}
+button{font-family:var(--body);color:var(--ink);cursor:pointer}
+button:focus-visible{outline:3px solid var(--lantern);outline-offset:2px}
+
+.top{display:flex;align-items:center;gap:8px}
+.brand{font-family:var(--display);font-weight:800;font-size:26px;line-height:1;margin-right:auto;background:linear-gradient(90deg,#ff5d6c,#ff9a3c,#ffd23f,#3fd68a,#4da3ff,#b678ff);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.2px}
+.brand small{display:block;font-family:var(--body);font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--ink-soft);-webkit-text-fill-color:var(--ink-soft);margin-top:2px}
+.pill{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 11px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.pill .st{color:var(--lantern)}
+.iconbtn{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;width:38px;height:38px;display:grid;place-items:center;font-size:17px;font-weight:800;padding:0}
+
+.tip{display:flex;flex-direction:column;gap:6px;min-height:52px}
+.tip h2{margin:0;font-family:var(--display);font-weight:700;font-size:20px;line-height:1.1;text-wrap:balance}
+.tip p{margin:0;font-size:14.5px;font-weight:700;color:var(--ink-soft);line-height:1.35}
+.mix{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--ink-soft);background:rgba(255,255,255,.05);border-radius:999px;padding:3px 9px 3px 5px}
+.tun{width:12px;height:12px;border-radius:50%;display:inline-block;background:radial-gradient(#000308,#123650);border:2px solid #5fe0d0}
+.brg{width:9px;height:14px;border-radius:2px;display:inline-block;background:repeating-linear-gradient(180deg,#b9864f 0 3px,#6b4a2f 3px 4px);border-left:2px solid #e2b77c;border-right:2px solid #e2b77c}
+.veil{visibility:hidden}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 6px currentColor}
+
+.stage{position:relative}
+canvas{display:block;width:100%;touch-action:none;border-radius:20px}
+.ink{display:flex;justify-content:space-between;font-size:13px;font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums;padding-inline:4px}
+
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:auto}
+.tool{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.13);border-radius:14px;padding:10px 4px;font-weight:800;font-size:14px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tool span{font-size:18px;line-height:1}
+
+[hidden]{display:none!important}
+.sheet{position:fixed;inset:0;display:grid;place-items:center;background:rgba(4,12,22,.66);padding:16px;z-index:5;backdrop-filter:blur(3px)}
+.card{background:linear-gradient(180deg,#1b3b58,#12293f);border:1.5px solid rgba(255,255,255,.14);border-radius:22px;padding:20px 18px;width:min(380px,100%);box-sizing:border-box;display:flex;flex-direction:column;gap:12px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.45);max-height:88vh;overflow-y:auto}
+.card h3{margin:0;font-family:var(--display);font-size:26px;font-weight:800;line-height:1.05}
+.card p{margin:0;color:var(--ink-soft);font-weight:700;font-size:14.5px;line-height:1.4}
+.stars{font-size:40px;letter-spacing:6px;color:var(--lantern);text-shadow:0 0 18px rgba(255,210,122,.5)}
+.stars .off{color:rgba(255,255,255,.16);text-shadow:none}
+.big{background:linear-gradient(180deg,var(--lantern),var(--lantern-deep));color:#2b1a00;border:0;border-radius:14px;padding:13px;font-weight:800;font-size:17px;font-family:var(--display)}
+.ghost{background:transparent;border:1.5px solid rgba(255,255,255,.18);border-radius:14px;padding:10px;font-weight:800;font-size:14px}
+.ask{display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px}
+.ask b{font-size:14px}
+.ask .row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ask .row button{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.14);border-radius:12px;padding:8px 2px;font-weight:800;font-size:12.5px}
+.ask .row button.on{background:var(--lantern);color:#2b1a00;border-color:var(--lantern)}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.lv{aspect-ratio:1;border-radius:14px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);font-family:var(--display);font-weight:800;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px;max-width:100%}
+.lv small{font-family:var(--body);font-size:10px;color:var(--lantern);letter-spacing:1px}
+.lv[disabled]{opacity:.35;cursor:default}
+.chap{display:flex;justify-content:space-between;align-items:baseline;margin:6px 2px -4px;font-family:var(--display);font-size:15px;text-align:left}.chap span{font-size:12px;color:var(--lantern)}
+.chnote{font-size:12px;opacity:.7;margin:-4px 2px 0;text-align:left}
+.lv.cur{border-color:var(--lantern)}
+.set{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;font-weight:800;font-size:14.5px}
+.set small{display:block;color:var(--ink-soft);font-weight:700;font-size:12.5px}
+.tog{width:52px;height:30px;border-radius:999px;border:0;background:rgba(255,255,255,.18);position:relative;flex:none}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
+.tog.on{background:#3fd68a}.tog.on::after{left:25px}
+.answers{font-size:12.5px;color:var(--ink-soft);font-weight:700;text-align:left;line-height:1.5}
+.toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);background:rgba(8,20,34,.92);border:1.5px solid rgba(255,255,255,.16);padding:8px 14px;border-radius:999px;font-weight:800;font-size:14px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:6;white-space:nowrap}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.tog::after,.toast{transition:none}}
+</style>
+
+<div id="app">
+  <div class="top">
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.15 · 91 levels</small></div>
+    <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
+    <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
+  </div>
+
+  <div class="tip">
+    <h2 id="lvTitle">Level 1</h2>
+    <p id="lvTip"></p>
+    <div class="mix" id="mix"></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="board" aria-label="Game board. Drag from a den to a nest."></canvas>
+  </div>
+  <div class="ink"><span id="inkNow">Ink 0</span><span id="inkPar">★★★ at 0 ink</span></div>
+
+  <div class="tools">
+    <button class="tool" id="hintBtn"><span>💡</span>Hint</button>
+    <button class="tool" id="resetBtn"><span>↺</span>Restart</button>
+    <button class="tool" id="levelsBtn"><span>▦</span>Levels</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
+<div class="toast" id="toast"></div>
+
+<script id="engine">
+// ---------- Engine (no DOM). Rules live here so tests can run them headless. ----------
+// Colors are sets of paint primaries: red=1, yellow=2, blue=4. Mixing is set union. All three = mud.
+const MASK={R:1,Y:2,B:4};
+const NEST={r:1,y:2,b:4,o:3,g:6,p:5};
+const COLORS={0:"#cfe0ee",1:"#ff5d6c",2:"#ffd23f",4:"#4da3ff",3:"#ff9a3c",6:"#3fd68a",5:"#b678ff",7:"#9a7454"};
+const NAMES={0:"see-through",1:"red",2:"yellow",4:"blue",3:"orange",6:"green",5:"purple",7:"mud"};
+
+// Map legend: R Y B = critter dens, r y b o g p = nests (the color they want), # rock, = bridge (cross without mixing),
+// T = tunnel mouth (paired in reading order: 1st+2nd, 3rd+4th), 1 2 4 = filter that takes red / yellow / blue out of a stream.
+// homes = shape nests: "nest x,y":"den x,y" means that nest only takes that den's critters.
+// sol = intended route from each den in reading order (U/D/L/R). Its total length is the 3-star par.
+// These are the hand-made levels: teaching levels for each chapter, plus the later-chapter preview.
+const HAND=[
+ {name:"Lead the way",tip:"Drag from the critter den to the nest of the same color.",
+  map:["R....",".##..",".#...",".#.#.","...#r"],sol:["RRRRDDDD"]},
+ {name:"Two streams",tip:"Each color goes home. If streams cross, their colors mix, so keep these apart.",
+  map:["R.B..",".#.#.",".#...",".###.","r...b"],sol:["DDDD","DDRRDD"]},
+ {name:"Make purple",firstMix:true,tip:"Two purple nests, but only red and blue critters. What happens if their streams cross?",
+  map:["..R..",".....","B...p",".....","..p.."],sol:["DDDD","RRRR"]},
+ {name:"Odd one out",tip:"Make two purples, but keep the yellow stream clean. Streams cross straight over each other, never turning on a crossing.",mix:true,
+  map:[".R...Y","......","B..p.#",".....#","......",".p...y"],sol:["DDDDD","DLDDDRD","RRR"]},
+ {name:"Going green",tip:"Yellow and blue make green. Red just wants to go home.",mix:true,
+  map:["..Y..R","......","B...g.","...#..","......","..g..r"],sol:["DDDDD","DDDDD","RRRR"]},
+ {name:"Bridge",tip:"These two have to cross. Cross on the bridge and nothing mixes.",mix:true,
+  map:["..B...","......","R.=..r","......","#...#.","..b..."],sol:["DDDDD","RRRRR"]},
+ {name:"Orange crush",tangle:true,tip:"Make two oranges. Blue has to get past them, so find the bridge.",mix:true,
+  map:["...Y..","R....o","......","......","B..=.b","...o.."],sol:["DDDDD","RRRRR","RRRRR"]},
+ {name:"Uh oh, mud",tip:"Yellow and blue make green. All three colors together make mud, so keep red away from the green.",mix:true,mud:true,
+  map:[".....",".....","r...B",".g...","..RgY"],sol:["LDD","LLUU","ULLL"]},
+ {name:"Go around",tip:"Purple plus yellow is mud. Let yellow find a way around the purple.",mix:true,mud:true,
+  map:["..#Y..","......","..B...","...y..",".....R",".p..p#"],sol:["DDD","DDDRR","LLLLD"]},
+ {name:"Mud alert",tangle:true,tip:"Purple plus yellow makes mud. Nobody likes mud. Use the bridge.",mix:true,mud:true,
+  map:[".R.Y..","......","B...=p","......","......",".p.y.."],sol:["DDDDD","DRDDDDL","RRRRR"]},
+ {name:"Two pairs",tangle:true,tip:"One purple pair, one green pair. Watch which streams touch.",mix:true,mud:true,
+  map:[".R...Y.",".......","...#...","B....=p",".......","..g...B",".p...g."],sol:["DDDDDD","DDDDDD","RRRRRR","LLLL"]},
+ {name:"Rainbow knot",tangle:true,tip:"Six streams, three pairs: orange, green and purple. Bridges keep pairs apart.",mix:true,mud:true,
+  map:[".Y...B.","R....=o","...Y...",".#g.B#.","...g...","p=....R",".o...p."],sol:["DDLDDRDD","DDRDDLDD","RRRRRR","DD","LL","LLLLLL"]},
+ {name:"Who goes where",tip:"New! Each nest now shows whose home it is. Round critters go to the round home, square critters to the square home.",mix:true,
+  map:["R...R",".....",".....",".....","r...r"],homes:{"0,4":"4,0","4,4":"0,0"},sol:["DDRRRRDD","LLDDDLLD"]},
+ {name:"Purple homes",tip:"Two purple homes and a red home, each for one den. Check the shape in each nest. Bridges help.",mix:true,mud:true,
+  map:["R.R..B","..=...","......","......","...=..","p..r.p"],homes:{"0,5":"5,0","5,5":"0,0","3,5":"2,0"},sol:["RDDDDRRRRD","DDDRDD","DLLLLLDDDD"]},
+ {name:"Underground",tip:"New! A stream that dives into a pool comes up in the matching pool, on the other side of the dam.",mix:true,
+  map:["R.#...",".T#T..","..#...","..#...",".T#T.r","B.#..b"],sol:["RDRDDDR","URDRR"]},
+ {name:"Two dams",tip:"One dam has an underground channel under it, the other you go around. Make two purples.",mix:true,
+  map:["R.#....","..#.#..",".T#T#..","..#.#..","..#B#..","..#...p","..#..p."],sol:["RDDUURRDDDDDD","DRRR"]},
+ {name:"Filters",tip:"New! A filter takes one color out of a stream. Purple through the red filter comes out blue.",mix:true,
+  map:["..R...","......","B.....","......","..1...","..b..p"],sol:["DDDDD","RRRRRDDD"]},
+];
+
+function parseLevel(L){
+  const h=L.map.length,w=L.map[0].length,cells=[],sources=[],nests=[];
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const ch=L.map[y][x],i=y*w+x;
+    if(ch==="#")cells.push({t:"rock"});
+    else if(ch==="=")cells.push({t:"bridge"});
+    else if(ch==="T")cells.push({t:"tunnel"});
+    else if(ch==="1"||ch==="2"||ch==="4")cells.push({t:"filter",f:+ch});
+    else if(MASK[ch]){cells.push({t:"src",id:sources.length,mask:MASK[ch]});sources.push({x,y,i,mask:MASK[ch]});}
+    else if(NEST[ch]){cells.push({t:"nest",id:nests.length,mask:NEST[ch]});nests.push({x,y,i,mask:NEST[ch]});}
+    else cells.push({t:"empty"});
+  }
+  // pair tunnel mouths in reading order
+  const partner={},tun=cells.map((c,i)=>c.t==="tunnel"?i:-1).filter(i=>i>=0);
+  for(let k=0;k+1<tun.length;k+=2){partner[tun[k]]=tun[k+1];partner[tun[k+1]]=tun[k];}
+  // shape nests: which den a nest belongs to
+  Object.entries(L.homes||{}).forEach(([n,d])=>{const [nx,ny]=n.split(",").map(Number),[dx,dy]=d.split(",").map(Number);
+    const nest=nests.find(q=>q.x===nx&&q.y===ny),den=sources.findIndex(q=>q.x===dx&&q.y===dy);nest.den=den;cells[nest.i].den=den;});
+  const G={w,h,cells,sources,nests,partner,par:0};
+  G.par=L.sol.reduce((a,s,k)=>a+solPath(G,k,s).length-1,0);
+  return G;
+}
+function isJump(G,a,b){return G.partner&&G.partner[a]===b;}
+function adj(G,a,b){const ax=a%G.w,ay=(a-ax)/G.w,bx=b%G.w,by=(b-bx)/G.w;return Math.abs(ax-bx)+Math.abs(ay-by)===1;}
+function others(paths,cell,p){const r=[];paths.forEach((q,k)=>{if(k!==p&&q.indexOf(cell)>0)r.push(k);});return r;}
+// Try to extend path p into cell n. Returns true if the path changed.
+function tryStep(G,paths,p,n){
+  const path=paths[p],last=path[path.length-1];
+  if(n<0||n>=G.cells.length||!adj(G,last,n))return false;
+  if(G.cells[last].t==="tunnel"&&path.length>1&&!isJump(G,path[path.length-2],last))return false; // in a tunnel: you come out the other end
+  if(path.length>1&&path[path.length-2]===n){path.pop();return true;}   // back up
+  const k=path.indexOf(n); if(k>=0){path.length=k+1;return true;}      // pull back to an earlier cell
+  if(G.cells[last].t==="nest")return false;                            // already home
+  if(path.length>=2&&others(paths,last,p).length){                     // sitting on a crossing: go straight
+    if(n-last!==last-path[path.length-2])return false;
+  }
+  const c=G.cells[n];
+  if(c.t==="rock"||c.t==="src")return false;
+  const o=others(paths,n,p);
+  if(c.t==="nest"){if(o.length)return false;path.push(n);return true;}
+  if(c.t==="tunnel"){if(o.length||others(paths,G.partner[n],p).length||path.indexOf(G.partner[n])>=0)return false;path.push(n,G.partner[n]);return true;} // pop out the far end
+  if(c.t==="filter"){if(o.length)return false;path.push(n);return true;}
+  if(!o.length){path.push(n);return true;}
+  if(o.length>1)return false;
+  const q=paths[o[0]],j=q.indexOf(n);
+  if(j<=0)return false;                                                // can't cross a den
+  const tipThere=j===q.length-1,qd=tipThere?q[j]-q[j-1]:q[j+1]-q[j];  // an unfinished stream's tip can be crossed too;
+  if(!tipThere&&qd!==q[j]-q[j-1])return false;                         // ...otherwise it must run straight through
+  if(Math.abs(n-last)===Math.abs(qd))return false;                     // ...at a right angle
+  path.push(n);return true;
+}
+// Trim a path whose tip was left sitting on a crossing.
+function settle(paths,p,G){const path=paths[p];
+  for(;;){const t=path[path.length-1];
+    if(path.length>1&&others(paths,t,p).length){path.pop();continue;}
+    if(G&&path.length>1&&G.cells[t].t==="tunnel"&&!isJump(G,path[path.length-2],t)){path.pop();continue;} // never stop inside a tunnel mouth
+    break;}}
+// Color of each path at each cell. A crossing (not on a bridge) gives both streams the union of their incoming colors.
+function computeColors(G,paths){
+  const col=paths.map(p=>p.map(()=>G.cells[p[0]].mask));
+  for(let it=0;it<12;it++){
+    let changed=false;
+    paths.forEach((path,p)=>{
+      let c=col[p][0];
+      for(let i=1;i<path.length;i++){
+        const cell=path[i];
+        if(G.cells[cell].t!=="bridge"){
+          paths.forEach((q,k)=>{if(k===p)return;const j=q.indexOf(cell);if(j>0)c|=col[k][j-1];});
+        }
+        if(G.cells[cell].t==="filter")c&=~G.cells[cell].f;
+        if(col[p][i]!==c){col[p][i]=c;changed=true;}
+      }
+    });
+    if(!changed)break;
+  }
+  return col;
+}
+function nestStatus(G,paths,col){
+  return G.nests.map(n=>{
+    const p=paths.findIndex(path=>path.length>1&&path[path.length-1]===n.i);
+    if(p<0)return {p:-1,ok:false,color:0};
+    const color=col[p][col[p].length-1];
+    const denOk=n.den==null||n.den===p;
+    return {p,ok:color===n.mask&&denOk,color,denOk};
+  });
+}
+function isWin(G,paths,col){return nestStatus(G,paths,col).every(s=>s.ok);}
+function inkOf(paths){return paths.reduce((a,p)=>a+p.length-1,0);}
+function starsFor(ink,par){return ink<=par?3:ink<=par+4?2:1;}
+function solPath(G,s,dirs){const d={U:-G.w,D:G.w,L:-1,R:1};const out=[G.sources[s].i];
+  for(const ch of dirs){const n=out[out.length-1]+d[ch];out.push(n);if(G.cells[n].t==="tunnel")out.push(G.partner[n]);}
+  return out;}
+
+// ---------- Chapters ----------
+// Production deals mechanics out one chapter at a time: a few hand-made teaching levels, then generated levels that
+// mix the new idea with everything before it. Generated levels come from tools/generate.js, which solves each one
+// for its least-ink route (that's the par and the hint) and keeps only boards that make you think. They are pasted
+// below as data so a level never changes under a player.
+const GEN=/*GEN-START*/{"1":[{name:"Meander",tip:"Every den has a nest of its color. Keep the streams from touching.",map:["...#.","R....",".....","#....","r...."],sol:["RDDDL"],stats:{lb:5,par:5,ways:2,bend:2}},{name:"Oxbow",tip:"The short way might be blocked. Look before you draw.",map:[".....",".#...","....#",".....",".b#.B"],sol:["LULLD"],stats:{lb:5,par:5,ways:2,bend:2}},{name:"Shallows",tip:"Three stars for the least ink. Is there a shorter way?",map:["r....","#.Y..","..#..","#..R.","y..#."],sol:["LDDDL","UUULLL"],stats:{lb:7,par:11,ways:1,bend:4}},{name:"Riffle",tip:"Plan both streams before you start.",map:["#.#..R",".b..#.","......","#.#...","B.r...","......"],sol:["LLDDDDL","RUUU"],stats:{lb:7,par:11,ways:7,bend:4}},{name:"Backwater",tip:"Every den has a nest of its color. Keep the streams from touching.",map:["#....Y",".y#...","......","....#b","B.....","..#.#."],sol:["LLLLD","RRRRRU"],stats:{lb:7,par:11,ways:1,bend:4}},{name:"Eddy",tip:"The short way might be blocked. Look before you draw.",map:["..#...",".....r",".....#","..#.y.",".Y.R#.","......"],sol:["RDRRRUUL","UURUR"],stats:{lb:9,par:13,ways:4,bend:4}},{name:"Brook",tip:"Three stars for the least ink. Is there a shorter way?",map:["..B#..","......","..#...","R.b.r.","....#.",".#...."],sol:["LDDDR","DRRRUR"],stats:{lb:7,par:11,ways:2,bend:4}},{name:"Creek",tip:"Plan both streams before you start.",map:[".b.#..","......","...#.Y","...yB.","#.#.#.","......"],sol:["DDDLLUU","UULLLU"],stats:{lb:7,par:13,ways:2,bend:6}},{name:"Bayou",tip:"Every den has a nest of its color. Keep the streams from touching.",map:[".......","....Y#.",".......",".#.r#..",".......","..#.y..",".R....#"],sol:["DRDDLD","RRUUU"],stats:{lb:7,par:11,ways:6,bend:4}},{name:"Reed bend",tip:"The short way might be blocked. Look before you draw.",map:["....#..","..b...#","..R...r",".......","..#....","....#.#","......B"],sol:["RRRR","LLLLLUUUUUR"],stats:{lb:7,par:15,ways:7,bend:10}},{name:"Willow run",tip:"Three stars for the least ink. Is there a shorter way?",map:[".......",".......","......y","#...#..","......B","#.#..Y.","b......"],sol:["DDLLLLLL","UURU"],stats:{lb:8,par:12,ways:2,bend:4}},{name:"Pebble ford",tip:"Plan both streams before you start.",map:["...#...",".......","...y...","R..#...","....Y.r","..#....","......."],sol:["RRDRDRRRU","UUL"],stats:{lb:6,par:12,ways:6,bend:6}},{name:"Mill race",tip:"Every den has a nest of its color. Keep the streams from touching.",map:["......#",".......","...b#..",".....R.",".....B.","...r...","......."],sol:["RDDLLL","LLUU"],stats:{lb:6,par:10,ways:2,bend:4}}],"2":[{name:"Spring",tip:"Some nests want a color nobody has yet. Which streams should cross?",map:["....#.","#.#p..","..B...",".R....","#.....",".p..#."],sol:["DDLD","RRUU"],mix:true,stats:{lb:4,par:8,ways:2,bend:4}},{name:"Cascade",tip:"Mix where you need to, and keep the rest apart.",map:["..B#..","......","....g.","g.....","..#...","..Y..."],sol:["DDDLL","LUUURRR"],mix:true,stats:{lb:8,par:12,ways:1,bend:4}},{name:"Tributary",tip:"Every orange, green and purple needs a crossing.",map:["......","..R...","o....#",".Y....","......","..#o#."],sol:["DDDLLUU","RRDD"],mix:true,stats:{lb:7,par:11,ways:2,bend:4}},{name:"Lagoon",tip:"A stream takes the new color from the crossing onward.",map:["......",".#.#B.",".....R",".p#..p","......","......"],sol:["DDR","LLLLD"],mix:true,stats:{lb:6,par:8,ways:1,bend:2}},{name:"Sandbar",tip:"Some nests want a color nobody has yet. Which streams should cross?",map:["..o#o.","Y.....","..#...",".B....",".R....","..b..#"],sol:["RRRRU","RDD","LUURUUR"],mix:true,stats:{lb:11,par:15,ways:1,bend:4}},{name:"Inlet",tip:"Mix where you need to, and keep the rest apart.",map:["#p#....","......p","B...R..","#......",".....#.","...y...",".....Y."],sol:["URRRRRR","LLLUU","LLU"],mix:true,stats:{lb:9,par:15,ways:3,bend:6}},{name:"Channel",tip:"Every orange, green and purple needs a crossing.",map:[".......",".Y.#R..",".....#B",".#.p...",".......","....#.p","y......"],sol:["LDDDDD","DDDRRD","DLLL"],mix:true,stats:{lb:12,par:16,ways:4,bend:4}},{name:"Ripple",tip:"A stream takes the new color from the crossing onward.",map:["....Y..",".......","..B....",".gr...R","...g...","....#..",".#....."],sol:["LLLDDD","LLDDRRR","LLLL"],mix:true,stats:{lb:11,par:17,ways:4,bend:6}},{name:"Trickle",tip:"Some nests want a color nobody has yet. Which streams should cross?",map:[".....R.","g....#.",".......","B#Y..g.",".......","..#...r","......#"],sol:["RDDDDD","URRRRRD","UULL"],mix:true,stats:{lb:11,par:17,ways:3,bend:6}},{name:"Rill",tip:"Mix where you need to, and keep the rest apart.",map:[".......","#..#r..",".....#g",".......",".#Y....",".RB.g..","......#"],sol:["RRD","LUURRURRU","RUURRRU"],mix:true,stats:{lb:17,par:19,ways:3,bend:4}},{name:"Fen",tip:"Every orange, green and purple needs a crossing.",map:["....B..",".#.#.r.",".....#.",".......",".....Y.","...g.R.",".g#...."],sol:["DDLDDD","LLLLDD","RUUUUL"],mix:true,stats:{lb:10,par:18,ways:6,bend:8}},{name:"Marsh",tip:"A stream takes the new color from the crossing onward.",map:["......R","...R.B.","#.r...#","..Y..p.",".#.....",".y...p.","......."],sol:["LLLLDD","DRRD","LDDDRD","DDL"],mix:true,tangle:true,stats:{lb:15,par:19,ways:11,bend:6}},{name:"Ford",tip:"Some nests want a color nobody has yet. Which streams should cross?",map:["...r..#","..g.Y..","....B#.",".......",".......",".....g.",".R...Yy"],sol:["LDDRRDD","LLU","UUUUUURR","R"],mix:true,tangle:true,stats:{lb:11,par:19,ways:6,bend:8}},{name:"Weir",tip:"Mix where you need to, and keep the rest apart.",map:["...#Y..",".......","R..#...","......g","..B#.g.",".......","r#B..g."],sol:["DDDDDDR","DDDD","URRRR","RURRU"],mix:true,tangle:true,stats:{lb:17,par:21,ways:2,bend:6}},{name:"Rapids",tip:"Every orange, green and purple needs a crossing.",map:["r......","#......",".R.g..g","...R#..","#..B...","r.....#","......Y"],sol:["UUL","LLDDL","RRRUU","LUUUULL"],mix:true,tangle:true,stats:{lb:14,par:20,ways:3,bend:8}},{name:"Beaver dam",tip:"A stream takes the new color from the crossing onward.",map:["......#",".R.gg..",".......","..r....","Y..#y..",".....BY","....#.."],sol:["RDD","RRDRRU","UUULLU","UULLUU"],mix:true,tangle:true,stats:{lb:13,par:21,ways:20,bend:8}},{name:"Lily pads",tip:"Some nests want a color nobody has yet. Which streams should cross?",map:[".......","BB...R.","..r....",".......","g....b.","g..#Y..","......."],sol:["DDRRRRRD","DDDDL","LLLD","ULLLL"],mix:true,tangle:true,stats:{lb:14,par:22,ways:4,bend:10}}],"3":[{name:"Kingfisher",tip:"Cross on a bridge and nothing mixes.",map:["......","....R.",".=b#..","..r...","......","..B#.."],sol:["DDLL","LUUUR"],mix:true,stats:{lb:5,par:9,ways:2,bend:4}},{name:"Otter slide",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:["y.B..#",".#....","..=.Y.","#b....","......","#..#.."],sol:["DDDL","LLLLUU"],mix:true,stats:{lb:6,par:10,ways:1,bend:4}},{name:"Heron's wait",tip:"A bridge works both ways: across or along.",map:["....r.","....#.","#.....","Y.=..#","..Ry..",".....#"],sol:["RRRD","UURUUR"],mix:true,stats:{lb:8,par:10,ways:3,bend:2}},{name:"Dragonfly",tip:"Which streams need to meet, and which need to pass?",map:["....#r","....B.",".#R.=.","......",".....#",".....b"],sol:["DDDDR","RRRUU"],mix:true,stats:{lb:8,par:10,ways:1,bend:2}},{name:"Moss bank",tip:"Cross on a bridge and nothing mixes.",map:[".#.p..","......",".YB=..","...p..","..#..#",".y..R."],sol:["DDD","RRRDLL","UUUULU"],mix:true,stats:{lb:9,par:15,ways:2,bend:6}},{name:"Cattails",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:["..#B..","p.....","p.R..Y","..=...","#..y..","......"],sol:["DDDLLUUL","LL","LDDL"],mix:true,stats:{lb:10,par:14,ways:3,bend:4}},{name:"Minnow run",tip:"A bridge works both ways: across or along.",map:[".....Y.","r...#..","..=....","ggR....","#....#B",".......","..#...."],sol:["LLDDDDLLU","UULL","ULLULLLLD"],mix:true,stats:{lb:16,par:22,ways:6,bend:8}},{name:"Frog hop",tip:"Which streams need to meet, and which need to pass?",map:["#..#...",".....#.",".b.....","....#.#","o=.=...","#B..#R.","o..Y..#"],sol:["UUU","ULLLLL","UUULDDDLL"],mix:true,stats:{lb:12,par:18,ways:1,bend:6}},{name:"Stepping stones",tip:"Cross on a bridge and nothing mixes.",map:[".......",".......",".R...g.","...g#..","#.....B","..Y=...",".r....#"],sol:["DDDD","LLLU","RRRUUU"],mix:true,stats:{lb:8,par:14,ways:1,bend:6}},{name:"Duck crossing",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:[".....B.","...Y.=.","...#...","..g....","......r","...#g#.",".R....."],sol:["DDDLLL","RDDDD","RRRRRUU"],mix:true,stats:{lb:12,par:18,ways:1,bend:6}},{name:"Mayfly",tip:"A bridge works both ways: across or along.",map:["......p","p....y.",".B.#.#.","Y.=....",".....#.","R#.#...","......."],sol:["UURRRRR","RRRRUUR","URRUUULL"],mix:true,stats:{lb:18,par:22,ways:1,bend:4}},{name:"Bulrush",tip:"Which streams need to meet, and which need to pass?",map:["....#..","..#r...","....#R.",".......",".......","B..g=..",".g.#Y#."],sol:["ULL","RRR","UULLLDD"],mix:true,stats:{lb:7,par:13,ways:2,bend:6}},{name:"Watercress",tip:"Cross on a bridge and nothing mixes.",map:["..Y...#",".......",".......",".#.....","......r",".g.=...",".g.R.B."],sol:["DDDDDDL","UURRR","LULLL"],mix:true,stats:{lb:11,par:17,ways:2,bend:6}},{name:"Driftwood",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:["....#y.","#.Y....",".pp#p..","....=.B",".B.....","....=..","..#..R."],sol:["RRRU","LLLLLU","RUU","UUUUL"],mix:true,tangle:true,stats:{lb:12,par:18,ways:1,bend:6}},{name:"Trout pool",tip:"A bridge works both ways: across or along.",map:["pp#..YR","....#..","y..=...","..=.#..","...r...","..B....","R......"],sol:["LLDDDLLLU","DLDLLLLUU","UUUULLU","RRRUU"],mix:true,tangle:true,stats:{lb:22,par:30,ways:2,bend:14}},{name:"Newt pond",tip:"Which streams need to meet, and which need to pass?",map:["YR...#.","...#...",".=....Y","B=....g",".....g.",".g.#...","..r...."],sol:["DDRRDDDL","DDDDLDDRR","LDD","RRRRRR"],mix:true,tangle:true,stats:{lb:20,par:26,ways:1,bend:6}},{name:"Pebble beach",tip:"Cross on a bridge and nothing mixes.",map:[".B.#Y..",".R.....","...#..#","...p...","#......","B...=..","p.#.y#p"],sol:["LDDRRDR","DDDDDD","DDDDDL","RRRRRRD"],mix:true,tangle:true,stats:{lb:22,par:26,ways:3,bend:4}},{name:"Cedar ford",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:["o#o.B..","...=...","....R.#","....#..","...=Y..","r..b...",".#....R"],sol:["LDDDDD","ULLLLU","LLUUUU","LLLLULL"],mix:true,tangle:true,stats:{lb:17,par:25,ways:1,bend:8}},{name:"Muskrat lane",tip:"A bridge works both ways: across or along.",map:[".Yy....","..#..Y.",".......","..g.R..","..=....",".......","g..Br.."],sol:["R","LLDDDDLLLD","DDD","LUUU"],mix:true,tangle:true,stats:{lb:12,par:18,ways:6,bend:6}},{name:"Bluegill",tip:"Which streams need to meet, and which need to pass?",map:["B..#..g","Y..B...",".=.....","#....#r","..R=...",".=.....","gb.#..."],sol:["RDDDDDD","DRRRRRRUU","DDDDLLLD","RRRRU"],mix:true,tangle:true,stats:{lb:23,par:29,ways:6,bend:10}},{name:"Snail trail",tip:"Cross on a bridge and nothing mixes.",map:["#.#...p",".....p#","..Y...R","..#..B.",".=...#.","#.R.r..","...y..."],sol:["LDDDDRR","LLUURR","UU","RR"],mix:true,tangle:true,stats:{lb:13,par:17,ways:1,bend:6}},{name:"Mill wheel",tip:"Some crossings should mix and some shouldn't. Bridges decide which.",map:["....R..","...#...","#b=...B","o.....Y",".o.....","..#.#.#","Y.....y"],sol:["LLDDDDL","LLLLL","LLLLLL","RRRRRR"],mix:true,tangle:true,stats:{lb:20,par:24,ways:1,bend:6}},{name:"Old ferry",tip:"A bridge works both ways: across or along.",map:["B.#Br..",".......","#....R.","....#..","...=..Y","ggb..#.",".#....."],sol:["RDDDDD","DDDDDL","LUU","LLLLLLD"],mix:true,tangle:true,stats:{lb:20,par:22,ways:6,bend:4}}],"4":[{name:"Willow bend",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:["...oB.","..b...","o....R","......","#.#...",".Y...."],sol:["DLL","LLLLL","UUUUURR"],mix:true,mud:true,stats:{lb:9,par:15,ways:1,bend:6}},{name:"Toad stool",tip:"A mixed stream must never meet the third color.",map:[".Y.R..","....o.","......","#..B..","b.o...","......"],sol:["DRRR","LDDDD","DDLLLU"],mix:true,mud:true,stats:{lb:9,par:15,ways:8,bend:6}},{name:"Kingcup",tip:"Mud can sneak in two crossings later. Trace each stream to its nest.",map:["..g...","....#g","#...r.","Y..=..","...=..",".R..#B"],sol:["RRRRRUU","RRUUUR","ULLLUUUU"],mix:true,mud:true,stats:{lb:15,par:21,ways:1,bend:6}},{name:"Plover",tip:"Use a bridge, or go the long way round.",map:["o...b#","...o..","..B...","...Y..",".....#",".R...."],sol:["RRUU","LLLUUU","UUUURR"],mix:true,mud:true,stats:{lb:12,par:16,ways:1,bend:4}},{name:"Wren's bank",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:["...o..","..b...","....#.","R...B.","..Y...",".....o"],sol:["RRRDRRD","RUULLL","LUUUURR"],mix:true,mud:true,stats:{lb:12,par:20,ways:6,bend:8}},{name:"Silver shoal",tip:"A mixed stream must never meet the third color.",map:["..#R.b.","B...=..","#.....#","...Y...",".....#.",".#...o.","...o..."],sol:["RDDDDDDL","RRRRRU","DDRR"],mix:true,mud:true,stats:{lb:14,par:18,ways:1,bend:4}},{name:"Mossy log",tip:"Mud can sneak in two crossings later. Trace each stream to its nest.",map:[".o..Rb.","o.#....",".......",".#.....",".......","....#B.","..#...Y"],sol:["DDLLLLU","UUUUU","LLLUUUUUULL"],mix:true,mud:true,stats:{lb:19,par:23,ways:2,bend:4}},{name:"Meander",tip:"Use a bridge, or go the long way round.",map:["y.....#",".....p.",".......",".R.....","..Y.p..",".....B#","....#.."],sol:["RRRRRDLL","LLUUUU","UUUU"],mix:true,mud:true,stats:{lb:10,par:18,ways:4,bend:8}},{name:"Oxbow",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:["..g..#.","..#...r","g....Y.",".R.=...","....#.#","......B","......."],sol:["LLLLL","RRRRRUU","LLLUUUUUL"],mix:true,mud:true,stats:{lb:13,par:21,ways:1,bend:10}},{name:"Shallows",tip:"A mixed stream must never meet the third color.",map:["#.....B",".....R.","y..Y..#",".......","#Bp.p.#",".......","....p.."],sol:["LLDDDD","DDLLDDDLUU","LLL","DRRRD"],mix:true,tangle:true,mud:true,stats:{lb:16,par:24,ways:1,bend:8}},{name:"Riffle",tip:"Mud can sneak in two crossings later. Trace each stream to its nest.",map:["Y...#R.","R.#....","#.....#","....B..",".....r#","#.r..g.","g......"],sol:["RRRDDDDDRR","DDDD","RDRDDD","DDDLLLL"],mix:true,tangle:true,mud:true,stats:{lb:21,par:27,ways:4,bend:8}},{name:"Backwater",tip:"Use a bridge, or go the long way round.",map:["R#..y..","......#",".Y.#..g",".B.....",".=...r.",".......","Y.....g"],sol:["DDDDRRRRR","RURRU","DDDRRRRR","URRRRRRUUU"],mix:true,tangle:true,mud:true,stats:{lb:24,par:32,ways:6,bend:12}},{name:"Eddy",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:[".......","......B","...p...","#.gp...",".R..#..","#....Y.","g....B#"],sol:["LDLL","UURURRDDL","LLLLDL","LLLUUU"],mix:true,tangle:true,mud:true,stats:{lb:15,par:25,ways:12,bend:10}},{name:"Brook",tip:"A mixed stream must never meet the third color.",map:[".......",".p..#R.","y..R...","p.Y....","....r..","#..B...","......."],sol:["DLDD","DDLLLU","UUULLDD","LLUUUU"],mix:true,tangle:true,mud:true,stats:{lb:13,par:23,ways:3,bend:12}},{name:"Creek",tip:"Mud can sneak in two crossings later. Trace each stream to its nest.",map:[".......","#B..#..","...=r.#","..g....",".Y...g.",".....y.","R....Y."],sol:["RRDDDDLUU","RRRR","UUURURRR","U"],mix:true,tangle:true,mud:true,stats:{lb:14,par:22,ways:2,bend:8}},{name:"Bayou",tip:"Use a bridge, or go the long way round.",map:[".B.....","..BY.#.","....Rb.","......#","..#....","...b.#.","o.....o"],sol:["RRRRRDDL","LDDDDRR","DDRRDRDD","DDDDLLLL"],mix:true,tangle:true,mud:true,stats:{lb:21,par:31,ways:8,bend:10}},{name:"Reed bend",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:["...#g..",".r....Y","g...r..",".......","...R...",".....BR","#......"],sol:["LLLLULLDD","LLUUU","UUUUUL","DLLUUUU"],mix:true,tangle:true,mud:true,stats:{lb:21,par:27,ways:6,bend:6}},{name:"Willow run",tip:"A mixed stream must never meet the third color.",map:["BYR....","..#..#.","....gg.",".=.....","Y=...#.","#...r..","y.....#"],sol:["DDRRRR","DDDRRRRU","RRRRDDDDDLL","RDDL"],mix:true,tangle:true,mud:true,stats:{lb:25,par:29,ways:1,bend:8}},{name:"Pebble ford",tip:"Mud can sneak in two crossings later. Trace each stream to its nest.",map:[".......","...g.B.","..r.B..",".g.....","R......","....#.#","..Y...b"],sol:["DDDDDR","DLLL","UURR","RUUUUU"],mix:true,tangle:true,mud:true,stats:{lb:10,par:20,ways:3,bend:10}},{name:"Mill race",tip:"Use a bridge, or go the long way round.",map:[".......",".r#.R..","..gR...",".r.....",".....#g",".Y.....","..B...."],sol:["LULLD","DLL","RRRRRU","UULLUURR"],mix:true,tangle:true,mud:true,stats:{lb:14,par:22,ways:2,bend:10}},{name:"Spring",tip:"Red, yellow and blue together make mud. Keep the third color away.",map:["..yr.g.",".....#.",".B.....","..==.g.",".Y....Y",".....#.","#...R.."],sol:["DRRRR","RUUUU","LLUUUUR","LUUUUUU"],mix:true,tangle:true,mud:true,stats:{lb:18,par:24,ways:2,bend:6}}]}/*GEN-END*/;
+const CHAPTERS=[
+  {id:1,title:"First Streams",teach:["Lead the way","Two streams"]},
+  {id:2,title:"Mixing",teach:["Make purple","Odd one out","Going green"]},
+  {id:3,title:"Bridges",teach:["Bridge","Orange crush"]},
+  {id:4,title:"Mud",teach:["Uh oh, mud","Mud alert","Go around","Two pairs"]},
+  {id:0,title:"Preview: later chapters",note:"A sampler of what's still to come: shape homes, underground channels and filters.",
+    teach:["Rainbow knot","Who goes where","Purple homes","Underground","Two dams","Filters"]},
+];
+// Every level has a stable id, and saves are keyed by it, never by position: adding or reordering chapters must
+// never scramble a player's stars. Hand-made levels: "h-" + their name. Generated: chapter + slot ("c3-07").
+// Once a level has shipped, its id and board never change.
+const slug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+function buildLevels(){
+  const out=[];
+  CHAPTERS.forEach(C=>{
+    C.teach.forEach(n=>{const H=HAND.find(h=>h.name===n);out.push(Object.assign({},H,{ch:C.id,id:H.id||"h-"+slug(n)}));});
+    (GEN[C.id]||[]).forEach((L,k)=>out.push(Object.assign({},L,{ch:C.id,gen:true,id:`c${C.id}-${String(k+1).padStart(2,"0")}`})));
+  });
+  return out;
+}
+const LEVELS=buildLevels();
+if(typeof module!=="undefined")module.exports={CHAPTERS,HAND,LEVELS,parseLevel,tryStep,settle,computeColors,nestStatus,isWin,inkOf,starsFor,solPath};
+</script>
+
+<script>
+// ---------- Game ----------
+const $=id=>document.getElementById(id);
+const cv=$("board"),ctx=cv.getContext("2d");
+const store={get(k,d){try{const v=localStorage.getItem("cr-"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("cr-"+k,JSON.stringify(v));}catch(e){}}};
+// Progress format 3: everything per level is keyed by the level's stable id (see buildLevels).
+// Older saves were keyed by list position; carry them over once by mapping position -> id.
+const ID=i=>LEVELS[i].id,IDX=id=>LEVELS.findIndex(L=>L.id===id);
+let prog=(()=>{
+  const blank={v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0};
+  const saved=store.get("prog3",null);if(saved)return Object.assign(blank,saved);
+  const old=store.get("prog2",null);if(!old)return blank;
+  const byId=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>LEVELS[+k]).map(([k,v])=>[ID(+k),v]));
+  const p=Object.assign(blank,{stars:byId(old.stars),answers:byId(old.answers),trace:byId(old.trace),plays:byId(old.plays),seen:old.seen||{},all:(old.unlocked||1)>=LEVELS.length});
+  p.total=Object.values(p.stars).reduce((a,b)=>a+b,0);return p;
+})();
+function saveProg(){store.set("prog3",prog);}
+// Open levels: everything up to one past the furthest level with stars (or all, in tester mode).
+function openCount(){if(prog.all)return LEVELS.length;let far=-1;LEVELS.forEach((L,i)=>{if(prog.stars[L.id])far=i;});return Math.min(LEVELS.length,far+2);}
+let retraces=0,hintsUsed=0,drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null;
+function fireworks(cell,mask){
+  const [cx,cy]=C(cell),cols=[COLORS[mask],"#ffffff",COLORS[mask],"#fff2b8"];
+  for(let b=0;b<4;b++){const bx=b?Math.random()*cs*G.w:cx,by=b?Math.random()*cs*G.h*.7:cy,t0=performance.now()+b*220;
+    for(let k=0;k<34;k++){const a=Math.random()*Math.PI*2,v=cs*(1.2+Math.random()*2.2);parts.push({x:bx,y:by,vx:Math.cos(a)*v,vy:Math.sin(a)*v,t0,life:900+Math.random()*600,c:cols[k%4]});}}
+}
+let opts=store.get("opts",{shapes:true,sound:true});
+let lv=0,G,paths,col,active=-1,won=false,wonAt=0,hints=[],cs=60,dpr=1,lastStatus=[],bloom=[],sparks=[];
+const SHAPES=["round","square","drop","star","diamond","hex"];
+
+function startLevel(n,keep){
+  lv=n;G=parseLevel(LEVELS[n]);
+  paths=keep&&keep.length===G.sources.length?keep:G.sources.map(s=>[s.i]);
+  active=-1;won=false;hints=[];bloom=G.nests.map(()=>0);sparks=[];retraces=0;hintsUsed=0;turnTold=false;
+  drawn=paths.map(p=>p.slice());legendMix=!!LEVELS[n].mix;clearToast();
+  if(!keep){prog.plays[ID(n)]=(prog.plays[ID(n)]||0)+1;saveProg();}
+  recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
+  const L=LEVELS[n];
+  $("lvTitle").textContent=`Level ${n+1} · ${L.name}`;
+  $("lvTip").textContent=L.tip;
+  renderLegend();
+  const hasBridge=L.map.some(r=>r.includes("=")),hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
+  const intro=(key,msg)=>{if(!prog.seen[key]){prog.seen[key]=1;saveProg();laterToast(msg);return true;}return false;};
+  newTile=0;
+  if(L.homes&&intro("homes","New: nests that want one den's critters"))newTile=performance.now();
+  if(hasT&&intro("tunnel","New: underground channels"))newTile=performance.now();
+  if(fl.length&&intro("filter","New: color filters"))newTile=performance.now();
+  bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
+  resize();updateInk();updateStars();updateHintBtn();store.set("cur",ID(n));
+}
+// Legend chips above the board. The first-mix level starts without the mix chart so the first purple is a surprise; it appears once they mix.
+function renderLegend(){
+  const L=LEVELS[lv];
+  // the first-mix level keeps the chart's space (hidden) so the board doesn't jump when it appears
+  const mixes=legendMix||L.firstMix?[[1,4,5],[1,2,3],[2,4,6]]:[];
+  let html=mixes.map(([a,b,c])=>`<span class="chip${legendMix?"":" veil"}"><i class="dot" style="background:${COLORS[a]};color:${COLORS[a]}"></i>+<i class="dot" style="background:${COLORS[b]};color:${COLORS[b]}"></i>=<i class="dot" style="background:${COLORS[c]};color:${COLORS[c]}"></i>${NAMES[c]}</span>`).join("");
+  const hasBridge=L.map.some(r=>r.includes("="));
+  if(hasBridge)html+=`<span class="chip"><i class="brg"></i>bridge: cross without mixing</span>`;
+  if(L.mud)html+=`<span class="chip"><i class="dot" style="background:${COLORS[5]};color:${COLORS[5]}"></i>+<i class="dot" style="background:${COLORS[2]};color:${COLORS[2]}"></i>=<i class="dot" style="background:${COLORS[7]};color:${COLORS[7]}"></i>mud</span>`;
+  const hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
+  if(L.homes)html+=`<span class="chip">shape in a nest = only those critters</span>`;
+  if(hasT)html+=`<span class="chip"><i class="tun"></i>dive in, come up at the matching pool</span>`;
+  fl.forEach(f=>html+=`<span class="chip"><i class="dot" style="background:${COLORS[f]};color:${COLORS[f]}"></i>filter takes ${NAMES[f]} out</span>`);
+  $("mix").innerHTML=html;
+}
+function recolor(){col=computeColors(G,paths);}
+function updateInk(){const ink=inkOf(paths);$("inkNow").textContent=`Ink ${ink}`;$("inkPar").textContent=`★★★ at ${G.par} ink or less`;}
+function updateStars(){$("totalStars").textContent=Object.values(prog.stars).reduce((a,b)=>a+b,0);}
+
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect();
+  const maxH=Math.max(260,window.innerHeight-300);
+  cs=Math.floor(Math.min(r.width/G.w,maxH/G.h));
+  dpr=Math.min(3,window.devicePixelRatio||1);
+  cv.style.width=cs*G.w+"px";cv.style.height=cs*G.h+"px";cv.style.margin="0 auto";
+  cv.width=cs*G.w*dpr;cv.height=cs*G.h*dpr;
+}
+window.addEventListener("resize",()=>G&&resize());
+
+// ---------- sound ----------
+let ac=null;
+function tone(f,dur,type="sine",vol=.12,when=0){
+  if(!opts.sound)return;
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const t=ac.currentTime+when;const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.01);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+dur+.02);}catch(e){}
+}
+const sfx={
+  step(){tone(520+Math.random()*80,.06,"sine",.03);},
+  home(){tone(660,.12,"triangle",.1);tone(990,.18,"triangle",.08,.08);},
+  wrong(){tone(180,.22,"sawtooth",.05);},
+  mix(){tone(440,.1,"sine",.08);tone(554,.14,"sine",.07,.06);},
+  mud(){tone(110,.3,"square",.05);},
+  magic(){[392,523,659,784,1047,1319].forEach((f,i)=>tone(f,.5,"sine",.07,i*.06));},
+  win(){[523,659,784,1047].forEach((f,i)=>tone(f,.25,"triangle",.09,i*.09));}
+};
+// the stream diving into a pool: a quick falling "bl" then a rising "oop"
+function bloop(){if(!opts.sound)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
+  o.type="sine";o.frequency.setValueAtTime(520,t);o.frequency.exponentialRampToValueAtTime(160,t+.09);o.frequency.exponentialRampToValueAtTime(420,t+.2);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.13,t+.015);g.gain.exponentialRampToValueAtTime(.001,t+.26);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+.3);}catch(e){}}
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
+
+// ---------- input ----------
+// After a stream goes through a tunnel the finger is still on the entry side, so the drag carries on from the far
+// cave as if the finger had come out there too: each tunnel taken adds the jump to a warp until the finger lifts.
+let warps=[];
+const warpXY=()=>warps.reduce(([x,y],w)=>[x+w.dx,y+w.dy],[0,0]);
+function realFinger(e){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/cs,(e.clientY-r.top)/cs];}
+function fingerAt(e){const [fx,fy]=realFinger(e),[wx,wy]=warpXY();return [fx+wx,fy+wy];}
+function cellAt(e){const [fx,fy]=fingerAt(e),x=Math.floor(fx),y=Math.floor(fy);if(x<0||y<0||x>=G.w||y>=G.h)return -1;return y*G.w+x;}
+const done=k=>paths[k].length>1&&G.cells[paths[k][paths[k].length-1]].t==="nest";
+// Snap forgiveness: a press that lands next to an unfinished stream's tip (or its den) carries on from that tip.
+function nearTip(e){
+  const [fx,fy]=realFinger(e);let best=-1,bd=1.6;
+  paths.forEach((p,k)=>{if(done(k))return;const t=p[p.length-1],tx=t%G.w+.5,ty=Math.floor(t/G.w)+.5,d=Math.hypot(fx-tx,fy-ty);if(d<bd){bd=d;best=k;}});
+  return best;
+}
+let lastCell=-1,popAt={};
+cv.addEventListener("pointerdown",e=>{
+  if(won)return;warps=[];const c=cellAt(e);if(c<0)return;
+  const cell=G.cells[c];
+  if(cell.t==="src")paths[cell.id]=[c],active=cell.id;
+  else{
+    const owners=paths.map((p,k)=>p.indexOf(c)>0?k:-1).filter(k=>k>=0);
+    // pressing a cell two streams share: a stream whose tip is here carries on, otherwise cut the top one
+    if(owners.length){active=owners.find(k=>paths[k][paths[k].length-1]===c)??owners[owners.length-1];paths[active].length=cutPoint(paths[active],c)+1;}
+    else{active=nearTip(e);if(active<0)return;lastCell=-1;cv.setPointerCapture(e.pointerId);follow(e);return;}
+  }
+  lastCell=c;cv.setPointerCapture(e.pointerId);afterChange(false);
+});
+let lastReal=-1;
+cv.addEventListener("pointermove",e=>{if(active<0)return;const c=cellAt(e),[fx,fy]=realFinger(e),rc=Math.floor(fy)*G.w+Math.floor(fx);
+  if(c===lastCell&&rc===lastReal)return;lastReal=rc;if(c>=0||warps.length)follow(e);});
+// Move the active stream toward the finger, carrying on through any tunnels it goes into.
+function follow(e){
+  const path=paths[active];
+  while(warps.length&&path.length<warps[warps.length-1].len)warps.pop(); // that tunnel was undone
+  const w=warps[warps.length-1];
+  if(w&&path.length===w.len){ // just out of the cave, and the finger went back to before the entry with no way on: back out
+    const [fx,fy]=realFinger(e),[wx,wy]=warpXY(),rc=Math.floor(fy+wy-w.dy)*G.w+Math.floor(fx+wx-w.dx); // the finger as it was before this tunnel
+    const c=cellAt(e),test=paths.map(q=>q.slice()),onward=c>=0&&adj(G,path[path.length-1],c)&&tryStep(G,test,active,c);
+    if(rc===path[w.len-3]&&!onward){path.length=w.len-2;warps.pop();lastCell=cellAt(e);afterChange(false);return;}
+  }
+  for(let k=0;k<4;k++){const c=cellAt(e);if(c<0)break;lastCell=c;if(walkTo(c)!=="tunnel")break;}
+  afterChange(false);
+}
+// Walk the active stream one cell at a time toward cell c, so fast drags don't skip.
+function walkTo(c){
+  // finger back on the stream: pull it back to there
+  if(paths[active].indexOf(c)>0){paths[active].length=cutPoint(paths[active],c)+1;return "cut";}
+  let guard=0;
+  while(guard++<20){
+    const tip=paths[active][paths[active].length-1];if(tip===c)break;
+    const tx=tip%G.w,ty=(tip-tx)/G.w,cx=c%G.w,cy=(c-cx)/G.w;
+    const dx=cx-tx,dy=cy-ty;
+    const step=Math.abs(dx)>=Math.abs(dy)?tip+Math.sign(dx):tip+Math.sign(dy)*G.w;
+    const before=paths[active].length;
+    if(!tryStep(G,paths,active,step)){
+      const alt=Math.abs(dx)>=Math.abs(dy)?(dy?tip+Math.sign(dy)*G.w:-1):(dx?tip+Math.sign(dx):-1);
+      if(alt<0||!tryStep(G,paths,active,alt)){
+        // tell them once why a turn on a crossing doesn't work
+        if(!turnTold&&before>1&&paths.some((q,k)=>k!==active&&q.indexOf(tip)>0)){turnTold=true;toast("Streams cross straight over, no turning on a crossing");}
+        break;}
+    }
+    sfx.step();
+    if(paths[active].length===before+2){ // dove into a pool: bloop, and the finger now draws from the matching pool
+      bloop();
+      const p=paths[active],a=p[p.length-2],b=p[p.length-1];
+      warps.push({len:p.length,entry:a,dx:b%G.w-a%G.w,dy:Math.floor(b/G.w)-Math.floor(a/G.w)});
+      popAt[active+":"+b]=performance.now();sparks.push({cell:b,color:col[active][col[active].length-1]||G.sources[active].mask,t:performance.now(),big:false});
+      return "tunnel";
+    }
+  }
+  return "walk";
+}
+// cutting a stream at a tunnel mouth keeps the far end too, so the stream never stops inside a tunnel
+function cutPoint(path,c){const k=path.indexOf(c);return G.cells[c].t==="tunnel"&&isJump(G,c,path[k+1])?k+1:k;}
+function release(e){
+  if(active<0)return;
+  // count the finger's final spot too, in case the last move event never came
+  const c=cellAt(e);if(c>=0&&c!==lastCell)follow(e);
+  snapHome(e);endDrag();warps=[];
+}
+// Lifted one cell short of a nest: let it in if the finger was in the near half of the cell,
+// or if the nest is straight ahead and would take this stream as it is.
+function snapHome(e){
+  const path=paths[active],tip=path[path.length-1];if(done(active))return;
+  const [fx,fy]=fingerAt(e),prev=path.length>1?path[path.length-2]:-1;
+  for(const n of G.nests){
+    if(!adj(G,tip,n.i)||paths.some(q=>q.indexOf(n.i)>0))continue;
+    const near=Math.hypot(fx-(n.x+.5),fy-(n.y+.5))<.9;
+    const ahead=prev>=0&&!isJump(G,prev,tip)&&n.i-tip===tip-prev;
+    if(!near&&!ahead)continue;
+    if(!tryStep(G,paths,active,n.i))continue;
+    if(near)return;
+    const ok=nestStatus(G,paths,computeColors(G,paths)).find(s=>s.p===active);
+    if(ok&&ok.ok)return;
+    path.pop(); // would be refused: leave it where the finger stopped
+  }
+}
+function endDrag(){if(active<0)return;settle(paths,active,G);judgeRetrace(active);active=-1;afterChange(true);}
+// A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
+// Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
+function judgeRetrace(k){
+  const now=paths[k],best=drawn[k];let j=0;while(j<now.length&&j<best.length&&now[j]===best[j])j++;
+  if(j===now.length)return;                         // only cut back so far
+  if(j<best.length&&best.length-j>=2)retraces++;
+  drawn[k]=now.slice();
+}
+cv.addEventListener("pointerup",release);cv.addEventListener("pointercancel",()=>{endDrag();warps=[];});
+
+let lastCrossColors="";
+function afterChange(released){
+  const before=JSON.stringify(col.map(c=>c[c.length-1]));
+  recolor();updateInk();
+  if(hints.length){pruneHints();updateHintBtn();}
+  // feedback for new mixes
+  const crosses=crossings();const sig=crosses.map(x=>x.cell+":"+x.color).join(",");
+  if(sig!==lastCrossColors){
+    const prev=new Set(lastCrossColors.split(","));
+    crosses.forEach(x=>{if(!prev.has(x.cell+":"+x.color)&&x.mix){
+      const first=!prog.seen[x.color];
+      if(first){prog.seen[x.color]=1;saveProg();}
+      if(x.color===7){sfx.mud();buzz(40);if(first)toast("Uh oh, mud! Purple + yellow mixes to mud");}
+      else if(first){sfx.magic();buzz([15,30,15,30,60]);toast(`✨ New color: ${NAMES[x.color]}!`);}
+      else{sfx.mix();buzz(12);}
+      sparks.push({cell:x.cell,color:x.color,t:performance.now(),big:first});
+      wash={color:x.color,t:performance.now(),strength:x.color===7?.1:first?.28:.12};
+      if(first&&x.color!==7)fireworks(x.cell,x.color);
+      if(!legendMix&&LEVELS[lv].firstMix){legendMix=true;renderLegend();}}});
+    lastCrossColors=sig;
+  }
+  const st=nestStatus(G,paths,col);
+  st.forEach((s,k)=>{
+    if(s.p>=0&&!lastStatus[k]&&s.ok){sfx.home();buzz(15);}
+    if(s.p>=0&&!s.ok&&released&&lastStatus[k]!=="bad"){sfx.wrong();buzz([20,40,20]);toast(s.denOk===false?`This home is for the ${SHAPES[G.nests[k].den]} critters`:`This nest only takes ${NAMES[G.nests[k].mask]}, not ${NAMES[s.color]}`);}
+  });
+  lastStatus=st.map((s,k)=>s.ok?true:(s.p>=0&&(released||lastStatus[k]==="bad")?"bad":false)); // "bad" only counts once the finger lifts, so the refusal is announced
+  if(released&&isWin(G,paths,col))win();
+}
+function crossings(){
+  const out=[];
+  for(let c=0;c<G.cells.length;c++){
+    const on=paths.map((p,k)=>[k,p.indexOf(c)]).filter(([k,j])=>j>0);
+    if(on.length===2){const [p,i]=on[0],[q,j]=on[1];const br=G.cells[c].t==="bridge";
+      out.push({cell:c,bridge:br,color:col[p][i],mix:!br&&col[p][i-1]!==col[q][j-1],a:on[0],b:on[1]});} // same colors crossing isn't a mix
+  }
+  return out;
+}
+
+// ---------- win / sheets ----------
+function win(){
+  won=true;wonAt=performance.now();hints=[];updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
+  const ink=inkOf(paths),s=starsFor(ink,G.par);
+  const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id];
+  if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
+  prog.stars[id]=Math.max(prog.stars[id]||0,s);prog.total=Object.values(prog.stars).reduce((a,b)=>a+b,0); // total + highest: what leaderboards will rank on
+  if(lv+1>(prog.highest||0)){prog.highest=lv+1;prog.highestId=id;}
+  saveProg();updateStars();
+  const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},1300);
+}
+function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</span>`).join("");}
+// Muse's pass/fail bar: on a tangle level, a first-time player routes every stream without re-tracing (and without a hint).
+function traceLine(t){if(!t)return "Not measured on this clear";return t.pass?"PASS: every stream traced first try":`FAIL: ${t.retraces} re-trace${t.retraces===1?"":"s"}${t.hints?`, ${t.hints} hint${t.hints===1?"":"s"}`:""}`;}
+function askBlock(fresh){
+  if(!LEVELS[lv].tangle)return "";
+  const t=prog.trace[ID(lv)],now={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
+  const a=prog.answers[ID(lv)];const opt=[["easy","Easy"],["sec","Took a sec"],["lost","Lost track"]];
+  // the first clear is the one that counts for the test; a replay shows this play too, so it's clear which is which
+  const check=fresh?`<b>Readability check (first clear, saved)</b><p>${traceLine(t)}</p>`
+    :`<b>This play</b><p>${traceLine(now)}</p><b>Saved first clear</b><p>${traceLine(t)}</p>`;
+  return `<div class="ask">${check}<b>Could you tell whose critters were whose?</b><div class="row">${opt.map(([k,t])=>`<button data-ans="${k}" class="${a===k?"on":""}">${t}</button>`).join("")}</div></div>`;
+}
+function showWin(s,ink,fresh){
+  const last=lv===LEVELS.length-1,nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
+  const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close! Just ${over} ink over par. Three stars at ${G.par}.`:`${ink} ink. Three stars at ${G.par} or less.`; // near-miss drives the retry
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${askBlock(fresh)}
+   ${last?`<p>That's every level in this prototype. Thanks for playing!</p><button class="big" id="goLevels">See all levels</button>`:`<button class="big" id="goNext">Next level</button>`}
+   <button class="ghost" id="goRetry">Play again for more stars</button>`);
+  $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
+  if(last)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();startLevel(lv+1);};
+  wireAsk();
+}
+function wireAsk(){
+  document.querySelectorAll("[data-ans]").forEach(b=>b.onclick=()=>{prog.answers[ID(lv)]=b.dataset.ans;saveProg();document.querySelectorAll("[data-ans]").forEach(x=>x.classList.toggle("on",x===b));});
+}
+function showLevels(){
+  const names={easy:"Easy",sec:"Took a sec",lost:"Lost track"};
+  const keys=[...new Set([...Object.keys(prog.answers),...Object.keys(prog.trace)])].filter(k=>IDX(k)>=0).sort((a,b)=>IDX(a)-IDX(b));
+  let ans=keys.map(k=>`Level ${IDX(k)+1}: ${prog.trace[k]?traceLine(prog.trace[k]):"not cleared"}${prog.answers[k]?` · "${names[prog.answers[k]]}"`:""}`).join("<br>");
+  const fm=LEVELS.findIndex(L=>L.firstMix);
+  const fp=prog.plays[ID(fm)];if(fp)ans=`Level ${fm+1} (first mix) played ${fp} time${fp===1?"":"s"}`+(ans?"<br>"+ans:"");
+  const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}</small></button>`;
+  const chapters=CHAPTERS.map(C=>{const ids=LEVELS.map((L,i)=>L.ch===C.id?i:-1).filter(i=>i>=0);
+    const got=ids.reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
+    return `<div class="chap"><b>${C.id?`Chapter ${C.id} · `:""}${C.title}</b><span>★ ${got}/${ids.length*3}</span></div>${C.note?`<p class="chnote">${C.note}</p>`:""}<div class="grid">${ids.map(btn).join("")}</div>`;}).join("");
+  openSheet(`<h3>Levels</h3>${chapters}
+    ${ans?`<div class="answers"><b>Readability results</b><br>${ans}</div>`:""}
+    <button class="ghost" id="close">Close</button>`);
+  document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{closeSheet();startLevel(+b.dataset.lv);});
+  $("close").onclick=closeSheet;
+}
+function showSettings(){
+  openSheet(`<h3>Settings</h3>
+   <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" aria-label="Critter shapes"></button></div>
+   <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" aria-label="Sound"></button></div>
+   <p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>
+   <button class="ghost" id="close">Close</button>`);
+  $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);store.set("opts",opts);};
+  $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);store.set("opts",opts);};
+  $("close").onclick=closeSheet;
+}
+function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;}
+function closeSheet(){$("sheet").hidden=true;}
+$("sheet").addEventListener("click",e=>{if(e.target.id==="sheet"&&!won)closeSheet();});
+$("levelsBtn").onclick=showLevels;$("setBtn").onclick=showSettings;
+$("resetBtn").onclick=()=>startLevel(lv);
+// Hints stay on the board until that den's stream follows them. Each press adds the next den's route; once every
+// unfinished den has one, the button hides them all.
+const routeOf=s=>solPath(G,s,LEVELS[lv].sol[s]);
+const onRoute=s=>JSON.stringify(routeOf(s))===JSON.stringify(paths[s]);
+function pruneHints(){hints=hints.filter(s=>!onRoute(s));}
+function nextHint(){for(let s=0;s<G.sources.length;s++)if(!onRoute(s)&&!hints.includes(s))return s;return -1;}
+function updateHintBtn(){const more=won||nextHint()>=0||!hints.length;$("hintBtn").innerHTML=more?"<span>💡</span>Hint":"<span>🙈</span>Hide hints";}
+$("hintBtn").onclick=()=>{
+  if(won)return;pruneHints();const s=nextHint();
+  if(s>=0){hints.push(s);hintsUsed++;}else hints=[];
+  updateHintBtn();
+};
+let taps=0,tapT=0;
+$("brand").addEventListener("click",()=>{const n=performance.now();taps=n-tapT<3000?taps+1:1;tapT=n;if(taps>=5){testerUnlock();taps=0;}});
+// tester builds: 5 taps on the title (up to 3 s apart, so automated clicks count) or a ?unlock=1 / #unlock=1 link
+function testerUnlock(){prog.all=true;saveProg();if(typeof updateStars=="function")updateStars();toast("Tester mode: all levels open");}
+try{if(/[?&#]unlock=1\b/.test(location.search+location.hash))testerUnlock();}catch(e){}
+function toast(t,ms=1900){const el=$("toast");clearTimeout(toastTimer);el.textContent=t;el.classList.add("show");
+  toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";},300);},ms);}
+function clearToast(){clearTimeout(toastTimer);const el=$("toast");el.classList.remove("show");el.textContent="";}
+function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at)toast(t);},400);}
+
+// ---------- drawing ----------
+const C=(i)=>{const x=i%G.w,y=(i-x)/G.w;return [(x+.5)*cs,(y+.5)*cs];};
+function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;}
+function rrect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function drawShapeAlways(x,y,r,shape){const o=opts.shapes;opts.shapes=true;drawShape(x,y,r,shape);opts.shapes=o;}
+function drawShape(x,y,r,shape){
+  ctx.beginPath();
+  if(shape==="round"||!(opts.shapes||LEVELS[lv].homes)){ctx.arc(x,y,r,0,Math.PI*2);}
+  else if(shape==="square"){rrect(x-r*.92,y-r*.92,r*1.84,r*1.84,r*.45);}
+  else if(shape==="drop"){ctx.moveTo(x,y-r*1.25);ctx.bezierCurveTo(x+r*1.1,y-r*.2,x+r*1.05,y+r,x,y+r);ctx.bezierCurveTo(x-r*1.05,y+r,x-r*1.1,y-r*.2,x,y-r*1.25);}
+  else if(shape==="star"){for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,rr=k%2?r*.6:r*1.2;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();}
+  else if(shape==="diamond"){ctx.moveTo(x,y-r*1.2);ctx.lineTo(x+r*1.05,y);ctx.lineTo(x,y+r*1.2);ctx.lineTo(x-r*1.05,y);ctx.closePath();}
+  else if(shape==="hex"){for(let k=0;k<6;k++){const a=k*Math.PI/3;ctx.lineTo(x+Math.cos(a)*r*1.05,y+Math.sin(a)*r*1.05);}ctx.closePath();}
+}
+function critter(x,y,r,shape,mask,glow,blink,phase){
+  const color=COLORS[mask];
+  ctx.save();
+  if(phase!=null){const w=Math.sin(phase);ctx.translate(x,y);ctx.rotate(w*.16);ctx.scale(1+.07*Math.abs(w),1-.07*Math.abs(w));ctx.translate(-x,-y);} // waddle
+  ctx.save();ctx.shadowColor=color;ctx.shadowBlur=glow;ctx.fillStyle=color;drawShape(x,y,r,shape);ctx.fill();ctx.restore();
+  ctx.fillStyle="rgba(255,255,255,.35)";ctx.beginPath();ctx.arc(x-r*.35,y-r*.4,r*.28,0,Math.PI*2);ctx.fill();
+  // face
+  const ey=y-r*.08,ex=r*.36,er=Math.max(1.2,r*.24);
+  if(mask===7){ctx.strokeStyle="#2a1a10";ctx.lineWidth=Math.max(1,r*.16);ctx.beginPath();ctx.moveTo(x-ex-er,ey);ctx.lineTo(x-ex+er,ey);ctx.moveTo(x+ex-er,ey);ctx.lineTo(x+ex+er,ey);ctx.moveTo(x-r*.3,y+r*.45);ctx.quadraticCurveTo(x,y+r*.25,x+r*.3,y+r*.45);ctx.stroke();ctx.restore();return;}
+  ctx.fillStyle="#fff";ctx.beginPath();ctx.ellipse(x-ex,ey,er,blink?er*.25:er,0,0,Math.PI*2);ctx.ellipse(x+ex,ey,er,blink?er*.25:er,0,0,Math.PI*2);ctx.fill();
+  if(!blink){ctx.fillStyle="#13202e";ctx.beginPath();ctx.arc(x-ex,ey+er*.15,er*.55,0,Math.PI*2);ctx.arc(x+ex,ey+er*.15,er*.55,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+}
+
+// A little wooden footbridge running up/down the cell, with rails, posts and a shadow on the water.
+function drawBridge(i,now){
+  const x=(i%G.w)*cs,y=Math.floor(i/G.w)*cs,w=cs*.5,l=x+(cs-w)/2;
+  ctx.save();
+  ctx.fillStyle="rgba(0,0,0,.35)";rrect(l+cs*.04,y+cs*.06,w,cs*.9,cs*.08);ctx.fill();
+  const g=ctx.createLinearGradient(l,0,l+w,0);g.addColorStop(0,"#8a6038");g.addColorStop(.5,"#b9864f");g.addColorStop(1,"#8a6038");
+  ctx.fillStyle=g;rrect(l,y+cs*.02,w,cs*.96,cs*.08);ctx.fill();
+  ctx.strokeStyle="rgba(60,36,18,.7)";ctx.lineWidth=Math.max(1,cs*.022);
+  for(let k=1;k<7;k++){const yy=y+cs*.02+k*cs*.96/7;ctx.beginPath();ctx.moveTo(l+2,yy);ctx.lineTo(l+w-2,yy);ctx.stroke();}
+  ctx.strokeStyle="#e2b77c";ctx.lineWidth=Math.max(1.5,cs*.045);ctx.lineCap="round";ctx.fillStyle="#f0cf9a";
+  [l+cs*.03,l+w-cs*.03].forEach(rx=>{ctx.beginPath();ctx.moveTo(rx,y+cs*.06);ctx.lineTo(rx,y+cs*.94);ctx.stroke();
+    [.08,.5,.92].forEach(f=>{ctx.beginPath();ctx.arc(rx,y+cs*f,cs*.045,0,Math.PI*2);ctx.fill();});});
+  if(bridgeIntro&&now-bridgeIntro<4000){const a=(now-bridgeIntro)/4000,pl=.5+.5*Math.sin(now/180);
+    ctx.strokeStyle=`rgba(255,240,200,${(1-a)*(.5+.5*pl)})`;ctx.lineWidth=cs*.06;ctx.beginPath();ctx.arc(x+cs/2,y+cs/2,cs*(.55+.08*pl),0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+// ---------- rocks, mountains and caves ----------
+// A lone rock is a boulder in the stream. Rocks that touch join into one mountain ridge; tall peaks get snow.
+// Terrain is the backdrop, so it's kept slate-blue and quiet; the streams are the stars.
+const isRock=(x,y)=>x>=0&&y>=0&&x<G.w&&y<G.h&&G.cells[y*G.w+x].t==="rock";
+function rockGroups(){
+  const comp=G.cells.map(()=>-1),size=[];
+  G.cells.forEach((c,i)=>{if(c.t!=="rock"||comp[i]>=0)return;const id=size.length,st=[i];let n=0;comp[i]=id;
+    while(st.length){const j=st.pop(),x=j%G.w,y=(j-x)/G.w;n++;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{const k=j+dx+dy*G.w;if(isRock(x+dx,y+dy)&&comp[k]<0){comp[k]=id;st.push(k);}});}
+    size.push(n);});
+  return {comp,size};
+}
+// Underground channel pairs, numbered in reading order of their first pool; both pools share a rim color and a glyph.
+// The glyphs are deliberately not critter shapes, so a pool never reads as a shape home.
+const TUN_COLORS=["#5fe0d0","#ff9ad5","#c8f06a"],TUN_GLYPHS=["tri","moon","plus"];
+function tunnelPair(i){const firsts=Object.keys(G.partner).map(Number).filter(k=>k<G.partner[k]).sort((a,b)=>a-b);return firsts.indexOf(Math.min(i,G.partner[i]));}
+function poolInfo(i){const x=i%G.w,y=(i-x)/G.w;return {x,y,cx:(x+.5)*cs,cy:(y+.5)*cs,pair:tunnelPair(i)};}
+function glyph(b,kind,x,y,r){
+  b.beginPath();
+  if(kind==="tri"){b.moveTo(x,y-r);b.lineTo(x+r*.95,y+r*.7);b.lineTo(x-r*.95,y+r*.7);b.closePath();b.fill();}
+  else if(kind==="moon"){b.arc(x,y,r,Math.PI*.3,Math.PI*1.7);b.arc(x+r*.5,y,r*.78,Math.PI*1.6,Math.PI*.4,true);b.closePath();b.fill();}
+  else{const t=r*.38;b.rect(x-t,y-r,2*t,2*r);b.rect(x-r,y-t,2*r,2*t);b.fill();}
+}
+// An underground channel: a calm, deep pool where the stream sinks into the ground, with a ring of wet stones,
+// a rim in the pair's color and the pair's glyph on the bank above it.
+function drawPool(b,i,rnd){
+  const {cx,cy,pair}=poolInfo(i),mc=TUN_COLORS[pair%3],R=cs*.33,edge=blobPts(cx,cy,R,.14,rnd,12);
+  b.save();
+  for(let k=0;k<10;k++){const a=rnd()*Math.PI*2,d=R+cs*(.05+rnd()*.05);b.fillStyle=`rgba(190,225,245,${.04+rnd()*.06})`;b.beginPath();b.ellipse(cx+Math.cos(a)*d,cy+Math.sin(a)*d,cs*(.06+rnd()*.05),cs*(.03+rnd()*.03),a+1.5,0,Math.PI*2);b.fill();} // ripples at the edge
+  b.fillStyle="#3e4c55";smoothPath(b,blobPts(cx,cy,R+cs*.07,.16,rnd,13));b.fill();                // muddy bank
+  for(let k=0;k<13;k++){const a=k/13*Math.PI*2+rnd()*.35,r=cs*(.025+rnd()*.03),d=R+cs*(.02+rnd()*.03);  // wet stones, all different
+    b.fillStyle=["#6c7a86","#58656f","#7d8a95","#4f5b64"][Math.floor(rnd()*4)];smoothPath(b,blobPts(cx+Math.cos(a)*d,cy+Math.sin(a)*d,r,.4,rnd,6,.8));b.fill();}
+  const g=b.createRadialGradient(cx,cy+cs*.03,cs*.02,cx,cy,R);g.addColorStop(0,"#000308");g.addColorStop(.65,"#04121f");g.addColorStop(1,"#123650");
+  b.fillStyle=g;smoothPath(b,edge);b.fill();                                                        // the deep water
+  b.strokeStyle=hexA(mc,.85);b.lineWidth=Math.max(1.5,cs*.028);smoothPath(b,edge);b.stroke();          // pair rim, following the water's edge
+  b.strokeStyle="rgba(200,235,255,.16)";b.lineWidth=cs*.014;b.beginPath();b.arc(cx,cy,R*.78,Math.PI*1.1,Math.PI*1.55);b.stroke(); // sheen
+  const gy=cy-R-cs*.03;b.fillStyle="rgba(10,18,28,.75)";b.beginPath();b.arc(cx,gy,cs*.08,0,Math.PI*2);b.fill();
+  b.fillStyle=mc;b.shadowColor=mc;b.shadowBlur=cs*.14*dpr;glyph(b,TUN_GLYPHS[pair%3],cx,gy,cs*.055);
+  b.restore();
+}
+// An irregular, organic outline (no clean circles): radius wobbles round the shape.
+function blobPts(cx,cy,r,jit,rnd,n=14,sy=1){const pts=[];for(let k=0;k<n;k++){const a=k/n*Math.PI*2,rr=r*(1-jit/2+rnd()*jit);pts.push([cx+Math.cos(a)*rr,cy+Math.sin(a)*rr*sy]);}return pts;}
+function smoothPath(b,pts){b.beginPath();const m=(p,q)=>[(p[0]+q[0])/2,(p[1]+q[1])/2],n=pts.length;let s0=m(pts[n-1],pts[0]);b.moveTo(...s0);
+  for(let k=0;k<n;k++){const q=m(pts[k],pts[(k+1)%n]);b.quadraticCurveTo(pts[k][0],pts[k][1],q[0],q[1]);}b.closePath();}
+// A beaver dam: a messy heap of sticks, mud and a few logs piled along a straight run of blocked cells,
+// with sticks poking out at all angles and water foaming unevenly against it. No clean outline anywhere.
+function drawDam(b,cells,rnd){
+  const pts=cells.map(i=>[(i%G.w+.5)*cs,(Math.floor(i/G.w)+.5)*cs]).sort((p,q)=>p[0]-q[0]||p[1]-q[1]);
+  const [x0,y0]=pts[0],[x1,y1]=pts[pts.length-1],hor=y0===y1,ux=hor?1:0,uy=hor?0:1,len=Math.hypot(x1-x0,y1-y0);
+  const at=(f,o)=>[x0+ux*f+uy*o,y0+uy*f+ux*o],th=cs*.5;
+  // ragged outline of the heap: wobbling width down each side, blunt uneven ends
+  const side=[],steps=Math.max(6,Math.round((len+cs)/(cs*.16)));
+  for(let k=0;k<=steps;k++){const f=-cs*.42+(len+cs*.84)*k/steps,end=Math.min(1,Math.min(k,steps-k)/2.2);side.push([f,th/2*(.55+.45*end)*(.8+rnd()*.45)]);}
+  const outline=[...side.map(([f,o])=>at(f,o)),...side.slice().reverse().map(([f,o])=>at(f,-o*(.85+rnd()*.3)))];
+  for(let k=0;k<steps*3;k++){const f=-cs*.45+rnd()*(len+cs*.9),o=(rnd()<.5?-1:1)*th*(.45+rnd()*.25),[fx,fy]=at(f,o); // uneven foam
+    b.fillStyle=`rgba(190,225,245,${.05+rnd()*.08})`;b.beginPath();b.ellipse(fx,fy,cs*(.05+rnd()*.07),cs*(.03+rnd()*.04),rnd()*3,0,Math.PI*2);b.fill();}
+  b.fillStyle="#3d2e24";smoothPath(b,outline);b.fill();                                              // packed mud
+  b.fillStyle="rgba(90,70,52,.5)";for(let k=0;k<cells.length*8;k++){const [mx,my]=at(rnd()*len+(rnd()-.5)*cs*.6,(rnd()-.5)*th*.6);b.beginPath();b.ellipse(mx,my,cs*(.04+rnd()*.06),cs*(.03+rnd()*.04),rnd()*3,0,Math.PI*2);b.fill();}
+  b.lineCap="round";const sticks=["#5a4635","#6a5340","#7d634b","#8c7155","#9c8262"];
+  const stick=(dark)=>{const f=rnd()*(len+cs*.7)-cs*.35,o=(rnd()-.5)*th*.8,a=rnd()*Math.PI,l=cs*(.16+rnd()*.3)*(rnd()<.15?1.6:1),[mx,my]=at(f,o);
+    const ex=Math.cos(a)*l/2,ey=Math.sin(a)*l/2,bend=(rnd()-.5)*cs*.06;
+    b.strokeStyle=sticks[Math.floor(rnd()*(dark?2:5))];b.lineWidth=cs*(.022+rnd()*.03);
+    b.beginPath();b.moveTo(mx-ex,my-ey);b.quadraticCurveTo(mx-ey/l*bend*8,my+ex/l*bend*8,mx+ex,my+ey);b.stroke();
+    if(rnd()<.3){const t=.3+rnd()*.4,tx=mx-ex+2*ex*t,ty=my-ey+2*ey*t,ta=a+(rnd()<.5?.7:-.7);b.lineWidth*=.6;b.beginPath();b.moveTo(tx,ty);b.lineTo(tx+Math.cos(ta)*l*.25,ty+Math.sin(ta)*l*.25);b.stroke();}}; // twig
+  for(let k=0;k<cells.length*14;k++)stick(true);
+  for(let k=0;k<cells.length;k++){const f=(k+.15+rnd()*.7)/cells.length*len,o=(rnd()-.5)*th*.35,ll=cs*(.45+rnd()*.3),a=(hor?0:Math.PI/2)+(rnd()-.5)*.6; // logs, not lined up
+    const [mx,my]=at(f,o),ax=mx-Math.cos(a)*ll/2,ay=my-Math.sin(a)*ll/2,bx=mx+Math.cos(a)*ll/2,by=my+Math.sin(a)*ll/2;
+    b.strokeStyle="#5f4a37";b.lineWidth=cs*(.1+rnd()*.04);b.beginPath();b.moveTo(ax,ay);b.lineTo(bx,by);b.stroke();
+    b.strokeStyle="rgba(150,120,90,.55)";b.lineWidth=cs*.03;b.beginPath();b.moveTo(ax-Math.sin(a)*cs*.02,ay-Math.cos(a)*cs*.02*0+(-cs*.02));b.lineTo(bx,by-cs*.02);b.stroke();
+    if(rnd()<.6){b.fillStyle="#c2a27a";b.beginPath();b.ellipse(bx,by,cs*.05,cs*.045,a,0,Math.PI*2);b.fill();
+      b.strokeStyle="#94704a";b.lineWidth=cs*.01;b.beginPath();b.arc(bx,by,cs*.025,0,Math.PI*2);b.stroke();}}
+  for(let k=0;k<cells.length*12;k++)stick(false);
+  for(let k=0;k<cells.length*2;k++){const [mx,my]=at(rnd()*len,(rnd()-.5)*th*.9);b.fillStyle=rnd()<.5?"rgba(110,150,80,.7)":"rgba(150,130,60,.7)"; // a few leaves caught in it
+    b.beginPath();b.ellipse(mx,my,cs*.035,cs*.018,rnd()*3,0,Math.PI*2);b.fill();}
+}
+// A cluster of rounded boulders in the stream: 1-3 rocks per blocked cell.
+function drawBoulders(b,cells,rnd){
+  const rocks=[];
+  cells.forEach(i=>{const cx=(i%G.w+.5)*cs,cy=(Math.floor(i/G.w)+.5)*cs,n=1+Math.floor(rnd()*2.4);
+    for(let k=0;k<n;k++){const r=cs*(n===1?.3:k?.17+rnd()*.06:.24+rnd()*.05),a=rnd()*Math.PI*2,d=n===1?0:cs*(.08+rnd()*.1);
+      rocks.push({x:cx+Math.cos(a)*d,y:cy+Math.sin(a)*d,r});}});
+  rocks.forEach(q=>{for(let k=0;k<5;k++){const a=rnd()*Math.PI*2,d=q.r*(.75+rnd()*.3);b.fillStyle=`rgba(190,225,245,${.05+rnd()*.07})`;b.beginPath();b.ellipse(q.x+Math.cos(a)*d,q.y+Math.sin(a)*d,cs*(.05+rnd()*.05),cs*(.03+rnd()*.03),a+1.5,0,Math.PI*2);b.fill();}}); // uneven foam
+  rocks.sort((p,q)=>p.y-q.y).forEach(q=>{
+    const g=b.createRadialGradient(q.x-q.r*.35,q.y-q.r*.4,q.r*.1,q.x,q.y,q.r);g.addColorStop(0,"#a7b3bd");g.addColorStop(.7,"#6c7984");g.addColorStop(1,"#4a5560");
+    b.fillStyle=g;smoothPath(b,blobPts(q.x,q.y,q.r,.28,rnd,9,.85));b.fill();
+    b.fillStyle="rgba(255,255,255,.14)";smoothPath(b,blobPts(q.x-q.r*.3,q.y-q.r*.35,q.r*.3,.4,rnd,7,.6));b.fill();
+    if(rnd()<.35){b.fillStyle="rgba(110,170,110,.45)";b.beginPath();b.ellipse(q.x+q.r*.2,q.y-q.r*.5,q.r*.3,q.r*.12,.3,0,Math.PI*2);b.fill();}});
+}
+// All blockers and pools are painted on their own layer, then dropped onto the riverbed once with one soft shadow.
+// Blocked cells that touch form one blocker: a straight run becomes a beaver dam, anything else a boulder cluster.
+function drawTerrain(b,rnd,W,H){
+  const {comp,size}=rockGroups();
+  const L=document.createElement("canvas");L.width=Math.ceil(W*dpr);L.height=Math.ceil(H*dpr);const t=L.getContext("2d");t.scale(dpr,dpr);
+  size.forEach((n,id)=>{const cells=G.cells.map((c,i)=>i).filter(i=>comp[i]===id),xs=new Set(cells.map(i=>i%G.w)),ys=new Set(cells.map(i=>Math.floor(i/G.w)));
+    if(n>=2&&(xs.size===1||ys.size===1))drawDam(t,cells,rnd);else drawBoulders(t,cells,rnd);});
+  G.cells.forEach((c,i)=>{if(c.t==="tunnel")drawPool(t,i,rnd);});
+  b.save();b.shadowColor="rgba(2,8,16,.55)";b.shadowBlur=cs*.18*dpr;b.shadowOffsetX=cs*.05*dpr;b.shadowOffsetY=cs*.08*dpr;
+  b.drawImage(L,0,0,W,H);b.restore();
+}
+// Sandy riverbed with pebbles and weed, drawn once per board size.
+function makeBed(W,H){
+  const c=document.createElement("canvas");c.width=Math.ceil(W*dpr);c.height=Math.ceil(H*dpr);const b=c.getContext("2d");b.scale(dpr,dpr);
+  let seed=lv*977+13;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  const g=b.createLinearGradient(0,0,0,H);g.addColorStop(0,"#143049");g.addColorStop(1,"#0c2033");b.fillStyle=g;b.fillRect(0,0,W,H);
+  for(let k=0;k<W*H/40;k++){b.fillStyle=`rgba(${rnd()<.5?"190,220,255":"20,40,60"},${.03+rnd()*.04})`;b.fillRect(rnd()*W,rnd()*H,1.4,1.4);} // sand grain
+  for(let k=0;k<G.w*G.h*1.3;k++){const x=rnd()*W,y=rnd()*H,r=cs*(.03+rnd()*.07),t=rnd();
+    b.fillStyle=`rgba(${110+t*60|0},${130+t*50|0},${150+t*40|0},.22)`;b.beginPath();b.ellipse(x,y,r,r*.75,rnd()*3,0,Math.PI*2);b.fill();
+    b.fillStyle="rgba(255,255,255,.06)";b.beginPath();b.ellipse(x-r*.25,y-r*.25,r*.4,r*.3,0,0,Math.PI*2);b.fill();} // pebbles
+  for(let k=0;k<G.w;k++){const x=rnd()*W,y=rnd()*H;b.strokeStyle="rgba(70,140,110,.18)";b.lineWidth=cs*.03;b.lineCap="round";
+    for(let j=0;j<3;j++){b.beginPath();b.moveTo(x+j*cs*.06,y);b.quadraticCurveTo(x+j*cs*.06+cs*.12,y-cs*.2,x+j*cs*.06+cs*.04,y-cs*.35);b.stroke();}} // weed
+  drawTerrain(b,rnd,W,H);
+  const v=b.createRadialGradient(W/2,H/2,Math.min(W,H)*.35,W/2,H/2,Math.hypot(W,H)*.6);v.addColorStop(0,"rgba(0,0,0,0)");v.addColorStop(1,"rgba(0,6,14,.38)");
+  b.fillStyle=v;b.fillRect(0,0,W,H); // vignette for depth
+  return {c,cs,lv};
+}
+function newGlow(cx,cy,now){if(!newTile||now-newTile>4000)return;const a=(now-newTile)/4000,pl=.5+.5*Math.sin(now/180);
+  ctx.save();ctx.strokeStyle=`rgba(255,240,200,${(1-a)*(.5+.5*pl)})`;ctx.lineWidth=cs*.06;ctx.beginPath();ctx.arc(cx,cy,cs*(.55+.08*pl),0,Math.PI*2);ctx.stroke();ctx.restore();}
+// Pool: a slow breathing glow in the pair's color, a few bubbles rising and a lazy ripple, drawn each frame.
+function drawTunnel(i,now){
+  const {cx,cy,pair}=poolInfo(i),mc=TUN_COLORS[pair%3],R=cs*.33,br=.5+.5*Math.sin(now/650+pair*2);
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+  const g=ctx.createRadialGradient(cx,cy,cs*.01,cx,cy,R);g.addColorStop(0,hexA(mc,.16+.16*br));g.addColorStop(1,hexA(mc,0));
+  ctx.fillStyle=g;ctx.fillRect(cx-R,cy-R,R*2,R*2);
+  const rp=((now/2600)+pair*.37)%1;ctx.strokeStyle=hexA(mc,.35*(1-rp));ctx.lineWidth=cs*.015;ctx.beginPath();ctx.arc(cx,cy,R*(.2+.75*rp),0,Math.PI*2);ctx.stroke();
+  for(let k=0;k<3;k++){const ph=(now/1500+k/3+pair*.17)%1,bx=cx+Math.sin(k*2.1+ph*4)*cs*.1+(k-1)*cs*.06,by=cy+cs*.15-ph*cs*.28;
+    ctx.strokeStyle=`rgba(210,240,255,${.55*(1-ph)})`;ctx.lineWidth=Math.max(1,cs*.012);ctx.beginPath();ctx.arc(bx,by,cs*(.018+.012*ph),0,Math.PI*2);ctx.stroke();}
+  ctx.restore();newGlow(cx,cy,now);
+}
+// Filter: a glowing ring of the primary it removes, with a minus sign.
+function drawFilter(i,f,now){
+  const [cx,cy]=C(i),color=COLORS[f],pl=.5+.5*Math.sin(now/400);
+  ctx.save();ctx.fillStyle="rgba(230,245,255,.12)";ctx.beginPath();for(let k=0;k<6;k++){const a=k*Math.PI/3+Math.PI/6;ctx.lineTo(cx+Math.cos(a)*cs*.42,cy+Math.sin(a)*cs*.42);}ctx.closePath();ctx.fill();
+  ctx.shadowColor=color;ctx.shadowBlur=cs*(.25+.15*pl);ctx.strokeStyle=color;ctx.lineWidth=cs*.06;ctx.stroke();
+  ctx.shadowBlur=0;ctx.strokeStyle="rgba(255,255,255,.18)";ctx.lineWidth=1;for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(cx+k*cs*.1,cy-cs*.3);ctx.lineTo(cx+k*cs*.1,cy+cs*.3);ctx.stroke();}
+  ctx.fillStyle=color;ctx.font=`800 ${cs*.34}px Nunito,system-ui,sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("−",cx+cs*.24,cy-cs*.24);
+  ctx.restore();newGlow(cx,cy,now);
+}
+function drawStroke(pts,color,w,glow,d0){
+  ctx.save();ctx.lineCap="round";ctx.lineJoin="round";
+  ctx.shadowColor=color;ctx.shadowBlur=glow;ctx.strokeStyle=hexA(color,.55);ctx.lineWidth=w;
+  ctx.beginPath();ctx.moveTo(...pts[0]);ctx.lineTo(...pts[1]);ctx.stroke();
+  ctx.shadowBlur=0;ctx.strokeStyle=hexA("#ffffff",.3);ctx.lineWidth=w*.28;ctx.beginPath();ctx.moveTo(...pts[0]);ctx.lineTo(...pts[1]);ctx.stroke();
+  if(d0!=null){ // pulses of light travelling from the den toward the nest
+    ctx.setLineDash([cs*.18,cs*.55]);ctx.lineDashOffset=-(frameNow/1000*cs*1.7)+d0;
+    ctx.strokeStyle=hexA("#ffffff",.55);ctx.lineWidth=w*.42;ctx.beginPath();ctx.moveTo(...pts[0]);ctx.lineTo(...pts[1]);ctx.stroke();}
+  ctx.restore();
+}
+// Which way the river pokes out of a far cave: straight on in the direction it went in, else away from the mountain.
+function stubDir(path,i){
+  const ent=path[i],prev=path[i-1],exit=path[i+1],ex=exit%G.w,ey=(exit-ex)/G.w;
+  const free=([dx,dy])=>{const x=ex+dx,y=ey+dy;return x>=0&&y>=0&&x<G.w&&y<G.h&&G.cells[y*G.w+x].t!=="rock";};
+  const go=prev!=null?[Math.sign(ent%G.w-prev%G.w),Math.sign(Math.floor(ent/G.w)-Math.floor(prev/G.w))]:[0,1];
+  if(free(go))return go;
+  const opts=[[1,0],[-1,0],[0,1],[0,-1]];const rock=opts.find(([dx,dy])=>!free([dx,dy])&&isRock(ex+dx,ey+dy));
+  if(rock&&free([-rock[0],-rock[1]]))return [-rock[0],-rock[1]];
+  return opts.find(free)||go;
+}
+function pathSegments(p,skipCell){
+  // per segment: half segments so color changes exactly at the crossing's center
+  const path=paths[p],c=col[p],segs=[];
+  for(let i=0;i<path.length-1;i++){
+    if(isJump(G,path[i],path[i+1]))continue; // underground
+    const a=C(path[i]),b=C(path[i+1]),m=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+    segs.push({pts:[a,m],color:COLORS[c[i]],cells:[path[i]],d0:i*cs});
+    segs.push({pts:[m,b],color:COLORS[c[i]],cells:[path[i+1]],d0:(i+.5)*cs});
+  }
+  return segs;
+}
+
+let frameNow=0;
+function draw(now){frameNow=now;
+  const W=cs*G.w,H=cs*G.h;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  // riverbed (pre-drawn once per board) + moving light caustics
+  if(!bed||bed.cs!==cs||bed.lv!==lv)bed=makeBed(W,H);
+  ctx.drawImage(bed.c,0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation="lighter";ctx.strokeStyle="rgba(140,210,255,.045)";ctx.lineWidth=cs*.05;
+  for(let k=0;k<9;k++){ctx.beginPath();for(let x=-10;x<=W+10;x+=10){const yy=(k+.5)*H/9+Math.sin(x/(cs*.9)+now/1300+k*1.7)*cs*.18+Math.sin(x/(cs*.37)-now/900+k)*cs*.05;x<0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}ctx.stroke();}
+  ctx.restore();
+
+  // tiles
+  for(let i=0;i<G.cells.length;i++){
+    const x=i%G.w,y=(i-x)/G.w,c=G.cells[i];
+    if(c.t==="rock")continue; // dams and boulders are part of the riverbed picture
+    ctx.strokeStyle="rgba(255,255,255,.035)";ctx.lineWidth=1;rrect(x*cs+3,y*cs+3,cs-6,cs-6,cs*.2);ctx.stroke();
+    if(c.t==="tunnel"){drawTunnel(i,now);
+    }else if(c.t==="filter"){drawFilter(i,c.f,now);
+    }else if(c.t==="bridge"){
+      ctx.fillStyle="rgba(90,170,230,.12)";rrect(x*cs+2,y*cs+2,cs-4,cs-4,cs*.18);ctx.fill();
+    }
+  }
+  // hint routes: dashed, in the den's color, until that stream follows them
+  hints.forEach(h=>{const path=routeOf(h),color=COLORS[G.sources[h].mask];
+    ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.globalAlpha=.85;ctx.setLineDash([cs*.12,cs*.14]);ctx.lineDashOffset=-now/30;
+    const pts=[];path.forEach((c,k)=>{if(k&&isJump(G,path[k-1],c)){pts.push(null);}pts.push(C(c));});
+    [[ "rgba(0,0,0,.45)",cs*.13],[color,cs*.08]].forEach(([st,lw])=>{ctx.strokeStyle=st;ctx.lineWidth=lw;ctx.beginPath();let pen=false;pts.forEach(q=>{if(!q){pen=false;return;}pen?ctx.lineTo(...q):ctx.moveTo(...q);pen=true;});ctx.stroke();});
+    ctx.restore();});
+  // streams
+  const crosses=crossings();
+  const lw=cs*.3,glow=cs*.35;
+  const later=[];
+  const stNow=nestStatus(G,paths,col),refused=new Set(stNow.filter(s=>s.p>=0&&!s.ok).map(s=>s.p));
+  // soft bloom: one wide faint stroke per same-color run, so joints don't double up
+  paths.forEach((path,p)=>{
+    const segs=pathSegments(p);let run=null;
+    const flush=()=>{if(!run)return;ctx.save();ctx.globalCompositeOperation="lighter";ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle=hexA(run.color,.13);ctx.lineWidth=lw*2.6;ctx.beginPath();run.pts.forEach((q,k)=>k?ctx.lineTo(...q):ctx.moveTo(...q));ctx.stroke();ctx.restore();run=null;};
+    segs.forEach(sg=>{const lp=run&&run.pts[run.pts.length-1];if(run&&run.color===sg.color&&lp[0]===sg.pts[0][0]&&lp[1]===sg.pts[0][1])run.pts.push(sg.pts[1]);else{flush();run={color:sg.color,pts:[sg.pts[0],sg.pts[1]]};}});flush();
+  });
+  paths.forEach((path,p)=>{
+    const segs=pathSegments(p);
+    if(refused.has(p)){const last=segs.pop();ctx.save();ctx.globalAlpha=.3;ctx.setLineDash([cs*.06,cs*.08]);drawStroke(last.pts,last.color,lw*.6,0);ctx.restore();}
+    segs.forEach(s=>{
+      const cell=s.cells[0];
+      // streams run up/down OVER a bridge and left/right UNDER it
+      if(G.cells[cell].t==="bridge"&&Math.abs(s.pts[1][1]-s.pts[0][1])>Math.abs(s.pts[1][0]-s.pts[0][0])){later.push(s);return;}
+      drawStroke(s.pts,s.color,lw,glow,s.d0);
+    });
+  });
+  G.cells.forEach((c,i)=>{if(c.t==="bridge")drawBridge(i,now);});
+  later.forEach(s=>{ // over the bridge: dark casing so it reads as passing over
+    drawStroke(s.pts,s.color,lw*.7,glow*.6,s.d0); // slimmer on the deck so the planks and rails show
+  });
+  // tunnels: a faint dotted trail under the mountain from cave to cave, and when the stream stops at the far cave,
+  // a short bit of river pokes out of it (popping out with a splash) so it's obvious where it came out
+  paths.forEach((path,p)=>{for(let i=0;i+1<path.length;i++){if(!isJump(G,path[i],path[i+1]))continue;
+    const a=C(path[i]),b=C(path[i+1]),color=COLORS[col[p][i+1]];
+    ctx.save();ctx.globalAlpha=.45;ctx.setLineDash([cs*.06,cs*.12]);ctx.lineDashOffset=-now/40;ctx.lineCap="round";ctx.strokeStyle=color;ctx.lineWidth=cs*.07;
+    ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.restore();
+    if(i+1===path.length-1){
+      const exit=path[i+1],d=stubDir(path,i),t=Math.min(1,(now-(popAt[p+":"+exit]||0))/350),ease=1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2); // pops out with a little overshoot
+      const len=cs*.5*ease,tip=[b[0]+d[0]*len,b[1]+d[1]*len],pulse=.5+.5*Math.sin(now/200);
+      drawStroke([b,tip],color,lw*.9,glow,0);
+      ctx.save();ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=cs*.3;ctx.beginPath();ctx.arc(tip[0],tip[1],cs*(.1+.03*pulse),0,Math.PI*2);ctx.fill();ctx.restore();
+    }}});
+  // mix flashes at crossings
+  crosses.forEach(x=>{
+    if(x.bridge)return;const [cx,cy]=C(x.cell);const pulse=.5+.5*Math.sin(now/260);
+    ctx.save();ctx.shadowColor=COLORS[x.color];ctx.shadowBlur=cs*.5;ctx.fillStyle=hexA(COLORS[x.color],.55+.25*pulse);
+    ctx.beginPath();ctx.arc(cx,cy,cs*(.2+.03*pulse),0,Math.PI*2);ctx.fill();ctx.restore();
+  });
+  // board wash: the whole pond briefly takes on the new color
+  if(wash){const a=(now-wash.t)/900;if(a>=1)wash=null;else{ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=hexA(COLORS[wash.color],wash.strength*Math.sin(a*Math.PI));ctx.fillRect(0,0,W,H);ctx.restore();}}
+  sparks=sparks.filter(s=>now-s.t<(s.big?1600:900));
+  sparks.forEach(s=>{const dur=s.big?1600:700,sc=s.big?2.6:1;const a=(now-s.t)/dur;const [cx,cy]=C(s.cell);ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle=COLORS[s.color];ctx.lineWidth=cs*.06;ctx.beginPath();for(let r=0;r<3;r++){const ar=Math.max(0,a-r*.15);if(ar>0){ctx.globalAlpha=(1-ar)*(1-r*.25);ctx.beginPath();ctx.arc(cx,cy,cs*(.2+ar*.9*sc),0,Math.PI*2);ctx.stroke();}}ctx.globalAlpha=1-a;if(s.big){ctx.globalAlpha=(1-a)*.35;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx,cy,cs*(.3+a*1.6),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1-a;}
+    for(let k=0;k<8;k++){const ang=k*Math.PI/4;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx+Math.cos(ang)*cs*(.25+a*.45*sc),cy+Math.sin(ang)*cs*(.25+a*.45*sc),cs*(s.big?.06:.035),0,Math.PI*2);ctx.fill();}ctx.restore();});
+  // nests
+  const st=nestStatus(G,paths,col);
+  G.nests.forEach((n,k)=>{
+    const [cx0,cy]=C(n.i),s=st[k],color=COLORS[n.mask],cx=cx0;
+    bloom[k]+=((s.ok?1:0)-bloom[k])*.12;
+    // reactive: a little bounce every time a critter arrives
+    let pulse=0;if(s.ok){const L=paths[s.p].length-1,fr=((((now/1000)*1.7-L)%.85)+.85)%.85/.85;pulse=Math.pow(1-fr,4);}
+    ctx.save();ctx.translate(cx,cy);ctx.scale(1+.09*pulse,1+.09*pulse);ctx.translate(-cx,-cy);
+    if(s.ok&&pulse>.5){ctx.save();ctx.globalAlpha=(pulse-.5)*.8;ctx.strokeStyle=color;ctx.lineWidth=cs*.03;ctx.beginPath();ctx.arc(cx,cy,cs*(.46+.12*(1-pulse)),0,Math.PI*2);ctx.stroke();ctx.restore();}
+    // lily pad
+    ctx.fillStyle="#1f4a3a";ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,cs*.44,.35,Math.PI*2-.05);ctx.closePath();ctx.fill();
+    ctx.save();ctx.shadowColor=color;ctx.shadowBlur=cs*.4;ctx.strokeStyle=color;ctx.lineWidth=cs*.07;
+    if(!s.ok){ctx.setLineDash([cs*.1,cs*.07]);ctx.lineDashOffset=now/60;}
+    ctx.beginPath();ctx.arc(cx,cy,cs*.3,0,Math.PI*2);ctx.stroke();ctx.restore();
+    ctx.fillStyle=hexA(color,.22);ctx.beginPath();ctx.arc(cx,cy,cs*.26,0,Math.PI*2);ctx.fill();
+    const b=bloom[k];
+    if(b>.02){ // flower bloom
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(now/3000);ctx.shadowColor=color;ctx.shadowBlur=cs*.4*b;
+      for(let i=0;i<6;i++){ctx.rotate(Math.PI/3);ctx.fillStyle=hexA(color,.9);ctx.beginPath();ctx.ellipse(0,-cs*.2*b,cs*.09*b,cs*.17*b,0,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle="#fff6d8";ctx.beginPath();ctx.arc(0,0,cs*.08*b,0,Math.PI*2);ctx.fill();ctx.restore();
+    }else if(s.p>=0){ // wrong color arrived
+      const sh=Math.sin(now/40)*cs*.02;if(n.den==null){ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx+sh,cy,cs*.12,0,Math.PI*2);ctx.fill();}
+      ctx.strokeStyle="#fff";ctx.lineWidth=cs*.05;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(cx-cs*.07+sh,cy-cs*.07);ctx.lineTo(cx+cs*.07+sh,cy+cs*.07);ctx.moveTo(cx+cs*.07+sh,cy-cs*.07);ctx.lineTo(cx-cs*.07+sh,cy+cs*.07);ctx.stroke();
+    }else if(n.den==null){ // empty: tiny sleeping egg in the wanted color
+      ctx.fillStyle=hexA(color,.8);ctx.beginPath();ctx.ellipse(cx,cy+cs*.02,cs*.08,cs*.1,0,0,Math.PI*2);ctx.fill();
+    }
+    if(n.den!=null&&b<.6){ // whose home: the den's shape, outlined
+      ctx.save();ctx.globalAlpha=.85*(1-b);drawShapeAlways(cx,cy,cs*.17,SHAPES[n.den%SHAPES.length]);ctx.fillStyle="rgba(255,255,255,.28)";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=cs*.04;ctx.stroke();ctx.restore();
+      if(s.p>=0&&!s.ok){const sh=Math.sin(now/40)*cs*.02;ctx.strokeStyle="#ff5d6c";ctx.lineWidth=cs*.06;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(cx-cs*.1+sh,cy-cs*.1);ctx.lineTo(cx+cs*.1+sh,cy+cs*.1);ctx.moveTo(cx+cs*.1+sh,cy-cs*.1);ctx.lineTo(cx-cs*.1+sh,cy+cs*.1);ctx.stroke();}
+    }
+    ctx.restore();
+  });
+  // critters walking the streams
+  paths.forEach((path,p)=>{
+    if(path.length<2)return;
+    const L=path.length-1,home=G.cells[path[L]].t==="nest"&&!refused.has(p),spacing=.85,speed=1.7;
+    const n=Math.ceil((L+1)/spacing);
+    for(let k=0;k<n;k++){
+      let s=((now/1000)*speed+k*spacing)%(n*spacing);
+      if(s>L)continue;
+      const i=Math.min(L-1,Math.floor(s)),f=s-i,a=C(path[i]),b=C(path[i+1]);
+      if(isJump(G,path[i],path[i+1]))continue; // underground in the tunnel
+      const x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f+Math.sin(now/120+k)*cs*.025;
+      let alpha=1;if(s<.35)alpha=s/.35;if(home&&s>L-.4)alpha=(L-s)/.4;if(!home&&s>L-.5)alpha=Math.max(0,(L-s)/.5);
+      ctx.save();ctx.globalAlpha=alpha;
+      critter(x,y,cs*.15,SHAPES[p%SHAPES.length],col[p][Math.floor(s)],cs*.25,false,now/110+k*1.3);
+      ctx.restore();
+    }
+  });
+  // dens
+  G.sources.forEach((src,k)=>{
+    const [cx,cy]=C(src.i),color=COLORS[src.mask];
+    ctx.fillStyle="#08131f";ctx.beginPath();ctx.arc(cx,cy,cs*.4,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.shadowColor=color;ctx.shadowBlur=cs*.45;ctx.strokeStyle=color;ctx.lineWidth=cs*.07;ctx.beginPath();ctx.arc(cx,cy,cs*.38,0,Math.PI*2);ctx.stroke();ctx.restore();
+    const blink=((now/1000+k*1.7)%4)<.12;
+    critter(cx,cy+Math.sin(now/400+k)*cs*.02,cs*.21,SHAPES[k%SHAPES.length],src.mask,cs*.3,blink);
+  });
+  // active tip
+  if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
+    ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  // fireworks particles
+  parts=parts.filter(q=>now-q.t0<q.life);
+  parts.forEach(q=>{const t=(now-q.t0)/1000;if(t<0)return;const x=q.x+q.vx*t,y=q.y+q.vy*t+cs*1.6*t*t,al=1-(now-q.t0)/q.life;
+    ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=q.c;ctx.globalAlpha=al;ctx.beginPath();ctx.arc(x,y,cs*.045,0,Math.PI*2);ctx.fill();ctx.restore();});
+  // win shimmer
+  if(won){const a=Math.min(1,(now-wonAt)/600);ctx.fillStyle=`rgba(255,240,200,${.12*Math.sin(a*Math.PI)})`;ctx.fillRect(0,0,W,H);}
+}
+function loop(now){if(G)draw(now);requestAnimationFrame(loop);}
+
+// keep the board across live updates
+window.claude?.hot?.snapshot?.(()=>({lv,paths}));
+function boot(data){
+  const cur=store.get("cur",null),ci=typeof cur==="string"?IDX(cur):Number.isInteger(cur)?cur:-1; // older saves stored the position
+  const start=data&&Number.isInteger(data.lv)?data.lv:Math.min(ci>=0?ci:0,openCount()-1);
+  startLevel(Math.max(0,start),data&&data.paths);
+  requestAnimationFrame(loop);
+}
+window.claude?.hot?.ready?window.claude.hot.ready(boot):boot(window.claude?.hot?.data??{});
+</script>
+</body>
+</html>
