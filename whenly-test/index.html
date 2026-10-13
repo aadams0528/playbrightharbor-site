@@ -1,0 +1,1215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- Copied from aadams0528/whenly src/game.html and src/art/. Unlisted test page: not linked from the site. Replace this file to update. -->
+<title>Whenly (test version)</title>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=Spline+Sans+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one phone-width column; a vertical timeline rail (OLDEST at top, NEWEST at bottom) holds five draggable cards. */
+:root{
+  --bg:#e8edf2; --paper:#fbfcfd; --ink:#1b2836; --muted:#5a6878; --line:#c3cfdb;
+  --accent:#e8a21a; --accent-ink:#3a2700; --plate:#dde6ee;
+  --good:#2e9a58; --near:#d4a106; --miss:#cf5440;
+  --shadow:0 1px 0 rgba(27,40,54,.06),0 6px 18px -10px rgba(27,40,54,.35);
+  --display:"Bricolage Grotesque",ui-rounded,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Spline Sans Mono",ui-monospace,Menlo,monospace;
+  --card-h:80px; --gap:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111922; --paper:#1b2531; --ink:#e7edf3; --muted:#9aa8b7; --line:#2f3d4d;
+  --accent:#f2b23a; --accent-ink:#2a1c00; --plate:#243241;
+  --good:#3fb56e; --near:#e0b21d; --miss:#e06650;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 8px 22px -12px rgba(0,0,0,.8); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111922; --paper:#1b2531; --ink:#e7edf3; --muted:#9aa8b7; --line:#2f3d4d;
+  --accent:#f2b23a; --accent-ink:#2a1c00; --plate:#243241;
+  --good:#3fb56e; --near:#e0b21d; --miss:#e06650;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 8px 22px -12px rgba(0,0,0,.8); color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+.app{max-width:460px;margin:0 auto;padding-inline:16px;padding-block:10px 28px;display:flex;flex-direction:column;gap:14px;min-height:100%;box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,.card:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.logo{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1}
+.logo b{color:var(--accent)}
+.hbtns{display:flex;gap:6px}
+.icon{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-size:18px;display:grid;place-items:center}
+
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--plate);border-radius:14px;padding:4px;gap:4px}
+.tabs button{border:0;background:transparent;padding:9px;border-radius:10px;font-weight:700;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:var(--shadow)}
+
+.meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.meta h1{font-family:var(--display);font-weight:600;font-size:20px;margin:0;text-wrap:balance}
+.pill{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.diff{display:flex;gap:6px}
+.diff button{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 11px;font-size:14px;font-weight:700;color:var(--muted)}
+.diff button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.board{display:grid;grid-template-columns:30px 1fr;gap:10px}
+.rail{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding-block:2px}
+.rail::before{content:"";position:absolute;top:22px;bottom:22px;left:50%;width:2px;transform:translateX(-50%);background:repeating-linear-gradient(var(--line) 0 6px,transparent 6px 11px)}
+.rail span{position:relative;writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--muted);background:var(--bg);padding-block:4px}
+.list{position:relative;touch-action:none}
+.card{position:absolute;left:0;right:0;height:var(--card-h);display:grid;grid-template-columns:var(--card-h) 1fr auto;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;transition:top .22s cubic-bezier(.3,.7,.3,1),transform .15s,box-shadow .15s,border-color .3s;cursor:grab;user-select:none;-webkit-user-select:none}
+.card.drag{transition:transform .15s,box-shadow .15s;z-index:5;transform:scale(1.03) rotate(-.6deg);box-shadow:0 18px 30px -14px rgba(0,0,0,.45);cursor:grabbing}
+.plate{height:100%;display:grid;place-items:center;font-size:36px;background:var(--plate);border-right:1px solid var(--line);overflow:hidden}
+.plate img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.plate.h{background:color-mix(in srgb,#7d93c9 22%,var(--plate))}
+.plate.i{background:color-mix(in srgb,#e8a21a 22%,var(--plate))}
+.plate.f{background:color-mix(in srgb,#d9708a 22%,var(--plate))}
+.plate.s{background:color-mix(in srgb,#5a9fb5 24%,var(--plate))}
+.plate.p{background:color-mix(in srgb,#6fae6a 22%,var(--plate))}
+.ctext{padding:8px 10px 8px 12px;min-width:0;font-weight:700;font-size:15.5px;line-height:1.2;text-wrap:balance}
+.ctext small{display:block;font-weight:400;font-size:12.5px;color:var(--muted);margin-top:3px}
+.moves{display:flex;flex-direction:column;height:100%;border-left:1px solid var(--line)}
+.moves button{flex:1;width:40px;border:0;background:transparent;color:var(--muted);font-size:13px}
+.moves button+button{border-top:1px solid var(--line)}
+.moves button:disabled{opacity:.25;cursor:default}
+.year{display:none;font-family:var(--mono);font-weight:700;font-size:19px;padding-inline:12px;letter-spacing:-.02em}
+.card.done{cursor:pointer}
+.card.done .moves{display:none}
+.card.done .year{display:block}
+.card.g{border-color:var(--good);box-shadow:inset 6px 0 0 var(--good),var(--shadow)}
+.card.n{border-color:var(--near);box-shadow:inset 6px 0 0 var(--near),var(--shadow)}
+.card.m{border-color:var(--miss);box-shadow:inset 6px 0 0 var(--miss),var(--shadow)}
+.card.g .year{color:var(--good)} .card.n .year{color:var(--near)} .card.m .year{color:var(--miss)}
+.card.hinted::after{content:"💡";position:absolute;top:4px;left:calc(var(--card-h) - 22px);font-size:15px}
+.card.flip{animation:flip .6s ease}
+@keyframes flip{0%{transform:perspective(700px) rotateX(0)}50%{transform:perspective(700px) rotateX(90deg)}100%{transform:perspective(700px) rotateX(0)}}
+.card.bump{animation:bump .35s ease}
+@keyframes bump{50%{transform:scale(1.04)}}
+
+.actions{display:grid;grid-template-columns:auto 1fr;gap:10px}
+.btn{border:0;border-radius:14px;padding:15px 18px;font-weight:700;font-size:17px}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:var(--paper);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.hint-line{font-size:14px;color:var(--muted);text-align:center;min-height:20px}
+
+.result{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow)}
+.result h2{margin:0;font-family:var(--display);font-weight:800;font-size:26px;text-wrap:balance}
+.grid-emoji{font-size:28px;letter-spacing:4px}
+.fact{font-size:15px;background:var(--plate);border-radius:12px;padding:10px 12px}
+.fact b{font-family:var(--mono)}
+.fact a{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row .btn{flex:1;min-width:140px}
+.next{font-size:14px;color:var(--muted)}
+.next b{font-family:var(--mono);color:var(--ink)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+
+.sheet{position:fixed;inset:0;background:rgba(10,16,24,.5);display:grid;place-items:end center;z-index:20;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet>div{background:var(--paper);color:var(--ink);border-radius:20px;padding:20px;max-width:430px;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;max-height:85vh;overflow:auto}
+.sheet h2{margin:0;font-family:var(--display);font-size:24px}
+.sheet p{margin:0}
+.remind{border:1px dashed var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}.remind p{margin:0;font-weight:700}
+.remind select,.remindset select{font:inherit;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer;padding:4px;align-self:center}
+body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
+.remindset{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+.stats b{display:block;font-family:var(--mono);font-size:24px}
+.stats span{font-size:12px;color:var(--muted)}
+.dist{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:13px}
+.dist div{display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:center}
+.dist i{display:block;height:18px;background:var(--line);border-radius:4px;min-width:18px;text-align:right;padding-right:6px;font-style:normal;box-sizing:border-box;color:var(--ink);line-height:18px}
+.dist i.me{background:var(--accent);color:var(--accent-ink)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;max-width:90vw;text-align:center}
+.coach{position:absolute;right:52px;font-size:30px;pointer-events:none;z-index:6;animation:coach 1.6s ease-in-out infinite}
+@keyframes coach{0%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(-80px);opacity:1}100%{opacity:0;transform:translateY(-80px)}}
+canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
+footer{font-size:12px;color:var(--muted);text-align:center;margin-top:auto}
+textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--ink);box-sizing:border-box}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* v2 additions: clue chips between cards, hint tags, score dial, tiers, reveal panel */
+.chip{position:absolute;left:calc(var(--card-h) + 18px);height:22px;min-width:22px;padding-inline:7px;border-radius:999px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:4px;z-index:4;pointer-events:none;box-sizing:border-box;border:1.5px solid var(--paper);transform:translateY(-50%)}
+.chip.ok{background:var(--good);color:#fff}
+.chip.no{background:var(--miss);color:#fff}
+.tag{display:inline-block;margin-top:4px;font-family:var(--mono);font-size:12px;font-weight:700;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 28%,var(--paper));color:var(--ink)}
+.card.picking{outline:2px dashed var(--accent);outline-offset:2px}
+.tries{display:flex;gap:6px;align-items:center;justify-content:center;font-size:13px;color:var(--muted)}
+.tries i{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
+.tries i.used{background:var(--accent)}
+.offer{background:color-mix(in srgb,var(--accent) 16%,var(--paper));border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:15px}
+.offer .btn{padding:10px 14px;font-size:15px}
+.linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:4px}
+.scoreline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.score{font-family:var(--mono);font-weight:700;font-size:44px;line-height:1;letter-spacing:-.03em}
+.score small{font-size:18px;color:var(--muted)}
+.tier{font-family:var(--display);font-weight:800;font-size:24px}
+.star{font-size:14px;color:var(--muted)}
+.pairs{display:flex;gap:6px;font-size:30px;line-height:1}
+.near{font-size:15px;border-left:4px solid var(--near);padding:4px 0 4px 10px}
+.card .year{font-size:22px}
+.card.done .tagwrap{display:none}
+.milestone{font-family:var(--display);font-weight:800;font-size:18px;color:var(--accent)}
+.tester{display:flex;gap:8px;flex-wrap:wrap}
+.tester .btn{padding:8px 12px;font-size:14px}
+.reasons{display:flex;flex-direction:column;gap:8px}
+.reasons button{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;font-weight:700}
+.tabs{grid-template-columns:repeat(4,1fr)}
+.tabs button{padding:9px 4px}
+#archive{display:flex;flex-direction:column;gap:8px}
+#archive h2,#expert h2{margin:0;font-family:var(--display);font-weight:800;font-size:22px}
+.arow{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
+.arow b{font-family:var(--mono)}
+.arow small{display:block;color:var(--muted);font-size:13px}
+.arow .res{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--muted)}
+.arow .res.done{color:var(--ink)}
+#expert{display:flex;flex-direction:column;gap:10px}
+.xcard{display:grid;grid-template-columns:64px 1fr 92px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;min-height:72px}
+.xcard .plate{font-size:30px}
+.xcard input{width:76px;margin-right:12px;font:inherit;font-family:var(--mono);font-weight:700;font-size:20px;text-align:center;border:1.5px solid var(--line);border-radius:10px;padding:8px 4px;background:var(--bg);color:var(--ink);box-sizing:border-box}
+.xcard input:focus{outline:3px solid var(--accent);outline-offset:1px}
+.xcard .xres{font-family:var(--mono);font-weight:700;font-size:19px;text-align:center;padding-right:10px}
+.xcard .xres small{display:block;font-size:11px;font-weight:500;color:var(--muted)}
+.xcard.g{border-color:var(--good);box-shadow:inset 6px 0 0 var(--good),var(--shadow)}
+.xcard.n{border-color:var(--near);box-shadow:inset 6px 0 0 var(--near),var(--shadow)}
+.xcard.m{border-color:var(--miss);box-shadow:inset 6px 0 0 var(--miss),var(--shadow)}
+.crowd{font-size:15px;border-left:4px solid var(--accent);padding:4px 0 4px 10px;margin:0}
+.email{font-family:var(--mono);font-size:15px;user-select:all;-webkit-user-select:all;background:var(--bg);padding:8px 10px;border-radius:8px}
+</style>
+
+<canvas id="fx"></canvas>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo">When<b>ly</b></div></div>
+    <div class="hbtns">
+      <button class="icon" id="bStats" aria-label="Your stats">📊</button>
+      <button class="icon" id="bHelp" aria-label="How to play">?</button>
+    </div>
+  </header>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tDaily" aria-selected="true">Today</button>
+    <button role="tab" id="tArchive" aria-selected="false">Archive</button>
+    <button role="tab" id="tPractice" aria-selected="false">Practice</button>
+    <button role="tab" id="tExpert" aria-selected="false">Expert</button>
+  </div>
+  <div class="meta" id="meta">
+    <h1 id="title">Oldest at the top</h1>
+    <span class="pill" id="pill"></span>
+    <div class="diff" id="diff" hidden>
+      <button data-g="30" aria-pressed="true">Easy</button>
+      <button data-g="10" aria-pressed="false">Medium</button>
+      <button data-g="3" aria-pressed="false">Hard</button>
+    </div>
+  </div>
+  <div class="board" id="board">
+    <div class="rail"><span>OLDEST</span><span>NEWEST</span></div>
+    <div class="list" id="list"></div>
+  </div>
+  <div id="play">
+    <div class="offer" id="offer" hidden>
+      <span>Stuck? Put one card in its right spot. This gives up the ⭐ bonus.</span>
+      <button class="btn primary" id="bPlace">Place a card</button>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="bHint">💡 Hint</button>
+      <button class="btn primary" id="bLock">Check my order</button>
+    </div>
+    <div class="tries" id="tries"></div>
+    <p class="hint-line" id="hintLine">Drag the cards, or use the arrows.</p>
+    <p style="text-align:center;margin:0"><button class="linkbtn" id="bGiveUp" hidden>Show the answer</button></p>
+  </div>
+  <section class="result" id="result" hidden></section>
+  <section id="archive" hidden></section>
+  <section id="expert" hidden></section>
+  <footer id="foot">Bright Harbor Games</footer>
+</div>
+
+<script>
+// [year, emoji, title, did-you-know, category, Wikipedia article]
+// Categories: h history, i invention, f fun & pop culture, s space & science, p sports & places
+const EVENTS = [
+[1066, "⚔️", "Battle of Hastings", "William of Normandy won and became king of England, so he is remembered as William the Conqueror.", "h", "Battle_of_Hastings"],
+[1173, "🗼", "Leaning Tower of Pisa construction begins", "It started to lean while it was still being built.", "p", "Leaning_Tower_of_Pisa"],
+[1215, "📜", "Magna Carta is sealed", "King John agreed to it at Runnymede, near London. Four copies from 1215 still survive.", "h", "Magna_Carta"],
+[1271, "🐫", "Marco Polo sets off for China", "He was 17 when he left Venice. He didn't come home for 24 years.", "h", "Marco_Polo"],
+[1455, "📖", "Gutenberg Bible is printed", "It was one of the first big books printed with movable metal type in Europe. About 49 copies survive.", "i", "Gutenberg_Bible"],
+[1492, "⛵", "Columbus reaches the Americas", "He landed in the Bahamas in October after about five weeks at sea.", "h", "Voyages_of_Christopher_Columbus"],
+[1503, "🖼️", "Leonardo starts the Mona Lisa", "He kept working on it for years. It now hangs behind glass at the Louvre in Paris.", "f", "Mona_Lisa"],
+[1517, "🚪", "Luther posts his 95 Theses", "His list of complaints about the church helped start the Protestant Reformation.", "h", "Ninety-five_Theses"],
+[1519, "🧭", "Magellan sets off around the world", "Five ships left Spain. Only one came back, three years later. Magellan himself died on the way.", "h", "Magellan_expedition"],
+[1543, "☀️", "Copernicus puts the Sun at the center", "His book was published the year he died.", "s", "Nicolaus_Copernicus"],
+[1564, "🎭", "William Shakespeare is born", "He was born in Stratford-upon-Avon and wrote about 39 plays.", "f", "William_Shakespeare"],
+[1588, "⚓", "Spanish Armada is defeated", "Storms wrecked more Spanish ships than the English fleet did.", "h", "Spanish_Armada"],
+[1607, "🛶", "Jamestown is founded", "It was the first lasting English settlement in North America, in what is now Virginia.", "h", "Jamestown,_Virginia"],
+[1610, "🔭", "Galileo spots moons around Jupiter", "He saw four of them with a telescope he built himself. They are still called the Galilean moons.", "s", "Galilean_moons"],
+[1620, "🚢", "The Mayflower lands at Plymouth", "About 100 passengers made the trip. The ship was only about 100 feet long.", "h", "Mayflower"],
+[1626, "🏝️", "Dutch buy Manhattan", "The deal was famously valued at 60 guilders of trade goods.", "h", "Manhattan"],
+[1666, "🔥", "Great Fire of London", "It burned for four days and destroyed about 13,000 houses, but few deaths were recorded.", "h", "Great_Fire_of_London"],
+[1687, "🍎", "Newton's laws of motion", "His book, the Principia, also explained gravity. It was written in Latin.", "s", "Philosophi%C3%A6_Naturalis_Principia_Mathematica"],
+[1692, "🧹", "Salem witch trials", "Twenty people were executed. In 1711 the colony cleared many of their names and paid their families.", "h", "Salem_witch_trials"],
+[1706, "👶", "Benjamin Franklin is born", "He was the 15th of 17 children and left school at age 10.", "h", "Benjamin_Franklin"],
+[1752, "🪁", "Ben Franklin's kite experiment", "He used a kite in a thunderstorm to show that lightning is electricity.", "s", "Kite_experiment"],
+[1770, "🔫", "Boston Massacre", "British soldiers fired on a crowd in Boston. John Adams defended the soldiers in court.", "h", "Boston_Massacre"],
+[1773, "🫖", "Boston Tea Party", "Colonists dumped 342 chests of tea into Boston Harbor.", "h", "Boston_Tea_Party"],
+[1775, "🏮", "Paul Revere's midnight ride", "He never actually shouted \"The British are coming!\" The mission was meant to be quiet.", "h", "Paul_Revere%27s_Midnight_Ride"],
+[1776, "🦅", "Declaration of Independence", "It was adopted on July 4. Most delegates signed it about a month later, on August 2.", "h", "United_States_Declaration_of_Independence"],
+[1781, "🏳️", "British surrender at Yorktown", "It was the last big battle of the American Revolution.", "h", "Siege_of_Yorktown"],
+[1781, "🪐", "Uranus is discovered", "William Herschel first thought it was a comet.", "s", "Uranus"],
+[1787, "✍️", "US Constitution is signed", "It is the oldest written national constitution still in use.", "h", "Constitution_of_the_United_States"],
+[1789, "🇺🇸", "Washington becomes president", "He was sworn in in New York City, which was the capital at the time.", "h", "First_inauguration_of_George_Washington"],
+[1791, "📃", "Bill of Rights is ratified", "These are the first ten amendments to the Constitution.", "h", "United_States_Bill_of_Rights"],
+[1796, "💉", "First vaccine is tested", "Edward Jenner used cowpox to protect a boy from smallpox. The word vaccine comes from the Latin for cow.", "s", "Smallpox_vaccine"],
+[1800, "🏠", "First president moves into the White House", "John Adams moved in on November 1, before the house was even finished.", "h", "White_House"],
+[1803, "🗺️", "Louisiana Purchase", "The US bought about 828,000 square miles from France, roughly doubling the country's size.", "h", "Louisiana_Purchase"],
+[1804, "👑", "Napoleon crowns himself emperor", "With the Pope looking on, he picked up the crown and put it on his own head.", "h", "Coronation_of_Napoleon"],
+[1812, "⚔️", "War of 1812 begins", "The US and Britain fought for almost three years.", "h", "War_of_1812"],
+[1814, "🎶", "The Star-Spangled Banner is written", "Francis Scott Key wrote the words after watching the bombing of Fort McHenry. It became the anthem in 1931.", "f", "The_Star-Spangled_Banner"],
+[1815, "🎖️", "Battle of Waterloo", "Napoleon's final defeat, in what is now Belgium.", "h", "Battle_of_Waterloo"],
+[1825, "🚤", "Erie Canal opens", "It linked the Great Lakes to New York City and made shipping goods much cheaper.", "p", "Erie_Canal"],
+[1836, "🏚️", "Battle of the Alamo", "The fort in San Antonio fell after a 13-day siege.", "h", "Battle_of_the_Alamo"],
+[1844, "📠", "Morse sends 'What hath God wrought'", "It was the first message on Samuel Morse's new line from Washington to Baltimore.", "i", "Electrical_telegraph"],
+[1846, "🔵", "Neptune is discovered", "It was found by math first, then spotted with a telescope.", "s", "Neptune"],
+[1848, "⛏️", "Gold is found in California", "The discovery at Sutter's Mill set off the Gold Rush. San Francisco grew from about 1,000 people to 25,000 in two years.", "h", "California_gold_rush"],
+[1859, "🐢", "Darwin's Origin of Species", "All of the first 1,250 copies were snapped up by booksellers before it even went on sale.", "s", "On_the_Origin_of_Species"],
+[1860, "🐎", "Pony Express starts", "Riders carried mail from Missouri to California in about 10 days.", "h", "Pony_Express"],
+[1861, "🎖️", "US Civil War begins", "It started with the attack on Fort Sumter in South Carolina in April.", "h", "American_Civil_War"],
+[1863, "🎩", "Lincoln's Gettysburg Address", "The speech was about 270 words and took around two minutes.", "h", "Gettysburg_Address"],
+[1865, "🎗️", "Lincoln is assassinated", "He was shot at Ford's Theatre five days after the main Confederate army surrendered.", "h", "Assassination_of_Abraham_Lincoln"],
+[1867, "🐻‍❄️", "US buys Alaska from Russia", "It cost 7.2 million dollars, about 2 cents an acre.", "h", "Alaska_Purchase"],
+[1869, "🚂", "Coast-to-coast railroad done", "A golden spike was driven at Promontory Summit, Utah, joining east and west.", "p", "First_transcontinental_railroad"],
+[1869, "🧪", "Mendeleev's periodic table", "Dmitri Mendeleev left gaps for elements nobody had found yet.", "s", "Periodic_table"],
+[1869, "🏈", "First college football game", "Rutgers beat Princeton, 6 to 4.", "p", "1869_Princeton_vs._Rutgers_football_game"],
+[1871, "🐄", "Great Chicago Fire", "It burned for about two days. Legend blames Mrs. O'Leary's cow, but that story was never proven.", "h", "Great_Chicago_Fire"],
+[1872, "🦬", "Yellowstone becomes the first national park", "Old Faithful erupts about every hour and a half.", "p", "Yellowstone_National_Park"],
+[1876, "☎️", "Bell patents the telephone", "His first words on it were reportedly \"Mr. Watson, come here, I want to see you.\"", "i", "Invention_of_the_telephone"],
+[1876, "⚾", "Baseball's National League forms", "It is the older of baseball's two major leagues.", "p", "National_League_(baseball)"],
+[1877, "📯", "Edison invents the phonograph", "The first words he recorded were \"Mary had a little lamb\".", "i", "Phonograph"],
+[1879, "💡", "Edison's long-lasting light bulb", "His team found a carbon filament that glowed for over 13 hours.", "i", "Incandescent_light_bulb"],
+[1883, "🌉", "Brooklyn Bridge opens", "P. T. Barnum walked 21 elephants across it to show it was safe.", "p", "Brooklyn_Bridge"],
+[1885, "🏛️", "Washington Monument is dedicated", "At about 555 feet, it was the tallest structure in the world until the Eiffel Tower.", "p", "Washington_Monument"],
+[1886, "🗽", "Statue of Liberty is dedicated", "It was a gift from France. Its copper skin turned green over about 20 years.", "p", "Statue_of_Liberty"],
+[1886, "🥤", "Coca-Cola is invented", "A pharmacist in Atlanta created it. It first sold for 5 cents a glass.", "f", "Coca-Cola"],
+[1888, "📸", "Kodak's first camera", "Its slogan was \"You press the button, we do the rest.\" You mailed the whole camera back for prints.", "i", "Kodak"],
+[1889, "🗼", "Eiffel Tower opens", "It was built for a world's fair and was supposed to stand for only 20 years.", "p", "Eiffel_Tower"],
+[1891, "🏀", "Basketball is invented", "James Naismith used peach baskets as hoops, so someone had to fetch the ball after every basket.", "p", "Basketball"],
+[1892, "⛴️", "Ellis Island opens", "About 12 million immigrants passed through it.", "h", "Ellis_Island"],
+[1893, "🎡", "First Ferris wheel spins", "It was built for the Chicago World's Fair to rival the Eiffel Tower. Each car held about 60 people.", "f", "Ferris_Wheel_(1893)"],
+[1895, "🎞️", "Lumière brothers' first film show", "They showed short films to a paying crowd in a Paris café.", "f", "Auguste_and_Louis_Lumi%C3%A8re"],
+[1895, "☢️", "X-rays are discovered", "The first X-ray photo of a person was of Wilhelm Röntgen's wife's hand.", "s", "X-ray"],
+[1896, "🏅", "First modern Olympic Games", "They were held in Athens, Greece, with about 240 athletes, all men.", "p", "1896_Summer_Olympics"],
+[1897, "🍮", "Jell-O goes on sale", "Sales were slow at first, so the inventor sold the rights in 1899.", "f", "Jell-O"],
+[1898, "⚗️", "Marie and Pierre Curie discover radium", "Her notebooks are still radioactive and kept in lead boxes.", "s", "Marie_Curie"],
+[1900, "👟", "Women compete in the Olympics", "Paris 1900 was the first Games with women athletes.", "p", "1900_Summer_Olympics"],
+[1900, "🚇", "Paris Métro opens", "Its first line opened during the World's Fair.", "p", "Paris_M%C3%A9tro"],
+[1903, "✈️", "Wright brothers' first flight", "The first flight at Kitty Hawk lasted 12 seconds and covered 120 feet.", "i", "Wright_Flyer"],
+[1903, "🚴", "First Tour de France", "Riders covered about 1,500 miles in six stages.", "p", "1903_Tour_de_France"],
+[1903, "🖍️", "Crayola crayons go on sale", "The first box had 8 colors and cost a nickel.", "f", "Crayola"],
+[1904, "🚇", "New York City subway opens", "The fare was 5 cents.", "p", "New_York_City_Subway"],
+[1905, "⚛️", "Einstein's E = mc²", "He published it at age 26 while working in a patent office.", "s", "Mass%E2%80%93energy_equivalence"],
+[1906, "🏚️", "San Francisco earthquake", "Fires after the quake burned for days and destroyed most of the city.", "h", "1906_San_Francisco_earthquake"],
+[1907, "🍫", "Hershey's Kisses are made", "Nobody knows for sure why they are called Kisses.", "f", "Hershey%27s_Kisses"],
+[1908, "🚗", "Ford Model T goes on sale", "Over 15 million were built. Ford said you could have any color as long as it was black.", "i", "Ford_Model_T"],
+[1912, "🧊", "The Titanic sinks", "It hit an iceberg on its first voyage. The wreck was found in 1985.", "h", "Titanic"],
+[1912, "🍪", "Oreo cookie is introduced", "Over 450 billion have been sold since.", "f", "Oreo"],
+[1913, "🚉", "Grand Central Terminal opens", "Its ceiling shows the night sky, painted backwards.", "p", "Grand_Central_Terminal"],
+[1914, "🚢", "Panama Canal opens", "Ships no longer had to sail around South America, saving about 8,000 miles.", "p", "Panama_Canal"],
+[1914, "🌍", "World War I begins", "It was called the Great War. It ended on November 11, 1918.", "h", "World_War_I"],
+[1918, "🪵", "Lincoln Logs go on sale", "They were invented by the son of architect Frank Lloyd Wright.", "f", "Lincoln_Logs"],
+[1917, "🇺🇸", "US enters World War I", "Congress declared war on Germany in April.", "h", "American_entry_into_World_War_I"],
+[1920, "🗳️", "US women win the right to vote", "The 19th Amendment was ratified in August, after decades of campaigning.", "h", "Nineteenth_Amendment_to_the_United_States_Constitution"],
+[1920, "📻", "First commercial radio station", "KDKA in Pittsburgh broadcast presidential election results.", "f", "KDKA_(AM)"],
+[1922, "🏺", "King Tut's tomb is found", "Howard Carter found it almost untouched in Egypt's Valley of the Kings.", "h", "KV62"],
+[1923, "🎬", "The Hollywood sign goes up", "It first read HOLLYWOODLAND and was an ad for new houses.", "f", "Hollywood_Sign"],
+[1924, "⛷️", "First Winter Olympics", "They were held in Chamonix, France.", "p", "1924_Winter_Olympics"],
+[1925, "🪕", "Grand Ole Opry's first broadcast", "It is the longest-running radio broadcast in US history.", "f", "Grand_Ole_Opry"],
+[1926, "🚀", "First liquid-fueled rocket", "Robert Goddard's rocket flew for about 2.5 seconds and rose 41 feet.", "s", "Robert_H._Goddard"],
+[1926, "🏊‍♀️", "Gertrude Ederle swims the English Channel", "She was the first woman to do it and beat the men's record by about two hours.", "p", "Gertrude_Ederle"],
+[1927, "🛩️", "Lindbergh flies the Atlantic", "He flew from New York to Paris in about 33.5 hours without sleep.", "h", "Spirit_of_St._Louis"],
+[1927, "📺", "First electronic TV picture", "Philo Farnsworth's first image was a single straight line.", "i", "Philo_Farnsworth"],
+[1928, "🐭", "Mickey Mouse debuts", "His first hit was Steamboat Willie, one of the first cartoons with synced sound.", "f", "Steamboat_Willie"],
+[1928, "🍞", "Sliced bread goes on sale", "It was first sold in Chillicothe, Missouri.", "i", "Sliced_bread"],
+[1929, "📉", "Stock market crash", "The crash in October helped start the Great Depression.", "h", "Wall_Street_crash_of_1929"],
+[1930, "🩹", "Scotch tape is invented", "A 3M engineer made it so food packagers could seal clear cellophane wrappers.", "i", "Scotch_Tape"],
+[1930, "❄️", "Pluto is discovered", "An 11-year-old girl in England suggested the name.", "s", "Pluto"],
+[1930, "⚽", "First soccer World Cup", "Uruguay hosted and won it.", "p", "1930_FIFA_World_Cup"],
+[1930, "🧁", "Twinkies are invented", "The first filling was banana cream, not vanilla.", "f", "Twinkie"],
+[1931, "🏙️", "Empire State Building opens", "It was built in about 13 months and stayed the world's tallest building for nearly 40 years.", "p", "Empire_State_Building"],
+[1933, "🍺", "Prohibition ends", "The 21st Amendment repealed the ban on alcohol after 13 years.", "h", "Prohibition_in_the_United_States"],
+[1933, "🦍", "King Kong hits theaters", "Kong was an 18-inch model moved a little at a time for each frame.", "f", "King_Kong_(1933_film)"],
+[1935, "🎩", "Monopoly goes on sale", "It was based on an earlier game called The Landlord's Game.", "f", "Monopoly_(game)"],
+[1935, "🧓", "Social Security becomes law", "The first monthly check, in 1940, was for $22.54.", "h", "Social_Security_Act"],
+[1936, "🥇", "Jesse Owens wins four gold medals", "He won them at the Berlin Olympics.", "p", "Jesse_Owens"],
+[1936, "💧", "Hoover Dam is finished", "It holds back Lake Mead, the largest reservoir in the US when full.", "p", "Hoover_Dam"],
+[1937, "🌉", "Golden Gate Bridge opens", "Its color is called International Orange, picked so it stands out in fog.", "p", "Golden_Gate_Bridge"],
+[1937, "🍎", "Disney's Snow White", "People called it \"Disney's Folly\" before it became a huge hit.", "f", "Snow_White_and_the_Seven_Dwarfs_(1937_film)"],
+[1937, "🥫", "Spam goes on sale", "Hawaii eats more Spam per person than any other US state.", "f", "Spam_(food)"],
+[1938, "🦸", "Superman's first comic", "Action Comics #1 cost 10 cents. A copy later sold for over 3 million dollars.", "f", "Action_Comics_1"],
+[1938, "🖊️", "Ballpoint pen is patented", "László Bíró was a newspaper editor who was tired of smudged ink.", "i", "Ballpoint_pen"],
+[1939, "🌈", "The Wizard of Oz hits theaters", "The ruby slippers were silver in the book. They were changed to show off Technicolor.", "f", "The_Wizard_of_Oz_(1939_film)"],
+[1939, "🎬", "Gone with the Wind premieres", "Adjusted for ticket prices, it is still one of the biggest movies ever.", "f", "Gone_with_the_Wind_(film)"],
+[1941, "⛰️", "Mount Rushmore is finished", "Each face is about 60 feet tall. Around 400 people worked on it.", "p", "Mount_Rushmore"],
+[1941, "⚓", "Attack on Pearl Harbor", "The surprise attack on December 7 brought the US into World War II.", "h", "Attack_on_Pearl_Harbor"],
+[1941, "🥣", "Cheerios go on sale", "They were first called CheeriOats.", "f", "Cheerios"],
+[1941, "🍬", "M&M's are made", "They were sold to soldiers because they didn't melt in the heat.", "f", "M%26M%27s"],
+[1942, "🎹", "Casablanca premieres", "The line \"Play it again, Sam\" is never actually said in the movie.", "f", "Casablanca_(film)"],
+[1944, "🪖", "D-Day landings in Normandy", "About 156,000 Allied troops landed on the beaches of France on June 6.", "h", "Normandy_landings"],
+[1945, "🕊️", "World War II ends", "Germany surrendered in May and Japan in September.", "h", "World_War_II"],
+[1945, "🌀", "Slinky goes on sale", "All 400 at the first store demo sold in 90 minutes.", "f", "Slinky"],
+[1946, "🖥️", "ENIAC computer is unveiled", "It filled a large room and weighed about 30 tons.", "i", "ENIAC"],
+[1946, "👙", "The bikini is introduced", "It was named after Bikini Atoll in the Pacific.", "f", "Bikini"],
+[1947, "⚾", "Jackie Robinson's first MLB game", "He broke baseball's color line. Every player now wears number 42 on Jackie Robinson Day.", "p", "Jackie_Robinson"],
+[1947, "🔌", "The transistor is invented", "This tiny switch made computers and phones small enough to carry.", "i", "Transistor"],
+[1947, "♨️", "First microwave oven goes on sale", "The Radarange was almost 6 feet tall and weighed about 750 pounds.", "i", "Microwave_oven"],
+[1948, "📷", "Polaroid instant camera goes on sale", "It made a print in about a minute.", "i", "Land_Camera"],
+[1948, "🔤", "Scrabble gets its name", "The game was first called Criss-Crosswords.", "f", "Scrabble"],
+[1948, "🍔", "First In-N-Out Burger", "It opened in Baldwin Park, California, as a tiny drive-thru.", "f", "In-N-Out_Burger"],
+[1949, "🤝", "NATO is founded", "Twelve countries signed the treaty in Washington.", "h", "NATO"],
+[1949, "🍭", "Candy Land goes on sale", "A teacher invented it while getting over polio.", "f", "Candy_Land"],
+[1950, "🐶", "Peanuts comic strip begins", "Charles Schulz drew it for almost 50 years, nearly 18,000 strips.", "f", "Peanuts"],
+[1950, "🪖", "Korean War begins", "The fighting stopped with an armistice in 1953, but no peace treaty was ever signed.", "h", "Korean_War"],
+[1951, "📺", "I Love Lucy premieres", "Lucille Ball and Desi Arnaz were married in real life too.", "f", "I_Love_Lucy"],
+[1952, "🥔", "Mr. Potato Head goes on sale", "It was the first toy advertised on TV. At first, kids used a real potato.", "f", "Mr._Potato_Head"],
+[1953, "🏔️", "First climb to the top of Everest", "Edmund Hillary and Tenzing Norgay reached the summit on May 29.", "p", "1953_British_Mount_Everest_expedition"],
+[1954, "🏫", "Brown v. Board of Education", "The Supreme Court ruled that segregated public schools were unconstitutional.", "h", "Brown_v._Board_of_Education"],
+[1954, "⏱️", "First mile run in under 4 minutes", "Roger Bannister was a medical student at the time.", "p", "Roger_Bannister"],
+[1954, "🎤", "Elvis records his first single", "\"That's All Right\" was recorded at Sun Studio in Memphis.", "f", "That%27s_All_Right"],
+[1955, "🏰", "Disneyland opens", "It opened in Anaheim, California, in July 1955.", "f", "Disneyland"],
+[1955, "🚌", "Rosa Parks keeps her bus seat", "Her arrest in Montgomery, Alabama, started a bus boycott that lasted over a year.", "h", "Rosa_Parks"],
+[1955, "💉", "Polio vaccine is declared safe", "Jonas Salk did not patent it.", "s", "Polio_vaccine"],
+[1955, "🍟", "Ray Kroc opens his first McDonald's", "It was in Des Plaines, Illinois. A hamburger cost 15 cents.", "f", "McDonald%27s"],
+[1956, "💾", "First computer hard drive", "IBM's drive stored about 5 million characters and was the size of two refrigerators.", "i", "IBM_305_RAMAC"],
+[1956, "🟡", "Play-Doh is sold as a toy", "It started out as a wallpaper cleaner.", "f", "Play-Doh"],
+[1956, "🕺", "Elvis on The Ed Sullivan Show", "About 60 million people watched.", "f", "Elvis_Presley"],
+[1957, "🛰️", "Sputnik, the first satellite", "It was about the size of a beach ball and circled Earth every 96 minutes.", "s", "Sputnik_1"],
+[1957, "🥏", "Frisbee gets its name", "It was named after the Frisbie Pie Company, whose tins college students tossed around.", "f", "Frisbee"],
+[1958, "🧱", "LEGO brick patent is filed", "Bricks made in 1958 still click together with bricks made today.", "f", "Lego"],
+[1958, "🛸", "NASA is founded", "It was created a year after Sputnik.", "s", "NASA"],
+[1958, "⭕", "Hula hoop craze", "Wham-O sold about 25 million in four months.", "f", "Hula_hoop"],
+[1958, "🍕", "First Pizza Hut opens", "Two brothers borrowed $600 from their mom to open it in Wichita, Kansas.", "f", "Pizza_Hut"],
+[1959, "👱‍♀️", "Barbie doll debuts", "She was introduced at the New York Toy Fair and sold for 3 dollars.", "f", "Barbie"],
+[1959, "🌺", "Hawaii becomes the 50th state", "Alaska became the 49th state earlier the same year.", "h", "Hawaii_Admission_Act"],
+[1960, "🗳️", "John F. Kennedy is elected", "At 43, he was the youngest person ever elected president.", "h", "1960_United_States_presidential_election"],
+[1960, "✏️", "Etch A Sketch goes on sale", "The gray screen is coated with aluminum powder.", "f", "Etch_A_Sketch"],
+[1961, "👨‍🚀", "First person in space", "Yuri Gagarin circled Earth once in 108 minutes.", "s", "Vostok_1"],
+[1962, "🛒", "First Walmart opens", "Sam Walton opened it in Rogers, Arkansas.", "f", "Walmart"],
+[1962, "🚀", "Cuban Missile Crisis", "For 13 days in October, the US and the Soviet Union came close to nuclear war.", "h", "Cuban_Missile_Crisis"],
+[1962, "📡", "First live TV across the Atlantic", "The Telstar satellite carried the pictures.", "i", "Telstar_1"],
+[1962, "🌍", "John Glenn orbits Earth", "He was the first American to orbit. He flew again at age 77.", "s", "John_Glenn"],
+[1962, "🛸", "Seattle's Space Needle opens", "It was built for the 1962 World's Fair in about 400 days.", "p", "Space_Needle"],
+[1962, "🍸", "First James Bond movie, Dr. No", "Sean Connery played Bond.", "f", "Dr._No_(film)"],
+[1963, "✊", "\"I Have a Dream\" speech", "Martin Luther King Jr. spoke to about 250,000 people at the Lincoln Memorial.", "h", "I_Have_a_Dream"],
+[1963, "☎️", "Touch-tone phones arrive", "Push buttons began replacing the rotary dial.", "i", "Push-button_telephone"],
+[1963, "🧁", "Easy-Bake Oven goes on sale", "It baked tiny cakes with an ordinary light bulb.", "f", "Easy-Bake_Oven"],
+[1964, "🎸", "Beatles on Ed Sullivan", "About 73 million Americans watched their first appearance.", "f", "The_Beatles_on_The_Ed_Sullivan_Show"],
+[1964, "⚖️", "Civil Rights Act is signed", "It outlawed discrimination based on race, color, religion, sex or national origin.", "h", "Civil_Rights_Act_of_1964"],
+[1964, "🪖", "G.I. Joe goes on sale", "Hasbro called it an \"action figure\" so it wouldn't be called a doll.", "f", "G.I._Joe"],
+[1965, "🧑‍🚀", "First spacewalk", "Alexei Leonov floated outside his spacecraft for about 12 minutes.", "s", "Alexei_Leonov"],
+[1965, "🌈", "Gateway Arch is finished", "It is 630 feet tall and exactly as wide as it is tall.", "p", "Gateway_Arch"],
+[1965, "🏔️", "The Sound of Music movie", "It passed Gone with the Wind as the biggest movie of its time.", "f", "The_Sound_of_Music_(film)"],
+[1965, "🥤", "Gatorade is invented", "It was made for the University of Florida Gators football team.", "f", "Gatorade"],
+[1966, "🖖", "Star Trek premieres", "The first episode aired on NBC in September. It ran for only three seasons at first.", "f", "Star_Trek:_The_Original_Series"],
+[1966, "🔴", "Twister goes on sale", "It took off after Johnny Carson played it on TV.", "f", "Twister_(game)"],
+[1967, "🏈", "First Super Bowl", "The Green Bay Packers beat the Kansas City Chiefs. It was not yet called the Super Bowl on tickets.", "p", "Super_Bowl_I"],
+[1967, "🏧", "First cash machine", "It opened at a bank in London. Instead of a plastic card, you used a special paper voucher.", "i", "Automated_teller_machine"],
+[1967, "❤️", "First human heart transplant", "Dr. Christiaan Barnard did it in Cape Town, South Africa.", "s", "Heart_transplantation"],
+[1968, "🚨", "First 911 call", "It was made in Haleyville, Alabama, in February.", "i", "9-1-1"],
+[1968, "🖱️", "First computer mouse demo", "Douglas Engelbart's mouse was a wooden box with two wheels.", "i", "The_Mother_of_All_Demos"],
+[1968, "🌏", "Earthrise photo from Apollo 8", "It was the first time people saw Earth rise over the moon.", "s", "Earthrise"],
+[1968, "🍔", "Big Mac goes nationwide", "A Pittsburgh-area franchise owner created it the year before.", "f", "Big_Mac"],
+[1969, "🌕", "First moon landing", "Neil Armstrong and Buzz Aldrin walked on the moon on July 20.", "s", "Apollo_11"],
+[1969, "✌️", "Woodstock music festival", "About 400,000 people came to a dairy farm in New York.", "f", "Woodstock"],
+[1969, "🐦", "Sesame Street premieres", "Big Bird is over 8 feet tall.", "f", "Sesame_Street"],
+[1970, "🌎", "First Earth Day", "About 20 million Americans took part.", "h", "Earth_Day"],
+[1971, "📧", "First email between computers", "Ray Tomlinson sent it and picked the @ sign to separate the user from the computer.", "i", "Email"],
+[1972, "🏓", "Pong arcade game", "The first Pong machine was tested in a bar and stopped working because its coin box was full.", "f", "Pong"],
+[1972, "🌑", "Last people walk on the moon", "Apollo 17's crew left in December. No one has been back since.", "s", "Apollo_17"],
+[1973, "📱", "First handheld cell phone call", "Martin Cooper of Motorola called a rival at another phone company. The phone was about the size of a brick.", "i", "Mobile_phone"],
+[1973, "🐴", "Secretariat wins the Triple Crown", "He won the Belmont Stakes by 31 lengths.", "p", "Secretariat_(horse)"],
+[1973, "🎾", "Billie Jean King's \"Battle of the Sexes\"", "About 90 million people around the world watched her beat Bobby Riggs.", "p", "Battle_of_the_Sexes_(tennis)"],
+[1973, "🎶", "Sydney Opera House opens", "Its roof is covered with over a million tiles.", "p", "Sydney_Opera_House"],
+[1974, "🧩", "Rubik's Cube is invented", "Ernő Rubik took about a month to solve his own cube the first time.", "f", "Rubik%27s_Cube"],
+[1974, "🏷️", "First barcode is scanned", "It was on a pack of chewing gum in a supermarket in Ohio.", "i", "Universal_Product_Code"],
+[1974, "🚁", "Nixon resigns", "He is the only US president to resign.", "h", "Resignation_of_Richard_Nixon"],
+[1974, "⚾", "Hank Aaron hits home run 715", "It broke Babe Ruth's record, which had stood for 39 years.", "p", "Hank_Aaron"],
+[1975, "🪟", "Microsoft is founded", "Bill Gates and Paul Allen started it in Albuquerque, New Mexico.", "i", "Microsoft"],
+[1975, "🦈", "Jaws hits theaters", "It is often called the first summer blockbuster.", "f", "Jaws_(film)"],
+[1975, "🎭", "Saturday Night Live premieres", "George Carlin hosted the first show.", "f", "Saturday_Night_Live"],
+[1976, "🍏", "Apple is founded", "Steve Jobs and Steve Wozniak started it. Their first computer, the Apple I, sold for $666.66.", "i", "Apple_Inc."],
+[1976, "🛫", "Concorde starts passenger flights", "It crossed the Atlantic in about 3.5 hours, twice the speed of sound.", "i", "Concorde"],
+[1976, "🔴", "First successful Mars landing", "NASA's Viking 1 sent back the first photos from the surface.", "s", "Viking_1"],
+[1977, "🌌", "Star Wars hits theaters", "It opened in only 32 theaters, then became the biggest movie of its time.", "f", "Star_Wars_(film)"],
+[1977, "💻", "Apple II goes on sale", "It was one of the first computers sold ready to use, with color graphics.", "i", "Apple_II"],
+[1977, "📀", "Voyager probes launch", "Each carries a golden record of sounds and music from Earth.", "s", "Voyager_program"],
+[1977, "🕹️", "Atari 2600 goes on sale", "Its joystick had just one button.", "f", "Atari_2600"],
+[1978, "👾", "Space Invaders arcade game", "Legend says it caused a shortage of 100-yen coins in Japan.", "f", "Space_Invaders"],
+[1978, "🐱", "Garfield comic strip begins", "Garfield's favorite food is lasagna.", "f", "Garfield"],
+[1979, "🎧", "Sony Walkman goes on sale", "It made carrying your own music cool. Sony sold over 200 million cassette Walkmans.", "i", "Walkman"],
+[1979, "🍟", "McDonald's Happy Meal", "The first one came in a box shaped like a circus wagon.", "f", "Happy_Meal"],
+[1980, "👾", "Pac-Man arcade game", "Its designer said the shape came from a pizza with a slice missing.", "f", "Pac-Man"],
+[1980, "🗒️", "Post-it notes go on sale nationwide", "The glue came from a failed attempt at a super-strong adhesive.", "i", "Post-it_note"],
+[1980, "🏒", "\"Miracle on Ice\"", "A team of US college players beat the Soviet Union at the Lake Placid Olympics.", "p", "Miracle_on_Ice"],
+[1980, "📡", "CNN goes on the air", "It was the first 24-hour TV news channel.", "f", "CNN"],
+[1981, "📺", "MTV launches", "The first video it played was \"Video Killed the Radio Star\".", "f", "MTV"],
+[1981, "👩‍⚖️", "First woman on the Supreme Court", "Sandra Day O'Connor served for almost 25 years.", "h", "Sandra_Day_O%27Connor"],
+[1981, "🖥️", "IBM Personal Computer", "Its name, PC, became the word for almost any home computer.", "i", "IBM_Personal_Computer"],
+[1981, "🛰️", "First space shuttle launch", "Columbia's first flight lasted just over two days.", "s", "STS-1"],
+[1982, "💿", "First CD players go on sale", "The first album released on CD was Billy Joel's 52nd Street.", "i", "Compact_disc"],
+[1982, "🌐", "EPCOT opens at Disney World", "Its big silver ball is called Spaceship Earth.", "p", "Epcot"],
+[1982, "👽", "E.T. the Extra-Terrestrial", "Reese's Pieces sales jumped after E.T. ate them in the movie.", "f", "E.T._the_Extra-Terrestrial"],
+[1983, "👩‍🚀", "Sally Ride flies in space", "She was the first American woman in space, on the space shuttle Challenger.", "s", "Sally_Ride"],
+[1983, "📞", "First cell phone goes on sale", "The Motorola DynaTAC cost about $4,000 and the battery lasted 30 minutes of talk.", "i", "Motorola_DynaTAC"],
+[1983, "🧸", "Cabbage Patch Kids craze", "Shoppers fought in stores to buy one for Christmas.", "f", "Cabbage_Patch_Kids"],
+[1983, "🌙", "Michael Jackson's first moonwalk", "He did it on TV during a Motown anniversary special.", "f", "Moonwalk_(dance)"],
+[1984, "🖱️", "Apple Macintosh goes on sale", "It was introduced with a famous Super Bowl ad.", "i", "Macintosh_128K"],
+[1984, "🏀", "Michael Jordan is drafted", "Two other players were picked before him.", "p", "Michael_Jordan"],
+[1984, "👻", "Ghostbusters hits theaters", "The theme song reached number 1.", "f", "Ghostbusters"],
+[1984, "🟦", "Tetris is created", "Alexey Pajitnov made it on a Soviet computer in Moscow.", "f", "Tetris"],
+[1985, "🍄", "Super Mario Bros. is released", "The game sold over 40 million copies.", "f", "Super_Mario_Bros."],
+[1985, "🪟", "Windows 1.0 comes out", "It ran on top of DOS, and its windows could not overlap. They were tiled side by side.", "i", "Windows_1.0"],
+[1985, "⏰", "Back to the Future", "The time machine was nearly a refrigerator instead of a DeLorean.", "f", "Back_to_the_Future"],
+[1985, "🎸", "Live Aid concerts", "About 1.9 billion people watched the shows in London and Philadelphia.", "f", "Live_Aid"],
+[1986, "🛩️", "Top Gun hits theaters", "The Navy set up recruiting booths in some theaters showing the movie.", "f", "Top_Gun"],
+[1986, "🛋️", "The Oprah Winfrey Show goes national", "It ran for 25 seasons.", "f", "The_Oprah_Winfrey_Show"],
+[1989, "🧱", "Berlin Wall falls", "It had divided the city for 28 years.", "h", "Fall_of_the_Berlin_Wall"],
+[1989, "🎮", "Nintendo Game Boy comes out", "It came with Tetris and ran on four AA batteries.", "f", "Game_Boy"],
+[1990, "🔭", "Hubble Space Telescope launches", "It orbits about 340 miles above Earth.", "s", "Hubble_Space_Telescope"],
+[1990, "✊🏿", "Nelson Mandela is freed", "He had spent 27 years in prison. Four years later he was elected president of South Africa.", "h", "Nelson_Mandela"],
+[1991, "🌐", "World Wide Web goes public", "Tim Berners-Lee made the first website. It explained what the web was.", "i", "World_Wide_Web"],
+[1991, "☭", "Soviet Union breaks up", "It split into 15 countries in December.", "h", "Dissolution_of_the_Soviet_Union"],
+[1991, "🎸", "Nirvana's Nevermind", "It knocked Michael Jackson off the top of the album chart.", "f", "Nevermind"],
+[1992, "💬", "First text message", "It said \"Merry Christmas\" and was sent from a computer to a phone.", "i", "SMS"],
+[1993, "🦖", "Jurassic Park hits theaters", "The dinosaur roars were mixed from real animal sounds.", "f", "Jurassic_Park_(film)"],
+[1994, "🚄", "Channel Tunnel opens", "It links England and France under the sea, about 31 miles long.", "p", "Channel_Tunnel"],
+[1994, "☕", "Friends premieres", "It ran for 10 seasons.", "f", "Friends"],
+[1995, "🤠", "Toy Story comes out", "It was the first movie made fully with computer animation.", "f", "Toy_Story"],
+[1995, "📦", "Amazon opens as an online bookstore", "Its first sale was a science book about how minds make analogies.", "i", "Amazon_(company)"],
+[1995, "🏷️", "eBay starts", "The first item sold was a broken laser pointer, for $14.83.", "i", "EBay"],
+[1996, "🐑", "Dolly the sheep is born", "She was the first mammal cloned from an adult cell.", "s", "Dolly_(sheep)"],
+[1996, "⚡", "First Pokémon games", "They came out in Japan with 151 Pokémon.", "f", "Pok%C3%A9mon_Red_and_Blue"],
+[1996, "🤣", "Tickle Me Elmo craze", "Some sold for hundreds of dollars that Christmas.", "f", "Tickle_Me_Elmo"],
+[1997, "⚡", "First Harry Potter book", "The first printing in the UK was only 500 copies.", "f", "Harry_Potter_and_the_Philosopher%27s_Stone"],
+[1997, "🚙", "Sojourner rover drives on Mars", "It was about the size of a microwave oven.", "s", "Sojourner_(rover)"],
+[1997, "⛳", "Tiger Woods wins his first Masters", "He was 21 and won by 12 strokes.", "p", "1997_Masters_Tournament"],
+[1997, "♟️", "Computer beats chess champion", "IBM's Deep Blue beat Garry Kasparov.", "f", "Deep_Blue_versus_Garry_Kasparov"],
+[1997, "🛳️", "Titanic the movie", "It won 11 Oscars.", "f", "Titanic_(1997_film)"],
+[1998, "🔎", "Google is founded", "It started in a garage in Menlo Park, California.", "i", "Google"],
+[1998, "🦉", "Furby craze", "Furbies seemed to learn English over time, but they were just programmed to.", "f", "Furby"],
+[1999, "🎶", "Napster lets people share songs", "It had tens of millions of users before courts shut it down.", "i", "Napster"],
+[1999, "🕶️", "The Matrix hits theaters", "Its slow-motion \"bullet time\" effect was copied for years.", "f", "The_Matrix"],
+[2000, "🏠", "First crew moves into the Space Station", "People have lived on the station without a break ever since.", "s", "International_Space_Station"],
+[2000, "🏡", "The Sims comes out", "It became one of the best-selling PC games ever.", "f", "The_Sims_(video_game)"],
+[2001, "🎵", "Apple iPod goes on sale", "The first one held about 1,000 songs.", "i", "IPod"],
+[2001, "📚", "Wikipedia starts", "It now has more than 6 million articles in English alone.", "i", "Wikipedia"],
+[2001, "🧅", "Shrek hits theaters", "It won the first-ever Oscar for Best Animated Feature.", "f", "Shrek"],
+[2002, "💶", "Euro coins and notes arrive", "Twelve countries swapped their old money for euros on New Year's Day.", "h", "Euro"],
+[2002, "🎤", "American Idol premieres", "Kelly Clarkson won the first season.", "f", "American_Idol"],
+[2003, "🧬", "Human Genome Project finishes", "It mapped the human genetic code, about 3 billion letters long.", "s", "Human_Genome_Project"],
+[2003, "🎙️", "Skype launches", "It let people make free voice calls over the internet.", "i", "Skype"],
+[2004, "👍", "Facebook starts", "It began as a site for Harvard students only.", "i", "Facebook"],
+[2004, "🧦", "Red Sox win the World Series", "It was their first title in 86 years.", "p", "2004_World_Series"],
+[2005, "▶️", "YouTube starts", "The first video was 19 seconds long, filmed at the San Diego Zoo.", "i", "YouTube"],
+[2006, "🐦", "Twitter launches", "Posts were limited to 140 characters, about the length of a text message.", "i", "Twitter"],
+[2006, "🪐", "Pluto is called a dwarf planet", "Astronomers voted on the change in Prague.", "s", "Pluto"],
+[2006, "🎮", "Nintendo Wii goes on sale", "Some remotes flew out of players' hands into TVs, so Nintendo swapped in stronger wrist straps.", "f", "Wii"],
+[2007, "📲", "First iPhone goes on sale", "It went on sale on June 29. People camped out in line for days.", "i", "IPhone_(1st_generation)"],
+[2007, "🍿", "Netflix starts streaming", "Before this, Netflix mailed DVDs in red envelopes.", "i", "Netflix"],
+[2007, "📘", "Amazon Kindle goes on sale", "The first one sold out in about five and a half hours.", "i", "Amazon_Kindle"],
+[2008, "🗳️", "Barack Obama is elected", "He was the first African American president of the US.", "h", "2008_United_States_presidential_election"],
+[2008, "🛍️", "Apple's App Store opens", "It started with about 500 apps.", "i", "App_Store_(Apple)"],
+[2008, "🦾", "Iron Man hits theaters", "It started the Marvel Cinematic Universe.", "f", "Iron_Man_(2008_film)"],
+[2009, "⛏️", "Minecraft is first released", "The first version was shared on an indie game forum in May 2009.", "f", "Minecraft"],
+[2009, "🌿", "Avatar hits theaters", "It became the highest-grossing movie of all time.", "f", "Avatar_(2009_film)"],
+[2010, "📷", "Instagram launches", "It got one million users in about two months.", "i", "Instagram"],
+[2010, "🏙️", "Burj Khalifa opens in Dubai", "At over 2,700 feet, it is the world's tallest building.", "p", "Burj_Khalifa"],
+[2011, "🗣️", "Siri arrives on the iPhone", "It came with the iPhone 4S.", "i", "Siri"],
+[2012, "🤖", "Curiosity rover lands on Mars", "It is about the size of a small car and is powered by nuclear energy.", "s", "Curiosity_(rover)"],
+[2013, "❄️", "Frozen hits theaters", "\"Let It Go\" won the Oscar for Best Original Song.", "f", "Frozen_(2013_film)"],
+[2015, "💗", "Spacecraft flies past Pluto", "New Horizons found a big heart-shaped plain.", "s", "New_Horizons"],
+[2016, "🐾", "Pokémon Go comes out", "People walked billions of miles hunting Pokémon in its first year.", "f", "Pok%C3%A9mon_Go"],
+[2016, "🐻", "Cubs win the World Series", "It was their first title in 108 years.", "p", "2016_World_Series"],
+[2017, "🕹️", "Nintendo Switch goes on sale", "You can play it on a TV or take it with you.", "f", "Nintendo_Switch"],
+[2019, "⚫", "First photo of a black hole", "It took a network of telescopes around the world acting as one.", "s", "Event_Horizon_Telescope"],
+[2021, "✨", "James Webb Space Telescope launches", "It launched on Christmas Day. Its mirror is made of 18 gold-coated pieces.", "s", "James_Webb_Space_Telescope"],
+[2022, "🤖", "ChatGPT is released", "It reached an estimated 100 million users in about two months.", "i", "ChatGPT"]
+];
+
+const NAME="Whenly";
+const EPOCH=new Date(2026,9,12); // puzzle #1
+const DAY_GAP=[2,30,20,12,8,5,3]; // Sun..Sat: fewest years between any two cards
+const DAY_NAME=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const DAY_FEEL=["Hardest","Easiest","Easy","Medium","Medium","Tricky","Hard"];
+// Hand-picked daily puzzles: puzzle number -> [theme, five card titles]. Days without an entry are dealt by the rules.
+// Written for puzzle #1 on a Monday (each day's cards fit that weekday's level), so keep EPOCH on a Monday.
+// Card photos (public domain / CC0, see docs/art-credits.md), keyed by Wikipedia article. Written by scripts/fetch-art.mjs.
+const ART=new Set(/*ART*/["1896_Summer_Olympics","1900_Summer_Olympics","1906_San_Francisco_earthquake","1924_Winter_Olympics","1930_FIFA_World_Cup","9-1-1","Alaska_Purchase","Alexei_Leonov","American_Civil_War","American_entry_into_World_War_I","Apollo_11","Apollo_17","Assassination_of_Abraham_Lincoln","Attack_on_Pearl_Harbor","Battle_of_Hastings","Battle_of_Waterloo","Battle_of_the_Alamo","Benjamin_Franklin","Boston_Massacre","Boston_Tea_Party","California_gold_rush","Casablanca_(film)","Constitution_of_the_United_States","Coronation_of_Napoleon","Cuban_Missile_Crisis","Curiosity_(rover)","Earth_Day","Earthrise","Eiffel_Tower","Empire_State_Building","Ferris_Wheel_(1893)","First_inauguration_of_George_Washington","First_transcontinental_railroad","Ford_Model_T","Gertrude_Ederle","Gettysburg_Address","Gone_with_the_Wind_(film)","Great_Chicago_Fire","Great_Fire_of_London","Hubble_Space_Telescope","I_Have_a_Dream","International_Space_Station","James_Webb_Space_Telescope","Jamestown,_Virginia","John_Glenn","King_Kong_(1933_film)","Kite_experiment","Korean_War","Land_Camera","Magellan_expedition","Magna_Carta","Marco_Polo","Marie_Curie","Mayflower","Microsoft","Mobile_phone","Mona_Lisa","Neptune","New_Horizons","Nicolaus_Copernicus","Ninety-five_Theses","Normandy_landings","On_the_Origin_of_Species","Philo_Farnsworth","Phonograph","Pluto","Polio_vaccine","Pony_Express","Prohibition_in_the_United_States","Resignation_of_Richard_Nixon","Robert_H._Goddard","STS-1","Salem_witch_trials","Sally_Ride","Secretariat_(horse)","Siege_of_Yorktown","Smallpox_vaccine","Sojourner_(rover)","Space_Needle","Spanish_Armada","Statue_of_Liberty","Sydney_Opera_House","The_Star-Spangled_Banner","The_Wizard_of_Oz_(1939_film)","Titanic","United_States_Bill_of_Rights","United_States_Declaration_of_Independence","Uranus","Viking_1","Voyager_program","Wall_Street_crash_of_1929","War_of_1812","William_Shakespeare","World_War_I","Wright_Flyer"]/*ART*/),ART_BASE="art/";
+const SCHEDULE={
+ 1:["A little of everything",["Columbus reaches the Americas","Declaration of Independence","The Titanic sinks","Beatles on Ed Sullivan","First iPhone goes on sale"]],
+ 2:["Snack time",["Coca-Cola is invented","Hershey's Kisses are made","Twinkies are invented","Ray Kroc opens his first McDonald's","McDonald's Happy Meal"]],
+ 3:["Planets and telescopes",["Neptune is discovered","Pluto is discovered","First successful Mars landing","Hubble Space Telescope launches","James Webb Space Telescope launches"]],
+ 4:["Toy box",["Monopoly goes on sale","Slinky goes on sale","Barbie doll debuts","Rubik's Cube is invented","Furby craze"]],
+ 5:["Game on",["Pong arcade game","Space Invaders arcade game","Super Mario Bros. is released","First Pokémon games","Minecraft is first released"]],
+ 6:["At the movies",["Star Wars hits theaters","E.T. the Extra-Terrestrial","Back to the Future","Jurassic Park hits theaters","Titanic the movie"]],
+ 7:["Gadgets of the '80s",["Sony Walkman goes on sale","IBM Personal Computer","First cell phone goes on sale","Windows 1.0 comes out","Nintendo Game Boy comes out"]],
+ 8:["American firsts",["The Mayflower lands at Plymouth","Louisiana Purchase","Gold is found in California","Wright brothers' first flight","Hawaii becomes the 50th state"]],
+ 9:["Big builds",["Statue of Liberty is dedicated","Panama Canal opens","Hoover Dam is finished","Gateway Arch is finished","Burj Khalifa opens in Dubai"]],
+ 10:["Turn it up",["Grand Ole Opry's first broadcast","Elvis on The Ed Sullivan Show","Woodstock music festival","MTV launches","Napster lets people share songs"]],
+ 11:["Game day",["First modern Olympic Games","First soccer World Cup","Jackie Robinson's first MLB game","First Super Bowl","\"Miracle on Ice\""]],
+ 12:["Online",["First email between computers","World Wide Web goes public","Google is founded","Facebook starts","Instagram launches"]],
+ 13:["The space race",["Sputnik, the first satellite","First person in space","First spacewalk","First moon landing","Last people walk on the moon"]],
+ 14:["The '60s",["John F. Kennedy is elected","Cuban Missile Crisis","Beatles on Ed Sullivan","Star Trek premieres","Big Mac goes nationwide"]],
+ 15:["Inventions",["Gutenberg Bible is printed","Bell patents the telephone","Ford Model T goes on sale","ENIAC computer is unveiled","World Wide Web goes public"]],
+ 16:["Turning points",["Magna Carta is sealed","Declaration of Independence","Lincoln's Gettysburg Address","\"I Have a Dream\" speech","Nelson Mandela is freed"]],
+ 17:["Kitchen cupboard",["Jell-O goes on sale","Oreo cookie is introduced","Sliced bread goes on sale","Cheerios go on sale","Gatorade is invented"]],
+ 18:["Funny pages",["Mickey Mouse debuts","Superman's first comic","Peanuts comic strip begins","Garfield comic strip begins","Toy Story comes out"]],
+ 19:["Can you hear me now?",["Bell patents the telephone","Touch-tone phones arrive","First handheld cell phone call","First text message","First iPhone goes on sale"]],
+ 20:["The '80s",["Jaws hits theaters","Pac-Man arcade game","Michael Jackson's first moonwalk","Top Gun hits theaters","Berlin Wall falls"]],
+ 21:["A new nation",["Boston Tea Party","Paul Revere's midnight ride","British surrender at Yorktown","US Constitution is signed","Washington becomes president"]],
+ 22:["Landmarks",["Leaning Tower of Pisa construction begins","Eiffel Tower opens","Empire State Building opens","Sydney Opera House opens","Burj Khalifa opens in Dubai"]],
+ 23:["Big ideas in science",["Galileo spots moons around Jupiter","Newton's laws of motion","Darwin's Origin of Species","Einstein's E = mc²","First moon landing"]],
+ 24:["Presidents",["First president moves into the White House","Lincoln's Gettysburg Address","John F. Kennedy is elected","Nixon resigns","Barack Obama is elected"]],
+ 25:["Women who led the way",["Women compete in the Olympics","US women win the right to vote","Rosa Parks keeps her bus seat","Billie Jean King's \"Battle of the Sexes\"","Sally Ride flies in space"]],
+ 26:["Must-see TV",["First electronic TV picture","I Love Lucy premieres","Sesame Street premieres","Saturday Night Live premieres","Friends premieres"]],
+ 27:["Computers",["Apple is founded","IBM Personal Computer","Windows 1.0 comes out","Amazon opens as an online bookstore","YouTube starts"]],
+ 28:["The 1940s",["Attack on Pearl Harbor","D-Day landings in Normandy","ENIAC computer is unveiled","Polaroid instant camera goes on sale","Peanuts comic strip begins"]],
+ 29:["Getting around",["Magellan sets off around the world","Erie Canal opens","Coast-to-coast railroad done","Wright brothers' first flight","Concorde starts passenger flights"]],
+ 30:["Movie magic",["Lumière brothers' first film show","Mickey Mouse debuts","Disneyland opens","Jurassic Park hits theaters","Frozen hits theaters"]]
+};
+const TRIES=3, MAX_HINTS=3, MILESTONES=[7,30,100,365];
+// Cards most adults will recognize. Every daily puzzle has at least two.
+const ANCHOR_WORDS=["Columbus","Declaration of Independence","Washington becomes president","Civil War","Lincoln's","Lincoln is","Titanic sinks","Wright brothers","Model T","World War I begins","World War II ends","Pearl Harbor","D-Day","First moon landing","Berlin Wall","First iPhone","Google","Facebook","YouTube","Disneyland","Star Wars","Pac-Man","Mickey Mouse","Wizard of Oz","Beatles","telephone","light bulb","Statue of Liberty","Eiffel Tower","Golden Gate","Empire State","I Have a Dream","Kennedy is elected","Barbie","LEGO","Super Mario","Harry Potter","Toy Story","Jurassic Park","Friends premieres","Coca-Cola","Ray Kroc","right to vote","Gold is found","Mayflower","Shakespeare","Mona Lisa","Sputnik","First person in space","Boston Tea Party","Elvis","Netflix","Amazon opens","Minecraft","Frozen","Sesame Street","Monopoly","Hubble","Walkman","Game Boy","Mount Rushmore","Hoover Dam","Brooklyn Bridge","Rosa Parks","Pokémon Go","Instagram","Twitter","Woodstock","Super Bowl","Jackie Robinson","Wikipedia"];
+const ANCHOR=EVENTS.map(e=>ANCHOR_WORDS.some(w=>e[2].includes(w)));
+const TIERS=[[100,"Flawless"],[90,"Historian"],[75,"Sharp"],[55,"Solid"],[35,"Getting there"],[0,"Lost in time"]];
+const tier=s=>TIERS.find(t=>s>=t[0])[1];
+const $=s=>document.querySelector(s);
+const KEY="whenly-v2";
+let S;try{S=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){S={}}
+S.days=S.days||{};S.tiers=S.tiers||{};S.streak=S.streak||0;S.best=S.best||0;S.played=S.played||0;S.total=S.total||0;S.freezes=S.freezes||0;S.offset=S.offset||0;S.reports=S.reports||[];
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+// ---------- funnel analytics ----------
+// Every event goes to Firebase Analytics in the apps (once its config files are added) and to gtag on
+// the web if the page loads it. A local tally (tester tools) shows the events fire.
+function track(name,params={}){
+  try{S.ev=S.ev||{};S.ev[name]=(S.ev[name]||0)+1;save()}catch(e){}
+  try{if(window.Capacitor?.isNativePlatform?.())window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({name,params}).catch(()=>{})}catch(e){}
+  try{window.gtag&&gtag("event",name,params)}catch(e){}
+}
+// Day-2 return: the first time a player opens the daily on the day after their first daily.
+function trackOpen(n){
+  if(S.lastOpen===n)return;
+  if(S.firstDay==null)S.firstDay=n;
+  const since=n-S.firstDay;S.lastOpen=n;save();
+  track("daily_open",{puzzle:n,days_since_first:since});
+  if(since===1)track("day2_return",{puzzle:n});
+}
+
+// ---------- crowd stats ----------
+// A tiny shared counter per daily puzzle in Firestore: how many finished it, and for each neighboring
+// pair (in the true order) how many had it swapped. Needs the Firebase web API key; empty = off.
+const CROWD={projectId:"spellburst-ddedf",apiKey:"AIzaSyCnLxlr0_87_eCB-wHB9Xg2io4wwmiODws",min:20};
+const crowdDoc=n=>`projects/${CROWD.projectId}/databases/(default)/documents/whenly_daily/${n}`;
+const crowdCache={};
+function crowdSend(n,swaps){
+  if(!CROWD.apiKey)return;
+  const t=[{fieldPath:"plays",increment:{integerValue:"1"}}];
+  swaps.forEach((sw,i)=>{if(sw)t.push({fieldPath:"s"+i,increment:{integerValue:"1"}})});
+  fetch(`https://firestore.googleapis.com/v1/projects/${CROWD.projectId}/databases/(default)/documents:commit?key=${CROWD.apiKey}`,
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({writes:[{transform:{document:crowdDoc(n),fieldTransforms:t}}]})}).catch(()=>{});
+}
+async function crowdGet(n){
+  if(S.fakeCrowd){const r=rng(n*31+7);return{plays:240,s:[0,1,2,3].map(()=>Math.floor(r()*170))}}
+  if(!CROWD.apiKey)return null;
+  if(crowdCache[n])return crowdCache[n];
+  try{
+    const j=await (await fetch(`https://firestore.googleapis.com/v1/${crowdDoc(n)}?key=${CROWD.apiKey}`)).json(),f=j.fields||{},v=k=>+(f[k]?.integerValue||0);
+    return crowdCache[n]={plays:v("plays"),s:[0,1,2,3].map(i=>v("s"+i))};
+  }catch(e){return null}
+}
+// For each neighboring pair in the true order: was it swapped in the order you locked in?
+function swapsOf(order){const t=sortIds(G.ids);return t.slice(0,-1).map((a,i)=>order.indexOf(a)>order.indexOf(t[i+1]))}
+async function showCrowd(){
+  const el=$("#crowd");if(!el)return;
+  const c=await crowdGet(G.n);if(!c||c.plays<CROWD.min||$("#crowd")!==el)return;
+  const t=sortIds(G.ids);let i=c.s.indexOf(Math.max(...c.s));const pct=Math.round(100*c.s[i]/c.plays);
+  if(pct<10){el.innerHTML=`Most players got every pair right today.`;el.hidden=false;return}
+  const mine=swapsOf(G.finalOrder||G.order)[i];
+  el.innerHTML=`<b>${pct}%</b> of players swapped <b>${EVENTS[t[i]][2]}</b> and <b>${EVENTS[t[i+1]][2]}</b>. ${mine?"You did too.":"You beat the crowd on this one."}`;
+  el.hidden=false;
+}
+
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function shuffle(arr,r){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function today(){const d=new Date();d.setDate(d.getDate()+S.offset);return d}
+function dayNum(d=today()){const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());return Math.round((t-EPOCH)/864e5)+1}
+const yr=id=>EVENTS[id][0];
+
+// ---------- dealing ----------
+// Rules: 5 cards, never two from the same year, every pair at least `gap` years apart,
+// daily puzzles also need 2+ anchor cards and one near-miss pair (neighbors within 2x the gap).
+function pick(n,gap,r,daily){
+  for(let g=gap;g>=1;g=Math.floor(g*0.7)){
+    for(let tries=0;tries<200;tries++){
+      const pool=shuffle(EVENTS.map((e,i)=>i),r),out=[];
+      for(const i of pool){if(out.every(j=>Math.abs(yr(j)-yr(i))>=g)){out.push(i);if(out.length===n)break}}
+      if(out.length<n)continue;
+      if(daily&&!dailyOk(out,g))continue;
+      return out;
+    }
+  }
+}
+function dailyOk(ids,g){
+  if(ids.filter(i=>ANCHOR[i]).length<2)return false;
+  const y=ids.map(yr).sort((a,b)=>a-b);
+  return y.slice(1).some((v,i)=>v-y[i]<=Math.max(2*g,g+6));
+}
+function scramble(ids,r){
+  const t=sortIds(ids);let o;
+  do{o=shuffle(ids,r)}while(o.filter((x,i)=>x===t[i]).length>1);
+  return o;
+}
+const sortIds=ids=>ids.slice().sort((a,b)=>yr(a)-yr(b));
+
+// ---------- scoring ----------
+// Pairs: of the 10 pairs of cards, how many are the right way round (60%).
+// Closeness: how far cards sit from their true spots (30%). Run: longest stretch of correct neighbors (10%).
+// That makes up to 90 points, scaled by the try you solved it on; finishing with no hints adds the last 10.
+function quality(order){
+  const t=sortIds(order),n=order.length;let pairs=0,tot=0,dist=0;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){tot++;if(yr(order[i])<yr(order[j]))pairs++}
+  order.forEach((id,i)=>dist+=Math.abs(t.indexOf(id)-i));
+  const maxDist=Math.floor(n*n/2);
+  let run=0,best=0;for(let i=0;i<n-1;i++){if(t.indexOf(order[i+1])===t.indexOf(order[i])+1){run++;best=Math.max(best,run)}else run=0}
+  return {pairs,tot,q:.6*pairs/tot+.3*(1-dist/maxDist)+.1*best/(n-1)};
+}
+// The ⭐ bonus needs a finish with no hints, no placed card and no "Show the answer".
+const noHelp=()=>G.hintsUsed===0&&!(G.placed||[]).length&&!G.gaveUp;
+function finalScore(){
+  const {q}=quality(G.order),f=[1,.85,.7][Math.min(G.attempt,TRIES)-1];
+  return Math.round(90*q*f)+(noHelp()?10:0);
+}
+function helpLine(){
+  if(noHelp())return "⭐ No help, +10 bonus";
+  const p=[];if(G.hintsUsed)p.push(`${G.hintsUsed} hint${G.hintsUsed>1?"s":""} used`);
+  if((G.placed||[]).length)p.push("1 card placed");
+  return p.length?p.join(" · ")+" · no ⭐":"no ⭐";
+}
+// Spoiler-free tiles: one per neighboring pair in the TRUE order.
+// 🟩 you had them next to each other, right way round; 🟨 right way round but apart; 🟥 swapped.
+function pairTiles(){
+  const t=sortIds(G.order);
+  return t.slice(0,-1).map((a,i)=>{const b=t[i+1],pa=G.order.indexOf(a),pb=G.order.indexOf(b);return pa>pb?"🟥":pb===pa+1?"🟩":"🟨"}).join("");
+}
+
+// ---------- state ----------
+let G=null,practiceGap=30,tutorial=false;
+function fresh(kind,ids,order){return{kind,ids,order,attempt:1,known:{},hints:{},hintsUsed:0,placed:[],done:false}}
+// The puzzle for day n is the same for everyone, so the archive can rebuild any past day.
+function dateOf(n){const d=new Date(EPOCH);d.setDate(d.getDate()+n-1);return d}
+const themeOf=n=>SCHEDULE[n]?SCHEDULE[n][0]:"";
+function dealFor(n){
+  const wd=dateOf(n).getDay(),r=rng(n*7919+13);
+  // A hand-picked puzzle for this day wins; otherwise the dealer picks one by the rules above.
+  const hand=SCHEDULE[n]&&SCHEDULE[n][1].map(t=>EVENTS.findIndex(e=>e[2]===t));
+  const ids=hand&&hand.every(i=>i>=0)?hand:pick(5,DAY_GAP[wd],r,true);
+  return {ids,order:scramble(ids,r),wd};
+}
+function newDaily(){
+  const n=dayNum(),wd=today().getDay();
+  trackOpen(n);
+  const saved=S.days[n];
+  if(saved&&saved.g){G=saved.g;G.n=n;G.wd=wd;return}
+  const d=dealFor(n);G=fresh("daily",d.ids,d.order);G.n=n;G.wd=wd;
+  track("puzzle_start",{mode:"daily",puzzle:n});
+}
+// Past days: a finished puzzle shows its result; anything else plays as an archive puzzle,
+// which never touches the streak or the daily stats.
+function newArchive(n){
+  const saved=S.days[n];
+  if(saved&&saved.g&&saved.g.done){G=saved.g.kind==="daily"?{...saved.g,kind:"archive",live:true}:saved.g;return}
+  if(saved&&saved.g){G=saved.g;G.kind="archive";return}
+  const d=dealFor(n);G=fresh("archive",d.ids,d.order);G.n=n;G.wd=d.wd;
+  track("puzzle_start",{mode:"archive",puzzle:n});
+}
+function newPractice(){const r=rng((Math.random()*1e9)|0),ids=pick(5,practiceGap,r,false);G=fresh("practice",ids,scramble(ids,r));track("puzzle_start",{mode:"practice",gap:practiceGap})}
+function newTutorial(){
+  const find=t=>EVENTS.findIndex(e=>e[2].startsWith(t));
+  const ids=[find("First moon"),find("Gutenberg"),find("First iPhone")];
+  G=fresh("tutorial",ids,ids.slice());
+}
+function persist(){if(G.kind==="daily"||G.kind==="archive"){S.days[G.n]={...(S.days[G.n]||{}),g:G};save()}}
+
+// ---------- render ----------
+const list=$("#list");let cardEls={};const GAP=16;
+function cardH(){return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-h"))}
+function slotTop(i){return i*(cardH()+GAP)}
+function build(){
+  list.innerHTML="";cardEls={};
+  list.style.height=(slotTop(G.order.length)-GAP)+"px";
+  G.order.forEach(id=>{
+    const e=EVENTS[id],el=document.createElement("div");
+    el.className="card";el.tabIndex=0;el.dataset.id=id;el.setAttribute("aria-label",e[2]);
+    el.innerHTML=`<div class="plate ${e[4]}" aria-hidden="true">${ART.has(e[5])?`<img src="${ART_BASE}${e[5]}.jpg" alt="" draggable="false">`:e[1]}</div><div class="ctext">${e[2]}<span class="tagwrap"></span></div><div class="moves"><button aria-label="Move up">▲</button><button aria-label="Move down">▼</button></div><div class="year">${e[0]}</div>`;
+    const [up,dn]=el.querySelectorAll(".moves button");
+    up.onclick=ev=>{ev.stopPropagation();move(id,-1)};dn.onclick=ev=>{ev.stopPropagation();move(id,1)};
+    up.addEventListener("pointerdown",ev=>ev.stopPropagation());dn.addEventListener("pointerdown",ev=>ev.stopPropagation());
+    el.addEventListener("pointerdown",startDrag);
+    el.addEventListener("keydown",ev=>{if(G.done)return;if(ev.key==="ArrowUp"){ev.preventDefault();move(id,-1);el.focus()}if(ev.key==="ArrowDown"){ev.preventDefault();move(id,1);el.focus()}if(ev.key==="Enter"&&picking){pickCard(id)}});
+    el.addEventListener("click",()=>{if(G.done)showFact(id);else if(picking)pickCard(id)});
+    list.appendChild(el);cardEls[id]=el;
+  });
+  layout();
+}
+function hintText(id){const h=G.hints[id];if(!h)return"";const y=yr(id);return h===1?`${Math.floor(y/100)}00s`:`${Math.floor(y/10)}0s`}
+function layout(){
+  G.order.forEach((id,i)=>{const el=cardEls[id];if(!el.classList.contains("drag"))el.style.top=slotTop(i)+"px";
+    const [up,dn]=el.querySelectorAll(".moves button");up.disabled=i===0;dn.disabled=i===G.order.length-1;
+    const tw=el.querySelector(".tagwrap"),ht=hintText(id),pl=G.placed.includes(id);
+    tw.innerHTML=(ht||pl)?`<br>${ht?`<span class="tag">💡 ${ht}</span> `:""}${pl?`<span class="tag">📌 placed</span>`:""}`:"";
+  });
+  drawChips();
+}
+// Clues from earlier checks: for two cards that sit next to each other now, show ✓ if we know
+// that order is right and ✗ if we know it's wrong. Nothing is shown for pairs you haven't checked.
+function drawChips(){
+  list.querySelectorAll(".chip").forEach(c=>c.remove());
+  if(G.done||drag)return;
+  for(let i=0;i<G.order.length-1;i++){
+    const a=G.order[i],b=G.order[i+1],k=a+">"+b,rk=b+">"+a;
+    let v=null;if(G.known[k]!==undefined)v=G.known[k];else if(G.known[rk]!==undefined)v=!G.known[rk];
+    if(v===null)continue;
+    const c=document.createElement("div");c.className="chip "+(v?"ok":"no");
+    c.textContent=v?"✓ in order":"✗ swap these";c.style.top=(slotTop(i+1)-GAP/2)+"px";list.appendChild(c);
+  }
+}
+function move(id,d){const i=G.order.indexOf(id),j=i+d;if(G.done||j<0||j>=G.order.length)return;[G.order[i],G.order[j]]=[G.order[j],G.order[i]];buzz(8);layout();persist()}
+
+// ---------- drag ----------
+let drag=null;
+function startDrag(ev){
+  if(G.done||picking||ev.button>0)return;
+  const el=ev.currentTarget,id=+el.dataset.id;
+  drag={el,id,y0:ev.clientY,top0:parseFloat(el.style.top),moved:false};
+  el.setPointerCapture(ev.pointerId);
+  el.addEventListener("pointermove",onDrag);el.addEventListener("pointerup",endDrag);el.addEventListener("pointercancel",endDrag);
+}
+function onDrag(ev){
+  if(!drag)return;const dy=ev.clientY-drag.y0;
+  if(!drag.moved&&Math.abs(dy)<4)return;
+  if(!drag.moved){drag.moved=true;drag.el.classList.add("drag");hideCoach();drawChips()}
+  const n=G.order.length,top=Math.max(-10,Math.min(slotTop(n-1)+10,drag.top0+dy));
+  drag.el.style.top=top+"px";
+  const slot=Math.max(0,Math.min(n-1,Math.round(top/slotTop(1)))),cur=G.order.indexOf(drag.id);
+  if(slot!==cur){G.order.splice(cur,1);G.order.splice(slot,0,drag.id);buzz(6);layout()}
+}
+function endDrag(){
+  if(!drag)return;const el=drag.el;
+  el.removeEventListener("pointermove",onDrag);el.removeEventListener("pointerup",endDrag);el.removeEventListener("pointercancel",endDrag);
+  el.classList.remove("drag");drag=null;layout();persist();
+}
+
+// ---------- hints ----------
+// Each hint is used on one card you pick: the first shows its century, a second on the same card its decade.
+let picking=false;
+function hint(){
+  if(G.done)return;
+  if(picking){stopPicking();return}
+  if(G.hintsUsed>=MAX_HINTS){toast("No hints left for this puzzle");return}
+  picking=true;Object.values(cardEls).forEach(c=>c.classList.add("picking"));
+  $("#hintLine").textContent="Tap a card to see its century. Tap the same card again later for its decade.";
+  $("#bHint").textContent="Cancel";
+}
+function stopPicking(){picking=false;Object.values(cardEls).forEach(c=>c.classList.remove("picking"));updateButtons()}
+function pickCard(id){
+  const h=G.hints[id]||0;
+  if(h>=2){toast("That card already shows its decade");return}
+  G.hints[id]=h+1;G.hintsUsed++;stopPicking();layout();track("hint_used",{mode:G.kind,level:h+1});
+  const el=cardEls[id];el.classList.remove("bump");void el.offsetWidth;el.classList.add("bump");
+  $("#hintLine").textContent=`💡 Hint ${G.hintsUsed} of ${MAX_HINTS} used. Hints give up the ⭐ bonus.`;
+  persist();
+}
+function place(){
+  if(G.done)return;
+  const t=sortIds(G.order),i=G.order.findIndex((id,k)=>yr(id)!==yr(t[k]));
+  if(i<0){toast("Every card is already in its spot!");return}
+  const id=t[i],cur=G.order.indexOf(id);G.order.splice(cur,1);G.order.splice(i,0,id);
+  G.placed.push(id);G.offerUsed=true;layout();track("place_card",{mode:G.kind});
+  const el=cardEls[id];el.classList.remove("bump");void el.offsetWidth;el.classList.add("bump");
+  $("#offer").hidden=true;$("#hintLine").textContent=`📌 "${EVENTS[id][2]}" is now in its right spot.`;
+  updateButtons();persist();
+}
+function updateButtons(){
+  const b=$("#bHint");b.disabled=G.done||G.hintsUsed>=MAX_HINTS;
+  b.textContent=G.hintsUsed>=MAX_HINTS?"💡 0 left":`💡 Hint`;
+  $("#bLock").textContent=G.kind==="tutorial"?"Check my order":`Check my order`;
+  $("#tries").innerHTML=G.kind==="tutorial"?"":`Try ${G.attempt} of ${TRIES} ${Array.from({length:TRIES},(_,i)=>`<i class="${i<G.attempt?"used":""}"></i>`).join("")}`;
+  $("#bGiveUp").hidden=G.kind==="tutorial"||G.attempt<2;
+  $("#offer").hidden=G.kind==="tutorial"||G.attempt<3||G.offerUsed;
+}
+
+// ---------- checking ----------
+function check(){
+  if(G.done)return;stopPicking();hideCoach();
+  const t=sortIds(G.order),perfect=G.order.every((id,i)=>yr(id)===yr(t[i]));
+  if(G.kind!=="tutorial")track("check",{mode:G.kind,try:G.attempt,solved:perfect?1:0});
+  if(perfect||G.attempt>=TRIES||G.kind==="tutorial"){finish();return}
+  // record what this check tells you about each neighboring pair
+  for(let i=0;i<G.order.length-1;i++){const a=G.order[i],b=G.order[i+1];G.known[a+">"+b]=yr(a)<yr(b)}
+  const ok=G.order.slice(0,-1).filter((a,i)=>yr(a)<yr(G.order[i+1])).length;
+  G.attempt++;layout();updateButtons();persist();
+  $("#hintLine").textContent=`${ok} of 4 neighbors are in the right order. Fix the ✗ pairs and check again.`;
+  buzz(20);
+}
+function giveUp(){
+  if(G.done)return;
+  const {q}=quality(G.order),f=[1,.85,.7][Math.min(G.attempt,TRIES)-1],pts=Math.round(90*q*f*.5);
+  const s=sheet(`<h2>Show the answer?</h2><p>This ends the puzzle. You'll get half the points your current order would earn (<b>${pts}</b> right now) and no ⭐. Your streak still counts.</p><button class="btn ghost" id="bShowYes">Show the answer</button>`,"Keep trying");
+  $("#bShowYes").onclick=()=>{s.remove();G.gaveUp=true;track("show_answer",{mode:G.kind,try:G.attempt});finish()};
+}
+
+function finish(){
+  G.done=true;stopPicking();
+  const t=sortIds(G.order),pos=G.order.map((id,i)=>{const d=Math.abs(t.indexOf(id)-i);return d===0?"g":d===1?"n":"m"});
+  G.score=G.gaveUp?Math.round(90*quality(G.order).q*[1,.85,.7][Math.min(G.attempt,TRIES)-1]*.5):finalScore();
+  G.tiles=pairTiles();G.marks=pos;
+  if(G.kind==="daily"){recordDaily();crowdSend(G.n,swapsOf(G.order));remindSync()}
+  if(G.kind==="tutorial"){S.tutorialDone=true;save();track("tutorial_done")}
+  else track("puzzle_done",{mode:G.kind,puzzle:G.n||0,score:G.score,tries:Math.min(G.attempt,TRIES),hints:G.hintsUsed,placed:G.placed.length,gave_up:G.gaveUp?1:0});
+  list.querySelectorAll(".chip").forEach(c=>c.remove());
+  G.order.forEach((id,i)=>{const el=cardEls[id];setTimeout(()=>{el.classList.add("done","flip",pos[i]);buzz(12)},i*320)});
+  $("#play").hidden=true;
+  setTimeout(()=>{G.order=t;layout();if(G.score>=90||G.milestone)fireworks();showResult()},G.order.length*320+800);
+  persist();
+}
+function recordDaily(){
+  const n=G.n;let note="";
+  const missed=S.lastDay?n-S.lastDay-1:0;
+  if(S.lastDay===n-1)S.streak++;
+  else if(missed>0&&S.freezes>=missed&&S.streak>0){S.freezes-=missed;S.streak++;note=`❄️ A streak freeze saved your streak.`}
+  else S.streak=1;
+  S.best=Math.max(S.best,S.streak);S.lastDay=n;S.played++;S.total+=G.score;
+  const tn=tier(G.score);S.tiers[tn]=(S.tiers[tn]||0)+1;
+  if(S.streak%7===0&&S.freezes<2){S.freezes++;note+=(note?" ":"")+`❄️ You earned a streak freeze (you have ${S.freezes}).`}
+  if(MILESTONES.includes(S.streak))G.milestone=S.streak;
+  G.note=note;save();
+}
+
+// ---------- result ----------
+function nearMiss(){
+  const t=sortIds(G.order);let best=null;
+  for(let i=0;i<t.length-1;i++){const gap=yr(t[i+1])-yr(t[i]);if(!best||gap<best.gap)best={a:t[i],b:t[i+1],gap}}
+  const swapped=G.finalOrder&&G.finalOrder.indexOf(best.a)>G.finalOrder.indexOf(best.b);
+  const A=EVENTS[best.a][2],B=EVENTS[best.b][2],yrs=best.gap===1?"1 year":best.gap+" years";
+  return swapped?`${best.gap<=10?"So close! ":""}You swapped <b>${A}</b> and <b>${B}</b>. They were only ${yrs} apart.`:`Closest call: <b>${A}</b> and <b>${B}</b> were only ${yrs} apart.`;
+}
+function surpriseCard(){ // the card you had furthest from its spot (or the oldest card if you were perfect)
+  const t=sortIds(G.ids);let id=t[0],far=0;
+  (G.finalOrder||t).forEach((c,i)=>{const d=Math.abs(t.indexOf(c)-i);if(d>far){far=d;id=c}});return id;
+}
+function showResult(){
+  const r=$("#result"),n=G.ids.length;
+  if(G.kind==="tutorial"){
+    r.innerHTML=`<h2>${G.marks.every(m=>m==="g")?"You've got it!":"That's the idea!"}</h2>
+      <p style="margin:0">In the real game you get 5 cards and 3 tries. After each try, green ✓ and red ✗ tags show which neighbors are in order.</p>
+      <div class="fact" id="fact"></div>
+      <div class="row"><button class="btn primary" id="go">Play today's puzzle</button></div>`;
+    r.hidden=false;showFact(sortIds(G.ids)[0]);$("#go").onclick=()=>{tutorial=false;setMode("daily")};return;
+  }
+  const share=shareText(),how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)} of ${TRIES}`:`Not solved in ${TRIES} tries`;
+  r.innerHTML=`${G.milestone?`<div class="milestone">🎉 ${G.milestone}-day streak!</div>`:""}
+    <div class="scoreline"><span class="score">${G.score}<small>/100</small></span><span class="tier">${tier(G.score)}</span></div>
+    <div class="pairs" aria-label="Your result">${G.tiles}</div>
+    <p class="star" style="margin:0">${how} · ${helpLine()}</p>
+    <p class="near" style="margin:0">${nearMiss()}</p>
+    ${G.kind==="daily"||G.kind==="archive"?`<p class="crowd" id="crowd" hidden></p>`:""}
+    <div class="fact" id="fact"></div>
+    <p class="star" style="margin:0">Tap any card for its story.</p>
+    <div class="row">
+      ${G.kind==="daily"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">Practice</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
+    </div>
+    ${G.kind==="archive"?`<p class="next">Past puzzles don't change your streak or daily stats.</p>`:""}
+    ${G.kind==="daily"?`<p class="next">${G.note?G.note+"<br>":""}Come back tomorrow for puzzle #${G.n+1} to keep your streak going. Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Next puzzle in <b id="cd"></b></p>`:""}
+    ${G.kind==="daily"&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
+    ${NATIVE&&adsAllowed()&&G.kind!=="tutorial"?`<button class="linkbtn noads" id="noads">Remove ads · ${removePrice}</button>`:""}
+    <textarea class="copy" id="copybox" rows="4" readonly hidden>${share}</textarea>`;
+  r.hidden=false;showFact(surpriseCard());
+  if($("#rYes")){$("#rYes").onclick=()=>setRemind($("#rTime").value).then(()=>$("#remind").remove());$("#rNo").onclick=()=>{setRemind(false);$("#remind").remove()}}
+  if(G.kind==="daily"){$("#share").onclick=()=>{track("share_tap",{mode:"daily",puzzle:G.n});copy(share)};$("#more").onclick=()=>interstitial(()=>setMode("practice"));tick()}
+  if(G.kind==="archive"){$("#share").onclick=()=>{track("share_tap",{mode:"archive",puzzle:G.n});copy(share)};$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
+  if(G.kind==="daily"||G.kind==="archive")showCrowd();
+  else if(G.kind==="practice")$("#again").onclick=()=>interstitial(()=>{newPractice();render()});
+  if($("#noads"))$("#noads").onclick=buyNoAds;
+  showBanner();
+}
+function shareText(){
+  const how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)}/${TRIES}`:`Not solved in ${TRIES}`;
+  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}\n${G.tiles}\n${how} · ${DAY_FEEL[G.wd]}${themeOf(G.n)&&G.kind!=="practice"?" · "+themeOf(G.n):""}\nplaywhenly.com`;
+}
+function copy(t){
+  const ok=()=>toast("Result copied. Paste it in a text to friends and family.");
+  const fall=()=>{const b=$("#copybox");b.hidden=false;b.focus();b.select();toast("Select and copy the text below")};
+  if(NATIVE&&PLUG.Share)return PLUG.Share.share({text:t,dialogTitle:"Share your result"}).catch(()=>{});
+  try{navigator.clipboard.writeText(t).then(ok,fall)}catch(e){fall()}
+}
+function showFact(id){
+  const e=EVENTS[id],f=$("#fact");if(!f)return;
+  f.innerHTML=`<b>${e[0]}</b> · ${e[2]}. ${e[3]} <a href="https://en.wikipedia.org/wiki/${e[5]}" target="_blank" rel="noopener">Source</a> · <button class="linkbtn" id="bReport" style="font-size:13px;padding:0">Report this card</button>`;
+  $("#bReport").onclick=()=>report(id);
+  Object.values(cardEls).forEach(c=>c.style.outline="");if(cardEls[id])cardEls[id].style.outline="2px solid var(--accent)";
+}
+function report(id){
+  const e=EVENTS[id];
+  const s=sheet(`<h2>Report this card</h2><p><b>${e[2]}</b> (${e[0]})</p><p>What's wrong?</p>
+    <div class="reasons"><button data-r="The year is wrong">The year is wrong</button><button data-r="The fact is wrong">The fact is wrong</button><button data-r="It's confusing">It's confusing</button></div>`);
+  s.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{
+    const msg=`Whenly card report: "${e[2]}" (${e[0]}): ${b.dataset.r}`;
+    S.reports.push({id,title:e[2],reason:b.dataset.r,at:Date.now()});save();
+    try{NATIVE&&PLUG.Clipboard?PLUG.Clipboard.write({string:msg}):navigator.clipboard.writeText(msg).catch(()=>{})}catch(_){}
+    const mail=`mailto:support@playbrightharbor.com?subject=${encodeURIComponent("Whenly card report")}&body=${encodeURIComponent(msg)}`;
+    s.querySelector("div").innerHTML=`<h2>Thanks!</h2><p>We copied your report. Tap below to email it to us, or paste it in an email to:</p><p class="email">support@playbrightharbor.com</p><a class="btn primary" href="${mail}" style="text-decoration:none;text-align:center">Email the report</a><button class="btn ghost" data-close>Done</button>`;
+  });
+}
+let cdTimer;
+function tick(){clearInterval(cdTimer);const f=()=>{const el=$("#cd");if(!el)return clearInterval(cdTimer);const now=new Date(),mid=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1),s=Math.max(0,Math.floor((mid-now)/1000));
+  el.textContent=[s/3600|0,(s/60|0)%60,s%60].map(x=>String(x).padStart(2,"0")).join(":");if(s===0){newDaily();render()}};f();cdTimer=setInterval(f,1000)}
+
+// ---------- screens ----------
+function render(){
+  $("#result").hidden=true;$("#play").hidden=false;stopPicking();
+  if(!G.done)hideBanner();
+  $("#hintLine").textContent=G.kind==="tutorial"?"The Gutenberg Bible is the oldest. Drag it to the top, then check.":G.attempt>1?"Fix the ✗ pairs and check again.":"Drag the cards, or use the arrows.";
+  $("#diff").hidden=G.kind!=="practice";$("#pill").hidden=G.kind==="practice";
+  if(G.kind==="daily"||G.kind==="archive"){$("#title").textContent="Oldest at the top";$("#pill").textContent=`#${G.n} · ${DAY_NAME[G.wd].slice(0,3)} · ${DAY_FEEL[G.wd]}${G.kind==="archive"?" · Archive":""}`;if(themeOf(G.n))$("#title").textContent=themeOf(G.n)}
+  if(G.kind==="practice")$("#title").textContent="Oldest at the top";
+  if(G.kind==="tutorial"){$("#title").textContent="Put them in order";$("#pill").textContent="Lesson"}
+  build();updateButtons();
+  $("#bHint").hidden=G.kind==="tutorial";
+  $("#play .actions").style.gridTemplateColumns=G.kind==="tutorial"?"1fr":"auto 1fr";
+  if(G.done){
+    const t=sortIds(G.ids),col={};G.finalOrder.forEach((id,i)=>col[id]=G.marks[i]);
+    G.order=t;build();t.forEach(id=>cardEls[id].classList.add("done",col[id]));
+    $("#play").hidden=true;showResult();
+  }
+  if(G.kind==="tutorial")showCoach();
+}
+// keep the order the player locked in, for the near-miss line and reloads
+const _finish=finish;finish=function(){G.finalOrder=G.order.slice();_finish()};
+function setMode(m){
+  ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",m===t.toLowerCase()));
+  const game=m==="daily"||m==="practice";
+  $("#meta").hidden=$("#board").hidden=!game;$("#play").hidden=!game;$("#result").hidden=true;
+  $("#archive").hidden=m!=="archive";$("#expert").hidden=m!=="expert";
+  if(m==="daily")newDaily();else if(m==="practice")newPractice();
+  if(game)render();else if(m==="archive")showArchive();else newExpert();
+}
+function playArchive(n){
+  ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",t==="Archive"));
+  $("#archive").hidden=true;$("#meta").hidden=$("#board").hidden=false;newArchive(n);render();scrollTo(0,0);
+}
+
+// ---------- archive ----------
+function showArchive(){
+  const a=$("#archive"),now=dayNum(),rows=[];
+  for(let n=now-1;n>=1;n--){
+    const d=dateOf(n),g=S.days[n]&&S.days[n].g,wd=d.getDay();
+    const res=g&&g.done?`<span class="res done">${g.score} · ${tier(g.score)}</span>`:g?`<span class="res">Started</span>`:`<span class="res">Play</span>`;
+    rows.push(`<button class="arow" data-n="${n}"><b>#${n}</b><span>${d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}<small>${DAY_FEEL[wd]}${themeOf(n)?" · "+themeOf(n):""}</small></span>${res}</button>`);
+  }
+  a.innerHTML=`<h2>Past puzzles</h2><p class="star" style="margin:0">Play any day you missed, or replay the fun ones. Past puzzles don't change your streak.</p>`+
+    (rows.length?rows.join(""):`<p class="fact">Puzzle #1 is today's. From tomorrow, every past puzzle shows up here.</p>`);
+  a.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>playArchive(+b.dataset.n));
+}
+
+// ---------- expert mode ----------
+// Guess the exact year of each card. Each card is worth 20 points, minus 1 for every 2 years off.
+let E=null;
+const xPts=d=>Math.max(0,20-Math.floor(d/2));
+const xMark=d=>d===0?"🎯":d<=5?"🟩":d<=20?"🟨":"🟥";
+function newExpert(){
+  const r=rng((Math.random()*1e9)|0),ids=pick(5,3,r,false);
+  E={ids:shuffle(ids,r),guess:{},done:false};track("puzzle_start",{mode:"expert"});drawExpert();
+}
+function drawExpert(){
+  const x=$("#expert");
+  x.innerHTML=`<h2>Expert: name the year</h2><p class="star" style="margin:0">Type the year for each card. Exact earns 20 points, and you lose 1 point for every 2 years off.</p>`+
+    E.ids.map(id=>{const e=EVENTS[id],g=E.guess[id],d=E.done?Math.abs(g-e[0]):0;
+      return `<div class="xcard ${E.done?(d<=5?"g":d<=20?"n":"m"):""}" data-id="${id}"><div class="plate ${e[4]}" aria-hidden="true">${ART.has(e[5])?`<img src="${ART_BASE}${e[5]}.jpg" alt="" draggable="false">`:e[1]}</div><div class="ctext">${e[2]}</div>${E.done?`<div class="xres">${e[0]}<small>you: ${g}${d?` (${d} off)`:" 🎯"}</small></div>`:`<input type="number" inputmode="numeric" min="1000" max="2030" placeholder="Year" aria-label="Year for ${e[2].replace(/"/g,"")}" value="${g??""}">`}</div>`}).join("")+
+    (E.done?`<div class="result"><div class="scoreline"><span class="score">${E.score}<small>/100</small></span><span class="tier">${tier(E.score)}</span></div><div class="pairs">${E.marks}</div><div class="row"><button class="btn primary" id="xShare">Share result</button><button class="btn ghost" id="xNext">Next puzzle</button></div><p class="next">Expert best: <b>${S.xBest||0}</b> · Played: <b>${S.xPlayed||0}</b></p><textarea class="copy" id="copybox" rows="3" readonly hidden></textarea></div>`
+      :`<button class="btn primary" id="xLock">Lock in my years</button>`);
+  x.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{const id=+inp.closest(".xcard").dataset.id,v=parseInt(inp.value,10);if(isNaN(v))delete E.guess[id];else E.guess[id]=v});
+  if(!E.done)$("#xLock").onclick=lockExpert;
+  else{const t=`${NAME} Expert · ${E.score}/100 ${tier(E.score)}\n${E.marks}\nplaywhenly.com`;$("#copybox").value=t;
+    $("#xShare").onclick=()=>{track("share_tap",{mode:"expert"});copy(t)};$("#xNext").onclick=()=>interstitial(()=>{newExpert();scrollTo(0,0)})}
+}
+function lockExpert(){
+  if(E.ids.some(id=>!(E.guess[id]>=0))){toast("Enter a year for every card");return}
+  E.done=true;E.score=E.ids.reduce((s,id)=>s+xPts(Math.abs(E.guess[id]-yr(id))),0);E.marks=E.ids.map(id=>xMark(Math.abs(E.guess[id]-yr(id)))).join("");
+  S.xPlayed=(S.xPlayed||0)+1;S.xBest=Math.max(S.xBest||0,E.score);save();
+  track("puzzle_done",{mode:"expert",score:E.score});buzz(20);if(E.score>=90)fireworks();drawExpert();
+}
+let coachEl;
+function showCoach(){hideCoach();coachEl=document.createElement("div");coachEl.className="coach";coachEl.textContent="👆";coachEl.style.top=(slotTop(1)+20)+"px";list.appendChild(coachEl)}
+function hideCoach(){if(coachEl){coachEl.remove();coachEl=null}}
+
+function sheet(html,btn="Got it"){const s=document.createElement("div");s.className="sheet";s.innerHTML=`<div role="dialog" aria-modal="true">${html}${btn?`<button class="btn primary" data-close>${btn}</button>`:""}</div>`;
+  s.addEventListener("click",e=>{if(e.target===s||e.target.hasAttribute("data-close"))s.remove()});document.body.appendChild(s);const c=s.querySelector("[data-close]");if(c)c.focus();return s}
+function help(){sheet(`<h2>How to play</h2>
+  <p>You get five things from history: inventions, events, famous firsts.</p>
+  <p><b>Put them in order, oldest at the top.</b> Drag a card, or tap its arrows.</p>
+  <p>Tap <b>Check my order</b>. You get 3 tries. After each try, a green ✓ between two cards means they're in the right order, and a red ✗ means swap them.</p>
+  <p><b>💡 Hints:</b> tap Hint, then a card, to see its century. Use a second hint on the same card to see its decade. Finish with no hints for a ⭐ and 10 bonus points.</p>
+  <p><b>📌 Stuck on try 3?</b> "Place a card" puts one card in its right spot. <b>Show the answer</b> ends the puzzle early for half the points your order would earn. Both give up the ⭐, and your streak still counts.</p>
+  <p><b>Score:</b> up to 100, for pairs in the right order and cards close to their spots. Solving on your first try scores highest.</p>
+  <p><b>Streaks:</b> play every day to build a streak. Every 7 days in a row earns a ❄️ freeze that saves your streak if you miss a day.</p>
+  <p><b>Archive:</b> play any past day's puzzle. <b>Expert:</b> type the exact year of each card, scored by how close you get.</p>
+  <p>A new puzzle comes every day at midnight. Monday is the easiest and the week gets harder, up to Sunday (the label at the top shows today's level). There's no timer.</p>
+  <p style="color:var(--muted);font-size:14px">Card photos are public domain or CC0, from Wikimedia Commons.</p>`)}
+function stats(){
+  const max=Math.max(1,...TIERS.map(t=>S.tiers[t[1]]||0)),td=S.days[dayNum()],mine=td&&td.g&&td.g.done?tier(td.g.score):"";
+  sheet(`<h2>Your stats</h2>
+  <div class="stats"><div><b>${S.played}</b><span>Played</span></div><div><b>${S.played?Math.round(S.total/S.played):0}</b><span>Avg score</span></div><div><b>${S.streak}</b><span>Streak</span></div><div><b>${S.best}</b><span>Best streak</span></div></div>
+  <p>❄️ Streak freezes: <b>${S.freezes}</b> of 2. You earn one every 7 days in a row.</p>
+  ${S.played?"":`<p style="color:var(--muted)">Your stats start with your first daily puzzle. The lesson and Practice don't count.</p>`}
+  <p style="font-weight:700">Your results (daily puzzles)</p>
+  <div class="dist">${TIERS.map(t=>`<div style="grid-template-columns:108px 1fr"><span>${t[1]}</span><i class="${mine===t[1]?"me":""}" style="width:${Math.max(8,(S.tiers[t[1]]||0)/max*100)}%">${S.tiers[t[1]]||0}</i></div>`).join("")}</div>
+  ${NATIVE?`<div class="row">${noAds()?"":`<button class="btn ghost noads" id="sNoAds">Remove ads · ${removePrice}</button>`}<button class="btn ghost" id="sRestore">Restore purchases</button></div>`:""}
+  ${NATIVE?`<label class="remindset">🔔 Daily reminder ${timeSelect("rSet",S.remind||"off",true)}</label>`:""}`);
+  const rs=$("#rSet");if(rs)rs.onchange=()=>setRemind(rs.value==="off"?false:rs.value);
+  if($("#sNoAds"))$("#sNoAds").onclick=buyNoAds;if($("#sRestore"))$("#sRestore").onclick=restoreNoAds}
+let toastT;function toast(t){document.querySelectorAll(".toast").forEach(x=>x.remove());const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);clearTimeout(toastT);toastT=setTimeout(()=>d.remove(),2600)}
+// In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
+const NATIVE=!!window.Capacitor?.isNativePlatform?.(),PLUG=NATIVE?window.Capacitor.Plugins:{};
+// Crash reporting (Firebase Crashlytics in the apps). Native crashes are caught by the plugin itself;
+// game script errors go up as non-fatal reports, at most 5 per session so a loop can't spam.
+let errorsSent=0;
+function reportError(message,stack){
+  try{
+    const crash=NATIVE&&PLUG.FirebaseCrashlytics;if(!crash||errorsSent++>=5)return;
+    if(stack)crash.log({message:String(stack).slice(0,1000)}).catch(()=>{});
+    crash.recordException({message:String(message).slice(0,500)}).catch(()=>{});
+  }catch(e){}
+}
+addEventListener("error",e=>reportError(e.message||"Script error",e.error?.stack));
+addEventListener("unhandledrejection",e=>reportError("Unhandled: "+(e.reason?.message||e.reason),e.reason?.stack));
+// ---------- daily reminder (apps only, opt-in) ----------
+// S.remind: undefined = not asked yet, false = off, "HH:MM" = on. The next 14 days are scheduled as
+// separate notifications so tomorrow's can mention the streak; they're rebuilt on every open and finish.
+function timeSelect(id,val,withOff){
+  const opts=(withOff?[["off","Off"]]:[]).concat([7,8,9,10,12,15,17,18,19,20,21].map(h=>[`${String(h).padStart(2,"0")}:00`,`${h%12||12}:00 ${h<12?"AM":"PM"}`]));
+  return `<select id="${id}" aria-label="Reminder time">${opts.map(([v,t])=>`<option value="${v}"${v===val?" selected":""}>${t}</option>`).join("")}</select>`;
+}
+async function setRemind(v){
+  if(v&&NATIVE&&PLUG.LocalNotifications){
+    const p=await PLUG.LocalNotifications.requestPermissions().catch(()=>({display:"denied"}));
+    if(p.display!=="granted"){toast("Notifications are off for Whenly. Turn them on in your phone's Settings.");v=false}
+  }
+  S.remind=v;save();track(v?"remind_on":"remind_off",v?{time:v}:{});
+  await remindSync();
+  if(v)toast(`We'll remind you at ${$("option[value='"+v+"']")?.textContent||v} each day.`);
+}
+// ---------- ads and Remove ads (apps only) ----------
+// A small banner on finished-puzzle screens and a full-screen ad between practice rounds or when
+// leaving a result. Never on a player's first day, never mid-puzzle, at most one full-screen ad per 3 minutes.
+const PLATFORM=window.Capacitor?.getPlatform?.()||"web",AdMob=NATIVE?PLUG.AdMob:null,Purchases=NATIVE?PLUG.NativePurchases:null;
+// Whenly's AdMob ad units (publisher 7780493483551677). Beta builds show Google's test ads; `npm run build:release` shows real ones.
+const AD_UNITS={
+  android:{interstitial:"ca-app-pub-7780493483551677/4190161403",banner:"ca-app-pub-7780493483551677/4228769980"},
+  ios:{interstitial:"ca-app-pub-7780493483551677/6624753058",banner:"ca-app-pub-7780493483551677/5423352020"}};
+const ADS_TESTING="__BUILD__"!=="release";
+// Product ID must match App Store Connect and Google Play Console.
+const REMOVE_ADS="whenly.removeads";let removePrice="$2.99",adsReady=false,lastAd=0,bannerOn=false;
+const noAds=()=>!!S.noAds;
+const adsAllowed=()=>adsReady&&!noAds()&&S.firstDay!=null&&dayNum()>S.firstDay;
+async function initAds(){
+  if(!AdMob)return;
+  try{
+    let info=await AdMob.requestConsentInfo();
+    if(info.isConsentFormAvailable&&info.status==="REQUIRED")info=await AdMob.showConsentForm();
+    // Analytics starts switched off (Info.plist, AndroidManifest.xml) and turns on once the consent step is done.
+    if(info.status==="OBTAINED"||info.status==="NOT_REQUIRED")PLUG.FirebaseAnalytics?.setEnabled({enabled:true}).catch(()=>{});
+    if(PLATFORM==="ios")await AdMob.requestTrackingAuthorization().catch(()=>{});
+    await AdMob.initialize({initializeForTesting:ADS_TESTING});
+    adsReady=true;if(G&&G.done)showBanner();
+  }catch(e){console.warn("Ads unavailable",e)}
+}
+function interstitial(then){
+  if(!adsAllowed()||Date.now()-lastAd<180000)return then();
+  lastAd=Date.now();hideBanner();track("ad_interstitial",{mode:G?G.kind:""});
+  const u=AD_UNITS[PLATFORM]||AD_UNITS.android;
+  AdMob.prepareInterstitial({adId:u.interstitial,isTesting:ADS_TESTING}).then(()=>AdMob.showInterstitial()).catch(()=>{}).finally(then);
+}
+function showBanner(){
+  if(!adsAllowed()||bannerOn)return;bannerOn=true;document.body.classList.add("banner");
+  const u=AD_UNITS[PLATFORM]||AD_UNITS.android;
+  AdMob.showBanner({adId:u.banner,adSize:"ADAPTIVE_BANNER",position:"BOTTOM_CENTER",margin:0,isTesting:ADS_TESTING}).catch(()=>{bannerOn=false;document.body.classList.remove("banner")});
+}
+function hideBanner(){if(!bannerOn)return;bannerOn=false;document.body.classList.remove("banner");AdMob?.removeBanner().catch(()=>{})}
+async function loadPrice(){
+  if(!Purchases)return;
+  try{
+    const {products}=await Purchases.getProducts({productIdentifiers:[REMOVE_ADS],productType:"inapp"});
+    if(products[0]?.priceString)removePrice=products[0].priceString;
+    const {purchases}=await Purchases.getPurchases({productType:"inapp"});
+    if(purchases.some(t=>t.productIdentifier===REMOVE_ADS)&&!S.noAds){S.noAds=true;save();hideBanner()}
+  }catch(e){}
+}
+async function buyNoAds(){
+  if(!Purchases)return toast("Purchases work in the iPhone and Android apps.");
+  try{
+    await Purchases.purchaseProduct({productIdentifier:REMOVE_ADS,productType:"inapp",quantity:1,isConsumable:false});
+    S.noAds=true;save();hideBanner();track("remove_ads");toast("Ads removed. Thank you!");
+    document.querySelectorAll(".noads").forEach(b=>b.remove());
+  }catch(e){if(!/cancel/i.test(String(e?.message||e)))toast("The purchase didn't go through. You were not charged.")}
+}
+async function restoreNoAds(){
+  if(!Purchases)return toast("Restore works in the iPhone and Android apps.");
+  try{await Purchases.restorePurchases()}catch(e){}
+  await loadPrice();toast(noAds()?"Remove ads restored.":"Nothing to restore.");
+}
+async function remindSync(){
+  const LN=NATIVE&&PLUG.LocalNotifications;if(!LN)return;
+  try{
+    const ids=Array.from({length:14},(_,i)=>({id:100+i}));
+    await LN.cancel({notifications:ids});
+    if(!S.remind)return;
+    const [h,m]=S.remind.split(":").map(Number),now=new Date(),n0=dayNum(),doneToday=!!(S.days[n0]&&S.days[n0].g&&S.days[n0].g.done);
+    const list=[];
+    for(let i=0;i<14;i++){
+      const at=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i,h,m);
+      if(at<=now||(i===0&&doneToday))continue;
+      const n=n0+i,th=themeOf(n);
+      const body=i<=1&&S.streak>=2?`Keep your ${S.streak}-day streak going. Puzzle #${n} is ready.`:th?`Today's theme: ${th}. Five cards, oldest at the top.`:`Puzzle #${n} is ready. Five cards, oldest at the top.`;
+      list.push({id:100+i,title:"Whenly",body,schedule:{at,allowWhileIdle:true}});
+    }
+    if(list.length)await LN.schedule({notifications:list});
+  }catch(e){}
+}
+function buzz(ms){try{if(NATIVE)PLUG.Haptics?.impact({style:ms<=10?"LIGHT":ms<=20?"MEDIUM":"HEAVY"});else navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+function fireworks(){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  const c=$("#fx"),x=c.getContext("2d"),W=c.width=innerWidth*devicePixelRatio,H=c.height=innerHeight*devicePixelRatio,P=[];
+  const cols=["#e8a21a","#2e9a58","#5a9fb5","#d9708a","#7d93c9"];
+  for(let b=0;b<3;b++){const cx=W*(.25+.25*b),cy=H*(.25+.1*(b%2));for(let i=0;i<50;i++){const a=Math.random()*6.28,s=(2+Math.random()*5)*devicePixelRatio;P.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:60+Math.random()*30,c:cols[i%5],d:b*12})}}
+  let f=0;(function step(){x.clearRect(0,0,W,H);let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx;p.y+=p.vy;p.vy+=.08*devicePixelRatio;p.vx*=.98;p.l--;x.globalAlpha=Math.min(1,p.l/30);x.fillStyle=p.c;x.fillRect(p.x,p.y,4*devicePixelRatio,4*devicePixelRatio)}f++;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
+}
+// Hidden tester tools: tap the footer 5 times.
+let footTaps=0;$("#foot").addEventListener("click",()=>{if(++footTaps<5)return;footTaps=0;
+  const s=sheet(`<h2>Tester tools</h2><p>Today is puzzle #${dayNum()} (offset ${S.offset} days).</p><div class="tester"><button class="btn ghost" data-t="next">Go to next day</button><button class="btn ghost" data-t="skip">Skip a day</button><button class="btn ghost" data-t="reset">Reset all progress</button></div><p class="star">Reports saved: ${S.reports.length}</p><p class="star">Funnel events on this device: ${Object.entries(S.ev||{}).map(([k,v])=>k+" "+v).join(" · ")||"none yet"}</p><button class="btn ghost" data-t="crowd">${S.fakeCrowd?"Hide":"Show"} sample crowd stats</button>`,"Close");
+  s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="reset"){S={days:{},tiers:{},streak:0,best:0,played:0,total:0,freezes:0,offset:0,reports:[],tutorialDone:true}}save();s.remove();setMode("daily");toast(`Now on puzzle #${dayNum()}`)})});
+
+// ---------- wire up ----------
+$("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
+$("#tDaily").onclick=()=>{if(!tutorial)setMode("daily")};$("#tPractice").onclick=()=>{if(!tutorial)setMode("practice")};
+$("#tArchive").onclick=()=>{if(!tutorial)setMode("archive")};$("#tExpert").onclick=()=>{if(!tutorial)setMode("expert")};
+$("#diff").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;practiceGap=+b.dataset.g;$("#diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));newPractice();render()});
+if(!S.tutorialDone){tutorial=true;newTutorial();render()}else setMode("daily");
+initAds().then(loadPrice);remindSync();document.addEventListener("visibilitychange",()=>{if(!document.hidden)remindSync()});
+</script>
+
+</body>
+</html>
