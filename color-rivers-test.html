@@ -79,11 +79,6 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .stars .off{color:rgba(255,255,255,.16);text-shadow:none}
 .big{background:linear-gradient(180deg,var(--lantern),var(--lantern-deep));color:#2b1a00;border:0;border-radius:14px;padding:13px;font-weight:800;font-size:17px;font-family:var(--display)}
 .ghost{background:transparent;border:1.5px solid rgba(255,255,255,.18);border-radius:14px;padding:10px;font-weight:800;font-size:14px}
-.ask{display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px}
-.ask b{font-size:14px}
-.ask .row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.ask .row button{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.14);border-radius:12px;padding:8px 2px;font-weight:800;font-size:12.5px}
-.ask .row button.on{background:var(--lantern);color:#2b1a00;border-color:var(--lantern)}
 .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .lv{aspect-ratio:1;border-radius:14px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);font-family:var(--display);font-weight:800;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px;max-width:100%}
 .lv small{font-family:var(--body);font-size:10px;color:var(--lantern);letter-spacing:1px}
@@ -99,7 +94,6 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .tog{width:52px;height:30px;border-radius:999px;border:0;background:rgba(255,255,255,.18);position:relative;flex:none}
 .tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
 .tog.on{background:#3fd68a}.tog.on::after{left:25px}
-.answers{font-size:12.5px;color:var(--ink-soft);font-weight:700;text-align:left;line-height:1.5}
 .toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);background:rgba(8,20,34,.92);border:1.5px solid rgba(255,255,255,.16);padding:8px 14px;border-radius:999px;font-weight:800;font-size:14px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:6;white-space:nowrap}
 .toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){.tog::after,.toast{transition:none}}
@@ -107,7 +101,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.27 · 303 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.28 · 303 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -664,29 +658,15 @@ function win(){
   const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},1300);
 }
 function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</span>`).join("");}
-// Muse's pass/fail bar: on a tangle level, a first-time player routes every stream without re-tracing (and without a hint).
-function traceLine(t){if(!t)return "Not measured on this clear";return t.pass?"PASS: every stream traced first try":`FAIL: ${t.retraces} re-trace${t.retraces===1?"":"s"}${t.hints?`, ${t.hints} hint${t.hints===1?"":"s"}`:""}`;}
-function askBlock(fresh){
-  if(!LEVELS[lv].tangle)return "";
-  const t=prog.trace[ID(lv)],now={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
-  const a=prog.answers[ID(lv)];const opt=[["easy","Easy"],["sec","Took a sec"],["lost","Lost track"]];
-  // the first clear is the one that counts for the test; a replay shows this play too, so it's clear which is which
-  const check=fresh?`<b>Readability check (first clear, saved)</b><p>${traceLine(t)}</p>`
-    :`<b>This play</b><p>${traceLine(now)}</p><b>Saved first clear</b><p>${traceLine(t)}</p>`;
-  return `<div class="ask">${check}<b>Could you tell whose critters were whose?</b><div class="row">${opt.map(([k,t])=>`<button data-ans="${k}" class="${a===k?"on":""}">${t}</button>`).join("")}</div></div>`;
-}
+// Re-traces and hints are still counted silently in prog.trace (kept for playtest analysis); nothing is shown to the player.
 function showWin(s,ink,fresh){
   const last=lv===LEVELS.length-1,locked=!last&&!prog.all&&!gateOK(lv+1),nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close! Just ${over} ink over par. Three stars at ${G.par}.`:`${ink} ink. Three stars at ${G.par} or less.`; // near-miss drives the retry
-  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}${askBlock(fresh)}
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
    ${last?`<p>That's every level in this prototype. Thanks for playing!</p><button class="big" id="goLevels">See all levels</button>`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
    <button class="ghost" id="goRetry">Play again for more stars</button>`);
   $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
   if(last||locked)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();goNext();};
-  wireAsk();
-}
-function wireAsk(){
-  document.querySelectorAll("[data-ans]").forEach(b=>b.onclick=()=>{prog.answers[ID(lv)]=b.dataset.ans;saveProg();document.querySelectorAll("[data-ans]").forEach(x=>x.classList.toggle("on",x===b));});
 }
 // ---------- Daily River ----------
 // One puzzle a day from the DAILY bank, the same for everyone on the same date. Slot = weekday (Monday gentle,
@@ -723,11 +703,6 @@ function showDailyWin(s,ink){
 }
 $("dailyBtn").onclick=()=>{if(daily&&!won)return;startDaily();};
 function showLevels(){
-  const names={easy:"Easy",sec:"Took a sec",lost:"Lost track"};
-  const keys=[...new Set([...Object.keys(prog.answers),...Object.keys(prog.trace)])].filter(k=>IDX(k)>=0).sort((a,b)=>IDX(a)-IDX(b));
-  let ans=keys.map(k=>`Level ${IDX(k)+1}: ${prog.trace[k]?traceLine(prog.trace[k]):"not cleared"}${prog.answers[k]?` · "${names[prog.answers[k]]}"`:""}`).join("<br>");
-  const fm=LEVELS.findIndex(L=>L.firstMix);
-  const fp=prog.plays[ID(fm)];if(fp)ans=`Level ${fm+1} (first mix) played ${fp} time${fp===1?"":"s"}`+(ans?"<br>"+ans:"");
   const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}</small></button>`;
   const chapters=CHAPTERS.map(C=>{const ids=LEVELS.map((L,i)=>L.ch===C.id?i:-1).filter(i=>i>=0);
     const got=ids.reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
@@ -736,7 +711,6 @@ function showLevels(){
   const sk=streakNow(),gr=prog.streak&&prog.streak.grace>0;
   const dl=dailyOpen()?`<button class="big" id="goDaily">☀︎ Daily River${dailyDone()?" ✓":""}${sk?` · 🔥 ${sk}`:""}</button><p class="chnote">${sk?`🔥 ${sk}-day streak. `:"Play every day to grow a 🔥 streak. "}Miss a day and a grace day keeps it going${sk&&!gr?" (yours is used: play 7 days in a row to earn it back)":""}.</p>`:`<p class="chnote">☀︎ Daily River opens at level ${DAILY_AT}: a new puzzle every day.</p>`;
   openSheet(`<h3>Levels</h3>${dl}${chapters}
-    ${ans?`<div class="answers"><b>Readability results</b><br>${ans}</div>`:""}
     <button class="ghost" id="close">Close</button>`);
   document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{closeSheet();startLevel(+b.dataset.lv);});
   if($("goDaily"))$("goDaily").onclick=()=>{closeSheet();startDaily();};
