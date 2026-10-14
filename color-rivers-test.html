@@ -56,6 +56,7 @@ button:focus-visible{outline:3px solid var(--lantern);outline-offset:2px}
 .brg{width:9px;height:14px;border-radius:2px;display:inline-block;background:repeating-linear-gradient(180deg,#b9864f 0 3px,#6b4a2f 3px 4px);border-left:2px solid #e2b77c;border-right:2px solid #e2b77c}
 .veil{visibility:hidden}
 .dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 6px currentColor}
+.mk{display:inline-block;vertical-align:middle;margin-left:3px}
 
 .stage{position:relative}
 canvas{display:block;width:100%;touch-action:none;border-radius:20px}
@@ -344,7 +345,7 @@ function fireworks(cell,mask){
   for(let b=0;b<4;b++){const bx=b?Math.random()*cs*G.w:cx,by=b?Math.random()*cs*G.h*.7:cy,t0=performance.now()+b*220;
     for(let k=0;k<34;k++){const a=Math.random()*Math.PI*2,v=cs*(1.2+Math.random()*2.2);parts.push({x:bx,y:by,vx:Math.cos(a)*v,vy:Math.sin(a)*v,t0,life:900+Math.random()*600,c:cols[k%4]});}}
 }
-let opts=store.get("opts",{shapes:true,sound:true});
+let opts=store.get("opts",{shapes:true,sound:true,marks:false});
 let lv=0,G,paths,col,active=-1,won=false,wonAt=0,hints=[],cs=60,dpr=1,lastStatus=[],bloom=[],sparks=[];
 const SHAPES=["round","square","drop","star","diamond","hex"];
 
@@ -382,7 +383,27 @@ function renderLegend(){
   if(L.homes)html+=`<span class="chip">shape in a nest = only those critters</span>`;
   if(hasT)html+=`<span class="chip"><i class="tun"></i>dive in, come up at the matching pool</span>`;
   fl.forEach(f=>html+=`<span class="chip"><i class="dot" style="background:${COLORS[f]};color:${COLORS[f]}"></i>filter takes ${NAMES[f]} out</span>`);
+  if(opts.marks)html=html.replace(/(<i class="dot" style="background:(#[0-9a-f]+);[^"]*"><\/i>)/g,(m,dot,hex)=>{const c=+Object.keys(COLORS).find(k=>COLORS[k]===hex);return dot+markSVG(c);});
   $("mix").innerHTML=html;
+}
+// Color marks for colorblind players (the ColorADD idea): red is a right-pointing triangle, blue a left-pointing
+// one, yellow a slash, and a mixed color shows the marks of the colors in it (mud shows all three).
+const MARK_ORDER=[4,2,1];
+function marksOf(c){return MARK_ORDER.filter(b=>c&b);}
+function markPath(g,b,x,y,h){ // one mark, h tall, centered at x,y
+  const w=h*.42;g.beginPath();
+  if(b===1){g.moveTo(x-w,y-h/2);g.lineTo(x+w,y);g.lineTo(x-w,y+h/2);g.closePath();g.fill();}
+  else if(b===4){g.moveTo(x+w,y-h/2);g.lineTo(x-w,y);g.lineTo(x+w,y+h/2);g.closePath();g.fill();}
+  else{g.lineWidth=h*.22;g.lineCap="round";g.moveTo(x-w*.75,y+h/2);g.lineTo(x+w*.75,y-h/2);g.stroke();}
+}
+function markSVG(c){const m=marksOf(c);if(!m.length)return"";const h=10,step=9,W=m.length*step+2;
+  const parts=m.map((b,k)=>{const x=1+step*k+step/2,w=h*.42;
+    return b===1?`<path d="M${x-w} 0L${x+w} 5L${x-w} 10Z"/>`:b===4?`<path d="M${x+w} 0L${x-w} 5L${x+w} 10Z"/>`:`<path d="M${x-w*.75} 10L${x+w*.75} 0" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`;}).join("");
+  return `<svg class="mk" width="${W}" height="${h}" viewBox="0 0 ${W} ${h}" fill="currentColor" style="color:#e8f2fb" aria-hidden="true">${parts}</svg>`;}
+function drawMarks(x,y,c,h){ // a dark pill with the color's marks, on the board
+  const m=marksOf(c);if(!m.length)return;const step=h*1.05,w=m.length*step+h*.5,r=h*.42+h*.25;
+  ctx.save();ctx.fillStyle="rgba(4,12,22,.78)";rrect(x-w/2,y-r,w,r*2,r);ctx.fill();
+  ctx.fillStyle=ctx.strokeStyle="#f2f8ff";m.forEach((b,k)=>markPath(ctx,b,x-w/2+h*.25+step*(k+.5),y,h));ctx.restore();
 }
 function recolor(){col=computeColors(G,paths);}
 function updateInk(){const ink=inkOf(paths);$("inkNow").textContent=`Ink ${ink}`;$("inkPar").textContent=`★★★ at ${G.par} ink or less`;}
@@ -647,12 +668,14 @@ function showLevels(){
 function showSettings(){
   openSheet(`<h3>Settings</h3>
    <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" aria-label="Critter shapes"></button></div>
+   <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" aria-label="Color marks"></button></div>
    <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" aria-label="Sound"></button></div>
    <div class="set"><div>Remove ads<small>${prog.noAds?"Ads are off. Thank you!":"No more breaks between levels"}</small></div><button class="ghost" id="tAds" ${prog.noAds?"disabled":""}>${prog.noAds?"Done":ADS.price}</button></div>
    <div class="set"><div>Lessons<small>See every new-element lesson again</small></div><button class="ghost" id="tLessons">Replay</button></div>
    <p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>
    <button class="ghost" id="close">Close</button>`);
   $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);store.set("opts",opts);};
+  $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);store.set("opts",opts);renderLegend();};
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
   $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
@@ -1171,6 +1194,16 @@ function draw(now){frameNow=now;
     const blink=((now/1000+k*1.7)%4)<.12;
     critter(cx,cy+Math.sin(now/400+k)*cs*.02,cs*.21,SHAPES[k%SHAPES.length],src.mask,cs*.3,blink);
   });
+  if(opts.marks){ // marks along each stream: where its color changes, then every third cell
+    const busy=new Set(crosses.map(x=>x.cell));
+    paths.forEach((path,p)=>{let pend=true,gap=0;for(let k=1;k<path.length;k++){
+      const cell=path[k],t=G.cells[cell].t;if(col[p][k]!==col[p][k-1])pend=true;
+      const ok=t==="empty"&&!busy.has(cell)&&k<path.length-1;
+      if(ok&&(pend||gap>=2)){drawMarks(...C(cell),col[p][k],cs*.17);pend=false;gap=0;}else gap++;}});
+    G.nests.forEach(n=>{const [x,y]=C(n.i);drawMarks(x+cs*.27,y+cs*.31,n.mask,cs*.15);});
+    G.sources.forEach(s=>{const [x,y]=C(s.i);drawMarks(x+cs*.27,y+cs*.31,s.mask,cs*.15);});
+    G.cells.forEach((c,i)=>{if(c.t==="filter"){const [x,y]=C(i);drawMarks(x+cs*.24,y+cs*.3,c.f,cs*.15);}});
+  }
   drawLesson(now);
   // active tip
   if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
