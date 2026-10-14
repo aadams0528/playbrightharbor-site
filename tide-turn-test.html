@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- Tide Turn rules test (3 boards). Unlisted test page: not linked from the site. Replace this file to update. -->
+<title>Tide Turn (test version)</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap">
+<style>
+/* Layout: one column, harbor board in a weathered wooden frame, controls on a dock plank below. Single daylight look by choice. */
+:root {
+  color-scheme: light;
+  --sky: #e9f1ef;
+  --ink: #23383d;
+  --ink-soft: #5b6f72;
+  --sea: #4f9aa3;
+  --sea-deep: #3a7f8a;
+  --calm: #8cc3c4;
+  --wood: #a7774c;
+  --wood-dark: #7a5233;
+  --rope: #d9b77c;
+  --red: #c4513b;
+  --blue: #2c5f8f;
+  --gold: #e3a92b;
+  --card: #fbf8f1;
+  --display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--sky);
+  background-image: radial-gradient(ellipse at 50% -10%, #f7fbf9 0%, var(--sky) 60%);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.wrap {
+  max-width: 460px; margin: 0 auto;
+  padding-block: 14px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 12px;
+}
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-size: 30px; line-height: 1; margin: 0; letter-spacing: .5px; }
+h1 small { font-family: var(--body); font-size: 12px; font-weight: 700; color: var(--ink-soft); letter-spacing: 1px; text-transform: uppercase; margin-left: 6px; }
+.boards { display: flex; gap: 6px; }
+.boards button {
+  font: 700 14px var(--body); color: var(--ink-soft);
+  background: transparent; border: 2px solid #c9d8d6; border-radius: 999px;
+  width: 34px; height: 34px; cursor: pointer;
+}
+.boards button[aria-current="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.boards button.done::after { content: "✓"; font-size: 10px; margin-left: 1px; }
+.titlebar { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.titlebar h2 { font-family: var(--display); font-size: 20px; margin: 0; }
+.tide { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink-soft); font-size: 14px; white-space: nowrap; }
+.tide b { color: var(--ink); font-size: 18px; }
+
+/* Board */
+.frame {
+  padding: 10px; border-radius: 14px;
+  background: linear-gradient(135deg, #b4875b, var(--wood) 40%, #946540);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.12), 0 6px 18px rgba(35,56,61,.18);
+}
+.board {
+  position: relative; width: 100%; aspect-ratio: 1; max-width: 100%;
+  border-radius: 6px; overflow: hidden;
+  background: var(--calm);
+  display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+  touch-action: manipulation; user-select: none;
+}
+.cell { position: relative; border: 1px solid rgba(255,255,255,.14); }
+.cell svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cell.calm { background:
+  radial-gradient(circle at 30% 35%, rgba(255,255,255,.22) 0 6%, transparent 7%),
+  radial-gradient(circle at 70% 70%, rgba(255,255,255,.14) 0 4%, transparent 5%),
+  var(--calm); }
+.cell.current { background: linear-gradient(160deg, var(--sea) 0%, var(--sea-deep) 100%); }
+.cell.rock, .cell.dock { background: var(--calm); }
+.cell.edit { cursor: pointer; }
+.cell.edit.locked { cursor: not-allowed; }
+.arrow { transition: transform .35s cubic-bezier(.3,1.4,.5,1); transform-origin: 50% 50%; }
+.flow { animation: flow 2.4s linear infinite; }
+@keyframes flow { from { transform: translateX(-20px); } to { transform: translateX(0); } }
+.cell.edit:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px; }
+.ring { transition: opacity .2s; }
+.cell.turned .ring circle.glow { opacity: 1; }
+.cell.edit.locked .arrow { opacity: .65; }
+.shake { animation: shake .35s; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* Boats + ghosts */
+.layer { position: absolute; inset: 0; pointer-events: none; }
+.boat, .ghost {
+  position: absolute; width: 20%; height: 20%;
+  transition: left .5s ease-in-out, top .5s ease-in-out;
+}
+.boat .hull { width: 100%; height: 100%; transition: transform .3s; }
+.boat.docked .hull { filter: drop-shadow(0 0 6px rgba(255,236,170,.9)); }
+.ghost { transition: left .2s, top .2s, opacity .2s; }
+.ghost svg { width: 100%; height: 100%; }
+.stays { position: absolute; inset: 8%; border-radius: 50%; border: 3px dotted currentColor; opacity: .75; }
+
+/* Controls */
+.hint { min-height: 44px; font-size: 15px; line-height: 1.35; color: var(--ink); text-wrap: balance; text-align: center; }
+.hint.warn { color: #9a3b26; font-weight: 700; }
+.controls { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; }
+.btn {
+  font: 700 16px var(--body); border-radius: 12px; border: 0; cursor: pointer;
+  min-height: 52px; padding: 0 12px; color: var(--ink);
+  background: #fff; box-shadow: 0 2px 0 #c9d8d6;
+}
+.btn:active { transform: translateY(2px); box-shadow: none; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.go { background: var(--ink); color: #fff; box-shadow: 0 3px 0 #10232a; font-size: 18px; }
+.btn.go.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 3px 0 #10232a, 0 0 0 6px rgba(227,169,43,.45); } }
+.btn:focus-visible, .boards button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-soft); justify-content: center; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+
+/* Overlays */
+.overlay {
+  position: fixed; inset: 0; background: rgba(35,56,61,.45); display: flex; align-items: center; justify-content: center;
+  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  z-index: 10; overflow-y: auto;
+}
+.card {
+  background: var(--card); border-radius: 18px; padding: 22px 20px; max-width: 400px; width: 100%;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 12px; margin: auto;
+}
+.card h2 { font-family: var(--display); font-size: 28px; margin: 0; line-height: 1.05; text-wrap: balance; }
+.card p { margin: 0; line-height: 1.45; }
+.card ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+.card .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.card .row .btn { flex: 1; }
+.star { font-size: 44px; line-height: 1; color: var(--gold); text-align: center; }
+.star.off { color: #cfd6d4; }
+.muted { color: var(--ink-soft); font-size: 14px; }
+.rate { display: flex; gap: 6px; }
+.rate button { flex: 1; min-height: 44px; font: 700 18px var(--body); border-radius: 10px; border: 2px solid #d5dedc; background: #fff; color: var(--ink); cursor: pointer; }
+.rate button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+label { font-weight: 700; font-size: 14px; }
+textarea { width: 100%; min-height: 70px; font: 15px var(--body); border-radius: 10px; border: 2px solid #d5dedc; padding: 8px; color: var(--ink); background: #fff; }
+.addr { user-select: all; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .flow, .btn.go.pulse { animation: none; }
+  .boat, .ghost, .arrow { transition: none; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Tide Turn<small>test</small></h1>
+    <nav class="boards" id="boards" aria-label="Boards"></nav>
+  </header>
+  <div class="titlebar">
+    <h2 id="bname"></h2>
+    <div class="tide" aria-live="polite">Tide <b id="tide">0</b> · par <span id="par"></span></div>
+  </div>
+  <div class="frame"><div class="board" id="board"></div></div>
+  <div class="hint" id="hint" aria-live="polite"></div>
+  <div class="controls">
+    <button class="btn" id="undo">Undo</button>
+    <button class="btn" id="restart">Restart</button>
+    <button class="btn go" id="next">Next tide</button>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--sea-deep)"></i>current</span>
+    <span><i style="background:var(--calm)"></i>calm (boats stop)</span>
+    <span><i style="background:var(--rope);border-radius:50%"></i>ring = you can turn it</span>
+    <span>faint boat = where it goes next</span>
+  </div>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <h2>Tide Turn</h2>
+    <p class="muted">A tiny harbor puzzle. Three boards. This is an early test, so plain art.</p>
+    <ol>
+      <li>Every tide, each boat drifts <b>one square</b> along the current it's sitting on.</li>
+      <li>Before each tide you may turn <b>one ringed arrow</b> a quarter turn clockwise. Or just wait.</li>
+      <li>Get every boat to the dock of its own color.</li>
+    </ol>
+    <p class="muted">The faint boat shows where each boat goes next. Undo and Restart are always there.</p>
+    <div class="row"><button class="btn go" id="start">Start board 1</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="win" hidden>
+  <div class="card">
+    <div class="star" id="winstar">★</div>
+    <h2 id="wintitle">Harbor clear!</h2>
+    <p id="winmsg"></p>
+    <div class="row">
+      <button class="btn" id="again">Play again</button>
+      <button class="btn go" id="nextboard">Next board</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="survey" hidden>
+  <div class="card">
+    <h2>Thanks for playing!</h2>
+    <p>Three quick questions for Alan.</p>
+    <label>How fun was it? (1 = meh, 5 = loved it)</label>
+    <div class="rate" id="rate"></div>
+    <label for="q1">In your own words, how do the boats move?</label>
+    <textarea id="q1"></textarea>
+    <label for="q2">Would you want another board? What surprised or annoyed you?</label>
+    <textarea id="q2"></textarea>
+    <button class="btn go" id="copy">Copy my answers</button>
+    <p class="muted">Then paste them in a text or an email to <span class="addr">hello@playbrightharbor.com</span>. Your board times and undo counts come along too.</p>
+    <p class="muted" id="copied" hidden>Copied. Paste it wherever you're sending it.</p>
+    <textarea id="dump" hidden readonly></textarea>
+    <button class="btn" id="back">Back to the boards</button>
+  </div>
+</div>
+
+<script id="logic">
+// Pure rules. Cells: '.' calm, '#' rock, '>' '<' '^' 'v' fixed current, '@>' etc editable, 'dR' 'dB' docks.
+const DIRS = { '^': [0, -1], '>': [1, 0], 'v': [0, 1], '<': [-1, 0] };
+const CW = { '^': '>', '>': 'v', 'v': '<', '<': '^' };
+const BOARDS = [
+  { name: 'Wait, then turn', par: 4,
+    grid: ['# . v . .', '. . v . .', '. > @> > dR', '. . v . .', '# . dB . #'],
+    boats: [{ id: 'R', c: 1, r: 2 }, { id: 'B', c: 2, r: 0 }] },
+  { name: 'First things first', par: 4,
+    grid: ['> > @> . .', '. . v . .', '. . dR . .', '. @> . . .', '. dB . . .'],
+    boats: [{ id: 'R', c: 0, r: 0 }, { id: 'B', c: 1, r: 3 }] },
+  { name: 'Hold and release', par: 5,
+    grid: ['. . @> # .', '. . v . .', '> > @> > dR', '. . v . .', '. . dB . .'],
+    boats: [{ id: 'R', c: 0, r: 2 }, { id: 'B', c: 2, r: 0 }] },
+];
+function parse(b) { return b.grid.map(row => row.split(' ')); }
+function initState(b) {
+  const g = parse(b), dirs = {};
+  g.forEach((row, r) => row.forEach((t, c) => { if (t[0] === '@') dirs[c + ',' + r] = t[1]; }));
+  return { tide: 0, dirs, turned: null, boats: b.boats.map(x => ({ ...x, docked: false })) };
+}
+function cellDir(g, s, c, r) {
+  const t = g[r][c];
+  if (t[0] === '@') return s.dirs[c + ',' + r];
+  return DIRS[t] ? t : null;
+}
+function target(g, s, boat) {
+  // Where this boat ends the next tide, and why.
+  if (boat.docked) return { c: boat.c, r: boat.r, moved: false, docks: false, why: 'docked' };
+  const d = cellDir(g, s, boat.c, boat.r);
+  if (!d) return { c: boat.c, r: boat.r, moved: false, why: 'calm' };
+  const nc = boat.c + DIRS[d][0], nr = boat.r + DIRS[d][1];
+  if (nc < 0 || nr < 0 || nc > 4 || nr > 4) return { c: boat.c, r: boat.r, moved: false, why: 'edge', dir: d };
+  const t = g[nr][nc];
+  if (t === '#') return { c: boat.c, r: boat.r, moved: false, why: 'rock', dir: d };
+  if (t[0] === 'd' && t[1] !== boat.id) return { c: boat.c, r: boat.r, moved: false, why: 'otherdock', dir: d };
+  return { c: nc, r: nr, moved: true, docks: t === 'd' + boat.id, dir: d };
+}
+function canTurn(g, s, c, r) { return g[r][c][0] === '@' && s.turned === null; }
+function turn(s, c, r) {
+  const k = c + ',' + r;
+  return { ...s, dirs: { ...s.dirs, [k]: CW[s.dirs[k]] }, turned: k };
+}
+function advance(g, s) {
+  const boats = s.boats.map(b => { const t = target(g, s, b); return { ...b, c: t.c, r: t.r, docked: b.docked || !!t.docks }; });
+  return { ...s, boats, tide: s.tide + 1, turned: null };
+}
+function stuckForGood(g, s, boat) {
+  // Only editable arrows ever change, so a blocked boat on a fixed square or calm water never moves again.
+  if (boat.docked || g[boat.r][boat.c][0] === '@') return false;
+  return !target(g, s, boat).moved;
+}
+function solved(s) { return s.boats.every(b => b.docked); }
+if (typeof module !== 'undefined') module.exports = { BOARDS, parse, initState, target, canTurn, turn, advance, stuckForGood, solved };
+</script>
+
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = { R: 'var(--red)', B: 'var(--blue)' };
+const NAMES = { R: 'red', B: 'blue' };
+const ANG = { '>': 0, 'v': 90, '<': 180, '^': 270 };
+let bi = 0, g, s, hist = [], busy = false, rot = {}, boatEls = {}, ghostEls = {};
+const stats = BOARDS.map(() => ({ solvedIn: null, undos: 0, restarts: 0, ms: 0, tries: 0 }));
+let t0 = Date.now(), rating = 0;
+let warned = '';
+
+function arrowSVG(edit) {
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">
+    ${edit ? `<g class="ring"><circle cx="50" cy="50" r="40" fill="rgba(255,255,255,.12)" stroke="var(--rope)" stroke-width="7"/>
+      <circle cx="50" cy="50" r="40" fill="none" stroke="#fff" stroke-width="7" stroke-dasharray="10 21" opacity=".55"/>
+      <circle class="glow" cx="50" cy="50" r="46" fill="none" stroke="var(--gold)" stroke-width="4" opacity="0"/></g>` : ''}
+    <g class="arrow">
+      <g opacity=".35" stroke="#fff" stroke-width="3" stroke-linecap="round">
+        <g class="flow"><path d="M0 30h10M20 30h10M40 30h10M60 30h10M80 30h10M100 30h10M0 70h10M20 70h10M40 70h10M60 70h10M80 70h10M100 70h10"/></g>
+      </g>
+      <path d="M26 50h40M54 36l16 14-16 14" fill="none" stroke="#fff" stroke-width="${edit ? 9 : 8}" stroke-linecap="round" stroke-linejoin="round"/>
+    </g></svg>`;
+}
+function rockSVG() {
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <ellipse cx="50" cy="66" rx="40" ry="16" fill="rgba(255,255,255,.25)"/>
+    <path d="M14 66c2-18 12-30 26-34 6-12 22-14 30-4 12 2 18 16 16 30 0 8-8 14-36 14S14 74 14 66z" fill="#7d7a72"/>
+    <path d="M26 56c4-12 12-18 22-20 6-8 16-8 22-2" fill="none" stroke="#a7a399" stroke-width="5" stroke-linecap="round"/>
+    <path d="M30 70c14 4 30 4 44-2" fill="none" stroke="#5e5b55" stroke-width="4" stroke-linecap="round"/></svg>`;
+}
+function dockSVG(id) {
+  const col = COLORS[id];
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect x="12" y="12" width="76" height="76" rx="8" fill="none" stroke="${col}" stroke-width="5" stroke-dasharray="9 7"/>
+    <g fill="var(--wood)" stroke="var(--wood-dark)" stroke-width="2">
+      <rect x="20" y="20" width="12" height="60" rx="2"/><rect x="68" y="20" width="12" height="60" rx="2"/></g>
+    <circle cx="26" cy="22" r="5" fill="var(--wood-dark)"/><circle cx="74" cy="22" r="5" fill="var(--wood-dark)"/>
+    <path d="M74 22V6" stroke="var(--wood-dark)" stroke-width="3"/><path d="M75 6l14 5-14 5z" fill="${col}"/></svg>`;
+}
+function boatSVG(id, ghost) {
+  const col = COLORS[id];
+  return `<svg class="hull" viewBox="0 0 100 100" aria-hidden="true">
+    ${ghost ? '' : '<ellipse cx="50" cy="58" rx="34" ry="20" fill="rgba(20,40,45,.18)"/>'}
+    <path d="M18 50c0-12 14-18 40-18h10c10 0 18 8 22 18-4 10-12 18-22 18H58c-26 0-40-6-40-18z"
+      fill="${ghost ? 'rgba(255,255,255,.45)' : '#f4ecdc'}" stroke="${col}" stroke-width="${ghost ? 6 : 6}" ${ghost ? 'stroke-dasharray="7 6"' : ''}/>
+    ${ghost ? '' : `<path d="M46 50l18-14v28z" fill="${col}"/><circle cx="40" cy="50" r="4" fill="var(--wood-dark)"/>`}</svg>`;
+}
+
+function buildBoard() {
+  const board = $('board'); board.innerHTML = ''; rot = {}; boatEls = {}; ghostEls = {};
+  g.forEach((row, r) => row.forEach((t, c) => {
+    const el = document.createElement('div'); el.className = 'cell'; el.dataset.c = c; el.dataset.r = r;
+    const label = 'ABCDE'[c] + (r + 1);
+    if (t === '.') { el.classList.add('calm'); el.setAttribute('aria-label', label + ' calm water'); }
+    else if (t === '#') { el.classList.add('rock'); el.innerHTML = rockSVG(); el.setAttribute('aria-label', label + ' rock'); }
+    else if (t[0] === 'd') { el.classList.add('dock'); el.innerHTML = dockSVG(t[1]); el.setAttribute('aria-label', label + ' ' + NAMES[t[1]] + ' dock'); }
+    else {
+      const edit = t[0] === '@';
+      el.classList.add('current'); if (edit) { el.classList.add('edit'); el.tabIndex = 0; el.setAttribute('role', 'button'); }
+      el.innerHTML = arrowSVG(edit);
+      const d = edit ? s.dirs[c + ',' + r] : t;
+      rot[c + ',' + r] = ANG[d];
+      el.querySelector('.arrow').style.transform = `rotate(${ANG[d]}deg)`;
+      if (edit) {
+        el.addEventListener('click', () => tapArrow(c, r, el));
+        el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapArrow(c, r, el); } });
+      }
+    }
+    board.appendChild(el);
+  }));
+  const gl = document.createElement('div'); gl.className = 'layer'; board.appendChild(gl);
+  const bl = document.createElement('div'); bl.className = 'layer'; board.appendChild(bl);
+  s.boats.forEach(b => {
+    const gh = document.createElement('div'); gh.className = 'ghost'; gh.style.color = COLORS[b.id]; gl.appendChild(gh); ghostEls[b.id] = gh;
+    const be = document.createElement('div'); be.className = 'boat'; be.innerHTML = boatSVG(b.id); bl.appendChild(be); boatEls[b.id] = be;
+  });
+}
+
+function place(el, c, r, off) { el.style.left = (c * 20 + (off || 0)) + '%'; el.style.top = (r * 20 + (off ? -off * 0.5 : 0)) + '%'; }
+
+function render(noAnimArrows) {
+  $('tide').textContent = s.tide;
+  // arrows: always rotate clockwise visually
+  for (const k in s.dirs) {
+    const [c, r] = k.split(',').map(Number);
+    const want = ANG[s.dirs[k]];
+    let cur = rot[k]; const curMod = ((cur % 360) + 360) % 360;
+    if (curMod !== want) { let delta = (want - curMod + 360) % 360; if (noAnimArrows) delta = want - curMod; rot[k] = cur + delta; }
+    const el = $('board').children[r * 5 + c];
+    el.querySelector('.arrow').style.transform = `rotate(${rot[k]}deg)`;
+    el.classList.toggle('turned', s.turned === k);
+    el.classList.toggle('locked', s.turned !== null && s.turned !== k);
+  }
+  // boats (offset if sharing a square)
+  const seen = {};
+  s.boats.forEach(b => {
+    const key = b.c + ',' + b.r; const off = seen[key] ? 4 : 0; seen[key] = 1;
+    const el = boatEls[b.id]; place(el, b.c, b.r, off);
+    el.classList.toggle('docked', b.docked);
+    const t = target(g, s, b);
+    const d = t.dir || cellDir(g, s, b.c, b.r);
+    if (!b.docked && d) el.querySelector('.hull').style.transform = `rotate(${ANG[d]}deg)`;
+    const gh = ghostEls[b.id];
+    if (b.docked) { gh.style.opacity = 0; }
+    else if (t.moved) { gh.innerHTML = boatSVG(b.id, true); gh.firstChild.style.transform = `rotate(${ANG[t.dir]}deg)`; place(gh, t.c, t.r); gh.style.opacity = .9; }
+    else { gh.innerHTML = '<div class="stays"></div>'; place(gh, b.c, b.r, off); gh.style.opacity = 1; }
+  });
+  $('undo').disabled = hist.length === 0 || busy;
+  $('next').disabled = busy || solved(s);
+  $('next').classList.toggle('pulse', s.turned !== null);
+  hintText();
+  [...$('boards').children].forEach((bt, i) => { bt.setAttribute('aria-current', i === bi); bt.classList.toggle('done', stats[i].solvedIn !== null); });
+}
+
+function hintText(msg, warn) {
+  const h = $('hint');
+  if (msg) { h.textContent = msg; h.classList.toggle('warn', !!warn); return; }
+  const stuck = s.boats.find(b => stuckForGood(g, s, b));
+  if (stuck) { h.textContent = `The ${NAMES[stuck.id]} boat is stuck for good. Tap Undo to go back.`; h.classList.add('warn'); return; }
+  h.classList.remove('warn');
+  if (s.turned) h.textContent = 'Turned. Now tap Next tide to let the boats move.';
+  else if (s.tide === 0 && bi === 0) h.textContent = 'Tap a ringed arrow to turn it, or tap Next tide to wait.';
+  else if (s.tide === 0) h.textContent = 'Dock both boats. One turn per tide.';
+  else h.textContent = 'Turn one ringed arrow, or wait. Then Next tide.';
+}
+
+function push() { hist.push(JSON.parse(JSON.stringify(s))); }
+function tapArrow(c, r, el) {
+  if (busy || solved(s)) return;
+  if (!canTurn(g, s, c, r)) {
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    hintText('Only one turn per tide. Tap Next tide, or Undo to take it back.', true);
+    return;
+  }
+  push(); s = turn(s, c, r); render();
+}
+function bump(b, t) {
+  const el = boatEls[b.id].querySelector('.hull');
+  const [dx, dy] = { '>': [1, 0], '<': [-1, 0], 'v': [0, 1], '^': [0, -1] }[t.dir];
+  const a = ANG[t.dir];
+  el.animate([{ transform: `rotate(${a}deg)` }, { transform: `translate(${dx * 14}%, ${dy * 14}%) rotate(${a}deg)` }, { transform: `rotate(${a}deg)` }], { duration: 380, easing: 'ease-out' });
+}
+function nextTide() {
+  if (busy || solved(s)) return;
+  push();
+  const blocked = s.boats.map(b => ({ b, t: target(g, s, b) })).filter(x => !x.b.docked && !x.t.moved && x.t.dir);
+  s = advance(g, s); busy = true; stats[bi].tries++;
+  render();
+  blocked.forEach(x => bump(x.b, x.t));
+  setTimeout(() => {
+    busy = false; render();
+    if (solved(s)) win();
+  }, 560);
+}
+function win() {
+  const st = stats[bi], par = BOARDS[bi].par;
+  st.ms += Date.now() - t0; t0 = Date.now();
+  if (st.solvedIn === null || s.tide < st.solvedIn) st.solvedIn = s.tide;
+  const star = s.tide <= par;
+  $('winstar').className = 'star' + (star ? '' : ' off');
+  $('wintitle').textContent = 'Harbor clear!';
+  $('winmsg').textContent = star ? `Both boats docked in ${s.tide} tides. That's par, so you earned the star.`
+    : `Both boats docked in ${s.tide} tides. Par is ${par} if you want the bonus star, but a clear harbor is a win.`;
+  $('nextboard').textContent = bi < BOARDS.length - 1 ? 'Next board' : 'Finish';
+  $('win').hidden = false;
+}
+function load(i, keepStats) {
+  if (!keepStats) { stats[bi].ms += Date.now() - t0; t0 = Date.now(); }
+  bi = i; const b = BOARDS[i]; g = parse(b); s = initState(b); hist = []; busy = false;
+  $('bname').textContent = (i + 1) + '. ' + b.name; $('par').textContent = b.par;
+  buildBoard(); render(true);
+}
+
+BOARDS.forEach((b, i) => {
+  const bt = document.createElement('button'); bt.textContent = i + 1; bt.setAttribute('aria-label', 'Board ' + (i + 1));
+  bt.onclick = () => load(i); $('boards').appendChild(bt);
+});
+$('next').onclick = nextTide;
+$('undo').onclick = () => { if (busy || !hist.length) return; s = hist.pop(); stats[bi].undos++; render(); };
+$('restart').onclick = () => { if (busy) return; stats[bi].restarts++; s = initState(BOARDS[bi]); hist = []; render(); };
+$('start').onclick = () => { $('intro').hidden = true; t0 = Date.now(); };
+$('again').onclick = () => { $('win').hidden = true; s = initState(BOARDS[bi]); hist = []; render(); };
+$('nextboard').onclick = () => {
+  $('win').hidden = true;
+  if (bi < BOARDS.length - 1) load(bi + 1); else $('survey').hidden = false;
+};
+$('back').onclick = () => { $('survey').hidden = true; };
+for (let n = 1; n <= 5; n++) {
+  const bt = document.createElement('button'); bt.textContent = n; bt.setAttribute('aria-pressed', 'false');
+  bt.onclick = () => { rating = n; [...$('rate').children].forEach((x, j) => x.setAttribute('aria-pressed', j + 1 === n)); };
+  $('rate').appendChild(bt);
+}
+$('copy').onclick = () => {
+  const lines = ['Tide Turn test feedback', 'Fun rating: ' + (rating || '-') + ' of 5',
+    'How the boats move: ' + $('q1').value.trim(), 'Another board? Surprises: ' + $('q2').value.trim(), '',
+    ...BOARDS.map((b, i) => { const st = stats[i]; return `Board ${i + 1} (${b.name}): ${st.solvedIn === null ? 'not solved' : 'solved in ' + st.solvedIn + ' tides (par ' + b.par + ')'}, undos ${st.undos}, restarts ${st.restarts}, about ${Math.round(st.ms / 1000)}s`; })];
+  const text = lines.join('\n');
+  const d = $('dump'); d.value = text;
+  const done = () => { $('copied').hidden = false; };
+  const fallback = () => { d.hidden = false; d.focus(); d.select(); $('copied').textContent = 'Select the text above and copy it.'; done(); };
+  try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+};
+document.addEventListener('keydown', e => { if (e.key === 'n' && $('intro').hidden && $('win').hidden && $('survey').hidden) nextTide(); });
+load(0, true);
+</script>
+</body>
+</html>
