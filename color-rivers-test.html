@@ -901,12 +901,16 @@ function gateNote(c,nextCh){return `<p>🔒 <b>${nextCh?nextCh.title:"The next c
 let taps=0,tapT=0;
 $("brand").addEventListener("click",()=>{const n=performance.now();taps=n-tapT<3000?taps+1:1;tapT=n;if(taps>=5){testerUnlock();taps=0;}});
 // tester builds: 5 taps on the title (up to 3 s apart, so automated clicks count) or a ?unlock=1 / #unlock=1 link
-function testerUnlock(){prog.all=true;saveProg();if(typeof updateStars=="function")updateStars();toast("Tester mode: all levels open");}
+const TEST_BUILD=true;
+function testerUnlock(){prog.all=true;prog.testLock=false;saveProg();if(typeof updateStars=="function")updateStars();toast("Tester mode: all levels open");}
 try{if(/[?&#]unlock=1\b/.test(location.search+location.hash))testerUnlock();}catch(e){}
 // ?lock=1 turns tester mode off again (stars kept), so chapter star gates show; ?fresh=1 starts over as a brand-new player
 try{const q=location.search+location.hash;
   if(/[?&#]fresh=1\b/.test(q)){Object.keys(prog).forEach(k=>delete prog[k]);Object.assign(prog,{v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0,noAds:false,sinceAd:0,lastAd:0,hintDay:"",hintsLeft:0,bonusHints:0});saveProg();store.set("cur",null);setTimeout(()=>toast("Fresh start: progress cleared"),400);}
-  else if(/[?&#]lock=1\b/.test(q)){prog.all=false;saveProg();setTimeout(()=>toast("Tester mode off: chapter star goals are on"),400);}}catch(e){}
+  else if(/[?&#]lock=1\b/.test(q)){prog.all=false;prog.testLock=true;saveProg();setTimeout(()=>toast("Tester mode off: chapter star goals are on"),400);}
+  // Test builds open every level by default (Alan, Oct 14: testers lose progress and need to pick any level).
+  // PRELAUNCH: set TEST_BUILD=false and remove the tester unlock before any store build.
+  else if(TEST_BUILD&&!prog.all&&!prog.testLock){prog.all=true;saveProg();}}catch(e){}
 function toast(t,ms=1900){const el=$("toast");clearTimeout(toastTimer);el.textContent=t;el.classList.add("show");
   toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";},300);},ms);}
 function clearToast(){clearTimeout(toastTimer);const el=$("toast");el.classList.remove("show");el.textContent="";}
