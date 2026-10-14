@@ -305,12 +305,15 @@ const CHAPTERS=[
 // never scramble a player's stars. Hand-made levels: "h-" + their name. Generated: chapter + slot ("c3-07"), or the
 // id stored with the level when a chapter was extended (old levels keep theirs, new ones take the next numbers).
 // Once a level has shipped, its id and board never change.
+// Retired levels stay in the GEN data (so the generator never reuses their ids) but are no longer played. Oct 14:
+// Chapter 1 trimmed from 25 to 10 levels so the first color mix comes at level 11 (Muse's fresh-player pass, Alan's call).
+const RETIRED=new Set(["c1-05","c1-06","c1-07","c1-08","c1-10","c1-12","c1-13","c1-15","c1-16","c1-18","c1-19","c1-20","c1-21","c1-22","c1-23"]);
 const slug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 function buildLevels(){
   const out=[];
   CHAPTERS.forEach(C=>{
     C.teach.forEach(n=>{const H=HAND.find(h=>h.name===n);out.push(Object.assign({},H,{ch:C.id,id:H.id||"h-"+slug(n)}));});
-    (GEN[C.id]||[]).forEach((L,k)=>out.push(Object.assign({},L,{ch:C.id,gen:true,id:L.id||`c${C.id}-${String(k+1).padStart(2,"0")}`})));
+    (GEN[C.id]||[]).forEach((L,k)=>{const id=L.id||`c${C.id}-${String(k+1).padStart(2,"0")}`;if(!RETIRED.has(id))out.push(Object.assign({},L,{ch:C.id,gen:true,id}));});
   });
   return out;
 }
@@ -345,7 +348,9 @@ const store={get(k,d){try{const v=localStorage.getItem("cr-"+k);return v==null?d
 const ID=i=>LEVELS[i].id,IDX=id=>LEVELS.findIndex(L=>L.id===id);
 let prog=(()=>{
   const blank={v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0,noAds:false,sinceAd:0,lastAd:0,hintDay:"",hintsLeft:0,bonusHints:0};
-  const saved=store.get("prog3",null);if(saved)return Object.assign(blank,saved);
+  const saved=store.get("prog3",null);if(saved){const p=Object.assign(blank,saved),far=LEVELS.reduce((m,L,i)=>p.stars[L.id]?i+1:m,0);
+    if(far>0&&far!==p.highest){p.highest=far;p.highestId=LEVELS[far-1].id;} // levels were added or retired: count from where they really are
+    return p;}
   const old=store.get("prog2",null);if(!old)return blank;
   const byId=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>LEVELS[+k]).map(([k,v])=>[ID(+k),v]));
   const p=Object.assign(blank,{stars:byId(old.stars),answers:byId(old.answers),trace:byId(old.trace),plays:byId(old.plays),seen:old.seen||{},all:(old.unlocked||1)>=LEVELS.length});
@@ -682,7 +687,7 @@ function wireAsk(){
 // Sunday hardest), cycling through the bank's weeks. Opens once a player reaches level DAILY_AT (they know mixing).
 // Streaks: play on consecutive days; one missed day is forgiven by a grace day, which refills every 7-day run.
 // prog.daily[day]=stars, prog.streak={n,best,last,grace}; total stars and highest level stay chapter-only.
-const DAILY_AT=30,DAILY_EPOCH=Date.UTC(2026,0,5); // a Monday
+const DAILY_AT=15,DAILY_EPOCH=Date.UTC(2026,0,5); // a Monday
 const dayNum=(d=new Date())=>Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-DAILY_EPOCH)/864e5);
 const dayLabel=n=>new Date(DAILY_EPOCH+n*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric",timeZone:"UTC"});
 function dailyFor(n){const weeks=Math.max(1,Math.floor(DAILY.length/7)),wk=Math.floor(n/7),wd=((n%7)+7)%7;
@@ -861,7 +866,7 @@ function drawLesson(now){const st=lessonStep();if(!st)return;const t=(now-lesson
 // ---------- Ads and hints ----------
 // Hard rules from the build sheet: ads only BETWEEN levels, never during a puzzle; no lives or energy; everything
 // earnable free. In this prototype the ads are stand-in cards; the phone app plugs AdMob into showAd/showRewarded.
-const ADS={freeLevels:10,every:3,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
+const ADS={freeLevels:13,every:3,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
 const today=()=>new Date().toISOString().slice(0,10);
 function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hintsLeft=ADS.freeHints;saveProg();}}
 const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0);
