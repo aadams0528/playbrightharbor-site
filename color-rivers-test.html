@@ -134,7 +134,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.37 · 434 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.38 · 434 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -498,7 +498,8 @@ function startLevel(n,keep,cut,extra){
   if(G.cells.some(c=>c.t==="delta")&&intro("delta","New: deltas split a stream in two"))newTile=performance.now();
   bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
   lesson=null;reserveTip();resize();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily)store.set("cur",ID(n));
-  if(LESSONS[L.name]&&!prog.seen["lesson:"+L.id]){startLesson();if(fits&&extra&&Number.isInteger(extra.ls)&&lesson&&extra.ls>0){lesson.i=Math.min(extra.ls,lesson.steps.length-1);renderCoach();}}else renderCoach();
+  const lsBack=fits&&extra&&Number.isInteger(extra.ls); // a lesson open at reload comes back, even one reopened by hand
+  if(LESSONS[L.name]&&(!prog.seen["lesson:"+L.id]||lsBack)){startLesson();if(fits&&extra&&Number.isInteger(extra.ls)&&lesson&&extra.ls>0){lesson.i=Math.min(extra.ls,lesson.steps.length-1);renderCoach();}}else renderCoach();
   updateUndo();
 }
 // Legend chips above the board. The first-mix level starts without the mix chart so the first purple is a surprise; it appears once they mix.
@@ -917,16 +918,16 @@ function showChapter(id){
 }
 function showSettings(){
   openSheet(`<h3>Settings</h3>
-   <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" aria-label="Critter shapes"></button></div>
-   <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" aria-label="Color marks"></button></div>
-   <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" aria-label="Sound"></button></div>
+   <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" role="switch" aria-checked="${!!opts.shapes}" aria-label="Critter shapes"></button></div>
+   <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" role="switch" aria-checked="${!!opts.marks}" aria-label="Color marks"></button></div>
+   <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" role="switch" aria-checked="${!!opts.sound}" aria-label="Sound"></button></div>
    <div class="set"><div>Remove ads<small>${prog.noAds?"Ads are off. Thank you!":"No more breaks between levels"}</small></div><button class="ghost" id="tAds" ${prog.noAds?"disabled":""}>${prog.noAds?"Done":ADS.price}</button></div>
    <div class="set"><div>Lessons<small>See every new-element lesson again</small></div><button class="ghost" id="tLessons">Replay</button></div>
    <p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>
    <button class="ghost" id="close">Close</button>`);
-  $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);store.set("opts",opts);};
-  $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);store.set("opts",opts);renderLegend();};
-  $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);store.set("opts",opts);};
+  $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);e.currentTarget.setAttribute("aria-checked",opts.shapes);store.set("opts",opts);};
+  $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);e.currentTarget.setAttribute("aria-checked",opts.marks);store.set("opts",opts);renderLegend();};
+  $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);e.currentTarget.setAttribute("aria-checked",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
   $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
@@ -1045,13 +1046,13 @@ function reserveTip(){const t=document.querySelector(".tip"),L=!daily&&LESSONS[L
   h=Math.max(h,$("coach").offsetTop+$("coach").offsetHeight+4); // offsetTop is within .tip (position:relative)
   lesson=keep;renderCoach();t.style.minHeight=h+"px";}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
-function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Show me how\" to see it again");}
+function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Show me how\" to see it again");}
 function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!daily&&!!LESSONS[LV().name];
   document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));$("crewBtn").classList.toggle("glow-ink",!!(st&&st.dom==="crew"));$("undoBtn").classList.toggle("glow-ink",!!(st&&st.dom==="undo"));
   if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LV().tip;
-    if(has){const b=document.createElement("button");b.className="showme";b.textContent="Show me how";b.onclick=()=>{startLevel(lv);startLesson();};tip.append(document.createElement("br"),b);}return;}
+    if(has){const b=document.createElement("button");b.className="showme";b.textContent="Show me how";b.onclick=()=>{startLevel(lv);startLesson();saveDraft();};tip.append(document.createElement("br"),b);}return;}
   // a lesson takes the tip's place; a note floats over the tip instead, so the board never moves when one appears
   tip.hidden=!lesson.note;el.hidden=false;el.classList.toggle("float",!!lesson.note);
   const last=lesson.i===lesson.steps.length-1;
