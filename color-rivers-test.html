@@ -57,6 +57,7 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 @keyframes coachIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .mix{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--ink-soft);background:rgba(255,255,255,.05);border-radius:999px;padding:3px 9px 3px 5px}
+.chip.tap{cursor:pointer;border:1px solid rgba(255,255,255,.14)}
 .tun{width:12px;height:12px;border-radius:50%;display:inline-block;background:radial-gradient(#000308,#123650);border:2px solid #5fe0d0}
 .brg{width:9px;height:14px;border-radius:2px;display:inline-block;background:repeating-linear-gradient(180deg,#b9864f 0 3px,#6b4a2f 3px 4px);border-left:2px solid #e2b77c;border-right:2px solid #e2b77c}
 .veil{visibility:hidden}
@@ -134,7 +135,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.40 · 432 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.41 · 432 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -522,9 +523,11 @@ function renderLegend(){
   const hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
   if(L.homes)html+=`<span class="chip">shape in a nest = only those critters</span>`;
   if(hasT)html+=`<span class="chip"><i class="tun"></i>dive in, come up at the matching pool</span>`;
-  fl.forEach(f=>html+=`<span class="chip"><i class="dot" style="background:${COLORS[f]};color:${COLORS[f]}"></i>filter takes ${NAMES[f]} out</span>`);
+  fl.forEach(f=>html+=`<span class="chip tap" data-f="${f}" role="button" tabindex="0" aria-label="What the ${NAMES[f]} filter does"><i class="dot" style="background:${COLORS[f]};color:${COLORS[f]}"></i>filter takes ${NAMES[f]} out ⓘ</span>`);
   if(opts.marks)html=html.replace(/(<i class="dot" style="background:(#[0-9a-f]+);[^"]*"><\/i>)/g,(m,dot,hex)=>{const c=+Object.keys(COLORS).find(k=>COLORS[k]===hex);return dot+markSVG(c);});
   $("mix").innerHTML=html;
+  // a filter chip opens that filter's note again, any time (Nikola, v0.40: the note only showed once)
+  document.querySelectorAll("#mix [data-f]").forEach(c=>{const go=()=>showNote(FILTER_SAY[c.dataset.f]);c.onclick=go;c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};});
 }
 // Color marks for colorblind players (the ColorADD idea): red is a right-pointing triangle, blue a left-pointing
 // one, yellow a slash, and a mixed color shows the marks of the colors in it (mud shows all three).
@@ -1054,13 +1057,13 @@ function reserveTip(){const t=document.querySelector(".tip"),L=!daily&&LESSONS[L
   h=Math.max(h,$("coach").offsetTop+$("coach").offsetHeight+4); // offsetTop is within .tip (position:relative)
   lesson=keep;renderCoach();t.style.minHeight=h+"px";}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
-function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Show me how\" to see it again");}
+function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
 function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!daily&&!!LESSONS[LV().name];
   document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));$("crewBtn").classList.toggle("glow-ink",!!(st&&st.dom==="crew"));$("undoBtn").classList.toggle("glow-ink",!!(st&&st.dom==="undo"));
   if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LV().tip;
-    if(has){const b=document.createElement("button");b.className="showme";b.textContent="Show me how";b.onclick=()=>{startLevel(lv);startLesson();saveDraft();};tip.append(document.createElement("br"),b);}return;}
+    if(has){const b=document.createElement("button");b.className="showme";b.textContent="Replay lesson";b.onclick=()=>{startLevel(lv);startLesson();saveDraft();};tip.append(document.createElement("br"),b);}return;}
   // a lesson takes the tip's place; a note floats over the tip instead, so the board never moves when one appears
   tip.hidden=!lesson.note;el.hidden=false;el.classList.toggle("float",!!lesson.note);
   const last=lesson.i===lesson.steps.length-1;
