@@ -178,6 +178,9 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chip.long{border-color:var(--gold)}
 .helpbody ul{padding-left:1.1em;margin:6px 0;line-height:1.5}
 .helpbody li{margin-bottom:6px}
+.cloudbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:.9rem}
+.cloudbox small{display:block;color:var(--muted);margin:2px 0 8px}
+.cloudbox .btn{width:100%}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.85rem}
 .cal .dow{font-weight:700;color:var(--muted)}
 .cal .d{padding:6px 0;border-radius:8px;background:var(--bg)}
@@ -264,7 +267,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 const N=8, $=id=>document.getElementById(id);
 const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
-             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BH_CLOUD?.changed?.()}};
+             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BHCloud?.changed?.()}};
 // Kept on this phone only, never sent to the cloud save: sound, ad and promo counters.
 const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-)/;
 let cloudApplying=false;
@@ -586,7 +589,7 @@ function endSession(){
   track('session_end',{mode,level,score,in_tutorial:!!tut,tutorial_step:tut?tut.step+1:0,board_fill:board.filter(Boolean).length,seconds:Math.round((Date.now()-sessionStart)/1000)});
 }
 addEventListener('pagehide',endSession);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)endSession();else if(sessionEnded){sessionEnded=false;sessionStart=Date.now()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){endSession();window.BHCloud?.flush?.()}else if(sessionEnded){sessionEnded=false;sessionStart=Date.now()}});
 
 // ---------- messages over the board ----------
 const READ_MS=3200, CASH_MS=2400;
@@ -1052,6 +1055,23 @@ function showHelp(){
   openTabSheet('help',document.getElementById('help-tpl').innerHTML);
   $('tut-replay').onclick=()=>{if(busy)return;closeSheet();startTutorial()};
   if(promoOn()){$('sheet').querySelector('.helpbody').insertAdjacentHTML('beforebegin',promoCard('help'));wirePromo('help')}
+  renderCloudBox();
+}
+// "Save progress to the cloud" at the top of Help, only in the phone apps (see cloudsave.js).
+function renderCloudBox(){
+  const C=window.BHCloud,sheet=$('sheet');if(!C?.available||openTab!=='help')return;
+  sheet.querySelector('.cloudbox')?.remove();
+  const who=C.user?.email||C.user?.displayName||'';
+  sheet.querySelector('h3').insertAdjacentHTML('afterend',C.user
+    ?`<div class="cloudbox">☁️ <b>Your progress is saved to your account.</b><small>${who?esc(who)+'. ':''}Sign in on a new phone to pick up where you left off.</small><button class="linkbtn" id="cloud-out">Sign out</button></div>`
+    :`<div class="cloudbox">☁️ <b>Keep your progress safe</b><small>Sign in to keep your coins, sums and games if you get a new phone.</small><button class="btn" id="cloud-in">Save progress to the cloud</button></div>`);
+  if($('cloud-in'))$('cloud-in').onclick=async()=>{
+    $('cloud-in').disabled=true;
+    try{await C.signIn();track('cloud_sign_in');toast('☁️ Progress saved!',false,READ_MS)}
+    catch(e){if(!/cancel/i.test(String(e?.message||e)))toast("Couldn't sign in.\nPlease try again later.",false,READ_MS)}
+    renderCloudBox();
+  };
+  if($('cloud-out'))$('cloud-out').onclick=async()=>{await C.flush();await C.signOut();renderCloudBox()};
 }
 function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'📅';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
 function questNews(){$('questdot').hidden=false;bumpEl($('tab-quests'))}
@@ -1243,6 +1263,7 @@ buildBoard();renderSound();
 if(!store.get('nb-tutorial-done',false))startTutorial();
 else if(!resumeGame())newGame('endless');
 checkStreakAtRisk();
+window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 // Test hook for the playtest bot, only when the page is opened with ?test
 if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
 })();
