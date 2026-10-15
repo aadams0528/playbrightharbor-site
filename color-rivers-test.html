@@ -134,7 +134,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.38 · 434 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.39 · 434 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -373,14 +373,14 @@ const CHAPTERS=[
   {id:2,title:"Mixing",teach:["Make purple","Odd one out","Going green"]},
   {id:3,title:"Bridges",teach:["Bridge","Orange crush"]},
   {id:4,title:"Mud",teach:["Uh oh, mud","Mud alert","Go around","Two pairs"]},
-  {id:5,title:"Riverside",note:"Nothing new here: everything you know so far, all on one board.",teach:[]},
+  {id:5,title:"Riverside",note:"Everything you know so far, together on one board. Time to put it all to work.",teach:[]},
   {id:6,title:"Underground",teach:["Dive","Underground","Two dams"]},
   {id:7,title:"Filters",teach:["Sieve","Filters"]},
   {id:8,title:"Shape Homes",teach:["Who goes where"]},
   {id:9,title:"Blockers",teach:["Around the dam","Boulder field"]},
-  {id:10,title:"River Run",note:"Nothing new here: pools, filters, shape homes and blockers, mixed together.",teach:[]},
+  {id:10,title:"River Run",note:"Pools, filters, shape homes and blockers, all mixed together on bigger boards.",teach:[]},
   {id:11,title:"Deltas",teach:["Split stream","Purple split"]},
-  {id:12,title:"Wetlands",note:"Nothing new here: deltas with pools, filters, blockers and mud.",teach:[]},
+  {id:12,title:"Wetlands",note:"The toughest mixes yet: deltas meet pools, filters, blockers and mud.",teach:[]},
   {id:13,title:"Breakthrough",teach:["Beaver saw","Mole pick","Which dam?"]},
   {id:14,title:"Confluence",note:"Everything you've learned, all together. New levels arrive with each update.",teach:[]},
   {id:0,title:"Preview: later chapters",note:"A sampler of what's still to come: everything at once.",
@@ -500,6 +500,7 @@ function startLevel(n,keep,cut,extra){
   lesson=null;reserveTip();resize();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily)store.set("cur",ID(n));
   const lsBack=fits&&extra&&Number.isInteger(extra.ls); // a lesson open at reload comes back, even one reopened by hand
   if(LESSONS[L.name]&&(!prog.seen["lesson:"+L.id]||lsBack)){startLesson();if(fits&&extra&&Number.isInteger(extra.ls)&&lesson&&extra.ls>0){lesson.i=Math.min(extra.ls,lesson.steps.length-1);renderCoach();}}else renderCoach();
+  if(!daily)filterNote(fl);
   updateUndo();
 }
 // Legend chips above the board. The first-mix level starts without the mix chart so the first purple is a surprise; it appears once they mix.
@@ -929,7 +930,7 @@ function showSettings(){
   $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);e.currentTarget.setAttribute("aria-checked",opts.marks);store.set("opts",opts);renderLegend();};
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);e.currentTarget.setAttribute("aria-checked",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
-  $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
+  $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:")||k.startsWith("note:filter"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
 }
 // While a card is up, the game behind it is inert, so Tab stays inside the card (Nikola, v0.34: Tab reached Hint behind the win card)
@@ -937,7 +938,7 @@ function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;$("app
 function closeSheet(){$("sheet").hidden=true;$("app").inert=false;}
 $("sheet").addEventListener("keydown",e=>{if(e.key!=="Tab")return;const f=[...$("card").querySelectorAll("button,[href],input,select")].filter(x=>!x.disabled&&x.offsetParent);if(!f.length)return;
   const i=f.indexOf(document.activeElement),j=e.shiftKey?(i<=0?f.length-1:i-1):(i<0||i===f.length-1?0:i+1);e.preventDefault();f[j].focus();}); // Tab wraps around inside the card
-$("sheet").addEventListener("click",e=>{if(e.target.id==="sheet"&&!won)closeSheet();});
+$("sheet").addEventListener("click",e=>{if(e.target.id==="sheet"&&!won&&!$("adDone"))closeSheet();}); // an ad only closes by its own buttons
 $("levelsBtn").onclick=showLevels;$("setBtn").onclick=showSettings;
 $("resetBtn").onclick=()=>startLevel(daily?"daily":lv);
 // Undo: takes back the last stroke (each press-and-drag is one step). Playtesters didn't find tap-the-den or drag-back.
@@ -1098,7 +1099,7 @@ function drawLesson(now){const st=lessonStep();if(!st)return;const t=(now-lesson
 // ---------- Ads and hints ----------
 // Hard rules from the build sheet: ads only BETWEEN levels, never during a puzzle; no lives or energy; everything
 // earnable free. In this prototype the ads are stand-in cards; the phone app plugs AdMob into showAd/showRewarded.
-const ADS={freeLevels:18,every:3,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
+const ADS={freeLevels:18,every:5,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
 const today=()=>new Date().toISOString().slice(0,10);
 function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hintsLeft=ADS.freeHints;saveProg();}}
 const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0);
@@ -1150,6 +1151,14 @@ function clearToast(){clearTimeout(toastTimer);const el=$("toast");el.classList.
 function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at&&!lesson)showNote(t);},400);} // a lesson says it better
 // First-time explanations stay up in the coach panel until "Got it" (Muse: a 2 s toast is easy to miss). After that
 // first time, the same message is a quick toast.
+// The first board with each filter color says what that filter does, so the red and blue filters are taught too, not
+// only the yellow and red ones that have their own lesson level (Nikola, v0.37). Replay lessons in Settings brings these back.
+const FILTER_SAY={1:"The red filter takes red out: purple comes out blue, orange comes out yellow.",
+  2:"The yellow filter takes yellow out: orange comes out red, green comes out blue.",
+  4:"The blue filter takes blue out: green comes out yellow, purple comes out red."};
+function filterNote(fl){const fresh=fl.filter(f=>!prog.seen["note:filter"+f]);if(!fresh.length)return;
+  fresh.forEach(f=>prog.seen["note:filter"+f]=1);saveProg();if(lesson&&!lesson.note)return; // a lesson level already teaches it
+  showNote(fresh.map(f=>FILTER_SAY[f]).join(" "));}
 function teachOnce(key,t){if(!lesson&&!prog.seen["note:"+key]){prog.seen["note:"+key]=1;saveProg();showNote(t);}else toast(t);}
 let pendingNote=null; // held until the finger lifts, so a note never pops up over a drag
 function showNote(t){if(active>=0){pendingNote=t;return;}if(lesson&&!lesson.note)return toast(t);lesson={steps:[{say:t}],i:0,t0:performance.now(),note:true};clearToast();renderCoach();}
@@ -1327,11 +1336,22 @@ function drawSurface(now){paths.forEach((p,k)=>{if(p.length<3)return;const t=p[p
   const ph=(now%1400)/1400;ctx.strokeStyle=`rgba(255,246,216,${.55*(1-ph)})`;ctx.lineWidth=Math.max(2,cs*.05);
   ctx.beginPath();ctx.arc(cx,cy,cs*(.45+.75*ph),0,Math.PI*2);ctx.stroke();
   ctx.strokeStyle=`rgba(255,246,216,${.35+.4*a})`;ctx.lineWidth=cs*.045;ctx.beginPath();ctx.arc(cx,cy,cs*(.42+.04*a),0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle=`rgba(255,246,216,${.45+.45*a})`;
+  // the arrow that keeps the stream going the way it dove in is bigger and brighter (Nikola, v0.37: L346 came up going north after diving south)
+  const e=p[p.length-2],q=p[p.length-3],fx=e%G.w-q%G.w,fy=Math.floor(e/G.w)-Math.floor(q/G.w);
   [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=G.w||ny>=G.h)return;const n=ny*G.w+nx;
-    if(G.cells[n].t==="rock"||p.includes(n))return;
-    const d=cs*(.56+.05*a),hx=cx+dx*d,hy=cy+dy*d,s2=Math.max(6,cs*.11);ctx.beginPath();
+    if(G.cells[n].t==="rock"||p.includes(n))return;const on=dx===fx&&dy===fy;
+    ctx.fillStyle=`rgba(255,246,216,${on?.6+.4*a:.3+.3*a})`;
+    const d=cs*(.56+.05*a),hx=cx+dx*d,hy=cy+dy*d,s2=Math.max(6,cs*(on?.15:.09));ctx.beginPath();
     ctx.moveTo(hx+dx*s2,hy+dy*s2);ctx.lineTo(hx-dx*s2+dy*s2,hy-dy*s2+dx*s2);ctx.lineTo(hx-dx*s2-dy*s2,hy-dy*s2-dx*s2);ctx.closePath();ctx.fill();});
+  ctx.restore();});}
+// A delta branch that sprouts onto a cell another stream already covers (L343: the south branch sprouts under its own
+// feeder) gets a ring and an arrow drawn on top, so the hidden tip is easy to find (Nikola, v0.37).
+function drawStubs(now){paths.forEach((p,k)=>{if(p.length!==2||G.cells[p[0]].t!=="delta"||done(k))return;const t=p[1];
+  if(!paths.some((q,j)=>j!==k&&q.indexOf(t)>0))return;
+  const [cx,cy]=C(t),a=.55+.45*Math.sin(now/220),dx=t%G.w-p[0]%G.w,dy=Math.floor(t/G.w)-Math.floor(p[0]/G.w);ctx.save();
+  ctx.strokeStyle=`rgba(255,246,216,${.4+.45*a})`;ctx.lineWidth=cs*.045;ctx.beginPath();ctx.arc(cx,cy,cs*(.3+.04*a),0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=`rgba(255,246,216,${.55+.4*a})`;const d=cs*(.5+.05*a),hx=cx+dx*d,hy=cy+dy*d,s2=Math.max(6,cs*.13);ctx.beginPath();
+  ctx.moveTo(hx+dx*s2,hy+dy*s2);ctx.lineTo(hx-dx*s2+dy*s2,hy-dy*s2+dx*s2);ctx.lineTo(hx-dx*s2-dy*s2,hy-dy*s2-dx*s2);ctx.closePath();ctx.fill();
   ctx.restore();});}
 function drawTunnel(i,now){
   const {cx,cy,pair}=poolInfo(i),mc=TUN_COLORS[pair%3],R=cs*.33,br=.5+.5*Math.sin(now/650+pair*2);
@@ -1566,7 +1586,7 @@ function draw(now){frameNow=now;
     G.sources.forEach(s=>{const [x,y]=C(s.i);drawMarks(x+cs*.27,y+cs*.31,s.mask,cs*.15);});
     G.cells.forEach((c,i)=>{if(c.t==="filter"){const [x,y]=C(i);drawMarks(x+cs*.24,y+cs*.3,c.f,cs*.15);}});
   }
-  drawSurface(now);drawToolHint(now);drawLesson(now);
+  drawSurface(now);drawStubs(now);drawToolHint(now);drawLesson(now);
   // active tip
   if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
     ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
