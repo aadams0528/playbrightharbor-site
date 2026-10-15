@@ -126,7 +126,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.31 · 428 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.32 · 428 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -219,7 +219,7 @@ const HAND=[
  {name:"Filters",tip:"New! A filter takes one color out of a stream. Purple through the red filter comes out blue.",mix:true,
   map:["..R...","......","B.....","......","..1...","..b..p"],sol:["DDDDD","RRRRRDDD"]},
 // Deltas (Chapter 11): sol lists the dens first, then the delta's two branches (for v: left one, then right one).
- {name:"Split stream",tip:"New! A delta splits one stream into two. Lead red into the reeds from the top, then draw both new streams home.",
+ {name:"Split stream",tip:"New! A delta splits one stream into two. Lead red into the reeds from the top. It swirls and pushes out a short stream on each side: drag each one home.",
   map:["..R..",".....","..v..",".....","r...r"],sol:["DD","LLDD","RRDD"]},
  {name:"Purple split",tip:"Make purple, then split it. Both streams that leave a delta carry what went in.",mix:true,
   map:["..R...","......","B....p","......","..v...","p...p."],sol:["DDDD","RRRRR","LLD","RRD"]},
@@ -647,8 +647,20 @@ function splash(tip,rock){
   parts.push({ring:true,x:ex,y:ey,t0:now,life:520,c:"#dff1ff",ux,uy});
   splishSound();buzz(12);
 }
+// One drag can flow through a delta (Alan, Oct 15: continuing past a delta was fiddly). When the finger heads out
+// of a delta's side, drawing switches to the branch that leaves by that side: from the feeder that just arrived, or
+// from the branch picked on the press if the finger went the other way (that one gets its old path back).
+function deltaHandoff(tip,step){const d=G.cells[tip],br=paths.map((q,k)=>k).filter(k=>paths[k][0]===tip),j=d.outs.findIndex(o=>tip+o===step);
+  if(j<0||!br[j]&&br[j]!==0||br[j]===active)return false;const to=br[j];
+  if(paths[active][0]!==tip){if(paths[to].length>1)return false;} // the feeder hands on only to an undrawn branch
+  else if(paths[active].length===1){const was=undoStack[undoStack.length-1];if(was&&was[active])paths[active]=was[active].slice();} // wrong branch picked on the press
+  else return false;
+  active=to;paths[to]=[tip];pressed=null;return true;}
 function walkTo(c){
   // finger back on the stream: pull it back to there
+  // a feeder that just reached a delta hands over first, even when its branch heads back across the feeder
+  const t0=paths[active][paths[active].length-1];
+  if(G.cells[t0].t==="delta"&&paths[active][0]!==t0&&G.cells[t0].outs.some(o=>t0+o===c))deltaHandoff(t0,c);
   if(paths[active].indexOf(c)>0){paths[active].length=cutPoint(paths[active],c)+1;return "cut";}
   let guard=0;
   while(guard++<20){
@@ -657,6 +669,7 @@ function walkTo(c){
     const dx=cx-tx,dy=cy-ty;
     const step=Math.abs(dx)>=Math.abs(dy)?tip+Math.sign(dx):tip+Math.sign(dy)*G.w;
     const before=paths[active].length;
+    if(G.cells[tip].t==="delta"&&deltaHandoff(tip,step))continue;
     if(!tryStep(G,paths,active,step)){
       const alt=Math.abs(dx)>=Math.abs(dy)?(dy?tip+Math.sign(dy)*G.w:-1):(dx?tip+Math.sign(dx):-1);
       if(alt<0||!tryStep(G,paths,active,alt)){
@@ -702,7 +715,11 @@ function snapHome(e){
     path.pop(); // would be refused: leave it where the finger stopped
   }
 }
-function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null; // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
+// Whirlpool (Alan, Oct 15): once a stream flows into a delta, each undrawn branch sprouts one cell out of its own
+// side, so there are two visible tips to drag on to the nests.
+function sprout(){G.cells.forEach((d,i)=>{if(d.t!=="delta"||!paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i))return;
+  paths.forEach((q,k)=>{if(q[0]!==i||q.length!==1)return;const j=branchNo(paths,k);tryStep(G,paths,k,i+d.outs[j]);});});}
+function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null;sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
   judgeRetrace(active);active=-1;afterChange(true);if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
 // A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
 // Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
@@ -946,7 +963,7 @@ const LESSONS={
   "Split stream":[
     {say:"This reed bed is a delta. Water that flows in from the top splits in two.",cells:["all:delta"]},
     {say:"Lead red down into the delta.",demo:0,wait:"reach:0"},
-    {say:"Now drag from the delta to each side and draw both new streams to a red nest.",wait:"win"}],
+    {say:"The water swirls and pushes out a short stream on each side. Drag each one on to a red nest.",wait:"win"}],
   "Purple split":[
     {say:"Water only gets into a delta from behind. The reeds block the far side and the channels are one way.",cells:["all:delta"]},
     {say:"Make purple first, then send it into the delta: both new streams come out purple.",wait:"win"}],
@@ -1284,6 +1301,16 @@ function drawFilter(i,f,now){
 }
 // Delta: a marshy reed bed. Water comes in down the stem and fans out into two channels, one each side; the reeds on
 // the far bank show it can't be entered from there. Ripples run out along the channels to show the way the water goes.
+// a fed delta swirls: three curling arcs turning slowly in the feeder's color
+function drawSwirl(i,now){const p=paths.findIndex(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i);if(p<0)return;
+  // a whirlpool on top of the streams where they meet: a deep pool of the feeder's color with three light arms turning in it
+  const [cx,cy]=C(i),c=COLORS[col[p][col[p].length-1]]||"#cfe9ff",t=now/700,R=cs*.3;ctx.save();
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,R);g.addColorStop(0,"rgba(4,14,30,.85)");g.addColorStop(.55,hexA(c,.55));g.addColorStop(1,hexA(c,.9));
+  ctx.fillStyle=g;ctx.shadowColor=c;ctx.shadowBlur=cs*.25;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  ctx.lineCap="round";
+  for(let a=0;a<3;a++){const st=t+a*Math.PI*2/3;ctx.strokeStyle="rgba(255,255,255,.8)";ctx.lineWidth=cs*.035;
+    ctx.beginPath();for(let q=0;q<=1.001;q+=.05){const ang=st+q*Math.PI*1.1,r=R*(.9-q*.75);q?ctx.lineTo(cx+Math.cos(ang)*r,cy+Math.sin(ang)*r):ctx.moveTo(cx+Math.cos(ang)*r,cy+Math.sin(ang)*r);}ctx.stroke();}
+  ctx.restore();}
 function drawDelta(i,c,now){
   const [cx,cy]=C(i),fx=c.flow===1?1:c.flow===-1?-1:0,fy=fx?0:Math.sign(c.flow),px=-fy,py=fx,R=cs*.5;
   ctx.save();
@@ -1392,6 +1419,7 @@ function draw(now){frameNow=now;
   later.forEach(s=>{ // over the bridge: dark casing so it reads as passing over
     drawStroke(s.pts,s.color,lw*.7,glow*.6,s.d0); // slimmer on the deck so the planks and rails show
   });
+  G.cells.forEach((c,i)=>{if(c.t==="delta")drawSwirl(i,now);});
   // tunnels: a faint dotted trail under the mountain from cave to cave, and when the stream stops at the far cave,
   // a short bit of river pokes out of it (popping out with a splash) so it's obvious where it came out
   paths.forEach((path,p)=>{for(let i=0;i+1<path.length;i++){if(!isJump(G,path[i],path[i+1]))continue;
@@ -1512,5 +1540,4 @@ function boot(data){
 }
 window.claude?.hot?.ready?window.claude.hot.ready(boot):boot(window.claude?.hot?.data??{});
 </script>
-</body>
-</html>
+</body></html>
