@@ -134,7 +134,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.34 · 434 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.35 · 434 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -393,7 +393,7 @@ const CHAPTERS=[
 // Retired levels stay in the GEN data (so the generator never reuses their ids) but are no longer played. Oct 14:
 // Chapter 1 trimmed from 25 to 10 levels so the first color mix comes at level 11 (Muse's fresh-player pass, Alan's call).
 // Oct 15: testers still found the opening too easy (Alan), so Chapter 1 keeps only its two lessons plus Willow run and
-// Creek, and Mixing drops its four smallest 2-stream boards: the first mix is level 5, and 3-stream boards start at 10.
+// Creek, and Mixing drops its four smallest 2-stream boards: the first mix is level 5. The first 3-stream boards are the lessons at 6-7, and generated ones start at 10.
 const RETIRED=new Set(["c1-05","c1-06","c1-07","c1-08","c1-10","c1-12","c1-13","c1-15","c1-16","c1-18","c1-19","c1-20","c1-21","c1-22","c1-23",
   "c1-01","c1-02","c1-03","c1-04","c1-14","c1-17","c2-19","c2-01","c2-18","c2-02"]);
 const slug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
@@ -472,12 +472,13 @@ let lv=0,daily=null,G,paths,col,active=-1,won=false,wonAt=0,hints=[],cs=60,dpr=1
 const SHAPES=["round","square","drop","star","diamond","hex"];
 
 const LV=()=>daily||LEVELS[lv]; // the level on the board: a chapter level, or today's Daily River
-function startLevel(n,keep,cut){
+function startLevel(n,keep,cut,extra){
   if(n!=="daily"){daily=null;lv=n;}
   const L=LV();G=parseLevel(L);
   if(keep&&cut!=null&&useTool(G,cut)){G.cutAt=cut;bed=null;}
   const fits=keep&&keep.length===G.starts.length&&keep.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length));
   paths=fits?keep:G.starts.map(i=>[i]);if(!keep)saveDraft(true);undoStack=[];
+  if(fits&&extra&&Array.isArray(extra.undo))undoStack=extra.undo.filter(st=>Array.isArray(st)&&st.length===G.starts.length&&st.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length)));
   active=-1;won=false;hints=[];bloom=G.nests.map(()=>0);sparks=[];retraces=0;hintsUsed=0;turnTold=false;
   drawn=paths.map(p=>p.slice());legendMix=!!L.mix;clearToast();
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
@@ -497,7 +498,8 @@ function startLevel(n,keep,cut){
   if(G.cells.some(c=>c.t==="delta")&&intro("delta","New: deltas split a stream in two"))newTile=performance.now();
   bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
   lesson=null;reserveTip();resize();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily)store.set("cur",ID(n));
-  if(LESSONS[L.name]&&!prog.seen["lesson:"+L.id])startLesson();else renderCoach();
+  if(LESSONS[L.name]&&!prog.seen["lesson:"+L.id]){startLesson();if(fits&&extra&&Number.isInteger(extra.ls)&&lesson&&extra.ls>0){lesson.i=Math.min(extra.ls,lesson.steps.length-1);renderCoach();}}else renderCoach();
+  updateUndo();
 }
 // Legend chips above the board. The first-mix level starts without the mix chart so the first purple is a surprise; it appears once they mix.
 function renderLegend(){
@@ -535,7 +537,7 @@ function drawMarks(x,y,c,h){ // a dark pill with the color's marks, on the board
   ctx.fillStyle=ctx.strokeStyle="#f2f8ff";m.forEach((b,k)=>markPath(ctx,b,x-w/2+h*.25+step*(k+.5),y,h));ctx.restore();
 }
 function recolor(){col=computeColors(G,paths);}
-// Breakthrough tools: the crew button under the board. Tap it, then tap the dam (saw) or boulder clump (pick).
+// Breakthrough tools: the crew button (under the board on phones, in the side column on wide screens). Tap it, then tap the dam (saw) or boulder clump (pick).
 let aiming=false,toolHint=0;
 const CREW={saw:{icon:"🦫",name:"Beaver's saw",aim:"Tap a beaver dam to saw through it",no:"The saw only cuts beaver dams: the straight rock walls"},
   pick:{icon:"⛏️",name:"Mole's pick",aim:"Tap a boulder clump to crack it",no:"The pick only cracks boulder clumps, not dams or single stones"}};
@@ -752,7 +754,9 @@ cv.addEventListener("pointerup",release);cv.addEventListener("pointercancel",()=
 
 let lastCrossColors="";
 // The unfinished drawing is kept on the phone, so a call or a closed app doesn't wipe it (Muse, v0.30).
-function saveDraft(clear){store.set("draw",clear||won||daily?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null});}
+// the draft also keeps the last strokes' Undo history and the lesson step, so a reload picks up exactly where you were
+function saveDraft(clear){store.set("draw",clear||won||daily?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null,
+  undo:undoStack.slice(-20),ls:lesson&&!lesson.note?lesson.i:null});}
 function afterChange(released){
   const before=JSON.stringify(col.map(c=>c[c.length-1]));
   recolor();updateInk();
@@ -803,14 +807,14 @@ function crossings(){
 function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
-  if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},1300);return;}
+  if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
   const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id];
   if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
   prog.stars[id]=Math.max(prog.stars[id]||0,s);prog.total=Object.values(prog.stars).reduce((a,b)=>a+b,0); // total + highest: what leaderboards will rank on
   if(lv+1>(prog.highest||0)){prog.highest=lv+1;prog.highestId=id;}
   prog.sinceAd=(prog.sinceAd||0)+1;
   saveProg();updateStars();
-  const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},1300);
+  const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},800);
 }
 function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</span>`).join("");}
 // Re-traces and hints are still counted silently in prog.trace (kept for playtest analysis); nothing is shown to the player.
@@ -906,8 +910,11 @@ function showSettings(){
   $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
 }
-function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;}
-function closeSheet(){$("sheet").hidden=true;}
+// While a card is up, the game behind it is inert, so Tab stays inside the card (Nikola, v0.34: Tab reached Hint behind the win card)
+function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;$("app").inert=true;const b=$("card").querySelector("button,[href],input,select");if(b)b.focus();}
+function closeSheet(){$("sheet").hidden=true;$("app").inert=false;}
+$("sheet").addEventListener("keydown",e=>{if(e.key!=="Tab")return;const f=[...$("card").querySelectorAll("button,[href],input,select")].filter(x=>!x.disabled&&x.offsetParent);if(!f.length)return;
+  const i=f.indexOf(document.activeElement),j=e.shiftKey?(i<=0?f.length-1:i-1):(i<0||i===f.length-1?0:i+1);e.preventDefault();f[j].focus();}); // Tab wraps around inside the card
 $("sheet").addEventListener("click",e=>{if(e.target.id==="sheet"&&!won)closeSheet();});
 $("levelsBtn").onclick=showLevels;$("setBtn").onclick=showSettings;
 $("resetBtn").onclick=()=>startLevel(daily?"daily":lv);
@@ -989,7 +996,7 @@ const LESSONS={
     {say:"Water only gets into a delta from behind. The reeds block the far side and the channels are one way.",cells:["all:delta"]},
     {say:"Make purple first, then send it into the delta: both new streams come out purple.",wait:"win"}],
   "Beaver saw":[
-    {say:"Meet the beaver crew! This level comes with one saw. Tap the saw button under the board.",dom:"crew",wait:"aim"},
+    {say:"Meet the beaver crew! This level comes with one saw. Tap the glowing saw button.",dom:"crew",wait:"aim"},
     {say:"Now tap the dam. The whole dam comes down.",cells:["all:rock"],wait:"cut"},
     {say:"The way is open. Lead red straight down to its nest.",wait:"win"}],
   "Mole pick":[
@@ -1018,7 +1025,7 @@ function reserveTip(){const t=document.querySelector(".tip"),L=!daily&&LESSONS[L
   lesson=keep;renderCoach();t.style.minHeight=h+"px";}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
 function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Show me how\" to see it again");}
-function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else renderCoach();}
+function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!daily&&!!LESSONS[LV().name];
   document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));$("crewBtn").classList.toggle("glow-ink",!!(st&&st.dom==="crew"));$("undoBtn").classList.toggle("glow-ink",!!(st&&st.dom==="undo"));
@@ -1395,7 +1402,7 @@ function draw(now){frameNow=now;
   // riverbed (pre-drawn once per board) + moving light caustics
   if(!bed||bed.cs!==cs||bed.key!==LV().id)bed=makeBed(W,H);
   ctx.drawImage(bed.c,0,0,W,H);
-  ctx.save();ctx.globalCompositeOperation="lighter";ctx.strokeStyle="rgba(140,210,255,.03)";ctx.lineWidth=cs*.05;
+  ctx.save();ctx.globalCompositeOperation="lighter";ctx.strokeStyle="rgba(140,210,255,.018)";ctx.lineWidth=cs*.05;
   for(let k=0;k<9;k++){ctx.beginPath();for(let x=-10;x<=W+10;x+=10){const yy=(k+.5)*H/9+Math.sin(x/(cs*.9)+now/1300+k*1.7)*cs*.18+Math.sin(x/(cs*.37)-now/900+k)*cs*.05;x<0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}ctx.stroke();}
   ctx.restore();
 
@@ -1404,7 +1411,7 @@ function draw(now){frameNow=now;
     const x=i%G.w,y=(i-x)/G.w,c=G.cells[i];
     if(c.t==="rock")continue; // dams and boulders are part of the riverbed picture
     // tile: a soft lighter pad with a clear edge, so every cell (and where a turn can happen) reads at a glance (Muse, v0.30)
-    rrect(x*cs+3,y*cs+3,cs-6,cs-6,cs*.2);ctx.fillStyle="rgba(200,230,255,.035)";ctx.fill();ctx.strokeStyle="rgba(215,238,255,.11)";ctx.lineWidth=1.25;ctx.stroke();
+    rrect(x*cs+3,y*cs+3,cs-6,cs-6,cs*.2);ctx.fillStyle="rgba(200,230,255,.05)";ctx.fill();ctx.strokeStyle="rgba(215,238,255,.2)";ctx.lineWidth=1.5;ctx.stroke(); // stronger edges than the water lines (Nikola, v0.34)
     if(c.t==="tunnel"){drawTunnel(i,now);
     }else if(c.t==="filter"){drawFilter(i,c.f,now);
     }else if(c.t==="delta"){drawDelta(i,c,now);
@@ -1559,7 +1566,7 @@ window.claude?.hot?.snapshot?.(()=>({lv,paths,daily:!!daily}));
 function boot(data){
   const cur=store.get("cur",null),ci=typeof cur==="string"?IDX(cur):Number.isInteger(cur)?cur:-1; // older saves stored the position
   const start=Math.max(0,data&&Number.isInteger(data.lv)?data.lv:Math.min(ci>=0?ci:0,openCount()-1)),dr=store.get("draw",null),mine=dr&&dr.id===ID(start)&&!(data&&data.paths);
-  if(data&&data.daily&&dailyOpen()){daily=dailyFor(dayNum());startLevel("daily",data.paths);}else startLevel(start,mine?dr.paths:data&&data.paths,mine?dr.cut:null);
+  if(data&&data.daily&&dailyOpen()){daily=dailyFor(dayNum());startLevel("daily",data.paths);}else startLevel(start,mine?dr.paths:data&&data.paths,mine?dr.cut:null,mine?dr:null);
   requestAnimationFrame(loop);
 }
 window.claude?.hot?.ready?window.claude.hot.ready(boot):boot(window.claude?.hot?.data??{});
