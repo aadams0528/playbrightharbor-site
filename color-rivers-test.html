@@ -126,7 +126,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.32 · 428 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.33 · 428 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -598,7 +598,7 @@ function nearTip(e){
 }
 let lastCell=-1,popAt={},pressed=null;
 cv.addEventListener("pointerdown",e=>{
-  if(won)return;warps=[];const c=cellAt(e);if(c<0)return;
+  if(won)return;warps=[];const c=cellAt(e);if(c<0)return;fedAtDown=fedDeltas();
   if(aiming){const cut=useTool(G,c);aiming=false;
     if(cut){G.cutAt=c;saveDraft();breakFx(cut);bed=null;toolHint=0;if(hints.length)updateHintBtn();lessonCheck();}else toast(CREW[G.tool].no);updateCrew();return;}
   undoStack.push(paths.map(p=>p.slice()));if(undoStack.length>60)undoStack.shift();
@@ -717,9 +717,14 @@ function snapHome(e){
 }
 // Whirlpool (Alan, Oct 15): once a stream flows into a delta, each undrawn branch sprouts one cell out of its own
 // side, so there are two visible tips to drag on to the nests.
+// Pulling the stream back out of a delta takes its branches with it (Alan, Oct 15). Only deltas that were fed when the
+// drag began are cleared, so branches drawn before their feeder still work.
+let fedAtDown=[];
+const fedDeltas=()=>G.cells.map((d,i)=>d.t==="delta"&&paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i)?i:-1).filter(i=>i>=0);
+function unfeed(){const now=fedDeltas();fedAtDown.forEach(i=>{if(!now.includes(i))paths.forEach((q,k)=>{if(q[0]===i)paths[k]=[i];});});fedAtDown=[];}
 function sprout(){G.cells.forEach((d,i)=>{if(d.t!=="delta"||!paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i))return;
   paths.forEach((q,k)=>{if(q[0]!==i||q.length!==1)return;const j=branchNo(paths,k);tryStep(G,paths,k,i+d.outs[j]);});});}
-function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null;sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
+function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null;unfeed();sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
   judgeRetrace(active);active=-1;afterChange(true);if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
 // A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
 // Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
