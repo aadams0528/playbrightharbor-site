@@ -190,6 +190,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .shop-row .btn{min-width:5.5rem;padding:.5em 1em;font-size:.9rem}
 .offer{background:#fff3c2;color:#5a4300!important;border-radius:10px;padding:8px 10px;font-weight:700}
 .linkbtn{background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:.85rem}
+.restore{text-align:center;margin:6px 0 0}
 .foot{text-align:center;font-size:.7rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition:none!important}}
 </style>
@@ -263,7 +264,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 const N=8, $=id=>document.getElementById(id);
 const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
-             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+             set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BH_CLOUD?.changed?.()}};
+// Kept on this phone only, never sent to the cloud save: sound, ad and promo counters.
+const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-)/;
+let cloudApplying=false;
 const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 
 // ---------- random + days ----------
@@ -947,14 +951,49 @@ const PRODUCTS=[
   {id:'sumburst.coins.6000',name:'6,000 coins',coins:6000,price:'$9.99',note:'Best value'},
 ];
 const firstBonus=()=>!store.get('nb-bought-coins',false);
+// In the phone apps, Capacitor provides the NativePurchases plugin (the same one Wordglow uses).
+// On the web it stays null and the shop explains that purchases need the app.
+const Purchases=window.Capacitor?.isNativePlatform?.()?window.Capacitor.Plugins.NativePurchases:null;
+function grant(id){
+  if(id===REMOVE_ADS){store.set('nb-noads',true);toast('Ads removed. Thank you!',true,READ_MS);return}
+  const p=PRODUCTS.find(x=>x.id===id);if(!p?.coins)return;
+  const n=firstBonus()?p.coins*2:p.coins;
+  store.set('nb-bought-coins',true);addCoins(n);toast(`+${n.toLocaleString()} 🪙${n>p.coins?' (double!)':''}\nThank you!`,true,READ_MS);
+}
+async function loadPrices(){
+  if(!Purchases)return;
+  try{const {products}=await Purchases.getProducts({productIdentifiers:PRODUCTS.map(p=>p.id),productType:'inapp'});
+    products.forEach(x=>{const p=PRODUCTS.find(y=>y.id===x.identifier);if(p&&x.priceString)p.price=x.priceString})}catch(e){}
+}
+// Remove ads is a one-time purchase the store remembers, so a reinstall or a new phone gets it back.
+async function checkOwnedRemoveAds(){
+  if(!Purchases)return;
+  try{const {purchases}=await Purchases.getPurchases({productType:'inapp'});
+    if(purchases.some(t=>t.productIdentifier===REMOVE_ADS))store.set('nb-noads',true)}catch(e){}
+}
+async function buy(id){
+  if(!Purchases){toast('Purchases work in the\niPhone and Android apps.',false,READ_MS);return}
+  try{await Purchases.purchaseProduct({productIdentifier:id,productType:'inapp',quantity:1,isConsumable:id!==REMOVE_ADS});
+    grant(id);closeSheet();track('shop_purchase',{item:id})}
+  catch(e){if(!/cancel/i.test(String(e?.message||e)))toast("The purchase didn't go through.\nYou were not charged.",false,READ_MS)}
+}
+async function restorePurchases(){
+  if(!Purchases){toast('Restore works in the\niPhone and Android apps.',false,READ_MS);return}
+  try{await Purchases.restorePurchases()}catch(e){}
+  await checkOwnedRemoveAds();closeSheet();
+  toast(store.get('nb-noads',false)?'Remove ads restored.':'Nothing to restore.',false,READ_MS);
+}
+loadPrices();checkOwnedRemoveAds();
 function openShop(){
   const bonus=firstBonus();
   const rows=PRODUCTS.filter(p=>!(p.id===REMOVE_ADS&&store.get('nb-noads',false))).map(p=>{
     const name=bonus&&p.coins?`<s>${p.name}</s> ${(p.coins*2).toLocaleString()} coins`:p.name;
     return `<div class="shop-row"><div class="what">${name}${p.note?`<small>${p.note}</small>`:''}</div><button class="btn" data-buy="${p.id}">${p.price}</button></div>`}).join('');
   openSheet(`<h3>Shop</h3>${bonus?'<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>':''}<p>You have ${coins.toLocaleString()} 🪙. Spend coins on erasers, shuffles and second chances.</p>${rows}
-    <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>`);
-  document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>toast('Purchases work in the\niPhone and Android apps.',false,READ_MS));
+    <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>
+    <p class="restore"><button class="linkbtn" id="shop-restore">Restore purchases</button></p>`);
+  document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy));
+  $('shop-restore').onclick=restorePurchases;
   $('shop-close').onclick=closeSheet;
 }
 
@@ -1022,6 +1061,71 @@ $('tab-mode').onclick=()=>tabClick('mode',showModeSwitch);
 $('tab-help').onclick=()=>tabClick('help',showHelp);
 $('streakbtn').onclick=showCalendar;
 $('coinpill').onclick=openShop;
+
+// ---------- cloud save: progress survives an app update or a new phone ----------
+// The shared studio module (cloudsave.js) handles sign-in and upload. Each game gives it this hook.
+// The save is every nb-* key except the device-only ones. Merging never loses anything earned on
+// either phone: best scores, unlocks and purchases win, and sum books are combined.
+const OLD_DAY=/^nb-(best-daily|final-daily)-(\d{4}-\d\d-\d\d)$/;
+function cloudSnapshot(){
+  const out={},cutoff=dayKey(-7);
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!k||!k.startsWith('nb-')||DEVICE_ONLY.test(k))continue;
+    const old=OLD_DAY.exec(k);if(old&&old[2]<cutoff)continue;
+    const v=store.get(k,null);if(v!==null)out[k]=v;
+  }
+  return out;
+}
+const saveRank=g=>g&&g.v===3?[g.level||0,g.score||0]:null;
+function betterSave(a,b){  // the further-along game of two saves
+  const ra=saveRank(a),rb=saveRank(b);
+  if(!rb)return ra?a:null;if(!ra)return b;
+  return rb[0]>ra[0]||(rb[0]===ra[0]&&rb[1]>ra[1])?b:a;
+}
+function mergeKey(k,a,b){  // a = this phone, b = cloud
+  if(a==null)return b;if(b==null)return a;
+  if(k==='nb-coins'||k==='nb-best-endless'||/^nb-(best-daily|final)-/.test(k))return Math.max(+a||0,+b||0);
+  if(/^nb-(noads|bought-coins|tutorial-done|special-seen|book-done-|book-half-|level-ms-)/.test(k))return !!(a||b);
+  if(k==='nb-streak-saved')return a>b?a:b;
+  if(k==='nb-book'){const m={};new Set([...Object.keys(a),...Object.keys(b)]).forEach(t=>m[t]=[...new Set([...(a[t]||[]),...(b[t]||[])])]);return m}
+  if(k==='nb-stats'){
+    const m={...b,...a};['blasts','topLevel','bestCombo'].forEach(f=>m[f]=Math.max(a[f]||0,b[f]||0));
+    const l=(b.longest||0)>(a.longest||0)?b:a;m.longest=l.longest||0;m.longestSum=l.longestSum||'';return m;
+  }
+  if(k==='nb-streak'){
+    const base=(b.last||'')>(a.last||'')||(b.last===a.last&&(b.n||0)>(a.n||0))?b:a;
+    return {...base,best:Math.max(a.best||0,b.best||0,base.n||0),days:[...new Set([...(a.days||[]),...(b.days||[])])].sort().slice(-63)};
+  }
+  if(k==='nb-save-endless')return betterSave(a,b);
+  if(k==='nb-save-daily')return betterSave(a&&a.day===dayKey()?a:null,b&&b.day===dayKey()?b:null);
+  return a;  // nb-save (the game open on this phone) and anything new: keep this phone's
+}
+function mergeSaves(local,cloud){
+  const m={};
+  new Set([...Object.keys(local||{}),...Object.keys(cloud||{})]).forEach(k=>{
+    if(DEVICE_ONLY.test(k))return;
+    const v=mergeKey(k,local?.[k],cloud?.[k]);if(v!=null)m[k]=v;
+  });
+  return m;
+}
+function applyCloudSave(m){
+  cloudApplying=true;  // the cloud module uploads the merged save itself, so these writes don't ask for one
+  try{Object.entries(m).forEach(([k,v])=>store.set(k,v));restoreFromSave()}finally{cloudApplying=false}
+}
+function restoreFromSave(){
+  book=store.get('nb-book',{});stats=store.get('nb-stats',stats);coins=store.get('nb-coins',0);
+  streak=store.get('nb-streak',streak);specialSeen=store.get('nb-special-seen',false);
+  renderCoins();renderStreak();
+  // Bring back a game that got further on the other phone, unless one is mid-move or just ended.
+  if(busy||drag||over)return;
+  if(tut){if(!store.get('nb-tutorial-done',false))return;tut=null;closeSheet();if(!resumeGame('nb-save-endless',false))newGame('endless');setHint();news('☁️ Your progress is back!');return}
+  const cur=saveRank({v:3,level,score}),saved=saveRank(store.get('nb-save-'+mode,null));
+  if(saved&&(saved[0]>cur[0]||(saved[0]===cur[0]&&saved[1]>cur[1]))&&resumeGame('nb-save-'+mode,false))news('☁️ Your progress is back!');
+}
+window.BH_SAVE={game:'sumburst',version:1,
+  get:cloudSnapshot,
+  merge(cloud){const m=mergeSaves(cloudSnapshot(),cloud||{});applyCloudSave(m);return m}};
 
 // ---------- save and resume ----------
 // Phones can close the app in the background, so the game is saved after every turn and picked up on the next launch.
