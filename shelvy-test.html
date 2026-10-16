@@ -56,8 +56,9 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 .medal.lost{opacity:.35;filter:grayscale(1)}
 .flybag{position:fixed;z-index:30;width:44px;pointer-events:none;transition:transform .65s cubic-bezier(.4,-.2,.6,1),opacity .65s}
 .toast{position:absolute;left:50%;top:24%;transform:translate(-50%,-50%);background:var(--ink);color:var(--paper);font-weight:800;padding:6px 12px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;white-space:nowrap}
-.toast.show{animation:toast 1.5s}
-@keyframes toast{0%{opacity:0;transform:translate(-50%,-30%)}15%,75%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(-50%,-80%)}}
+.toast{transform:translate(-50%,-30%);transition:opacity .2s,transform .2s;z-index:6}
+.toast.show{opacity:1;transform:translate(-50%,-50%)}
+[hidden]{display:none!important}
 .cust{transform-box:fill-box;transform-origin:50% 100%}
 .cust.happy{animation:hop .6s}
 .walkin{transform-box:fill-box;animation:walkin .7s ease-out}
@@ -308,7 +309,7 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 <script>
 (function(){
 "use strict";
-const VERSION="0.6.1";
+const VERSION="0.6.2";
 /* ---------- goods art: chunky, outlined, 40x40 ---------- */
 const O='stroke="#3b2a1f" stroke-width="1.6" stroke-linejoin="round"';
 const KINDS=[
@@ -783,7 +784,7 @@ function startLevel(opts){
   if(!daily&&save.at!==L){save.at=L;persist()}
   if(dy)name=`Day ${dy.d} · ${dy.b}/${PER}`;
   const kindsIn=[...new Set(made.stacks.flat().map(x=>x.k))];
-  clearTimeout(sayTimer);$("say").classList.remove("show");$("say").innerHTML="";
+  clearTransient();$("say").innerHTML="";
   hideClosed();
   G={id:++gameId,over:false,servedNow:[],gain:{},stacks:made.stacks,init:JSON.stringify(made.stacks),par:made.par,name,daily,level:L,moves:0,sel:-1,hintTo:-1,hist:[],extraUsed:false,extraIdx:null,
      kinds:kindsIn,sold:[],cust:null,custs:[],tips:0,streak:0,helped:false,hand:L===1&&!daily,handStep:0,
@@ -945,7 +946,11 @@ function renderFront(happy){
 }
 let sayTimer=0;
 function say(html){const e=$("say");e.innerHTML=html;e.classList.add("show");clearTimeout(sayTimer);sayTimer=setTimeout(()=>e.classList.remove("show"),4500)}
-function toast(t){const e=$("toast");e.textContent=t;e.classList.remove("show");void e.offsetWidth;e.classList.add("show")}
+/* toasts and the customer line are timed in script (not by CSS animation) so they always go away */
+let toastTimer=0;
+function toast(t,ms){const e=$("toast");e.textContent=t;e.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove("show"),ms||1800)}
+function clearTransient(){clearTimeout(toastTimer);$("toast").classList.remove("show");clearTimeout(sayTimer);$("say").classList.remove("show");
+  if(G){G.hintTo=-1;G.plan=null}const a=$("hintArrow");if(a)a.remove()}
 
 function layout(){
   const n=G.stacks.length;
@@ -1035,14 +1040,21 @@ function renderAll(landed,celebrate){renderFront();renderUnit(landed,celebrate);
 function tap(i){
   if(G.over)return;
   const st=G.stacks[i];
+  // tapping the cubby a hint already lifted keeps it lifted, so the next tap is the move
+  if(G.hintTo>=0&&G.sel===i){drawArrow();return}
   G.hintTo=-1;G.revealed=null;hideStuck();
+  const source=st.length&&!isDone(st);
   if(G.sel<0){
-    if(!st.length||isDone(st)){bad(i);return}
+    if(!source){bad(i);toast(st.length?"Already sold":"Nothing to pick up there");return}
     G.sel=i;sfx.pick();renderUnit();return;
   }
   if(G.sel===i){G.sel=-1;renderUnit();return}
   const n=canMove(G.stacks,G.sel,i);
-  if(!n){bad(i);return}
+  if(!n){
+    // say why, then treat the tap as picking up from this cubby instead, so no tap is wasted
+    toast(isDone(st)?"Already sold":st.length>=CAP?"That cubby is full":"Only matching goods can stack");
+    G.sel=source?i:-1;renderUnit();bad(i);return;
+  }
   const doneBefore=G.stacks.map(isDone);
   G.hist.push(JSON.stringify({s:G.stacks,sold:G.sold,m:G.moves,t:G.tips,k:G.streak,cs:G.custs.map(c=>c.st),g:G.gain,sn:G.servedNow}));
   const A=G.stacks[G.sel];
@@ -1069,7 +1081,7 @@ function bad(i){sfx.bad();try{navigator.vibrate&&navigator.vibrate(25)}catch(e){
 /* dead ends: no legal move, or the solver has searched every line and none clears the shelf */
 const plain=()=>G.stacks.map(s=>s.map(x=>x.k));
 function anyMove(){for(let a=0;a<G.stacks.length;a++)for(let b=0;b<G.stacks.length;b++)if(canMove(G.stacks,a,b))return true;return false}
-function isStuck(){if(!anyMove())return true;const sol=solve(plain(),30000);return !sol&&!solve.hitLimit}
+function isStuck(){if(!anyMove())return true;const sol=solve(plain(),150000);return !sol&&!solve.hitLimit}
 function checkStuck(){
   if(G.over||!isStuck())return;
   G.stuck=true;
@@ -1128,7 +1140,7 @@ function celebrateSet(j,ev){
     const p=ev.who.p;
     say(`<b>${p.nm}:</b> ${ev.line}`);
     if(ev.inOrder){
-      toast(ev.mult>1?`Tip streak x${ev.mult}! +${ev.coins}`:`${p.nm} tipped +${ev.coins}`);
+      toast(`${p.nm} tipped +${ev.coins}${ev.mult>1?` · streak x${ev.mult}`:""}`);
       later(()=>flyBag($("unit").children[j],k,true),320);
       later(()=>{renderFront(true);sfx.bell()},900);
       later(()=>{G.cust=curCust();renderFront();const b=$("bubble");b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop")},1700);
@@ -1242,14 +1254,23 @@ function undoOnce(){const h=JSON.parse(G.hist.pop());G.stacks=h.s;G.sold=h.sold;
   G.custs.forEach((c,i)=>c.st=h.cs[i]);G.cust=curCust();G.gain=h.g;G.servedNow=h.sn;
   if(G.extraIdx!=null&&G.extraIdx>=G.stacks.length)G.extraIdx=null}
 $("tUndo").onclick=()=>{if(G.over||!G.hist.length)return;hideStuck();const was=favorState();undoOnce();G.sel=-1;G.hintTo=-1;G.revealed=null;sfx.drop();renderAll();if(was==="missed"&&favorState()==="open")toast("Favor back on")};
-$("tRestart").onclick=()=>{if(G.over)return;hideStuck();G.revealed=null;G.stacks=JSON.parse(G.init);G.moves=0;G.sel=-1;G.hintTo=-1;G.hist=[];G.sold=[];G.tips=0;G.streak=0;G.extraUsed=false;G.extraIdx=null;G.helped=false;G.custs.forEach(c=>c.st=0);G.cust=curCust();G.gain={};G.servedNow=[];renderAll()};
+$("tRestart").onclick=()=>{if(G.over)return;hideStuck();clearTransient();G.revealed=null;G.stacks=JSON.parse(G.init);G.moves=0;G.sel=-1;G.hintTo=-1;G.hist=[];G.sold=[];G.tips=0;G.streak=0;G.extraUsed=false;G.extraIdx=null;G.helped=false;G.custs.forEach(c=>c.st=0);G.cust=curCust();G.gain={};G.servedNow=[];renderAll()};
 $("tExtra").onclick=()=>{if(G.over||G.extraUsed)return;hideStuck();G.extraUsed=true;G.helped=true;G.stacks.push([]);G.extraIdx=G.stacks.length-1;sfx.bell();toast("An extra cubby, on the house");renderAll()};
 $("tHint").onclick=()=>{
   if(G.over)return;
-  let sol=favorState()==="open"?solve(plain(),40000,0,null,favPred(G.favor.F)):null;
-  if(!sol)sol=solve(plain(),40000);
-  if(!sol||!sol.length){if(!solve.hitLimit)checkStuck();else toast("Try an Undo, then ask again");return}
-  const [a,b]=sol[0];G.sel=a;G.hintTo=b;G.helped=true;G.hand=false;sfx.pick();
+  // follow one planned route from hint to hint, so hints never undo each other; replan only after the player goes their own way
+  const now=plain(),key=now.map(s=>s.join(",")).join("|");
+  let P=G.plan;
+  if(!P||P.keys[P.i]!==key){
+    const fav=favorState()==="open";
+    let sol=fav?bestRoute(now,G.seed+G.moves,favPred(G.favor.F))||solve(now,60000,0,null,favPred(G.favor.F)):null;
+    if(!sol)sol=bestRoute(now,G.seed+G.moves)||solve(now,60000);
+    if(!sol||!sol.length){if(!solve.hitLimit)checkStuck();else toast("Try an Undo, then ask again");return}
+    const keys=[],T=now.map(s=>s.slice());
+    sol.forEach(([a,b])=>{keys.push(T.map(s=>s.join(",")).join("|"));const A=T[a],B=T[b];let r=0;while(r<A.length&&A[A.length-1-r]===A[A.length-1])r++;B.push(...A.splice(A.length-Math.min(r,CAP-B.length)))});
+    P=G.plan={moves:sol,keys,i:0};
+  }
+  const [a,b]=P.moves[P.i];P.i++;G.sel=a;G.hintTo=b;G.helped=true;G.hand=false;sfx.pick();
   renderUnit();renderHud();toast("Follow the arrow");
 };
 $("btnMute").onclick=()=>{save.muted=!save.muted;persist();renderHud();if(!save.muted)beep(660,.08)};
@@ -1328,6 +1349,7 @@ function showClosed(d){
 }
 function hideClosed(){const b=$("closedBox");if(b)b.remove()}
 function openMenu(){
+  clearTransient();if(G&&G.sel>=0&&!G.over){G.sel=-1;renderUnit()}
   const d=todayStr();const doneToday=save.daily.last===d;
   const totalStars=Object.values(save.stars).reduce((a,b)=>a+b,0);
   const cell=(L,label)=>{const locked=L>save.level;const s=save.stars[L]||0;
@@ -1358,8 +1380,8 @@ function openRegulars(){
 }
 function openHelp(){
   sheet(`<h3>How to play</h3>
-  <ol class="rules"><li><b>Tap a cubby</b> to pick up the top goods.</li><li><b>Tap another cubby</b> to set them down, on an empty spot or on the same kind.</li><li>Fill a cubby with <b>4 of one kind</b> and it sells.</li><li>Each customer <b>tips</b> when the goods they asked for sell. The strip at the top left shows who's <b>next</b>.</li><li>Sell the current customer's goods <b>before anything else</b> and tips double, then triple: a <b>tip streak</b>. Selling something else first resets the streak (they still tip).</li><li>Serve everyone in the order they arrive for <b>🎀 Perfect service</b>. It's optional, and always possible.</li><li>Finish within par for <b>3 stars</b>.</li><li>Each <b>shop day</b> is three shelves, then closing time. On the last shelf a regular may ask a <b>favor</b>: say yes and the queue changes to suit them, with par set to match. Keep it and they bring a keepsake for your shop.</li></ol>
-  <p>No timer. If a shelf gets stuck we'll tell you and take you back to a good spot. Undo is free, hints are free, and you get one extra cubby per level (hints and extra cubbies cap a level at 2 stars). Boxes show what's inside once they reach the top.</p>
+  <ol class="rules"><li><b>Tap a cubby</b> to pick up the top goods.</li><li><b>Tap another cubby</b> to set them down, on an empty cubby or on the same kind. Matching goods on top <b>move together</b>, as many as fit.</li><li>A cubby holds <b>4</b>. Fill one with <b>4 of one kind</b> and it sells.</li><li>Each customer <b>tips</b> when the goods they asked for sell. The strip at the top left shows who's <b>next</b>.</li><li>Sell the current customer's goods <b>before anything else</b> and tips double, then triple: a <b>tip streak</b>. Selling something else first resets the streak (they still tip).</li><li>Serve everyone in the order they arrive for <b>🎀 Perfect service</b>. It's optional, and always possible.</li><li>Finish within par for <b>3 stars</b>.</li><li>Each <b>shop day</b> is three shelves, then closing time. On the last shelf a regular may ask a <b>favor</b>: say yes and the queue changes to suit them, with par set to match. Keep it and they bring a keepsake for your shop.</li></ol>
+  <p>No timer. If a shelf gets stuck we'll tell you and take you back to a good spot. Undo is free, hints are free, and the <b>+ Cubby</b> button adds one empty cubby, free, once per level. Using a hint or the extra cubby caps that level at 2 stars. Boxes show what's inside once they reach the top.</p>
   <button class="big" id="ok">Let's sort</button>
   <p style="font-size:12px;margin-top:14px">Prototype v${VERSION} · Bright Harbor Games. <button class="linkbtn" id="reset">Reset progress</button></p>`,root=>{
     root.querySelector("#ok").onclick=closeSheet;
