@@ -242,6 +242,12 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 .pips svg{width:20px;height:20px;background:var(--paper);border-radius:6px}
 .favrule{background:#f6ecd2;border-radius:12px;padding:8px 12px;font-size:13px;color:var(--ink)!important;display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .favrule svg{width:26px;height:26px;vertical-align:middle}
+.qcmp{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.qcmp small{font-weight:800;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft)}
+.qrow{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+.qf{display:flex;align-items:center;background:var(--wall);border-radius:10px;padding:2px 4px 2px 2px}
+.qf svg{width:28px;height:28px}.qf svg:first-child{background:var(--paper);border-radius:8px}
+.qrow .ar{color:var(--ink-soft);font-weight:800}
 .keepprev{display:flex;gap:12px;align-items:center;background:var(--wall);border-radius:14px;padding:8px 10px;margin:10px 0}
 .keepprev .pk{width:110px;flex:none;border-radius:10px;overflow:hidden;background:var(--paper)}
 .keepprev .pk svg{display:block;width:100%;height:auto}
@@ -302,7 +308,7 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 <script>
 (function(){
 "use strict";
-const VERSION="0.6";
+const VERSION="0.6.1";
 /* ---------- goods art: chunky, outlined, 40x40 ---------- */
 const O='stroke="#3b2a1f" stroke-width="1.6" stroke-linejoin="round"';
 const KINDS=[
@@ -424,9 +430,10 @@ function solve(stacks,limit,jitter,R,pred){
     return false}
   const ok=dfs(start);solve.hitLimit=!ok&&nodes>limit;return ok?path.slice():null;
 }
-function bestPar(st,seed,pred){
+/* shortest route found over a few jittered searches */
+function bestRoute(st,seed,pred){
   const R=rng(seed);let best=null;
-  for(let i=0;i<6;i++){const s=solve(st,20000,i?12:0,R,pred);if(s&&(!best||s.length<best))best=s.length}
+  for(let i=0;i<6;i++){const s=solve(st,20000,i?12:0,R,pred);if(s&&(!best||s.length<best.length))best=s}
   return best;
 }
 
@@ -445,8 +452,8 @@ function makeLevel(n,spare,seed,boxes,must){
     if(pairs>n*1.2)continue;
     const sol=solve(st,n>=7?60000:25000);
     if(!sol||sol.length<Math.max(2,n*2-1))continue;
-    const par=bestPar(st,seed^0x5bd1)||sol.length;
-    return {stacks:st.map(s=>s.map((k,i)=>({k,h:!!boxes&&i<s.length-1&&R()<boxes}))),par};
+    const parSol=bestRoute(st,seed^0x5bd1)||sol;
+    return {stacks:st.map(s=>s.map((k,i)=>({k,h:!!boxes&&i<s.length-1&&R()<boxes}))),par:parSol.length,parSol};
   }
   return null;
 }
@@ -491,13 +498,13 @@ const dayFirst=d=>DAY0+(d-1)*PER;
 /* a favor sits on the day's last shelf: F must sell before B. Accepting reorders the queue and resets par for that rule */
 const DAYS=[
  {t:"Rainy Afternoon",theme:"rain",blurb:"Umbrellas by the door and the kettle on. A quiet, drizzly day on the high street.",
-  favor:{by:"june",F:2,B:3,keep:"bunting",ask:"Could you get my yarn ready before the books? I’m catching the four o’clock ferry.",thanks:"Thank you! I’ll make the ferry with time to spare."},
+  favor:{by:"june",F:2,B:3,keep:"bunting",ask:"Could you see to my yarn first? I’m catching the four o’clock ferry and can’t wait in line today.",thanks:"Thank you! I’ll make the ferry with time to spare."},
   next:"Mr. Okafor is bringing something for the reading corner."},
  {t:"Book Club Night",theme:"dusk",blurb:"The library book club meets next door tonight, and everyone wants something for the reading.",
-  favor:{by:"okafor",F:3,B:4,keep:"reading",ask:"Book club starts at seven. Could my books be ready before the candles? Theo is lighting them for the reading.",thanks:"Splendid. Chapter one, right on time."},
+  favor:{by:"okafor",F:3,B:4,keep:"reading",ask:"Book club starts at seven and I’m reading first. Could my books be ready before anyone else’s order?",thanks:"Splendid. Chapter one, right on time."},
   next:"It’s market day. Hank says he’s bringing something that buzzes."},
  {t:"Market Morning",theme:"morning",blurb:"Stalls are going up all along the street. Early birds want their goods before the crowds.",
-  favor:{by:"hank",F:1,B:0,keep:"plaque",ask:"Honey before the jam, please! I want my jars on the market stall before Mrs. Pell’s.",thanks:"First on the stall! Mrs. Pell will never let me hear the end of it."},
+  favor:{by:"hank",F:1,B:0,keep:"plaque",ask:"Honey first, please! I want my jars on the market stall before the gates open.",thanks:"First on the stall! Mrs. Pell will never let me hear the end of it."},
   next:"That’s every favor in this test build. More days and keepsakes are on the way."}
 ];
 const MORE=[{t:"Sunny Saturday",theme:"morning"},{t:"Foggy Monday",theme:"rain"},{t:"Late Opening",theme:"dusk"},{t:"Quiet Tuesday",theme:"default"}];
@@ -553,6 +560,15 @@ const PEOPLE=[
    "The grandkids helped with the harvest. Sticky everything.",
    "Handing the old hives to my grandson. He's a natural."]}
 ];
+/* once a regular's story is told, short everyday lines take turns instead of replaying the ending */
+const AFTER={
+ pell:["Lucy says hello. She’s practising her jam face.","The usual jar, dear. Some things shouldn’t change."],
+ theo:["Sam sends their love. And a request for more candles.","Our anniversary is coming up. You know what that means."],
+ june:["The knitting club says hi! We’re up to twelve now.","More yarn. Those blankets won’t knit themselves."],
+ okafor:["Chapter two of the sequel. The cat gets a bigger part.","Just browsing. Fine, I’ll take the usual."],
+ rosa:["Gerald has a new pot. He’s insufferable about it.","Hello, neighbor! Borrowing a cup of soil, as one does."],
+ hank:["My grandson’s first honey. Taste it before you judge.","The bees and I thank you kindly."]};
+const storyLine=(p,i)=>i<p.story.length?p.story[i]:AFTER[p.id][(i-p.story.length)%AFTER[p.id].length];
 /* ---------- people: full characters, feet at (0,0) ---------- */
 const OL='stroke="#3b2a1f" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"';
 const LOOKS={
@@ -764,6 +780,7 @@ function startLevel(opts){
     name="Level "+L;
   }
   const dy=daily?null:dayOf(L);
+  if(!daily&&save.at!==L){save.at=L;persist()}
   if(dy)name=`Day ${dy.d} · ${dy.b}/${PER}`;
   const kindsIn=[...new Set(made.stacks.flat().map(x=>x.k))];
   clearTimeout(sayTimer);$("say").classList.remove("show");$("say").innerHTML="";
@@ -772,12 +789,12 @@ function startLevel(opts){
      kinds:kindsIn,sold:[],cust:null,custs:[],tips:0,streak:0,helped:false,hand:L===1&&!daily,handStep:0,
      seed:daily?hash("order"+todayStr()):hash("order"+L),day:dy,theme:dy?dayInfo(dy.d).theme:"default",
      favorOffer:made.favor||null,favor:null};
-  buildQueue();
+  buildQueue(null,[made.parSol]);
   renderAll();
   // one-time cards, shown one after another
   const cards=[];
   if(dy&&dy.b===1&&!save.dayOpen[dy.d])cards.push(next=>showDay(dy.d,next));
-  if(G.favorOffer&&!keep(G.favorOffer.keep))cards.push(next=>showFavor(next));
+  if(G.favorOffer)cards.push(next=>showFavor(next));
   if(made.stacks.some(s=>s.some(x=>x.h))&&!save.seen.boxes)cards.push(next=>showIntro("boxes",next));
   else if(G.medalOk&&!G.hand&&!save.seen.service)cards.push(next=>showIntro("service",next));
   const run=()=>{const c=cards.shift();if(c)c(run);else closeSheet()};
@@ -785,11 +802,18 @@ function startLevel(opts){
   else if(dy&&dy.b>1&&opts.resume)toast(`${dayInfo(dy.d).t} · shelf ${dy.b} of ${PER}`);
 }
 /* ---------- favors ---------- */
+/* where a level button takes you, in day terms */
+function placeName(L){const dy=dayOf(L);if(!dy)return "Level "+L;
+  if(G&&G.day&&G.day.d===dy.d)return `Shelf ${dy.b} of ${PER}`;
+  return dy.b===1?`Day ${dy.d}: ${dayInfo(dy.d).t}`:`Day ${dy.d}, shelf ${dy.b}`}
 const favorFor=L=>{const dy=dayOf(L);if(!dy||dy.b!==PER)return null;const D=DAYS[dy.d-1];return D&&D.favor};
-const favPred=(F,B)=>{const full=(T,k)=>T.some(s=>s.length===CAP&&s[0]===k&&s.every(x=>x===k));return T=>!(full(T,B)&&!full(T,F))};
-/* the sale order the queue would use, from a solver route (optionally obeying a favor) */
-function orderFrom(st,seed,pred){
-  const sol=solve(st,40000,10,rng(seed),pred);
+/* a favor: the favored customer's goods are the first thing sold */
+const favPred=F=>{const full=s=>s.length===CAP&&s.every(x=>x===s[0]);return T=>!(T.some(s=>full(s)&&s[0]!==F)&&!T.some(s=>full(s)&&s[0]===F))};
+/* the sale order the queue uses comes from the shortest route found (the par route among them),
+   so 3 stars and Perfect service can always be had together */
+function orderFrom(st,seed,pred,known){
+  let sol=bestRoute(st,seed,pred);
+  for(const k of known||[])if(k&&(!sol||k.length<sol.length))sol=k;
   if(!sol)return null;
   const S=st.map(s=>s.slice()),order=[];
   const full=s=>s.length===CAP&&s.every(x=>x===s[0]);
@@ -797,43 +821,42 @@ function orderFrom(st,seed,pred){
     S[b].push(...S[a].splice(S[a].length-n,n));if(full(S[b])&&!order.includes(S[b][0]))order.push(S[b][0])}
   return {order,sol};
 }
-/* a favor board: both kinds on the shelf, the usual queue serves B first, and a route exists that sells F first.
-   Prefer boards where the favor really changes the plan (it costs extra moves, so par is reset for it) */
+/* a favor board: the usual queue does not start with the favored goods, and a route exists that sells them first.
+   Prefer boards where the favor really changes the plan (it costs a move, so par is set from the favor route) */
 const FAVCACHE={};
 function favorLevel(L,fv){
   if(L in FAVCACHE)return FAVCACHE[L];
-  const spec=levelSpec(L),n=Math.max(4,spec.n),seed=hash("order"+L),pred=favPred(fv.F,fv.B);
+  const spec=levelSpec(L),n=Math.max(4,spec.n),seed=hash("order"+L),pred=favPred(fv.F);
   let pick=null;
-  for(let t=0;t<40;t++){
+  for(let t=0;t<80;t++){
     const m=makeLevel(n,2,hash("fav"+L+"#"+t),spec.boxes,[fv.F,fv.B]);if(!m)continue;
     const st=m.stacks.map(s=>s.map(x=>x.k));
-    const nat=orderFrom(st,seed);if(!nat||nat.order.indexOf(fv.B)>nat.order.indexOf(fv.F))continue;
-    const fo=orderFrom(st,seed,pred);if(!fo)continue;
-    const fpar=bestPar(st,seed^0x5bd1,pred)||fo.sol.length;
-    const cand=Object.assign(m,{fpar:Math.max(fpar,m.par),favor:fv});
-    if(fpar>m.par){pick=cand;break}
+    const nat=orderFrom(st,seed,null,[m.parSol]);if(!nat||nat.order[0]===fv.F)continue;
+    const fsol=bestRoute(st,seed^0x5bd1,pred);if(!fsol)continue;
+    const cand=Object.assign(m,{par:nat.sol.length,fsol,favor:fv});
+    if(fsol.length>cand.par){pick=cand;break}
     if(!pick)pick=cand;
   }
   return FAVCACHE[L]=pick;
 }
 function favorState(){
-  if(!G.favor)return null;
-  const f=G.sold.indexOf(G.favor.F),b=G.sold.indexOf(G.favor.B);
-  if(f>=0&&(b<0||f<b))return "done";
-  return b>=0?"missed":"open";
+  if(!G.favor||!G.sold.length)return G.favor?"open":null;
+  return G.sold[0]===G.favor.F?"done":"missed";
 }
 function acceptFavor(){
-  const fv=G.favorOffer;G.favor=fv;G.par=FAVCACHE[G.level].fpar;
-  buildQueue(favPred(fv.F,fv.B));G.lastCust=undefined;renderAll();
+  const fv=G.favorOffer;G.favor=fv;
+  buildQueue(favPred(fv.F),[FAVCACHE[G.level].fsol]);G.lastCust=undefined;renderAll();
   toast("Favor accepted · the queue has changed");
 }
+const queueFaces=cs=>cs.map((c,i)=>`<span class="qf">${faceSvg(c.p)}${art(c.want)}</span>${i<cs.length-1?`<span class="ar">›</span>`:""}`).join("");
 function showFavor(next){
-  const fv=G.favorOffer,p=PEOPLE.find(x=>x.id===fv.by),K=KEEPS[fv.keep];
-  const other=G.custs.find(c=>c.want===fv.B);
+  const fv=G.favorOffer,p=PEOPLE.find(x=>x.id===fv.by),K=KEEPS[fv.keep],had=keep(fv.keep);
+  const fq=makeQueue(favPred(fv.F),[FAVCACHE[G.level].fsol]);
   sheet(`<h3>A favor from ${p.nm}</h3>
     <div class="moment">${faceSvg(p)}<div><b>${p.nm}</b><p>“${fv.ask}”</p></div></div>
-    <p class="favrule"><b>If you say yes:</b> ${art(fv.F)} sells before ${art(fv.B)}${other?` (${other.p.nm}’s ${KINDS[fv.B].name.toLowerCase()})`:""}. The queue and 🎀 follow the new order, and par is set for it, so your stars stay fair.</p>
-    <div class="keepprev"><div class="pk">${keepArt(fv.keep)}</div><div><b>${p.nm}’s thanks: ${K.nm}</b><small>${K.d}. Delivered at closing time.</small></div></div>
+    <div class="favrule"><b>If you say yes,</b> ${p.nm} goes first: ${art(fv.F)} must sell before anything else. The queue and 🎀 follow the new order, and par is set for it, so 3 stars and 🎀 are still possible together.</div>
+    <div class="qcmp"><div><small>Usual queue</small><div class="qrow">${queueFaces(G.custs)}</div></div><div><small>With the favor</small><div class="qrow">${queueFaces(fq.custs)}</div></div></div>
+    <div class="keepprev"><div class="pk">${keepArt(fv.keep)}</div><div><b>${had?`You have ${p.nm}’s ${K.nm.toLowerCase()}`:`${p.nm}’s thanks: ${K.nm}`}</b><small>${had?"Help again just for the fun of it. It won’t add a second one.":`${K.d}. Delivered at closing time.`}</small></div></div>
     <p style="font-size:13px">Say no and it’s the usual shelf. You can take the favor another time from the Levels map.</p>
     <div class="row2"><button class="big alt" id="favNo">Not today</button><button class="big" id="favYes">Help ${p.nm}</button></div>`,root=>{
       root.querySelector("#favYes").onclick=()=>{acceptFavor();next()};
@@ -860,7 +883,7 @@ function renderFavNote(){
   if(!G.favor){el.hidden=true;return}
   const st=favorState(),p=PEOPLE.find(x=>x.id===G.favor.by);
   el.hidden=false;el.className="favnote"+(st==="open"?"":" "+st);
-  el.innerHTML=`<span class="fc">${faceSvg(p)}</span>${art(G.favor.F)}<span aria-hidden="true">before</span>${art(G.favor.B)}<span class="st" aria-hidden="true">${st==="done"?"✓":st==="missed"?"✗":""}</span><span class="sr">${p.nm}’s favor: ${KINDS[G.favor.F].name.toLowerCase()} before ${KINDS[G.favor.B].name.toLowerCase()}. ${st==="done"?"Done.":st==="missed"?"Missed. Undo to try again.":"Not done yet."}</span>`;
+  el.innerHTML=`<span class="fc">${faceSvg(p)}</span><span aria-hidden="true">first:</span>${art(G.favor.F)}<span class="st" aria-hidden="true">${st==="done"?"✓":st==="missed"?"✗":""}</span><span class="sr">${p.nm}’s favor: ${KINDS[G.favor.F].name.toLowerCase()} sells first. ${st==="done"?"Done.":st==="missed"?"Missed. Undo to try again.":"Not done yet."}</span>`;
 }
 /* one-board lessons, shown the first time a new idea turns up */
 const INTROS={
@@ -878,22 +901,31 @@ function showIntro(id,next){
 
 /* one customer per kind on the shelf, in a fixed order. The order comes from a real solution,
    so serving everyone in turn (Perfect service) is always possible. */
-const saleOrder=pred=>orderFrom(G.stacks.map(s=>s.map(x=>x.k)),G.seed,pred);
-function buildQueue(pred){
+const saleOrder=(pred,known)=>orderFrom(G.stacks.map(s=>s.map(x=>x.k)),G.seed,pred,known);
+function buildQueue(pred,known){
+  const q=makeQueue(pred,known);
+  G.medalOk=q.medalOk;G.orderSol=q.orderSol;G.custs=q.custs;
+  if(q.orderSol)G.par=q.orderSol.length;
+  G.cust=curCust();
+}
+function makeQueue(pred,known){
   const R=rng(G.seed^0x9e37);
-  const so=saleOrder(pred);
-  G.medalOk=!!so;G.orderSol=so?so.sol:null;
+  const so=saleOrder(pred,known);
+  const medalOk=!!so,orderSol=so?so.sol:null;
   let order=so?so.order:G.kinds.slice();
   if(!so)for(let i=order.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[order[i],order[j]]=[order[j],order[i]]}
   const pool=PEOPLE.map((p,i)=>i);for(let i=pool.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
   const used=new Set();
-  G.custs=order.map(want=>{
-    let pi=pool.find(i=>PEOPLE[i].fav===want&&!used.has(i));
+  // regulars whose favorite is on the shelf come for it first; others fill the remaining requests
+  const who={};
+  order.forEach(want=>{const pi=pool.find(i=>PEOPLE[i].fav===want);if(pi!=null){who[want]=pi;used.add(pi)}});
+  const custs=order.map(want=>{
+    let pi=who[want];
     if(pi==null)pi=pool.find(i=>!used.has(i));
     if(pi==null){used.clear();pi=pool.find(i=>PEOPLE[i].fav!==want)??pool[0]}
     used.add(pi);return {p:PEOPLE[pi],want,st:0};
   });
-  G.cust=curCust();
+  return {custs,medalOk,orderSol};
 }
 const curCust=()=>G.custs.find(c=>!c.st)||null;
 function renderFront(happy){
@@ -1073,7 +1105,7 @@ function sell(k){
     const p=who.p,step=(save.story[p.id]||0)+(G.gain[p.id]||0);
     G.gain[p.id]=(G.gain[p.id]||0)+1;
     G.servedNow=G.servedNow.filter(x=>x!==p.id).concat(p.id);
-    var line=p.story[Math.min(step,p.story.length-1)];
+    var line=storyLine(p,step);
   }else G.streak=0;
   G.tips+=coins;
   return {k,who,cur,coins,inOrder,mult:Math.min(3,G.streak),line,fav};
@@ -1108,7 +1140,7 @@ function celebrateSet(j,ev){
   if(ev.fav){const fp=PEOPLE.find(x=>x.id===G.favor.by);
     later(()=>{renderFavNote();
       if(ev.fav==="done"){toast(`Favor done! ${fp.nm} will stop by at closing`);say(`<b>${fp.nm}:</b> ${G.favor.thanks}`)}
-      else toast(`${KINDS[G.favor.B].name} went first · favor missed. Undo to try again`)},1500)}
+      else toast(`${KINDS[G.sold[0]].name} sold first · favor missed. Undo to try again`)},1500)}
   flyCoins(c,Math.min(6,ev.coins));renderHud();
 }
 /* where the customer stands in the shop picture */
@@ -1147,6 +1179,7 @@ function win(){
   G.gain={};
   // favors: a kept favor earns its keepsake, handed over at closing (or right away on a replay)
   let gift=null;const closing=dy&&dy.b===PER&&firstClear;
+  const favDone=favorState()==="done",again=favDone&&keep(G.favorOffer.keep);
   if(G.favorOffer&&!keep(G.favorOffer.keep)){const rec=save.days[dy.d]=save.days[dy.d]||{};
     const fs=favorState();
     if(fs==="done"){rec.fav="done";gift=G.favorOffer.keep;if(!closing)save.keeps.push(gift)}
@@ -1171,13 +1204,14 @@ function win(){
   const shopLine=nextUp?`<div class="prog"><span>Next for your shop: ${nextUp.ic} ${nextUp.nm}</span><span>${Math.min(save.coins,nextUp.cost)}/${nextUp.cost}</span></div><div class="bar"><i id="upBar" style="width:${Math.min(100,(save.coins-earned)/nextUp.cost*100)}%"></i></div>`:`<p>Your shop is fully fixed up.</p>`;
   const regs=G.servedNow.map(id=>{const p=PEOPLE.find(x=>x.id===id),n=Math.min(6,save.story[id]||0);return `<div>${faceSvg(p)}${p.nm} <span class="h">${"♥".repeat(n)}${"♡".repeat(6-n)}</span></div>`}).join("");
   const lastId=G.servedNow[G.servedNow.length-1],lastP=lastId&&PEOPLE.find(x=>x.id===lastId);
-  const hn=lastP?Math.min(6,save.story[lastId]):0;
-  const moment=lastP?`<div class="moment">${faceSvg(lastP)}<div><b>${lastP.nm}</b> <span class="hearts">${[0,1,2,3,4,5].map(i=>`<span class="${i<hn-1?"on":i===hn-1?"on new":""}">${i<hn?"♥":"♡"}</span>`).join("")}</span><p>“${lastP.story[Math.min(save.story[lastId],lastP.story.length)-1]}”</p></div></div>`:"";
+  const hraw=lastP?save.story[lastId]:0,hn=Math.min(6,hraw),grew=hraw<=6;
+  const moment=lastP?`<div class="moment">${faceSvg(lastP)}<div><b>${lastP.nm}</b> <span class="hearts">${[0,1,2,3,4,5].map(i=>`<span class="${i<hn-1||(!grew&&i<hn)?"on":i===hn-1?"on new":""}">${i<hn?"♥":"♡"}</span>`).join("")}</span><p>“${storyLine(lastP,hraw-1)}”</p></div></div>`:"";
   const service=G.medalOk?`<p class="service">${perfect?`🎀 <b>Perfect service!</b> Everyone served in the order they came in.`:`${inOrder} of ${G.custs.length} customers served in order. Serve each one before selling anything else for 🎀.`}</p>`:"";
   const full=firstClear||(G.daily&&save.daily.doneMoves===G.moves&&save.daily.last===todayStr());
   const nextL=Math.min(L+1,save.level);
-  const favLine=G.favor?`<p class="service">${gift?`🤝 <b>Favor kept!</b> ${PEOPLE.find(x=>x.id===G.favor.by).nm} ${closing?"will drop by at closing time.":"has something for you."}`:`🤝 Favor missed this time. Try again from the Levels map whenever you like.`}</p>`:"";
-  const nextLabel=G.daily?"Play on":closing?"Close up shop 🌙":dy&&nextL===L+1&&dayOf(nextL).d===dy.d?`Shelf ${dy.b+1} of ${PER}`:"Level "+nextL;
+  const fnm=G.favor&&PEOPLE.find(x=>x.id===G.favor.by).nm;
+  const favLine=G.favor?`<p class="service">${gift?`🤝 <b>Favor kept!</b> ${fnm} ${closing?"will drop by at closing time.":"has something for you."}`:again?`🤝 <b>Favor kept again.</b> ${fnm} waves from the door.`:`🤝 Favor missed this time. Try again from the Levels map whenever you like.`}</p>`:"";
+  const nextLabel=G.daily?"Play on":closing?"Close up shop 🌙":placeName(nextL);
   sheet(`<div class="${full?"seq":""}" id="winBody"><h3>${G.daily?"Daily Shelf done":"Shelves sorted!"}</h3>${dy?`<p class="sub" style="margin:-4px 0 0;font-weight:800;font-size:13px">${dayInfo(dy.d).t} · shelf ${dy.b} of ${PER}</p>`:""}
     ${moment}
     <div class="s1"><div class="bigstars">${starSpans(stars)}</div>
@@ -1188,12 +1222,12 @@ function win(){
     ${extra}
     <div class="row2"><button class="big alt" id="goMap">Levels</button>${stars<3&&!G.daily?`<button class="big alt" id="goRetry">Try again</button>`:""}<button class="big" id="goNext">${nextLabel}</button></div>
     ${gift&&!closing?`<button class="big alt" id="goGift">${KEEPS[gift].ic} See what ${PEOPLE.find(x=>x.id===KEEPS[gift].by).nm} brought</button>`:""}
-    ${nextUp&&save.coins>=nextUp.cost&&!closing?`<button class="big alt" id="goShop">Fix up shop, then ${G.daily?"play on":"Level "+nextL}</button>`:""}</div></div>`,
+    ${nextUp&&save.coins>=nextUp.cost&&!closing?`<button class="big alt" id="goShop">Fix up shop, then ${G.daily?"play on":placeName(nextL)}</button>`:""}</div></div>`,
     root=>{
       const wb=root.querySelector("#winBody");root.querySelector(".card").addEventListener("pointerdown",()=>wb.classList.remove("seq"),{once:true});
       const ub=root.querySelector("#upBar");if(ub&&nextUp)setTimeout(()=>ub.style.width=Math.min(100,save.coins/nextUp.cost*100)+"%",250);
       root.querySelector("#goNext").onclick=closing?()=>openClosing(dy.d,gift):()=>{closeSheet();startLevel(G.daily?{}:{level:nextL})};
-      const gg=root.querySelector("#goGift");if(gg)gg.onclick=()=>revealKeep(gift,"default",()=>{closeSheet();startLevel({level:nextL})},"Level "+nextL);
+      const gg=root.querySelector("#goGift");if(gg)gg.onclick=()=>revealKeep(gift,"default",()=>{closeSheet();startLevel({level:nextL})},placeName(nextL));
       const rt=root.querySelector("#goRetry");if(rt)rt.onclick=()=>{closeSheet();startLevel({level:L})};
       root.querySelector("#goMap").onclick=openMenu;
       const gs=root.querySelector("#goShop");if(gs)gs.onclick=()=>{startLevel(G.daily?{}:{level:nextL});openShop()};
@@ -1212,7 +1246,7 @@ $("tRestart").onclick=()=>{if(G.over)return;hideStuck();G.revealed=null;G.stacks
 $("tExtra").onclick=()=>{if(G.over||G.extraUsed)return;hideStuck();G.extraUsed=true;G.helped=true;G.stacks.push([]);G.extraIdx=G.stacks.length-1;sfx.bell();toast("An extra cubby, on the house");renderAll()};
 $("tHint").onclick=()=>{
   if(G.over)return;
-  let sol=favorState()==="open"?solve(plain(),40000,0,null,favPred(G.favor.F,G.favor.B)):null;
+  let sol=favorState()==="open"?solve(plain(),40000,0,null,favPred(G.favor.F)):null;
   if(!sol)sol=solve(plain(),40000);
   if(!sol||!sol.length){if(!solve.hitLimit)checkStuck();else toast("Try an Undo, then ask again");return}
   const [a,b]=sol[0];G.sel=a;G.hintTo=b;G.helped=true;G.hand=false;sfx.pick();
@@ -1339,7 +1373,7 @@ $("btnShop").onclick=openShop;$("btnMenu").onclick=openMenu;
 window.addEventListener("resize",()=>{if(G){layout();drawArrow()}});
 
 window.__shelvy={get G(){return G},solve,makeLevel,levelSpec,tap,startLevel,isStuck,canMove,revealUpgrade,UPS,save:()=>save,favorState,favPred,dayOf,openClosing,KEEPS};
-startLevel({resume:true});
+startLevel({resume:true,level:save.at&&save.at<=save.level?save.at:save.level});
 })();
 </script>
 </body>
