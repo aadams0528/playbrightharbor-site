@@ -48,6 +48,7 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 .say.show{opacity:1;transform:none}
 .say b{color:var(--butter)}
 .queue{position:absolute;left:8px;top:6px;display:flex;align-items:center;gap:5px;background:rgba(251,248,241,.92);border-radius:12px;padding:3px 7px 3px 8px;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);box-shadow:0 2px 0 rgba(0,0,0,.1)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .queue .q{display:flex;align-items:center;margin-left:2px}
 .queue .q svg:first-child{width:22px;height:22px;background:#fff;border-radius:50%}
 .queue .q svg:last-child{width:18px;height:18px;margin-left:-3px}
@@ -237,8 +238,8 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
   <div class="cols"><div class="side">
   <div class="front" id="front">
     <div id="frontSvg"></div>
-    <div class="bubble" id="bubble"></div>
-    <div class="queue" id="queue" aria-label="Next customers"></div>
+    <div class="bubble" id="bubble" aria-live="polite"></div>
+    <div class="queue" id="queue"></div>
     <div class="say" id="say"></div>
     <div class="toast" id="toast"></div>
   </div>
@@ -258,7 +259,7 @@ button:focus-visible{outline:3px solid var(--plum);outline-offset:2px}
 <script>
 (function(){
 "use strict";
-const VERSION="0.5";
+const VERSION="0.5.1";
 /* ---------- goods art: chunky, outlined, 40x40 ---------- */
 const O='stroke="#3b2a1f" stroke-width="1.6" stroke-linejoin="round"';
 const KINDS=[
@@ -680,18 +681,22 @@ function startLevel(opts){
   }
   const kindsIn=[...new Set(made.stacks.flat().map(x=>x.k))];
   clearTimeout(sayTimer);$("say").classList.remove("show");$("say").innerHTML="";
-  G={id:++gameId,over:false,servedNow:[],stacks:made.stacks,init:JSON.stringify(made.stacks),par:made.par,name,daily,level:L,moves:0,sel:-1,hintTo:-1,hist:[],extraUsed:false,extraIdx:null,
+  G={id:++gameId,over:false,servedNow:[],gain:{},stacks:made.stacks,init:JSON.stringify(made.stacks),par:made.par,name,daily,level:L,moves:0,sel:-1,hintTo:-1,hist:[],extraUsed:false,extraIdx:null,
      kinds:kindsIn,sold:[],cust:null,custs:[],tips:0,streak:0,helped:false,hand:L===1&&!daily,handStep:0,
      seed:daily?hash("order"+todayStr()):hash("order"+L)};
   buildQueue();
   renderAll();
   if(made.stacks.some(s=>s.some(x=>x.h))&&!save.seen.boxes)showIntro("boxes");
+  else if(G.medalOk&&!G.hand&&!save.seen.service)showIntro("service");
 }
 /* one-board lessons, shown the first time a new idea turns up */
 const INTROS={
   boxes:{t:"Mystery boxes",art:()=>`${art(-1)}<span>→</span>${art(1)}`,
     p:"Some goods arrive boxed up. You can't see what's inside until you move everything above it. Plan a step ahead!",
-    p2:"Boxes move like any other goods, and they open as soon as they reach the top."}
+    p2:"Boxes move like any other goods, and they open as soon as they reach the top."},
+  service:{t:"Perfect service",art:()=>`<span>🎀</span>`,
+    p:"Customers line up in order. The strip at the top left shows who's next.",
+    p2:"Sell each customer's goods before anything else and you keep the 🎀 ribbon. It's optional and always possible. Your stars only count moves."}
 };
 function showIntro(id){
   const I=INTROS[id];save.seen[id]=1;persist();
@@ -732,12 +737,12 @@ function renderFront(happy){
   const walk=!!G.cust&&G.lastCust!==tag;if(G.cust)G.lastCust=tag;
   $("frontSvg").innerHTML=frontSvg(p,happy,walk);
   const b=$("bubble");
-  if(G.cust){b.innerHTML=`${art(G.cust.want)}<span>${G.cust.p.nm}</span>${G.streak>=1?`<span class="x">x${Math.min(3,G.streak+1)}</span>`:""}`;b.title=`${G.cust.p.nm} would like ${KINDS[G.cust.want].name.toLowerCase()}`}
+  if(G.cust){b.innerHTML=`${art(G.cust.want)}<span aria-hidden="true">${G.cust.p.nm}</span>${G.streak>=1?`<span class="x" aria-hidden="true">x${Math.min(3,G.streak+1)}</span>`:""}<span class="sr">Now serving ${G.cust.p.nm}, who wants ${KINDS[G.cust.want].name.toLowerCase()}${G.streak>=1?`. Tip streak pays x${Math.min(3,G.streak+1)}`:""}.</span>`;b.title=`${G.cust.p.nm} would like ${KINDS[G.cust.want].name.toLowerCase()}`}
   else b.innerHTML=`<span>All sold! 🎉</span>`;
   // who's next: the two customers after the current one
   const i0=G.cust?G.custs.indexOf(G.cust):G.custs.length;
   const next=G.custs.slice(i0+1).filter(x=>!x.st).slice(0,2);
-  $("queue").innerHTML=next.length?`<span>Next</span>${next.map(x=>`<span class="q" title="${x.p.nm}: ${KINDS[x.want].name}">${faceSvg(x.p)}${art(x.want)}</span>`).join("")}`:"";
+  $("queue").innerHTML=next.length?`<span aria-hidden="true">Next</span>${next.map(x=>`<span class="q" title="${x.p.nm}: ${KINDS[x.want].name}">${faceSvg(x.p)}${art(x.want)}</span>`).join("")}<span class="sr">Next customers: ${next.map(x=>`${x.p.nm} wants ${KINDS[x.want].name.toLowerCase()}`).join(", then ")}.</span>`:"";
   $("queue").hidden=!next.length;
 }
 let sayTimer=0;
@@ -841,7 +846,7 @@ function tap(i){
   const n=canMove(G.stacks,G.sel,i);
   if(!n){bad(i);return}
   const doneBefore=G.stacks.map(isDone);
-  G.hist.push(JSON.stringify({s:G.stacks,sold:G.sold,m:G.moves,t:G.tips,k:G.streak,cs:G.custs.map(c=>c.st)}));
+  G.hist.push(JSON.stringify({s:G.stacks,sold:G.sold,m:G.moves,t:G.tips,k:G.streak,cs:G.custs.map(c=>c.st),g:G.gain,sn:G.servedNow}));
   const A=G.stacks[G.sel];
   const hidden=[];G.stacks.forEach((s2,a)=>s2.forEach((x,j)=>{if(x.h)hidden.push([a,j])}));
   const moved=A.splice(A.length-n,n);moved.forEach(x=>x.h=false);st.push(...moved);
@@ -896,13 +901,14 @@ function sell(k){
     if(who===cur){G.streak++;inOrder=true;who.st=1}
     else{G.streak=0;who.st=2}
     coins=3*(inOrder?Math.min(3,G.streak):1);
-    const p=who.p,step=save.story[p.id]||0;
-    save.story[p.id]=step+1;save.served++;persist();
-    if(!G.servedNow.includes(p.id))G.servedNow.push(p.id);
-    G.lastLine={id:p.id,line:p.story[Math.min(step,p.story.length-1)]};
+    // story progress is held on the board and only saved when the level is finished, so Undo takes it back
+    const p=who.p,step=(save.story[p.id]||0)+(G.gain[p.id]||0);
+    G.gain[p.id]=(G.gain[p.id]||0)+1;
+    G.servedNow=G.servedNow.filter(x=>x!==p.id).concat(p.id);
+    var line=p.story[Math.min(step,p.story.length-1)];
   }else G.streak=0;
   G.tips+=coins;
-  return {k,who,cur,coins,inOrder,mult:Math.min(3,G.streak)};
+  return {k,who,cur,coins,inOrder,mult:Math.min(3,G.streak),line};
 }
 function celebrateSet(j,ev){
   const st=G.stacks[j];if(!isDone(st))return;
@@ -914,7 +920,7 @@ function celebrateSet(j,ev){
   if(!ev)return;
   if(ev.who){
     const p=ev.who.p;
-    say(`<b>${p.nm}:</b> ${G.lastLine&&G.lastLine.id===p.id?G.lastLine.line:p.story[0]}`);
+    say(`<b>${p.nm}:</b> ${ev.line}`);
     if(ev.inOrder){
       toast(ev.mult>1?`Tip streak x${ev.mult}! +${ev.coins}`:`${p.nm} tipped +${ev.coins}`);
       flyBag(c,k);renderFront(true);setTimeout(sfx.bell,250);
@@ -953,6 +959,8 @@ function win(){
   if(G.daily)earned+=25;
   else if(!prev){firstClear=true;earned+=5+G.kinds.length+stars*2}
   else if(stars>prev)earned+=(stars-prev)*3;
+  for(const id in G.gain){save.story[id]=(save.story[id]||0)+G.gain[id];save.served+=G.gain[id]}
+  G.gain={};
   const inOrder=G.custs.filter(c=>c.st===1).length,perfect=G.medalOk&&inOrder===G.custs.length;
   if(perfect&&(G.daily||!save.service[L])){earned+=5;if(!G.daily)save.service[L]=1}
   save.coins+=earned;
@@ -1003,10 +1011,10 @@ function selectShare(root){const el=root.querySelector("#shareTxt");const r=docu
 
 /* tools */
 function undoOnce(){const h=JSON.parse(G.hist.pop());G.stacks=h.s;G.sold=h.sold;G.moves=h.m;G.tips=h.t;G.streak=h.k;
-  G.custs.forEach((c,i)=>c.st=h.cs[i]);G.cust=curCust();
+  G.custs.forEach((c,i)=>c.st=h.cs[i]);G.cust=curCust();G.gain=h.g;G.servedNow=h.sn;
   if(G.extraIdx!=null&&G.extraIdx>=G.stacks.length)G.extraIdx=null}
 $("tUndo").onclick=()=>{if(G.over||!G.hist.length)return;hideStuck();undoOnce();G.sel=-1;G.hintTo=-1;G.revealed=null;sfx.drop();renderAll()};
-$("tRestart").onclick=()=>{if(G.over)return;hideStuck();G.revealed=null;G.stacks=JSON.parse(G.init);G.moves=0;G.sel=-1;G.hintTo=-1;G.hist=[];G.sold=[];G.tips=0;G.streak=0;G.extraUsed=false;G.extraIdx=null;G.helped=false;G.custs.forEach(c=>c.st=0);G.cust=curCust();renderAll()};
+$("tRestart").onclick=()=>{if(G.over)return;hideStuck();G.revealed=null;G.stacks=JSON.parse(G.init);G.moves=0;G.sel=-1;G.hintTo=-1;G.hist=[];G.sold=[];G.tips=0;G.streak=0;G.extraUsed=false;G.extraIdx=null;G.helped=false;G.custs.forEach(c=>c.st=0);G.cust=curCust();G.gain={};G.servedNow=[];renderAll()};
 $("tExtra").onclick=()=>{if(G.over||G.extraUsed)return;hideStuck();G.extraUsed=true;G.helped=true;G.stacks.push([]);G.extraIdx=G.stacks.length-1;sfx.bell();toast("An extra cubby, on the house");renderAll()};
 $("tHint").onclick=()=>{
   if(G.over)return;
