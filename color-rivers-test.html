@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Copied from aadams0528/color-rivers src/game.html. Unlisted test page: not linked from the site. Replace this file to update. -->
-<title>Color Rivers (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230b2236%22/%3E%3Cpath d=%22M8 22c14 0 14 20 28 20s14-20 20-20%22 stroke=%22%23ff5d6c%22 stroke-width=%228%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M8 42c14 0 14-20 28-20s14 20 20 20%22 stroke=%22%234da3ff%22 stroke-width=%228%22 fill=%22none%22 stroke-linecap=%22round%22 opacity=%22.9%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%226%22 fill=%22%23b678ff%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -457,6 +456,7 @@ let prog=(()=>{
 function saveProg(){store.set("prog3",prog);if(window.CR_CLOUD)window.CR_CLOUD.changed(prog);}
 // Hook for the shared studio cloud save (native wrapper: Firebase sign-in with Apple/Google). It calls
 // CR_SAVE.merge(cloudCopy) after sign-in, uploads CR_SAVE.get(), and sets window.CR_CLOUD={changed(p)} to hear of saves.
+// In the phone app, src/native.js sets window.CR_NATIVE={track(name,params),settings(box)} for analytics and the sign-in row.
 window.CR_SAVE={game:"color-rivers",version:3,get:()=>JSON.parse(JSON.stringify(prog)),
   merge(cloud){prog=mergeProg(prog,cloud);saveProg();updateStars();updateDailyBtn();return this.get();}};
 // Open levels: everything up to one past the furthest level with stars (or all, in tester mode).
@@ -599,7 +599,9 @@ function resize(){
   cv.style.width=cs*G.w+"px";cv.style.height=cs*G.h+"px";cv.style.margin="0 auto";
   cv.width=cs*G.w*dpr;cv.height=cs*G.h*dpr;
 }
-window.addEventListener("resize",()=>G&&resize());
+// Re-measure the tip too: a phone app's web view can start before the screen has its real size, and a tip
+// measured then is far too tall (Alan's Android, Oct 16: board shrunk and pushed down, buttons cut off).
+window.addEventListener("resize",()=>{if(G){reserveTip();resize();}});
 
 // ---------- sound ----------
 let ac=null;
@@ -768,13 +770,13 @@ function snapHome(e){
 // side, so there are two visible tips to drag on to the nests.
 // Pulling the stream back out of a delta takes its branches with it (Alan, Oct 15). Only deltas that were fed when the
 // drag began are cleared, so branches drawn before their feeder still work.
-let fedAtDown=[];
+let fedAtDown=[],lastDrawn=-1;
 const fedDeltas=()=>G.cells.map((d,i)=>d.t==="delta"&&paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i)?i:-1).filter(i=>i>=0);
 function unfeed(){const now=fedDeltas();fedAtDown.forEach(i=>{if(!now.includes(i))paths.forEach((q,k)=>{if(q[0]===i)paths[k]=[i];});});fedAtDown=[];}
 function sprout(){G.cells.forEach((d,i)=>{if(d.t!=="delta"||!paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i))return;
   paths.forEach((q,k)=>{if(q[0]!==i||q.length!==1)return;const j=branchNo(paths,k);tryStep(G,paths,k,i+d.outs[j]);});});}
 function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null;unfeed();sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
-  judgeRetrace(active);active=-1;afterChange(true);if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
+  judgeRetrace(active);lastDrawn=active;active=-1;afterChange(true);lastDrawn=-1;if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
 // A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
 // Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
 function judgeRetrace(k){
@@ -811,15 +813,16 @@ function afterChange(released){
     lastCrossColors=sig;
   }
   const st=nestStatus(G,paths,col);
-  // "Waiting for…" only once every stream has reached somewhere, so it never talks over a board still being drawn (Nikola, v0.32)
+  // "Waiting for…" once every stream has reached somewhere, so it never talks over a board still being drawn (Nikola, v0.32),
+  // or right away when the stream just drawn is the one waiting (Alan, Oct 16: blue into purple said nothing)
   const settled=paths.every((q,k)=>done(k));let toldWait=false; // one "waiting" message at a time
   st.forEach((s,k)=>{
     if(s.p>=0&&!lastStatus[k]&&s.ok){sfx.home();buzz(15);}
     if(s.p>=0&&!s.ok&&!s.color&&isBranch(G,paths[s.p])){if(released)teachOnce("dry","This stream has no water yet. Lead a stream into the delta first.");}
-    else if(waiting(s,k)){if(released&&settled&&!toldWait&&lastStatus[k]!=="wait"&&!(lessonStep()&&lessonStep().quiet))(toldWait=true,teachOnce)("wait",`Waiting for ${NAMES[G.nests[k].mask]}: cross a ${NAMES[G.nests[k].mask&~s.color]} stream on the way to mix it.`);}
+    else if(waiting(s,k)){if(released&&(settled||s.p===lastDrawn)&&!toldWait&&lastStatus[k]!=="wait"&&!(lessonStep()&&lessonStep().quiet))(toldWait=true,teachOnce)("wait",`Waiting for ${NAMES[G.nests[k].mask]}: cross a ${NAMES[G.nests[k].mask&~s.color]} stream on the way to mix it.`);}
     else if(s.p>=0&&!s.ok&&released&&lastStatus[k]!=="bad"&&!(lessonStep()&&lessonStep().quiet)){sfx.wrong();buzz([20,40,20]);teachOnce(s.denOk===false?"home":"nest",s.denOk===false?`This home is for the ${SHAPES[G.nests[k].den]} critters`:`This nest only takes ${NAMES[G.nests[k].mask]}, not ${NAMES[s.color]}`);}
   });
-  lastStatus=st.map((s,k)=>s.ok?true:waiting(s,k)?(released&&settled||lastStatus[k]==="wait"?"wait":false):(s.p>=0&&(released||lastStatus[k]==="bad")?"bad":false)); // "bad" only counts once the finger lifts, so the refusal is announced
+  lastStatus=st.map((s,k)=>s.ok?true:waiting(s,k)?(released&&(settled||s.p===lastDrawn)||lastStatus[k]==="wait"?"wait":false):(s.p>=0&&(released||lastStatus[k]==="bad")?"bad":false)); // "bad" only counts once the finger lifts, so the refusal is announced
   if(released&&isWin(G,paths,col)){if(lesson)endLesson(true);win();}else if(released)lessonCheck();
   if(released){saveDraft();updateUndo();}
 }
@@ -840,6 +843,7 @@ function crossings(){
 function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
+  if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":lv+1,stars:s,ink,hints:hintsUsed});
   if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
   const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id];
   if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
@@ -933,6 +937,7 @@ function showSettings(){
    <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" role="switch" aria-checked="${!!opts.marks}" aria-label="Color marks"></button></div>
    <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" role="switch" aria-checked="${!!opts.sound}" aria-label="Sound"></button></div>
    <div class="set"><div>Remove ads<small>${prog.noAds?"Ads are off. Thank you!":"No more breaks between levels"}</small></div><button class="ghost" id="tAds" ${prog.noAds?"disabled":""}>${prog.noAds?"Done":ADS.price}</button></div>
+   <div id="cloudBox"></div>
    <div class="set"><div>Lessons<small>See every new-element lesson again</small></div><button class="ghost" id="tLessons">Replay</button></div>
    <p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>
    <button class="ghost" id="close">Close</button>`);
@@ -942,6 +947,7 @@ function showSettings(){
   $("tAds").onclick=()=>showRemoveAds();
   $("tLessons").onclick=()=>{Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:")||k.startsWith("note:filter"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
+  if(window.CR_NATIVE)CR_NATIVE.settings($("cloudBox")); // phone app: cloud save sign-in row
 }
 // While a card is up, the game behind it is inert, so Tab stays inside the card (Nikola, v0.34: Tab reached Hint behind the win card)
 function openSheet(html){$("card").innerHTML=html;$("sheet").hidden=false;$("app").inert=true;const b=$("card").querySelector("button,[href],input,select");if(b)b.focus();}
