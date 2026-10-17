@@ -925,7 +925,53 @@ function closeSheet(){
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-expanded',false));
 }
 $('modal').addEventListener('click',e=>{if(e.target.id==='modal'&&!sheetLocked)closeSheet()});
-function watchAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
+// ---------- ads ----------
+// In the phone apps, Capacitor provides the AdMob plugin (the same one Wordglow uses). On the web
+// (test page and prototype) it stays null and sampleAd() stands in for the video.
+const IS_NATIVE=!!window.Capacitor?.isNativePlatform?.(),PLATFORM=window.Capacitor?.getPlatform?.()||'web';
+const AdMob=IS_NATIVE?window.Capacitor.Plugins.AdMob:null;
+// Sumburst's AdMob ad units (publisher 7780493483551677).
+const AD_UNITS={
+  android:{rewarded:'ca-app-pub-7780493483551677/3877267805',interstitial:'ca-app-pub-7780493483551677/8968803225'},
+  ios:{rewarded:'ca-app-pub-7780493483551677/5006516646',interstitial:'ca-app-pub-7780493483551677/3693434974'},
+};
+// Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
+const ADS_TESTING='__BUILD__'!=='release';
+let adsReady=false;
+// Consent and start-up are separate steps, so a consent failure still lets ads run (as non-personalized).
+// Beta builds say which step failed, so a tester can report it.
+async function initAds(){
+  if(!AdMob)return;
+  try{
+    const info=await AdMob.requestConsentInfo();
+    if(info.isConsentFormAvailable&&info.status==='REQUIRED')await AdMob.showConsentForm();
+  }catch(e){console.warn('Ad consent failed',e);if(ADS_TESTING)toast('Ads: consent step failed',false,READ_MS)}
+  if(PLATFORM==='ios')await AdMob.requestTrackingAuthorization().catch(()=>{});
+  try{await AdMob.initialize({initializeForTesting:ADS_TESTING});adsReady=true}
+  catch(e){console.warn('Ads unavailable',e);if(ADS_TESTING)toast('Ads: start-up failed',false,READ_MS)}
+}
+// onReward when the ad finishes, onSkip when it's closed early or can't load.
+// "forced" ads are the between-level interstitials, which give no reward and never block play.
+function watchAd(onReward,onSkip=()=>{},title,forced=false){
+  if(!AdMob)return sampleAd(onReward,onSkip,title,forced);
+  const noVideo=()=>{toast('No video available right now.\nTry again soon.',false,READ_MS);onSkip()};
+  if(!adsReady)return forced?onReward():noVideo();
+  const units=AD_UNITS[PLATFORM]||AD_UNITS.android;
+  if(forced){
+    AdMob.prepareInterstitial({adId:units.interstitial,isTesting:ADS_TESTING})
+      .then(()=>AdMob.showInterstitial()).catch(()=>{}).finally(onReward);
+    return;
+  }
+  let rewarded=false,handles=[];
+  const done=()=>{handles.forEach(h=>h.remove());rewarded?onReward():onSkip()};
+  Promise.all([
+    AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true;track('ad_reward',{mode,level})}),
+    AdMob.addListener('onRewardedVideoAdDismissed',done),
+  ]).then(hs=>{handles=hs;return AdMob.prepareRewardVideoAd({adId:units.rewarded,isTesting:ADS_TESTING})})
+    .then(()=>AdMob.showRewardVideoAd())
+    .catch(()=>{handles.forEach(h=>h.remove());noVideo()});
+}
+function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
   let n=3;
   openSheet(`<h3>${title}</h3><div class="adbox"><span class="count" id="adn">${n}</span>In the real app, a short video ad plays here.</div>
     <div class="btns">${forced?'':'<button class="btn plain" id="adskip">Close without reward</button>'}</div>`,true);
@@ -1264,6 +1310,7 @@ if(!store.get('nb-tutorial-done',false))startTutorial();
 else if(!resumeGame())newGame('endless');
 checkStreakAtRisk();
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
+initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
 if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
 })();
