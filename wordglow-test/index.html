@@ -826,9 +826,15 @@ function renderAll() { renderBoard(); renderTray(); renderScores(); sizeCells();
 const boardWrap = document.querySelector(".board-wrap"), appEl = document.querySelector(".app");
 function fitScreen() {
   const tray = document.getElementById("tray");
-  const rest = document.documentElement.scrollHeight - boardWrap.offsetHeight - tray.offsetHeight;
-  // The tray is about 0.26 board widths tall (three rows of 0.7-size cells) plus its padding.
-  const w = Math.floor((innerHeight - rest - 16) / 1.27);
+  // Add up what the game actually needs (not the page height, which the layout stretches to fill
+  // the screen and would make the board shrink a little more on every refit).
+  const last = [...appEl.children].filter(el => el.offsetParent).pop();
+  const used = last.getBoundingClientRect().bottom + parseFloat(getComputedStyle(last).marginBottom) + scrollY
+    + parseFloat(getComputedStyle(appEl).paddingBottom) + (document.querySelector(".tabbar")?.offsetHeight || 0);
+  const rest = used - boardWrap.offsetHeight - tray.offsetHeight;
+  // Board and tray both grow with the board's width; use their current ratio (refits settle it).
+  const k = (boardWrap.offsetHeight + tray.offsetHeight) / boardWrap.offsetWidth || 1.27;
+  const w = Math.floor((innerHeight - rest - 4) / k);
   const width = Math.max(200, Math.min(appEl.clientWidth, w));
   if (Math.abs(width - boardWrap.offsetWidth) > 1) boardWrap.style.width = width + "px";
 }
@@ -838,8 +844,8 @@ function sizeCells() {
   document.documentElement.style.setProperty("--cell", a.width + "px");
 }
 window.addEventListener("resize", sizeCells);
-// Hint and legend lines come and go; refit whenever the page's height changes.
-if (window.ResizeObserver) new ResizeObserver(() => sizeCells()).observe(appEl);
+// Hint and legend lines come and go; refit whenever any part of the game changes height.
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => sizeCells()); [appEl, ...appEl.children].forEach(el => ro.observe(el)); }
 
 // ---------- rules ----------
 function fits(p, r0, c0) {
