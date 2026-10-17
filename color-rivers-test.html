@@ -458,7 +458,11 @@ function saveProg(){store.set("prog3",prog);if(window.CR_CLOUD)window.CR_CLOUD.c
 // CR_SAVE.merge(cloudCopy) after sign-in, uploads CR_SAVE.get(), and sets window.CR_CLOUD={changed(p)} to hear of saves.
 // In the phone app, src/native.js sets window.CR_NATIVE={track(name,params),settings(box)} for analytics and the sign-in row.
 window.CR_SAVE={game:"color-rivers",version:3,get:()=>JSON.parse(JSON.stringify(prog)),
-  merge(cloud){prog=mergeProg(prog,cloud);saveProg();updateStars();updateDailyBtn();return this.get();}};
+  merge(cloud){const was=prog.highest||0;prog=mergeProg(prog,cloud);saveProg();updateStars();updateDailyBtn();
+    // A restore on a new phone (or after a reinstall) starts back at level 1: move on to where the cloud copy got to.
+    const far=LEVELS.reduce((m,L,i)=>prog.stars[L.id]?i+1:m,0);
+    if(far>was&&!daily&&!won&&lv<far){closeSheet();startLevel(Math.min(far,LEVELS.length-1));}
+    return this.get();}};
 // Open levels: everything up to one past the furthest level with stars (or all, in tester mode).
 function openCount(){if(prog.all)return LEVELS.length;let far=-1;LEVELS.forEach((L,i)=>{if(prog.stars[L.id])far=i;});
   return Math.min(LEVELS.length,far+1<LEVELS.length&&!gateOK(far+1)?far+1:far+2);}
