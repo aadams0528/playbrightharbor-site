@@ -1118,7 +1118,7 @@ function drawLesson(now){const st=lessonStep();if(!st)return;const t=(now-lesson
 }
 // ---------- Ads and hints ----------
 // Hard rules from the build sheet: ads only BETWEEN levels, never during a puzzle; no lives or energy; everything
-// earnable free. In this prototype the ads are stand-in cards; the phone app plugs AdMob into showAd/showRewarded.
+// earnable free. On the web the ads are stand-in cards; the phone app plugs AdMob in through window.CR_ADS (src/native.js).
 const ADS={freeLevels:18,every:5,gapMs:180000,freeHints:3,perAd:2,price:"$3.99"};
 const today=()=>new Date().toISOString().slice(0,10);
 function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hintsLeft=ADS.freeHints;saveProg();}}
@@ -1136,12 +1136,15 @@ function adCard(title,secs,done,extra=""){
   const r=$("adRemove");if(r)r.onclick=()=>{clearInterval(t);showRemoveAds(()=>{closeSheet();done();});};
 }
 function showAd(then){prog.sinceAd=0;prog.lastAd=Date.now();saveProg();
+  if(window.CR_ADS)return CR_ADS.interstitial(then); // phone app: a real AdMob ad (src/native.js)
   adCard("Quick break",5,then,`<button class="ghost" id="adRemove">Remove ads · ${ADS.price}</button>`);}
 function offerHintAd(give){
   openSheet(`<h3>Out of free hints</h3><p>You get ${ADS.freeHints} free hints a day. Watch a short ad for ${ADS.perAd} more?</p>
     <button class="big" id="watch">📺 Watch ad for ${ADS.perAd} hints</button><button class="ghost" id="close">Not now</button>`);
   $("close").onclick=closeSheet;
-  $("watch").onclick=()=>adCard("Thanks for watching",5,()=>{prog.bonusHints=(prog.bonusHints||0)+ADS.perAd;spendHint();give();toast(`Hint shown · ${hintsLeft()} left`);});
+  const reward=()=>{prog.bonusHints=(prog.bonusHints||0)+ADS.perAd;spendHint();give();toast(`Hint shown · ${hintsLeft()} left`);};
+  $("watch").onclick=()=>{if(!window.CR_ADS)return adCard("Thanks for watching",5,reward);
+    closeSheet();CR_ADS.rewarded(reward,()=>toast("No video available right now. Try again soon."));};
 }
 function showRemoveAds(after){
   if(prog.noAds){toast("Ads are already off");return;}
