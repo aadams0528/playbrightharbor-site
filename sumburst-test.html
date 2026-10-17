@@ -767,7 +767,9 @@ function blast(){
   // Main message, then the extra news one at a time below it.
   const praise=k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
   const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('\n');
-  toast((praise?praise+'\n':'')+label+`\n+${total}`+(extra.size?`\nBOOM! +${extra.size*3}`:'')+(chainX>1?`\n🔗 Chain x${chainX}`:'')+(earned?'\nEraser earned!':'')+(shuffleEarned?'\nShuffle earned!':''),longest>=4||k>1||extra.size>0,CASH_MS);
+  // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
+  const got=[earned&&'Eraser',shuffleEarned&&'Shuffle'].filter(Boolean).join(' + ');
+  toast((praise?praise+'\n':'')+label+`\n+${total}`+(extra.size?` 💥+${extra.size*3}`:'')+(chainX>1?` 🔗x${chainX}`:'')+(got?`\n${got} earned!`:''),longest>=4||k>1||extra.size>0,CASH_MS);
   const extras=[];
   if(!tut){
     const s=markPlayed();if(s)extras.push(s);
@@ -780,7 +782,13 @@ function blast(){
     if(goalsDone.length){extras.push([goalsDone.map(g=>'🎯 Quest done: '+REWARD_TEXT[g.reward]).join('\n'),false]);questNews()}
     extras.push(...milestones(runs,valsList));
   }
-  extras.forEach(([text,big])=>news(text,big));
+  // At most one extra message per blast so players aren't left reading a long line of them:
+  // the most important one, plus the headline of the next. Every reward is still given.
+  if(extras.length){
+    const rank=([t])=>/🪙/.test(t)?0:/Quest done/.test(t)?1:/streak/i.test(t)?2:/New way/.test(t)?4:3;
+    const top=extras.slice().sort((a,b)=>rank(a)-rank(b)).slice(0,2);
+    news(top[0][0]+(top[1]?'\n'+top[1][0].split('\n')[0]:''),top.some(([,b])=>b));
+  }
   // Effects
   busy=true;renderHUD();
   const all=[...set],gap=55;
@@ -952,18 +960,23 @@ async function initAds(){
 }
 // onReward when the ad finishes, onSkip when it's closed early or can't load.
 // "forced" ads are the between-level interstitials, which give no reward and never block play.
+// While an ad is loading or showing, extra taps are ignored so a slow ad can't play twice.
+let adPlaying=false;
 function watchAd(onReward,onSkip=()=>{},title,forced=false){
+  if(adPlaying)return;
   if(!AdMob)return sampleAd(onReward,onSkip,title,forced);
-  const noVideo=()=>{toast('No video available right now.\nTry again soon.',false,READ_MS);onSkip()};
+  const noVideo=()=>{adPlaying=false;toast('No video available right now.\nTry again soon.',false,READ_MS);onSkip()};
   if(!adsReady)return forced?onReward():noVideo();
   const units=AD_UNITS[PLATFORM]||AD_UNITS.android;
+  adPlaying=true;
   if(forced){
     AdMob.prepareInterstitial({adId:units.interstitial,isTesting:ADS_TESTING})
-      .then(()=>AdMob.showInterstitial()).catch(()=>{}).finally(onReward);
+      .then(()=>AdMob.showInterstitial()).catch(()=>{}).finally(()=>{adPlaying=false;onReward()});
     return;
   }
+  toast('Loading video…',false,1500);
   let rewarded=false,handles=[];
-  const done=()=>{handles.forEach(h=>h.remove());rewarded?onReward():onSkip()};
+  const done=()=>{adPlaying=false;handles.forEach(h=>h.remove());rewarded?onReward():onSkip()};
   Promise.all([
     AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true;track('ad_reward',{mode,level})}),
     AdMob.addListener('onRewardedVideoAdDismissed',done),
@@ -972,11 +985,13 @@ function watchAd(onReward,onSkip=()=>{},title,forced=false){
     .catch(()=>{handles.forEach(h=>h.remove());noVideo()});
 }
 function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
+  if(adPlaying)return;adPlaying=true;
+  const finish=f=>{adPlaying=false;f()};
   let n=3;
   openSheet(`<h3>${title}</h3><div class="adbox"><span class="count" id="adn">${n}</span>In the real app, a short video ad plays here.</div>
     <div class="btns">${forced?'':'<button class="btn plain" id="adskip">Close without reward</button>'}</div>`,true);
-  const iv=setInterval(()=>{const el=$('adn');if(--n>0&&el){el.textContent=n;return}clearInterval(iv);closeSheet();onReward()},1000);
-  if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();onSkip()};
+  const iv=setInterval(()=>{const el=$('adn');if(--n>0&&el){el.textContent=n;return}clearInterval(iv);closeSheet();finish(onReward)},1000);
+  if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();finish(onSkip)};
 }
 const POWER_COST=30,FREE_ADS_PER_DAY=5;
 function offerPowerup(kind){
@@ -1302,7 +1317,20 @@ $('shuffle').onclick=()=>{
 };
 function renderSound(){$('sound').textContent=muted?'🔇':'🔊';$('sound').setAttribute('aria-pressed',!muted);$('sound').setAttribute('aria-label',muted?'Sound off':'Sound on')}
 $('sound').onclick=()=>{muted=!muted;store.set('nb-muted',muted);renderSound()};
-addEventListener('resize',()=>{if(!drag)renderTray()});
+// Phones differ in height: size the board as big as fits, so the whole game is on screen and a
+// drag that misses a tile never scrolls the page. Measure down to the last game element, not the
+// page height (that would count empty space and shrink the board a little more on every refit).
+function fitScreen(){
+  if(drag)return;
+  const wrap=$('boardwrap'),app=document.querySelector('.app');
+  const last=[...app.children].filter(el=>el.offsetParent).pop();
+  const used=last.getBoundingClientRect().bottom+parseFloat(getComputedStyle(last).marginBottom)+scrollY+parseFloat(getComputedStyle(document.body).paddingBottom);
+  const w=Math.floor(innerHeight-(used-wrap.offsetHeight)-4);
+  const width=Math.max(220,Math.min(app.clientWidth,w));
+  if(Math.abs(width-wrap.offsetWidth)>1){wrap.style.width=width+'px';renderTray()}
+}
+addEventListener('resize',()=>{if(!drag){fitScreen();renderTray()}});
+if(window.ResizeObserver){const ro=new ResizeObserver(()=>fitScreen());const app=document.querySelector('.app');[app,...app.children].forEach(el=>ro.observe(el))}
 
 // ---------- start ----------
 buildBoard();renderSound();
