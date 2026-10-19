@@ -1,0 +1,89 @@
+# Rebuilds the hidden test pages from each game repo's src/game.html every morning,
+# and opens (or updates) one "Refresh test pages" PR when anything changed.
+# Nothing goes live until Alan merges that PR.
+# Needs the secret GAME_REPOS_TOKEN: a fine-grained token with read-only Contents
+# on spellburst, number-blast, color-rivers and whenly.
+name: Refresh test pages
+
+on:
+  schedule:
+    - cron: "17 10 * * *" # about 6 am Eastern
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: refresh-test-pages
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: auto/refresh-test-pages
+    steps:
+      - name: Check the token is set
+        env:
+          TOKEN: ${{ secrets.GAME_REPOS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Add the GAME_REPOS_TOKEN secret (read-only access to the four game repos). Steps are in README.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Check out the game repos
+        env:
+          TOKEN: ${{ secrets.GAME_REPOS_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/games"
+          for repo in spellburst number-blast color-rivers whenly; do
+            git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/aadams0528/${repo}.git" "$RUNNER_TEMP/games/$repo"
+            echo "$repo $(git -C "$RUNNER_TEMP/games/$repo" rev-parse --short HEAD)" >> "$RUNNER_TEMP/commits.txt"
+          done
+
+      - name: Rebuild the test pages
+        run: node scripts/build-test-pages.mjs "$RUNNER_TEMP/games"
+
+      - name: Open or update the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Test pages already match the games."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -q -m "Refresh test pages from the game repos"
+          git push -f origin "$BRANCH"
+          {
+            echo "Rebuilt the hidden test pages from each game's \`src/game.html\` (beta build). Merge to put them live."
+            echo
+            echo "Changed: $(git diff --name-only HEAD~1 | cut -d/ -f1 | sort -u | tr '\n' ' ')"
+            echo
+            echo "Game commits used:"
+            sed 's/^/- /' "$RUNNER_TEMP/commits.txt"
+            if [ -s "$RUNNER_TEMP/test-pages-failed.txt" ]; then
+              echo
+              echo "Not rebuilt (old page kept):"
+              sed 's/^/- /' "$RUNNER_TEMP/test-pages-failed.txt"
+            fi
+          } > "$RUNNER_TEMP/body.md"
+          if gh pr view "$BRANCH" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --head "$BRANCH" --base main --title "Refresh test pages" --body-file "$RUNNER_TEMP/body.md" --assignee aadams0528
+          fi
+
+      - name: Fail if a game didn't build
+        run: |
+          if [ -s "$RUNNER_TEMP/test-pages-failed.txt" ]; then
+            cat "$RUNNER_TEMP/test-pages-failed.txt"
+            exit 1
+          fi

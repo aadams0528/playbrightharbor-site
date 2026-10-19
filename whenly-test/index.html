@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<!-- Copied from aadams0528/whenly src/game.html and src/art/. Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Built from aadams0528/whenly src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
 <title>Whenly (test version)</title>
 </head>
 <body>
+<title>Whenly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=Spline+Sans+Mono:wght@500;700&display=swap">
@@ -158,6 +159,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
 .offer{background:color-mix(in srgb,var(--accent) 16%,var(--paper));border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:15px}
 .offer .btn{padding:10px 14px;font-size:15px}
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:4px}
+.cloudnote{color:var(--muted);font-size:14px;margin:6px 0 10px}
 .scoreline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .score{font-family:var(--mono);font-weight:700;font-size:44px;line-height:1;letter-spacing:-.03em}
 .score small{font-size:18px;color:var(--muted)}
@@ -605,7 +607,8 @@ const $=s=>document.querySelector(s);
 const KEY="whenly-v2";
 let S;try{S=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){S={}}
 S.days=S.days||{};S.tiers=S.tiers||{};S.streak=S.streak||0;S.best=S.best||0;S.played=S.played||0;S.total=S.total||0;S.freezes=S.freezes||0;S.offset=S.offset||0;S.reports=S.reports||[];
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(!cloudApplying)window.BHCloud?.changed?.()}
+let cloudApplying=false;
 
 // ---------- funnel analytics ----------
 // Every event goes to Firebase Analytics in the apps (once its config files are added) and to gtag on
@@ -1136,10 +1139,11 @@ function stats(){
   ${S.played?"":`<p style="color:var(--muted)">Your stats start with your first daily puzzle. The lesson and Practice don't count.</p>`}
   <p style="font-weight:700">Your results (daily puzzles)</p>
   <div class="dist">${TIERS.map(t=>`<div style="grid-template-columns:108px 1fr"><span>${t[1]}</span><i class="${mine===t[1]?"me":""}" style="width:${Math.max(8,(S.tiers[t[1]]||0)/max*100)}%">${S.tiers[t[1]]||0}</i></div>`).join("")}</div>
+  <div id="cloudRow"></div>
   ${NATIVE?`<div class="row">${noAds()?"":`<button class="btn ghost noads" id="sNoAds">Remove ads · ${removePrice}</button>`}<button class="btn ghost" id="sRestore">Restore purchases</button></div>`:""}
   ${NATIVE?`<label class="remindset">🔔 Daily reminder ${timeSelect("rSet",S.remind||"off",true)}</label>`:""}`);
   const rs=$("#rSet");if(rs)rs.onchange=()=>setRemind(rs.value==="off"?false:rs.value);
-  if($("#sNoAds"))$("#sNoAds").onclick=buyNoAds;if($("#sRestore"))$("#sRestore").onclick=restoreNoAds}
+  if($("#sNoAds"))$("#sNoAds").onclick=buyNoAds;if($("#sRestore"))$("#sRestore").onclick=restoreNoAds;renderCloud()}
 let toastT;function toast(t){document.querySelectorAll(".toast").forEach(x=>x.remove());const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);clearTimeout(toastT);toastT=setTimeout(()=>d.remove(),2600)}
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
 const NATIVE=!!window.Capacitor?.isNativePlatform?.(),PLUG=NATIVE?window.Capacitor.Plugins:{};
@@ -1179,7 +1183,7 @@ const PLATFORM=window.Capacitor?.getPlatform?.()||"web",AdMob=NATIVE?PLUG.AdMob:
 const AD_UNITS={
   android:{interstitial:"ca-app-pub-7780493483551677/4190161403",banner:"ca-app-pub-7780493483551677/4228769980"},
   ios:{interstitial:"ca-app-pub-7780493483551677/6624753058",banner:"ca-app-pub-7780493483551677/5423352020"}};
-const ADS_TESTING="__BUILD__"!=="release";
+const ADS_TESTING="beta"!=="release";
 // Product ID must match App Store Connect and Google Play Console.
 const REMOVE_ADS="whenly.removeads";let removePrice="$2.99",adsReady=false,lastAd=0,bannerOn=false;
 const noAds=()=>!!S.noAds;
@@ -1214,7 +1218,12 @@ async function loadPrice(){
     const {products}=await Purchases.getProducts({productIdentifiers:[REMOVE_ADS],productType:"inapp"});
     if(products[0]?.priceString)removePrice=products[0].priceString;
     const {purchases}=await Purchases.getPurchases({productType:"inapp"});
-    if(purchases.some(t=>t.productIdentifier===REMOVE_ADS)&&!S.noAds){S.noAds=true;save();hideBanner()}
+    // Android: only a finished payment counts (purchaseState "1"); a pending cash payment doesn't yet.
+    const paid=t=>t.productIdentifier===REMOVE_ADS&&(PLATFORM!=="android"||t.purchaseState==null||String(t.purchaseState)==="1");
+    if(purchases.some(paid)&&!S.noAds){S.noAds=true;save();hideBanner()}
+    // A purchase the app closed before finishing: Android refunds it unless it's acknowledged within 3 days.
+    if(PLATFORM==="android"){const {transactions}=await Purchases.getUnfinishedTransactions();
+      for(const t of transactions.filter(paid)){if(!S.noAds){S.noAds=true;save();hideBanner()}await Purchases.acknowledgePurchase({purchaseToken:t.purchaseToken}).catch(()=>{})}}
   }catch(e){}
 }
 async function buyNoAds(){
@@ -1256,10 +1265,71 @@ function fireworks(){
   for(let b=0;b<3;b++){const cx=W*(.25+.25*b),cy=H*(.25+.1*(b%2));for(let i=0;i<50;i++){const a=Math.random()*6.28,s=(2+Math.random()*5)*devicePixelRatio;P.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:60+Math.random()*30,c:cols[i%5],d:b*12})}}
   let f=0;(function step(){x.clearRect(0,0,W,H);let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx;p.y+=p.vy;p.vy+=.08*devicePixelRatio;p.vx*=.98;p.l--;x.globalAlpha=Math.min(1,p.l/30);x.fillStyle=p.c;x.fillRect(p.x,p.y,4*devicePixelRatio,4*devicePixelRatio)}f++;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
 }
-// Hidden tester tools: tap the footer 5 times.
-let footTaps=0;$("#foot").addEventListener("click",()=>{if(++footTaps<5)return;footTaps=0;
+// Hidden tester tools: tap the footer 5 times. Test builds only; `npm run build:release` turns them off.
+let footTaps=0;$("#foot").addEventListener("click",()=>{if(!ADS_TESTING||++footTaps<5)return;footTaps=0;
   const s=sheet(`<h2>Tester tools</h2><p>Today is puzzle #${dayNum()} (offset ${S.offset} days).</p><div class="tester"><button class="btn ghost" data-t="next">Go to next day</button><button class="btn ghost" data-t="skip">Skip a day</button><button class="btn ghost" data-t="reset">Reset all progress</button></div><p class="star">Reports saved: ${S.reports.length}</p><p class="star">Funnel events on this device: ${Object.entries(S.ev||{}).map(([k,v])=>k+" "+v).join(" · ")||"none yet"}</p><button class="btn ghost" data-t="crowd">${S.fakeCrowd?"Hide":"Show"} sample crowd stats</button>`,"Close");
   s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="reset"){S={days:{},tiers:{},streak:0,best:0,played:0,total:0,freezes:0,offset:0,reports:[],tutorialDone:true}}save();s.remove();setMode("daily");toast(`Now on puzzle #${dayNum()}`)})});
+
+// ---------- cloud save ----------
+// Shared studio cloud save (cloudsave.js; plan: business/cloud-save-plan.md). Signing in (Google on Android,
+// Apple on iPhone) keeps streaks, results and Remove ads on a new phone. Playing never needs an account.
+// Phone-only, never uploaded: reminder time, tester day offset and crowd switch, event tally, fact reports.
+const PHONE_ONLY=["remind","offset","fakeCrowd","ev","lastOpen","reports"];
+function cloudSave(){const o=JSON.parse(JSON.stringify(S));PHONE_ONLY.forEach(k=>delete o[k]);return o}
+// Nothing earned on either phone is lost: every day's result is kept (a finished game beats an unfinished
+// one, then the higher score); the totals come as one set from the phone that has played more; the streak
+// follows the phone that played most recently; bests are maxed and Remove ads is kept if either has it.
+function mergeWhenly(a,b){
+  if(!b||typeof b!=="object")return a;
+  const out={...a},ad=a.days||{},bd=b.days||{},days={...bd,...ad};
+  for(const n in bd){const x=ad[n]&&ad[n].g,y=bd[n]&&bd[n].g;
+    if(y&&(!x||(y.done&&!x.done)||(y.done&&x.done&&(y.score||0)>(x.score||0))))days[n]=bd[n];}
+  out.days=days;
+  const more=(b.played||0)>(a.played||0)?b:a;
+  out.played=more.played||0;out.total=more.total||0;out.tiers={...(more.tiers||{})};
+  const late=(b.lastDay||0)>(a.lastDay||0)||((b.lastDay||0)===(a.lastDay||0)&&(b.streak||0)>(a.streak||0))?b:a;
+  out.streak=late.streak||0;out.freezes=late.freezes||0;if(late.lastDay!=null)out.lastDay=late.lastDay;
+  out.best=Math.max(a.best||0,b.best||0,out.streak);
+  out.xPlayed=Math.max(a.xPlayed||0,b.xPlayed||0);out.xBest=Math.max(a.xBest||0,b.xBest||0);
+  out.noAds=!!(a.noAds||b.noAds);out.tutorialDone=!!(a.tutorialDone||b.tutorialDone);
+  if(b.firstDay!=null)out.firstDay=a.firstDay==null?b.firstDay:Math.min(a.firstDay,b.firstDay);
+  return out;
+}
+let cloudChanged=false;
+window.BH_SAVE={game:"whenly",version:1,get:cloudSave,
+  merge(cloud){const before=JSON.stringify(cloudSave());cloudApplying=true;
+    try{S=mergeWhenly(S,cloud);save()}finally{cloudApplying=false}
+    cloudChanged=JSON.stringify(cloudSave())!==before;return cloudSave()}};
+// If the cloud copy brought anything back, reload once so every screen shows it.
+function afterSync(){if(!cloudChanged)return;try{sessionStorage.setItem("whenly-restored","1")}catch(e){}location.reload()}
+function renderCloud(){
+  const box=$("#cloudRow");if(!box||!window.BHCloud?.available)return;
+  const who=BHCloud.provider==="apple"?"Apple":"Google",u=BHCloud.user;
+  box.innerHTML=u?`<p class="cloudnote">☁️ Your streak and results are saved to your ${who} account${u.email?` (${String(u.email).replace(/[<>&"]/g,"")})`:""}. Sign in on a new phone to pick up where you left off. <button class="linkbtn" id="cloudOut">Sign out</button>${typeof BHCloud.deleteAccount==="function"?` <button class="linkbtn" id="cloudDel">Delete my account</button>`:""}</p>`
+    :`<div class="row"><button class="btn ghost" id="cloudIn">☁️ Save progress to the cloud</button></div><p class="cloudnote">Sign in with ${who} to keep your streak and results if you get a new phone.</p>`;
+  const i=$("#cloudIn"),o=$("#cloudOut");
+  if(i)i.onclick=async()=>{i.disabled=true;
+    try{await BHCloud.signIn();track("cloud_signin",{provider:BHCloud.provider});toast("☁️ Progress saved to the cloud.");afterSync()}
+    catch(e){if(!/cancel/i.test(String(e?.message||e)))toast(BHCloud.user?"Signed in, but the cloud couldn't be reached. It will try again next time.":"Couldn't sign in right now. Try again soon.")}
+    renderCloud()};
+  if(o)o.onclick=async()=>{await BHCloud.signOut().catch(()=>{});renderCloud()};
+  const d=$("#cloudDel");if(d)d.onclick=confirmDelete;
+}
+// Apple requires an in-app way to delete an account made by signing in. This removes the cloud copy and
+// the sign-in account; progress on this phone stays, so nobody loses today's streak by accident.
+function confirmDelete(){
+  const s=sheet(`<h2>Delete your account?</h2><p>This permanently deletes your sign-in account and its cloud saves, for Whenly and any other Bright Harbor game. It can't be undone.</p><p>Your streak and results stay on this phone. You can sign in again later to start a new cloud save.</p><button class="btn ghost" id="bDelYes">Delete my account</button>`,"Keep my account");
+  const y=s.querySelector("#bDelYes");
+  y.onclick=async()=>{y.disabled=true;y.textContent="Deleting…";
+    try{await BHCloud.deleteAccount();track("cloud_delete",{provider:BHCloud.provider});s.remove();toast("Your account and cloud save were deleted.")}
+    catch(e){y.disabled=false;y.textContent="Delete my account";
+      // Stays in the sheet (not a toast) so there's time to read the email address.
+      if(!/cancel/i.test(String(e?.message||e))){let m=s.querySelector("#delErr");if(!m){m=document.createElement("p");m.id="delErr";m.className="cloudnote";y.before(m)}
+        m.innerHTML=`Couldn't delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com">support@playbrightharbor.com</a> and we'll delete it for you.`}}
+    renderCloud()};
+}
+if(window.BHCloud){BHCloud.init().then(afterSync);document.addEventListener("visibilitychange",()=>{if(document.hidden)BHCloud.flush()})}
+try{if(sessionStorage.getItem("whenly-restored")){sessionStorage.removeItem("whenly-restored");setTimeout(()=>toast("☁️ Progress restored!"),600)}}catch(e){}
 
 // ---------- wire up ----------
 $("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
