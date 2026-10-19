@@ -181,6 +181,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .cloudbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:.9rem}
 .cloudbox small{display:block;color:var(--muted);margin:2px 0 8px}
 .cloudbox .btn{width:100%}
+.btn.danger{background:#c62828;border-color:#c62828;color:#fff}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.85rem}
 .cal .dow{font-weight:700;color:var(--muted)}
 .cal .d{padding:6px 0;border-radius:8px;background:var(--bg)}
@@ -1124,7 +1125,7 @@ function renderCloudBox(){
   sheet.querySelector('.cloudbox')?.remove();
   const who=C.user?.email||C.user?.displayName||'';
   sheet.querySelector('h3').insertAdjacentHTML('afterend',C.user
-    ?`<div class="cloudbox">☁️ <b>Your progress is saved to your account.</b><small>${who?esc(who)+'. ':''}Sign in on a new phone to pick up where you left off.</small><button class="linkbtn" id="cloud-out">Sign out</button></div>`
+    ?`<div class="cloudbox">☁️ <b>Your progress is saved to your account.</b><small>${who?esc(who)+'. ':''}Sign in on a new phone to pick up where you left off.</small><button class="linkbtn" id="cloud-out">Sign out</button>${C.deleteAccount?' · <button class="linkbtn" id="cloud-del">Delete my account</button>':''}</div>`
     :`<div class="cloudbox">☁️ <b>Keep your progress safe</b><small>Sign in to keep your coins, sums and games if you get a new phone.</small><button class="btn" id="cloud-in">Save progress to the cloud</button></div>`);
   if($('cloud-in'))$('cloud-in').onclick=async()=>{
     $('cloud-in').disabled=true;
@@ -1133,6 +1134,20 @@ function renderCloudBox(){
     renderCloudBox();
   };
   if($('cloud-out'))$('cloud-out').onclick=async()=>{await C.flush();await C.signOut();renderCloudBox()};
+  if($('cloud-del'))$('cloud-del').onclick=confirmDeleteAccount;
+}
+// Apple requires a way to delete an account from inside any app that offers sign-in. Asks once
+// more before deleting; the progress on this phone stays, only the account and its cloud save go.
+function confirmDeleteAccount(){
+  const box=$('sheet').querySelector('.cloudbox');if(!box)return;
+  box.innerHTML=`🗑️ <b>Delete your account?</b><small>This deletes your Bright Harbor account and the progress saved to it, for all our games. It can't be undone. Your progress on this phone stays.</small><div class="btns"><button class="btn danger" id="del-yes">Delete account</button><button class="btn plain" id="del-no">Keep it</button></div>`;
+  $('del-no').onclick=renderCloudBox;
+  $('del-yes').onclick=async()=>{
+    $('del-yes').disabled=$('del-no').disabled=true;
+    try{await window.BHCloud.deleteAccount();track('cloud_delete_account');toast('Your account was deleted.',false,READ_MS)}
+    catch(e){if(!/cancel/i.test(String(e?.message||e)))toast("Couldn't delete your account.\nTry again, or email support@playbrightharbor.com.",false,READ_MS*2)}
+    renderCloudBox();
+  };
 }
 function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'📅';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
 function questNews(){$('questdot').hidden=false;bumpEl($('tab-quests'))}
