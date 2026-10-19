@@ -253,6 +253,8 @@ button.pill { cursor: pointer; }
 .shop-row s { opacity: 0.55; font-weight: 400; }
 .offer { background: var(--gold, #f5c542); color: #1b1b1b; border-radius: 10px; padding: 8px 10px; font-weight: 700; text-align: center; }
 .linkbtn { background: none; border: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; padding: 6px; }
+.linkbtn.danger { color: #c0392b; }
+.btn.danger { background: #c0392b; color: #fff; }
 .pill b { font-family: var(--font-display); font-size: 1rem; }
 .pill.bump { animation: bump 0.4s ease-out; }
 @keyframes bump { 40% { transform: scale(1.18); } }
@@ -437,8 +439,8 @@ const dailyNo = () => Math.floor((new Date(todayKey()) - new Date("2026-10-10"))
 const pick = arr => arr[Math.floor(rng() * arr.length)];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} if (!LOCAL_ONLY.test(k)) window.BHCloud?.changed(); } };
-// Kept on this phone only, never in the cloud save: daily free-ad allowance, session count, promo snooze.
-const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-)/;
+// Kept on this phone only, never in the cloud save: daily free-ad allowance, session count, promo snooze, delivered purchases.
+const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$)/;
 
 const VOWELS = "aaaaeeeeeiiiooou";
 const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
@@ -1839,6 +1841,33 @@ function grant(id) {
   store.set("wb-bought-coins", true);
   addCoins(n); toast(`+${n.toLocaleString()} 🪙${n > p.coins ? " (double!)" : ""}\nThank you!`, true, READ_MS);
 }
+// Each store purchase is delivered once, however many times the store reports it (purchase, restart, iPhone updates).
+const txKey = t => t?.purchaseToken || t?.transactionId;
+function grantOnce(id, t) {
+  const k = txKey(t);
+  if (k) {
+    const done = store.get("wb-granted-tx", []);
+    if (done.includes(k)) return false;
+    store.set("wb-granted-tx", [...done, k].slice(-50));
+  }
+  grant(id); return true;
+}
+// If the app closes after the store charged but before the coins were added, deliver them on the next launch.
+// Android lists purchases that were never finished; iPhone sends them as transaction updates when the app starts.
+async function finishUnfinishedPurchases() {
+  if (!Purchases) return;
+  const ours = t => PRODUCTS.some(p => p.id === t?.productIdentifier);
+  const recover = t => { if (ours(t) && grantOnce(t.productIdentifier, t)) track("shop_recovered", { item: t.productIdentifier }); };
+  try {
+    if (PLATFORM !== "android") { await Purchases.addListener("transactionUpdated", recover); return; }
+    const { transactions } = await Purchases.getUnfinishedTransactions();
+    for (const t of transactions.filter(ours)) {
+      recover(t);
+      if (t.productIdentifier === REMOVE_ADS) await Purchases.acknowledgePurchase({ purchaseToken: t.purchaseToken }).catch(() => {});
+      else await Purchases.consumePurchase({ purchaseToken: t.purchaseToken }).catch(() => {});
+    }
+  } catch {}
+}
 async function loadPrices() {
   if (!Purchases) return;
   try {
@@ -1856,8 +1885,8 @@ async function checkOwnedRemoveAds() {
 async function buy(id) {
   if (!Purchases) { toast("Purchases work in the\niPhone and Android apps.", false, READ_MS); return; }
   try {
-    await Purchases.purchaseProduct({ productIdentifier: id, productType: "inapp", quantity: 1, isConsumable: id !== REMOVE_ADS });
-    grant(id); closeSheet(); track("shop_purchase", { item: id });
+    const t = await Purchases.purchaseProduct({ productIdentifier: id, productType: "inapp", quantity: 1, isConsumable: id !== REMOVE_ADS });
+    grantOnce(id, t); closeSheet(); track("shop_purchase", { item: id });
   } catch (e) {
     if (!/cancel/i.test(String(e?.message || e))) toast("The purchase didn't go through.\nYou were not charged.", false, READ_MS);
   }
@@ -1883,7 +1912,7 @@ function openShop() {
   document.getElementById("shop-restore").onclick = restore;
 }
 document.getElementById("coinpill").onclick = openShop;
-initAds(); loadPrices(); checkOwnedRemoveAds();
+initAds(); finishUnfinishedPurchases(); loadPrices(); checkOwnedRemoveAds();
 
 // ---------- cloud save ----------
 // A signed-in player keeps their progress through app updates and on a new phone (cloudsave.js does
@@ -1953,7 +1982,8 @@ function renderCloudHelp() {
   const who = BHCloud.provider === "apple" ? "Apple" : "Google";
   box.innerHTML = BHCloud.user
     ? `<p class="cloud-note">☁️ Your progress is saved to your ${who} account${BHCloud.user.email ? ` (${BHCloud.user.email})` : ""}. Sign in on a new phone to pick up where you left off.</p>
-       <button type="button" class="linkbtn" id="cloud-out">Sign out</button>`
+       <button type="button" class="linkbtn" id="cloud-out">Sign out</button>
+       <button type="button" class="linkbtn danger" id="cloud-del">Delete my account</button>`
     : `<button type="button" class="btn plain" id="cloud-in">☁️ Save progress to the cloud</button>
        <p class="cloud-note">Sign in with ${who} to keep your levels, coins and word book if you get a new phone.</p>`;
   const signIn = document.getElementById("cloud-in"), signOut = document.getElementById("cloud-out");
@@ -1964,6 +1994,19 @@ function renderCloudHelp() {
     renderCloudHelp();
   };
   if (signOut) signOut.onclick = async () => { await BHCloud.signOut().catch(() => {}); renderCloudHelp(); };
+  const del = document.getElementById("cloud-del");
+  if (del) del.onclick = () => {
+    box.innerHTML = `<p class="cloud-note"><b>Delete your account?</b> This removes your cloud save and your Bright Harbor account for all our games. Your progress on this phone stays.</p>
+      <div class="btns"><button type="button" class="btn danger" id="del-yes">Delete account</button><button type="button" class="btn plain" id="del-no">Cancel</button></div>`;
+    document.getElementById("del-no").onclick = renderCloudHelp;
+    const yes = document.getElementById("del-yes");
+    yes.onclick = async () => {
+      yes.disabled = true; yes.textContent = "Deleting…";
+      try { await BHCloud.deleteAccount(); track("cloud_delete", { provider: BHCloud.provider }); toast("Your account was deleted.\nProgress on this phone is kept.", false, READ_MS); }
+      catch (e) { if (!/cancel/i.test(String(e?.message || e))) toast("Couldn't delete right now.\nTry again, or email support@playbrightharbor.com.", false, READ_MS); }
+      renderCloudHelp();
+    };
+  };
 }
 if (window.BHCloud) {
   BHCloud.init().then(afterSync);
