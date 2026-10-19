@@ -98,15 +98,21 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .shake2{animation:shake .45s 2}
 @keyframes shake{20%{transform:translate(-5px,2px)}40%{transform:translate(5px,-2px)}60%{transform:translate(-3px,1px)}80%{transform:translate(3px,0)}}
 
-.toast{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;white-space:pre-line;text-align:center;
-  background:rgba(12,24,20,.86);color:#fff;font-weight:700;font-size:.95rem;line-height:1.3;padding:.55em 1em;border-radius:14px;max-width:92%;
-  animation:toast var(--toast-ms,1300ms) ease-out forwards}
-.toast.big{font-family:var(--display);font-weight:800;font-size:1.35rem;line-height:1.15;color:var(--gold)}
-/* Messages worth reading pop in and hold still, then fade where they are. News (quests, sum book) sits lower so a new blast never covers it. */
+.toast{white-space:pre-line;text-align:center;font-weight:700;font-size:.9rem;line-height:1.2;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;animation:toast var(--toast-ms,1300ms) ease-out forwards}
+.toast.big{font-family:var(--display);font-weight:800;font-size:1.05rem;color:var(--gold)}
+/* Messages (blast scores, quests, sum book) get their own strip above the board, over the hint line, so they never cover the board.
+   The latest blast is on top; news waits its turn below it and gets the whole strip once the blast message fades. */
+.msgzone{position:relative}
+.msgbox{position:absolute;inset:0;z-index:6;pointer-events:none;display:flex;flex-direction:column;justify-content:center;gap:2px;
+  background:#16241f;color:#fff;border:2px solid var(--gold);border-radius:12px;padding:2px 8px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.msgbox[hidden]{display:none}
+.msgbox.both #lane-main .toast{-webkit-line-clamp:2}
+.msgbox.both #lane-news .toast{-webkit-line-clamp:1;font-size:.82rem}
+#lane-news .toast:not(.big){font-weight:600}
+@keyframes toastHold{0%{opacity:0}8%{opacity:1}86%{opacity:1}100%{opacity:0}}
 .toast.hold{animation-name:toastHold}
-.toast.news{top:70%}
-@keyframes toastHold{0%{opacity:0;transform:translate(-50%,-30%) scale(.85)}8%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}14%{transform:translate(-50%,-50%) scale(1)}86%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(-50%,-60%)}}
-@keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}10%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}18%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}
+@keyframes toast{0%{opacity:0}10%{opacity:1}80%{opacity:1}100%{opacity:0}}
 
 .over{position:absolute;inset:0;z-index:7;background:rgba(10,20,16,.82);border-radius:14px;display:flex;align-items:center;justify-content:center;overflow-y:auto;text-align:center;color:#fff;padding:14px}
 .over[hidden]{display:none}
@@ -219,8 +225,9 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
     <div class="score" id="score"><small>Score</small>0</div>
   </div>
   <div class="bar"><i id="bar"></i></div>
-  <div class="chainline" id="chain" aria-live="polite"></div>
+  <div class="msgzone"><div class="chainline" id="chain" aria-live="polite"></div>
   <p class="hint" id="hint"></p>
+  <div class="msgbox" id="msgbox" hidden aria-live="polite"><div class="lane" id="lane-main"></div><div class="lane" id="lane-news"></div></div></div>
   <div class="boardwrap" id="boardwrap"><div class="board" id="board" aria-label="Game board"></div><div class="over" id="over" hidden></div></div>
   <div class="tray" id="tray"></div>
   <div class="tools">
@@ -608,12 +615,20 @@ function nextNews(){
 function clearPending(keepNews){
   if(!keepNews){newsQ=[];clearTimeout(newsTimer);newsTimer=null}
   document.querySelectorAll(keepNews?'.toast:not(.news)':'.toast').forEach(t=>t.remove());
+  msgState();
+}
+function msgState(){
+  const m=!!$('lane-main').firstChild,n=!!$('lane-news').firstChild;
+  $('msgbox').hidden=!m&&!n;$('msgbox').classList.toggle('both',m&&n);
 }
 function toast(text,big=false,ms=0,lane='main'){
   if(lane==='main')document.querySelectorAll('.toast.main').forEach(t=>t.remove());  // a newer message replaces the old one
   const t=document.createElement('div');t.className='toast '+lane+(big?' big':'')+(ms?' hold':'');t.textContent=text;
   const life=ms||(big?1600:1300);t.style.setProperty('--toast-ms',life+'ms');
-  $('boardwrap').appendChild(t);setTimeout(()=>t.remove(),life);
+  // News reads on one line: "📒 New way to make 10! · 2 + 8 · 3 of 9 found".
+  if(lane==='news')t.textContent=text.replace(/\n/g,' · ');
+  $(lane==='news'?'lane-news':'lane-main').appendChild(t);msgState();
+  setTimeout(()=>{t.remove();msgState()},life);
 }
 
 // ---------- rendering ----------
@@ -658,7 +673,7 @@ function renderTray(){
 }
 function renderHUD(){
   $('target').textContent=T;
-  if(tut){$('lvl').innerHTML='<small>Lesson</small>'+(tut.step+1)+' of 3';$('bar').style.width=(tut.step/3*100)+'%'}
+  if(tut){$('lvl').innerHTML='<small>Lesson</small>'+(tut.step+1)+' of '+LESSONS.length;$('bar').style.width=(tut.step/LESSONS.length*100)+'%'}
   else{$('lvl').innerHTML=`<small>${mode==='daily'?'Daily #'+dailyNo():'Endless'}</small>Level ${level}`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
   $('score').innerHTML=(tut?'<small>Score</small>':`<small>${Math.min(levelPts(),goalFor(level))} / ${goalFor(level)}</small>`)+score.toLocaleString();
   $('eraserN').textContent=erasers;$('shuffleN').textContent=shuffles;
@@ -698,14 +713,22 @@ function startDrag(i,e,slot){
   e.preventDefault();
   if(!tut&&!canFit(p)){toast("That piece doesn't fit anywhere");buzz(15);return}
   const {cs}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap='4px';document.body.appendChild(fl);
-  const {rows,cols}=pieceSize(p),w=cols*cs+(cols-1)*4,h=rows*cs+(rows-1)*4;
-  drag={i,p,fl,w,h,slot,lift:e.pointerType==='mouse'?h/2:h+cs*.9,pos:null};
+  const {rows,cols}=pieceSize(p),w=cols*cs+(cols-1)*4,h=rows*cs+(rows-1)*4,step=cs+4;
+  // The square you grab stays under your pointer, so a 2-square piece lands where you expect.
+  // With a finger, the whole piece rides just above it so you can see where it goes.
+  const g=grabbedCell(p,slot,e),mouse=e.pointerType==='mouse';
+  drag={i,p,fl,w,h,slot,pos:null,dx:g.c*step+cs/2,dy:mouse?g.r*step+cs/2:h+cs*.9};
   slot.style.opacity='.25';moveDrag(e);
   addEventListener('pointermove',moveDrag);addEventListener('pointerup',endDrag);addEventListener('pointercancel',endDrag);
 }
+function grabbedCell(p,slot,e){  // the piece square nearest the pointer in the tray
+  const els=[...slot.querySelectorAll('.piece>div')];let best=p.cells[0],d=Infinity;
+  els.forEach((el,n)=>{const b=el.getBoundingClientRect(),dd=Math.hypot(e.clientX-(b.left+b.width/2),e.clientY-(b.top+b.height/2));if(dd<d){d=dd;best=p.cells[n]}});
+  return best;
+}
 function moveDrag(e){
   if(!drag)return;
-  const x=e.clientX-drag.w/2,y=e.clientY-drag.lift;
+  const x=e.clientX-drag.dx,y=e.clientY-drag.dy;
   drag.fl.style.transform=`translate(${x}px,${y}px)`;
   const {step,r}=cellStep(),a={r:Math.round((y-(r.top+6))/step),c:Math.round((x-(r.left+6))/step)};
   let pos=fitsAt(drag.p,a.r,a.c)?a:null;
@@ -769,10 +792,11 @@ function blast(){
   }
   // Main message, then the extra news one at a time below it.
   const praise=k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
-  const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('\n');
+  const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('  &  ');
   // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
   const got=[earned&&'Eraser',shuffleEarned&&'Shuffle'].filter(Boolean).join(' + ');
-  toast((praise?praise+'\n':'')+label+`\n+${total}`+(extra.size?` 💥+${extra.size*3}`:'')+(chainX>1?` 🔗x${chainX}`:'')+(got?`\n${got} earned!`:''),longest>=4||k>1||extra.size>0,CASH_MS);
+  // Two short lines in the message strip: what you made, then what it scored.
+  toast((praise?praise+' ':'')+label+`\n+${total}`+(extra.size?` 💥+${extra.size*3}`:'')+(chainX>1?` 🔗x${chainX}`:'')+(got?` · ${got} earned!`:''),longest>=4||k>1||extra.size>0,CASH_MS);
   const extras=[];
   if(!tut){
     const s=markPlayed();if(s)extras.push(s);
@@ -819,7 +843,12 @@ function blast(){
   return true;
 }
 function finishTurn(){
-  if(tut){renderAll();setHint();return}
+  if(tut){
+    renderAll();setHint();
+    const after=LESSONS[tut.step].after;  // a lesson that shows a drop that doesn't blast, then moves on
+    if(after&&!tray.some(Boolean)){busy=true;toast(after,true,READ_MS);setTimeout(()=>{busy=false;if(tut)nextLesson()},READ_MS)}
+    return;
+  }
   if(!over&&levelPts()>=goalFor(level))return levelUp();
   if(tray.every(p=>!p))newTray();
   setHint();renderAll();
@@ -851,7 +880,7 @@ function levelUp(){
     board=Array(N*N).fill(null);renderBoard();
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
       <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
-      <div class="btns"><button class="btn ad" id="dbl">Double it: watch an ad</button><button class="btn plain" id="next">Next level</button></div>`,true);
+      <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`,true);
     const go=n=>{closeSheet();addCoins(n);maybeInterstitial(startNextLevel)};
     $('dbl').onclick=()=>watchAd(()=>go(earned*2),()=>go(earned));
     $('next').onclick=()=>go(earned);
@@ -1283,9 +1312,13 @@ function newGame(m){
 
 // ---------- tutorial: three short lessons on scripted boards, then a real level 1 ----------
 const LESSONS=[
-  {tiles:{27:4},cell:28,piece:6,hint:'<b>Lesson 1 of 3: make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
-  {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Lesson 2 of 3: longer sums.</b> Drag the <b>5</b> onto the end. 2 + 3 + 5 = 10 is worth double!'},
-  {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Lesson 3 of 3: combos.</b> Drop the <b>4</b> where it finishes a sum across and down at once.'},
+  {tiles:{27:4},cell:28,piece:6,hint:'<b>Lesson 1 of 5: make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
+  // The whole touching group counts: a drop that makes 10 with one neighbour but touches more is too much.
+  {tiles:{33:5,35:7},cell:34,piece:5,after:'5 + 5 + 7 = 17. Too much,\nso nothing blasts.',
+    hint:'<b>Lesson 2 of 5: the whole group counts.</b> Drop the <b>5</b> between the 5 and the 7. All the touching blocks add up: 5 + 5 + 7 = 17, not 10. <b>Red</b> means too much.'},
+  {tiles:{33:5,36:7},cell:34,piece:5,hint:'<b>Lesson 3 of 5: a gap splits groups.</b> Now there is a gap before the 7. Drop the <b>5</b> next to the other 5: 5 + 5 = 10 blasts!'},
+  {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Lesson 4 of 5: longer sums.</b> Drag the <b>5</b> onto the end. 2 + 3 + 5 = 10 is worth double!'},
+  {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Lesson 5 of 5: combos.</b> Drop the <b>4</b> where it finishes a sum across and down at once.'},
 ];
 function startTutorial(){
   clearPending();closeSheet();$('over').hidden=true;
@@ -1382,7 +1415,7 @@ checkStreakAtRisk();
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
 })();
 </script>
 
