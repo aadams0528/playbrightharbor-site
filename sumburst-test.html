@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
+<!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
 <title>Sumburst (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
@@ -13,6 +14,10 @@ function gtag(){dataLayer.push(arguments)}
 gtag('js',new Date());
 gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
+</head>
+<body>
+<title>Sumburst</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Figtree:wght@400;600;700&display=swap">
@@ -198,9 +203,6 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .foot{text-align:center;font-size:.7rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition:none!important}}
 </style>
-</head>
-<body>
-
 
 <canvas id="fx" aria-hidden="true"></canvas>
 <div class="app">
@@ -269,8 +271,8 @@ const N=8, $=id=>document.getElementById(id);
 const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
              set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BHCloud?.changed?.()}};
-// Kept on this phone only, never sent to the cloud save: sound, ad and promo counters.
-const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-)/;
+// Kept on this phone only, never sent to the cloud save: sound, ad and promo counters, delivered purchases.
+const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-|granted-tx)/;
 let cloudApplying=false;
 const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 
@@ -945,15 +947,17 @@ const AD_UNITS={
   ios:{rewarded:'ca-app-pub-7780493483551677/5006516646',interstitial:'ca-app-pub-7780493483551677/3693434974'},
 };
 // Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
-const ADS_TESTING='__BUILD__'!=='release';
+const ADS_TESTING='beta'!=='release';
 let adsReady=false;
 // Consent and start-up are separate steps, so a consent failure still lets ads run (as non-personalized).
 // Beta builds say which step failed, so a tester can report it.
 async function initAds(){
   if(!AdMob)return;
   try{
-    const info=await AdMob.requestConsentInfo();
-    if(info.isConsentFormAvailable&&info.status==='REQUIRED')await AdMob.showConsentForm();
+    let info=await AdMob.requestConsentInfo();
+    if(info.isConsentFormAvailable&&info.status==='REQUIRED')info=await AdMob.showConsentForm();
+    // Analytics starts switched off (Info.plist, AndroidManifest.xml) and turns on once consent is answered or not needed.
+    if(info.status==='OBTAINED'||info.status==='NOT_REQUIRED')window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({enabled:true}).catch(()=>{});
   }catch(e){console.warn('Ad consent failed',e);if(ADS_TESTING)toast('Ads: consent step failed',false,READ_MS)}
   if(PLATFORM==='ios')await AdMob.requestTrackingAuthorization().catch(()=>{});
   try{await AdMob.initialize({initializeForTesting:ADS_TESTING});adsReady=true}
@@ -1025,6 +1029,29 @@ function grant(id){
   const n=firstBonus()?p.coins*2:p.coins;
   store.set('nb-bought-coins',true);addCoins(n);toast(`+${n.toLocaleString()} 🪙${n>p.coins?' (double!)':''}\nThank you!`,true,READ_MS);
 }
+// Each store purchase is delivered once, however many times the store reports it (purchase, restart, iPhone updates).
+const txKey=t=>t?.purchaseToken||t?.transactionId;
+function grantOnce(id,t){
+  const k=txKey(t);
+  if(k){const done=store.get('nb-granted-tx',[]);if(done.includes(k))return false;store.set('nb-granted-tx',[...done,k].slice(-50))}
+  grant(id);return true;
+}
+// If the app closes after the store charged but before the coins were added, deliver them on the next launch.
+// Android lists purchases that were never finished; iPhone sends them as transaction updates when the app starts.
+async function finishUnfinishedPurchases(){
+  if(!Purchases)return;
+  const ours=t=>PRODUCTS.some(p=>p.id===t?.productIdentifier);
+  const recover=t=>{if(ours(t)&&grantOnce(t.productIdentifier,t))track('shop_recovered',{item:t.productIdentifier})};
+  try{
+    if(PLATFORM!=='android'){await Purchases.addListener('transactionUpdated',recover);return}
+    const {transactions}=await Purchases.getUnfinishedTransactions();
+    for(const t of transactions.filter(ours)){
+      recover(t);
+      if(t.productIdentifier===REMOVE_ADS)await Purchases.acknowledgePurchase({purchaseToken:t.purchaseToken}).catch(()=>{});
+      else await Purchases.consumePurchase({purchaseToken:t.purchaseToken}).catch(()=>{});
+    }
+  }catch(e){}
+}
 async function loadPrices(){
   if(!Purchases)return;
   try{const {products}=await Purchases.getProducts({productIdentifiers:PRODUCTS.map(p=>p.id),productType:'inapp'});
@@ -1038,8 +1065,8 @@ async function checkOwnedRemoveAds(){
 }
 async function buy(id){
   if(!Purchases){toast('Purchases work in the\niPhone and Android apps.',false,READ_MS);return}
-  try{await Purchases.purchaseProduct({productIdentifier:id,productType:'inapp',quantity:1,isConsumable:id!==REMOVE_ADS});
-    grant(id);closeSheet();track('shop_purchase',{item:id})}
+  try{const t=await Purchases.purchaseProduct({productIdentifier:id,productType:'inapp',quantity:1,isConsumable:id!==REMOVE_ADS});
+    grantOnce(id,t);closeSheet();track('shop_purchase',{item:id})}
   catch(e){if(!/cancel/i.test(String(e?.message||e)))toast("The purchase didn't go through.\nYou were not charged.",false,READ_MS)}
 }
 async function restorePurchases(){
@@ -1048,7 +1075,7 @@ async function restorePurchases(){
   await checkOwnedRemoveAds();closeSheet();
   toast(store.get('nb-noads',false)?'Remove ads restored.':'Nothing to restore.',false,READ_MS);
 }
-loadPrices();checkOwnedRemoveAds();
+finishUnfinishedPurchases();loadPrices();checkOwnedRemoveAds();
 function openShop(){
   const bonus=firstBonus();
   const rows=PRODUCTS.filter(p=>!(p.id===REMOVE_ADS&&store.get('nb-noads',false))).map(p=>{
