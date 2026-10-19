@@ -20,7 +20,7 @@ window.BHCloud = (() => {
   const available = !!(cap?.isNativePlatform?.() && Auth && Store);
   // Sign in with Apple needs the Apple Developer account; switch on once it's set up.
   const config = { appleReady: false, delayMs: 5000 };
-  let user = null, timer = null, listeners = [];
+  let user = null, timer = null, listeners = [], deleting = false;
 
   const hook = () => window.BH_SAVE;
   const docRef = () => `saves/${user.uid}/games/${hook().game}`;
@@ -72,9 +72,34 @@ window.BHCloud = (() => {
       await Auth.signOut();
       user = null; emit();
     },
+    // "Delete my account" (Apple requires it for apps with sign-in). Removes every Bright Harbor
+    // cloud save for this player, revokes Sign in with Apple, then deletes the account itself.
+    // Progress on this phone stays. Throws if it couldn't finish, so the game can say so.
+    async deleteAccount() {
+      if (!user) return;
+      clearTimeout(timer); timer = null; deleting = true;
+      const p = provider();
+      // Sign in again first when needed: Apple only revokes with a fresh authorization code, and
+      // Firebase only deletes an account after a recent sign-in.
+      const fresh = () => p === "apple" ? Auth.signInWithApple() : Auth.signInWithGoogle();
+      try {
+        if (p === "apple") {
+          const r = await fresh();
+          if (r?.credential?.authorizationCode) await Auth.revokeAccessToken({ token: r.credential.authorizationCode });
+        }
+        const { snapshots } = await Store.getCollection({ reference: `saves/${user.uid}/games` });
+        for (const s of snapshots || []) await Store.deleteDocument({ reference: s.path || `saves/${user.uid}/games/${s.id}` });
+        try { await Auth.deleteUser(); }
+        catch (e) {
+          if (!/recent/i.test(String(e?.code || e?.message || e))) throw e;
+          await fresh(); await Auth.deleteUser();
+        }
+        user = null; emit();
+      } finally { deleting = false; }
+    },
     // Upload a few seconds after the last save, so a burst of saves sends once.
     changed() {
-      if (!user) return;
+      if (!user || deleting) return;
       clearTimeout(timer);
       timer = setTimeout(() => upload(hook().get()).catch(e => console.warn("Cloud upload failed", e)), config.delayMs);
     },
