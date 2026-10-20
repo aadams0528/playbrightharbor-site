@@ -887,6 +887,7 @@ function levelUp(){
   },900+left.length*40);
 }
 // Sample between-level ad, from level 3 on, every other level, unless ads were removed.
+// Any ad the player watches (rewarded or this one) resets the count, so ads never come back to back.
 function maybeInterstitial(then){
   if(level<3||store.get('nb-noads',false)||++levelsSinceAd<2)return then();
   levelsSinceAd=0;watchAd(then,then,'Between-level ad',true);
@@ -1010,7 +1011,7 @@ function watchAd(onReward,onSkip=()=>{},title,forced=false){
   }
   toast('Loading video…',false,1500);
   let rewarded=false,handles=[];
-  const done=()=>{adPlaying=false;handles.forEach(h=>h.remove());rewarded?onReward():onSkip()};
+  const done=()=>{adPlaying=false;levelsSinceAd=0;handles.forEach(h=>h.remove());rewarded?onReward():onSkip()};
   Promise.all([
     AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true;track('ad_reward',{mode,level})}),
     AdMob.addListener('onRewardedVideoAdDismissed',done),
@@ -1020,7 +1021,7 @@ function watchAd(onReward,onSkip=()=>{},title,forced=false){
 }
 function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
   if(adPlaying)return;adPlaying=true;
-  const finish=f=>{adPlaying=false;f()};
+  const finish=f=>{adPlaying=false;levelsSinceAd=0;f()};
   let n=3;
   openSheet(`<h3>${title}</h3><div class="adbox"><span class="count" id="adn">${n}</span>In the real app, a short video ad plays here.</div>
     <div class="btns">${forced?'':'<button class="btn plain" id="adskip">Close without reward</button>'}</div>`,true);
@@ -1415,7 +1416,7 @@ checkStreakAtRisk();
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut}},findRuns,fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut,levelsSinceAd}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
 })();
 </script>
 
