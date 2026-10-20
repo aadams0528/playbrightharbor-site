@@ -1339,7 +1339,7 @@ function watchAd(onReward, onSkip = () => {}, title = "Sample ad", forced = fals
   const iv = setInterval(() => {
     const el = document.getElementById("adn");
     if (--n > 0 && el) { el.textContent = n; return; }
-    clearInterval(iv); closeSheet(); onReward();
+    clearInterval(iv); closeSheet(); if (!forced) levelsSinceAd = 0; onReward();
   }, 1000);
   // The close button ignores taps for a moment, so the second tap of a double-tap on the ad button
   // can't land on it and cancel the reward.
@@ -1473,6 +1473,7 @@ function levelUp() {
   }, 900 + left.length * 40);
 }
 // Sample between-level ad, from level 3 on, every other level, unless ads were removed.
+// A rewarded video the player chose to watch counts as the ad break, so a forced ad never follows it.
 let levelsSinceAd = 0;
 function maybeInterstitial(then) {
   if (level < 3 || store.get("wb-noads", false) || ++levelsSinceAd < 2) return then();
@@ -1810,7 +1811,7 @@ watchAd = function (onReward, onSkip = () => {}, title, forced = false) {
   }
   toast("Loading video…", false, 1500);
   let rewarded = false, handles = [];
-  const done = () => { adPlaying = false; handles.forEach(h => h.remove()); rewarded ? onReward() : onSkip(); };
+  const done = () => { adPlaying = false; handles.forEach(h => h.remove()); if (rewarded) levelsSinceAd = 0; rewarded ? onReward() : onSkip(); };
   Promise.all([
     AdMob.addListener("onRewardedVideoAdReward", () => { rewarded = true; track("ad_reward", { level }); }),
     AdMob.addListener("onRewardedVideoAdDismissed", done),
