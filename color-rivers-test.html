@@ -134,7 +134,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.56 · 270 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.57 · 270 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -496,6 +496,8 @@ if(typeof module!=="undefined")module.exports={CHAPTERS,HAND,LEVELS,DAILY,DELTA,
 // ---------- Game ----------
 const $=id=>document.getElementById(id);
 const cv=$("board"),ctx=cv.getContext("2d");
+// a negative radius throws (Cooper, Oct 20: a win spark on Weir did, and the board stopped drawing), so clamp every circle
+{const arc=ctx.arc.bind(ctx);ctx.arc=(x,y,r,a,b,ccw)=>arc(x,y,Math.max(0,r),a,b,ccw);}
 const store={get(k,d){try{const v=localStorage.getItem("cr-"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("cr-"+k,JSON.stringify(v));}catch(e){}}};
 // Progress format 3: everything per level is keyed by the level's stable id (see buildLevels).
 // Older saves were keyed by list position; carry them over once by mapping position -> id.
@@ -1050,13 +1052,18 @@ $("hintBtn").onclick=()=>{
   if(won)return;pruneHints();
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
   // a den the player just tapped picks the stream, so they can ask about the route they're stuck on (Alan, Oct 20)
-  const mine=picked>=0&&!onRoute(picked)&&!hints.includes(picked),s=mine?picked:nextHint();picked=-1;
+  // the pick-a-stream note comes before the first automatic hint is spent (Cooper, Oct 20), so the player can still choose
+  if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Stuck on one stream? Tap its den, then tap Hint, and the hint shows that stream's route. Or tap Hint again for an automatic hint.");return;}
+  const mine=picked>=0&&!onRoute(picked)&&!hints.includes(picked),s=mine?picked:nextHint();
+  // a picked stream that's already right (or already hinted) can't be the hint: say so instead of quietly picking another
+  if(picked>=0&&!mine&&s>=0){const m=G.sources[picked]?NAMES[G.sources[picked].mask]:null;
+    toast(`${m?"The "+m+" stream":"That branch"} ${onRoute(picked)?"is already on its route":"already has a hint"}, so this hint shows another stream.`);}
+  picked=-1;
   if(s<0){hints=[];updateHintBtn();return;}
   // a stream that feeds a delta brings its branches into the same hint (Cooper, Oct 20: on Marsh the hint stopped at the delta)
   const give=()=>{const add=k=>{if(!hints.includes(k))hints.push(k);const end=routeOf(k).slice(-1)[0];
       if(G.cells[end]?.t==="delta")G.starts.forEach((_,b)=>{if(b!==k&&routeOf(b)[0]===end&&!onRoute(b))add(b);});};
-    add(s);hintsUsed++;updateHintBtn();
-    if(!mine&&!lesson&&!prog.seen["note:pickhint"])teachOnce("pickhint","Stuck on one stream? Tap its den, then tap Hint, and the hint shows that stream's route.");};
+    add(s);hintsUsed++;updateHintBtn();};
   if(spendHint())give();else offerHintAd(give);
 };
 // ---------- Lessons ----------
@@ -1453,6 +1460,10 @@ function drawHints(now){
     const pts=[];path.forEach((c,k)=>{if(k&&isJump(G,path[k-1],c)){pts.push(null);}pts.push(C(c));});
     [[ "rgba(0,0,0,.45)",cs*.13],[color,cs*.08]].forEach(([st,lw])=>{ctx.strokeStyle=st;ctx.lineWidth=lw;ctx.beginPath();let pen=false;pts.forEach(q=>{if(!q){pen=false;return;}pen?ctx.lineTo(...q):ctx.moveTo(...q);pen=true;});ctx.stroke();});
     ctx.restore();});
+  // the den picked for the next hint gets a bright ring (Cooper, Oct 20: nothing showed the tap had picked it)
+  if(picked>=0&&!won&&G.starts[picked]!=null){const [cx,cy]=C(G.starts[picked]),a=.5+.5*Math.sin(now/180);ctx.save();
+    ctx.strokeStyle=`rgba(255,246,216,${.6+.4*a})`;ctx.lineWidth=cs*.07;ctx.setLineDash([cs*.16,cs*.1]);ctx.lineDashOffset=-now/40;
+    ctx.beginPath();ctx.arc(cx,cy,cs*(.5+.04*a),0,Math.PI*2);ctx.stroke();ctx.restore();}
 }
 function drawSurface(now){paths.forEach((p,k)=>{if(p.length<3)return;const t=p[p.length-1];
   if(G.cells[t].t!=="tunnel"||G.partner[p[p.length-2]]!==t||done(k))return;
@@ -1634,7 +1645,7 @@ function draw(now){frameNow=now;
   // board wash: the whole pond briefly takes on the new color
   if(wash){const a=(now-wash.t)/900;if(a>=1)wash=null;else{ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=hexA(COLORS[wash.color],wash.strength*Math.sin(a*Math.PI));ctx.fillRect(0,0,W,H);ctx.restore();}}
   sparks=sparks.filter(s=>now-s.t<(s.big?1600:900));
-  sparks.forEach(s=>{const dur=s.big?1600:700,sc=s.big?2.6:1;const a=(now-s.t)/dur;const [cx,cy]=C(s.cell);ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle=COLORS[s.color];ctx.lineWidth=cs*.06;ctx.beginPath();for(let r=0;r<3;r++){const ar=Math.max(0,a-r*.15);if(ar>0){ctx.globalAlpha=(1-ar)*(1-r*.25);ctx.beginPath();ctx.arc(cx,cy,cs*(.2+ar*.9*sc),0,Math.PI*2);ctx.stroke();}}ctx.globalAlpha=1-a;if(s.big){ctx.globalAlpha=(1-a)*.35;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx,cy,cs*(.3+a*1.6),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1-a;}
+  sparks.forEach(s=>{const dur=s.big?1600:700,sc=s.big?2.6:1;const a=Math.max(0,(now-s.t)/dur);const [cx,cy]=C(s.cell);ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle=COLORS[s.color];ctx.lineWidth=cs*.06;ctx.beginPath();for(let r=0;r<3;r++){const ar=Math.max(0,a-r*.15);if(ar>0){ctx.globalAlpha=(1-ar)*(1-r*.25);ctx.beginPath();ctx.arc(cx,cy,cs*(.2+ar*.9*sc),0,Math.PI*2);ctx.stroke();}}ctx.globalAlpha=1-a;if(s.big){ctx.globalAlpha=(1-a)*.35;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx,cy,cs*(.3+a*1.6),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1-a;}
     for(let k=0;k<8;k++){const ang=k*Math.PI/4;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx+Math.cos(ang)*cs*(.25+a*.45*sc),cy+Math.sin(ang)*cs*(.25+a*.45*sc),cs*(s.big?.06:.035),0,Math.PI*2);ctx.fill();}ctx.restore();});
   // nests
   const st=nestStatus(G,paths,col);
@@ -1722,7 +1733,9 @@ function draw(now){frameNow=now;
   // win shimmer
   if(won){const a=Math.min(1,(now-wonAt)/600);ctx.fillStyle=`rgba(255,240,200,${.12*Math.sin(a*Math.PI)})`;ctx.fillRect(0,0,W,H);}
 }
-function loop(now){if(G)draw(now);requestAnimationFrame(loop);}
+// one bad frame must never stop the game: schedule the next frame first, and reset the canvas state if a draw throws
+let drawErr=0;
+function loop(now){requestAnimationFrame(loop);if(!G)return;try{draw(now);}catch(e){for(let i=0;i<20;i++)ctx.restore();ctx.globalAlpha=1;if(!drawErr++)console.error("draw",e);}}
 
 // keep the board across live updates
 window.claude?.hot?.snapshot?.(()=>({lv,paths,daily:!!daily}));
