@@ -76,12 +76,12 @@ const INTRO={
 };
 let store={get(k,d){try{const v=localStorage.getItem("flit."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("flit."+k,JSON.stringify(v))}catch(e){}}};
 let done=store.get("done",{}),seenIntro=store.get("intro",{}),unlocked=/[?&]unlock=1/.test(location.search)||store.get("unlock",false);
-let cur=0,birds=[],hist=[],undos=0,flying=[],press=null,hintId=null,shake=null,nextId=0;
+let cur=0,birds=[],hist=[],undos=0,startN=0,flying=[],press=null,hintId=null,shake=null,nextId=0;
 const cv=document.getElementById("cv"),cx=cv.getContext("2d");
 let W=0,dpr=1;
 function n(){return LEVELS[cur].n}
 function seedRand(s){return()=>{s=(s*16807)%2147483647;return s/2147483647}}
-function load(i){cur=i;const L=LEVELS[i];const rnd=seedRand(i*977+13);birds=L.b.map(([r,c,d,o],k)=>({id:nextId++,r,c,d,o:!!o,ang:d*Math.PI/2,col:COLORS[Math.floor(rnd()*COLORS.length)],j:rnd()*6.28}));hist=[];undos=0;flying=[];hintId=null;tip();drawDots();
+function load(i){cur=i;const L=LEVELS[i];const rnd=seedRand(i*977+13);birds=L.b.map(([r,c,d,o],k)=>({id:nextId++,r,c,d,o:!!o,ang:d*Math.PI/2,col:COLORS[Math.floor(rnd()*COLORS.length)],j:rnd()*6.28}));hist=[];undos=0;startN=birds.length;flying=[];hintId=null;tip();drawDots();
  document.getElementById("lvl").textContent="Level "+(i+1)+" of "+LEVELS.length;
  if(L.intro&&!seenIntro[L.intro])showIntro(L.intro);else if(L.intro)tutorialHint();}
 function at(r,c){return birds.find(b=>b.r===r&&b.c===c)}
@@ -114,11 +114,12 @@ function showIntro(k){const it=INTRO[k];card('<h2>'+it.h+'</h2><ol>'+it.steps.ma
 function card(h){document.getElementById("cardbody").innerHTML=h;document.getElementById("sheet").hidden=false}
 function closeCard(){document.getElementById("sheet").hidden=true}
 function tip(t,bad){const el=document.getElementById("tip");const L=LEVELS[cur];
+ if(t==null&&(L.intro==="block"||L.intro==="startle")&&birds.length<startN)t="Nice! Now tap the <b>glowing bird</b>.";
  if(t==null){t=L.intro==="tap"?"Tap the <b>glowing bird</b>.":L.intro==="block"?"Send the <b>glowing bird</b> first. The other one is blocked.":L.intro==="startle"?"Send the <b>glowing bird</b>. The bird beside it turns ↻.":L.intro==="owl"?"The brown owl won't turn. Follow the <b>glow</b>.":"Birds left: <b>"+birds.length+"</b>. Hold a bird to preview its flight."}
  el.innerHTML=t;el.classList.toggle("bad",!!bad)}
 function drawDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>load(i);d.appendChild(b)})}
 document.getElementById("undo").onclick=()=>{if(!hist.length)return;birds=hist.pop();undos++;flying=[];tip();tutorialHint()};
-document.getElementById("restart").onclick=()=>{const u=undos+(hist.length?1:0);load(cur);undos=u};
+document.getElementById("restart").onclick=()=>load(cur);
 document.getElementById("hint").onclick=()=>{const m=nextMove();if(m){hintId=m.id;tip("Try the <b>glowing bird</b>.")}else tip("This position can't be cleared. Tap <b>Undo</b> or <b>Restart</b>.",true)};
 let taps=0,tapT=0;document.getElementById("title").onclick=()=>{const t=Date.now();taps=t-tapT<600?taps+1:1;tapT=t;if(taps>=5){unlocked=true;store.set("unlock",true);drawDots();tip("Tester mode: every level is open.")}};
 // sound
