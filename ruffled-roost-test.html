@@ -48,6 +48,12 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(1.5rem,7.5vw,2rem)
 .dots button.done{background:var(--meadow2);border-color:var(--tuft);color:var(--ink)}
 .dots button.cur{border-color:var(--accent);color:var(--accent)}
 .dots button:disabled{opacity:.35;cursor:default}
+.dots button{position:relative;height:40px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.dots button .st{font-size:.6rem;letter-spacing:-.5px;margin-top:2px;color:var(--accent)}
+.dots button .st i{font-style:normal;opacity:.3;color:var(--soft)}
+.dots button .bx{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--card)}
+.pkey{font:600 .78rem var(--body);color:var(--soft);margin:0 0 8px}
+.pkey b{color:var(--accent)}
 /* the board takes what height is left after the header, tip and buttons, so the controls never fall below the fold */
 .boardwrap{position:relative;width:min(100%,max(240px,calc(100vh - 250px)));width:min(100%,max(240px,calc(100dvh - 250px)));aspect-ratio:1;margin:0 auto}
 canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px}
@@ -85,7 +91,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px
     <button class="btn" id="hint">Hint</button>
     <button class="btn" id="nudge" hidden>Nudge (1)</button>
   </div>
-  <div class="small">Prototype v0.6.1 for testing. Tap a bird to send it. Press and hold a bird to preview where it will fly; letting go after a hold does not move it.</div>
+  <div class="small">Prototype v0.6.2 for testing. Tap a bird to send it. Press and hold a bird to preview where it will fly; letting go after a hold does not move it.</div>
 </div>
 <div class="sheet" id="sheet" hidden><div class="card" id="cardbody"></div></div>
 <script>
@@ -178,8 +184,9 @@ function tip(t,bad){const el=document.getElementById("tip");const L=LEVELS[cur];
  el.innerHTML=t;el.classList.toggle("bad",!!bad)}
 let picker=false;
 function drawDots(){const lv=document.getElementById("lvl");lv.textContent="Level "+(cur+1)+" ▾";lv.setAttribute("aria-label","Level "+(cur+1)+" of "+LEVELS.length+", choose a level");if(picker)openPicker()}
-function openPicker(){picker=true;card('<h2>Choose a level</h2><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
-function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name+" · "+pk.place;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
+function openPicker(){picker=true;card('<h2>Choose a level</h2><p class="pkey"><b>★</b> stars earned · <b>●</b> bonus goal still open</p><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
+function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name+(pk.place.toLowerCase()===pk.name.toLowerCase()?"":" · "+pk.place);d.appendChild(lb)}const b=document.createElement("button");// best stars under the number, and a dot when the bonus goal is still open
+const st=done[i]||0,open=st>0&&!(feat[i]&&feat[i].x);b.innerHTML=(i+1)+(st?'<span class="st">'+"★".repeat(st)+"<i>"+"★".repeat(3-st)+"</i></span>":"")+(open?'<span class="bx"></span>':"");b.className=(st?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(st?", "+st+" of 3 stars":"")+(open?", bonus goal still open":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
 // help: the rules, a bird guide for every species reached, and every lesson reached, replayable
 const SPECIES=[{t:0,from:0,name:"Songbird",txt:"Turns a quarter turn ↻ when a bird beside it takes off."},{t:1,from:9,name:"Owl",txt:"Unimpressed. Never turns, not even for a Nudge. Still ruffles its neighbours when it flies."},{t:2,from:12,name:"Flip bird",txt:"Tumbles all the way around (a U-turn) when ruffled. A Nudge turns it only a quarter turn."},{t:9,from:28,name:"Knotted branch",txt:"Terrain, not a bird. Blocks any flight lane through it. Never moves, never ruffles, and can't be nudged."},{t:3,from:20,name:"Dizzy bird",txt:"Alternates: a quarter turn ↻, then a U-turn, then ↻ again. Its tag shows the next one. A Nudge is a quarter turn and leaves the tag alone."}];
 function openHelp(){picker=false;const reached=Object.keys(INTRO).filter(k=>seenIntro[k]||LEVELS.findIndex(L=>L.intro===k)<=cur);const sp=SPECIES.filter(q=>unlocked||q.from<=cur||done[q.from]);
