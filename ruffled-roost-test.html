@@ -25,9 +25,11 @@
 html,body{height:100%}
 body{background:linear-gradient(var(--sky2),var(--sky) 40%);background-color:var(--sky);color:var(--ink);font-family:var(--body);font-size:16px;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 .app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:12px;padding-block:12px 20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+header{display:flex;align-items:center;gap:8px}
 h1{font-family:var(--display);font-weight:800;font-size:clamp(1.5rem,7.5vw,2rem);white-space:nowrap;margin:0;letter-spacing:.5px;color:var(--accent);cursor:default}
-.lvl{font-weight:800;white-space:nowrap;color:var(--soft);font-variant-numeric:tabular-nums}
+.lvl{margin-left:auto;font:800 .95rem var(--body);white-space:nowrap;color:var(--ink);font-variant-numeric:tabular-nums;background:var(--card);border:2px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
+.help{width:38px;height:38px;flex:none;border-radius:50%;border:2px solid var(--line);background:var(--card);color:var(--ink);font:800 1.1rem var(--body);cursor:pointer;padding:0}
+.lvl:focus-visible,.help:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .dots{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .dots .pack{flex-basis:100%;font:800 .78rem var(--body);letter-spacing:.6px;text-transform:uppercase;color:var(--soft);margin-top:2px}
 .btn[hidden]{display:none}
@@ -36,27 +38,30 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(1.5rem,7.5vw,2rem)
 .dots button.done{background:var(--meadow2);border-color:var(--tuft);color:var(--ink)}
 .dots button.cur{border-color:var(--accent);color:var(--accent)}
 .dots button:disabled{opacity:.35;cursor:default}
-.boardwrap{position:relative;width:100%;aspect-ratio:1;max-width:100%}
+/* the board takes what height is left after the header, tip and buttons, so the controls never fall below the fold */
+.boardwrap{position:relative;width:min(100%,max(240px,calc(100vh - 250px)));width:min(100%,max(240px,calc(100dvh - 250px)));aspect-ratio:1;margin:0 auto}
 canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px}
 .tip{min-height:3.2em;font-weight:700;line-height:1.35;text-wrap:balance}
 .tip b{color:var(--accent)}
 .tip.bad{color:var(--warn)}
 .row{display:flex;gap:10px;flex-wrap:wrap}
-.btn{flex:1;min-width:70px;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:12px 10px;font:800 1rem var(--body);cursor:pointer}
+.btn{flex:1;min-width:70px;white-space:nowrap;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:12px 6px;font:800 1rem var(--body);cursor:pointer}
 .btn.main{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn:focus-visible,.dots button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .sheet{position:fixed;inset:0;background:rgba(20,30,25,.45);display:flex;align-items:flex-end;justify-content:center;z-index:5;padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet[hidden]{display:none}
-.card{background:var(--card);color:var(--ink);width:min(560px,100%);border-radius:24px 24px 0 0;padding:22px max(20px,env(safe-area-inset-left,0px)) 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+.card{max-height:88vh;max-height:88dvh;overflow-y:auto;background:var(--card);color:var(--ink);width:min(560px,100%);border-radius:24px 24px 0 0;padding:22px max(20px,env(safe-area-inset-left,0px)) 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
 .card h2{font-family:var(--display);margin:0;font-size:1.6rem;text-wrap:balance}
+.card h3{margin:4px 0 0;font:800 .8rem var(--body);letter-spacing:.6px;text-transform:uppercase;color:var(--soft)}
+.helplist{display:flex;flex-direction:column;gap:8px}
+.helplist .btn{text-align:left;flex:none}
 .card ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px;line-height:1.4}
 .stars{font-size:2rem;letter-spacing:4px;color:var(--accent)}
 .small{color:var(--soft);font-size:.9rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 <div class="app">
-  <header><h1 id="title">Ruffled Roost</h1><span class="lvl" id="lvl">Level 1 of 12</span></header>
-  <div class="dots" id="dots"></div>
+  <header><h1 id="title">Ruffled Roost</h1><button class="lvl" id="lvl" aria-haspopup="dialog">Level 1 ▾</button><button class="help" id="help" aria-label="How to play">?</button></header>
   <div class="boardwrap"><canvas id="cv" aria-label="Game board"></canvas></div>
   <div class="tip" id="tip"></div>
   <div class="row">
@@ -65,11 +70,11 @@ canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px
     <button class="btn" id="hint">Hint</button>
     <button class="btn" id="nudge" hidden>Nudge (1)</button>
   </div>
-  <div class="small">Prototype v0.3 for testing. Press and hold a bird to see where it will fly. Let go on the bird to send it, or slide off it to cancel.</div>
+  <div class="small">Prototype v0.4 for testing. Press and hold a bird to see where it will fly. Let go on the bird to send it, or slide off it to cancel.</div>
 </div>
 <div class="sheet" id="sheet" hidden><div class="card" id="cardbody"></div></div>
 <script>
-const LEVELS=[{"n":3,"b":[[1,1,0,0]],"intro":"tap"},{"n":3,"b":[[1,0,1,0],[1,2,0,0]],"intro":"block"},{"n":3,"b":[[1,1,0,0],[1,2,2,0],[2,2,0,0]],"intro":"startle"},{"n":4,"b":[[2,0,1,0],[2,1,3,0],[0,0,1,0],[1,0,1,0]],"intro":"use"},{"n":4,"b":[[2,1,3,0],[2,2,1,0],[0,1,2,0],[1,1,0,0]]},{"n":5,"b":[[3,4,0,0],[3,3,1,0],[2,3,3,0],[2,1,3,0],[4,1,2,0],[3,0,3,0],[0,4,2,0],[2,2,0,0]]},{"n":5,"b":[[1,1,2,0],[0,2,3,0],[3,1,0,0],[4,3,0,0],[3,4,2,0],[4,2,0,0],[4,1,0,0],[3,3,2,0],[0,3,1,0]]},{"n":5,"b":[[2,0,0,0],[1,2,1,0],[3,2,2,0],[1,1,3,0],[3,1,3,0],[0,3,1,0],[4,3,0,0],[1,3,2,0],[4,2,2,0]]},{"n":6,"b":[[4,4,1,0],[3,0,2,0],[1,1,0,0],[4,2,0,0],[4,1,0,0],[3,4,1,0],[4,3,0,0],[5,4,0,0],[5,2,2,0],[4,0,0,0]]},{"n":4,"b":[[0,1,0,0],[1,1,0,1],[1,2,3,0]],"intro":"owl"},{"n":6,"b":[[0,5,0,1],[0,2,1,1],[3,1,1,0],[0,3,1,0],[1,3,3,0],[0,1,1,0],[3,0,3,0],[4,5,0,0],[0,0,0,0],[5,3,3,0],[2,1,1,0],[1,0,0,0],[1,1,1,0],[2,3,3,0]]},{"n":6,"b":[[1,3,0,1],[1,4,1,1],[2,3,0,1],[2,0,0,0],[2,1,2,0],[4,4,1,0],[5,5,2,0],[5,1,0,0],[5,0,2,0],[2,4,3,0],[2,2,0,0],[5,2,3,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,2],[2,1,2,0],[0,1,2,1]],"intro":"flip"},{"n":4,"b":[[0,1,2,2],[0,0,1,2],[0,2,3,0],[1,0,0,0],[1,2,2,0]]},{"n":5,"b":[[1,2,1,2],[1,0,1,2],[3,3,1,0],[0,3,2,0],[4,3,0,0],[3,0,0,0],[1,1,2,0]]},{"n":5,"b":[[4,3,0,2],[2,4,1,2],[0,3,2,2],[2,2,0,0],[0,0,1,0],[2,3,1,0],[1,4,2,0],[4,2,3,0],[0,2,2,0]]},{"n":5,"b":[[1,2,2,1],[0,2,3,1],[4,0,0,2],[3,2,3,2],[4,2,2,0],[3,0,3,0],[4,1,3,0],[1,0,2,0],[0,3,1,0]]},{"n":6,"b":[[5,2,3,1],[5,5,0,1],[4,3,3,2],[2,4,3,2],[3,3,1,2],[5,3,0,0],[4,1,1,0],[2,3,0,0],[1,5,1,0],[2,1,2,0],[2,0,1,0],[2,2,0,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,0]],"k":1,"intro":"nudge"},{"n":5,"b":[[1,4,0,1],[0,2,0,2],[1,0,1,2],[4,1,0,0],[0,4,2,0],[0,0,1,0],[3,0,0,0],[0,3,2,0]],"k":1}];
+const LEVELS=[{"n":3,"b":[[1,1,0,0]],"intro":"tap"},{"n":3,"b":[[1,0,1,0],[1,2,0,0]],"intro":"block"},{"n":3,"b":[[1,1,0,0],[1,2,2,0],[2,2,0,0]],"intro":"startle"},{"n":4,"b":[[2,0,1,0],[2,1,3,0],[0,0,1,0],[1,0,1,0]],"intro":"use"},{"n":4,"b":[[2,1,3,0],[2,2,1,0],[0,1,2,0],[1,1,0,0]]},{"n":5,"b":[[3,4,0,0],[3,3,1,0],[2,3,3,0],[2,1,3,0],[4,1,2,0],[3,0,3,0],[0,4,2,0],[2,2,0,0]]},{"n":5,"b":[[1,1,2,0],[0,2,3,0],[3,1,0,0],[4,3,0,0],[3,4,2,0],[4,2,0,0],[4,1,0,0],[3,3,2,0],[0,3,1,0]]},{"n":5,"b":[[2,0,0,0],[1,2,1,0],[3,2,2,0],[1,1,3,0],[3,1,3,0],[0,3,1,0],[4,3,0,0],[1,3,2,0],[4,2,2,0]]},{"n":6,"b":[[2,4,0,0],[2,1,1,0],[5,3,3,0],[5,1,1,0],[4,4,1,0],[4,2,1,0],[5,4,2,0],[5,0,0,0],[4,0,2,0],[2,5,2,0]]},{"n":4,"b":[[0,1,0,0],[1,1,0,1],[1,2,3,0]],"intro":"owl"},{"n":6,"b":[[0,5,0,1],[0,2,1,1],[3,1,1,0],[0,3,1,0],[1,3,3,0],[0,1,1,0],[3,0,3,0],[4,5,0,0],[0,0,0,0],[5,3,3,0],[2,1,1,0],[1,0,0,0],[1,1,1,0],[2,3,3,0]]},{"n":6,"b":[[2,1,0,1],[3,0,1,1],[2,3,1,1],[1,2,2,0],[5,2,0,0],[2,2,0,0],[3,2,0,0],[0,5,0,0],[0,4,1,0],[4,1,2,0],[5,1,0,0],[3,1,0,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,2],[2,1,2,0],[0,1,2,1]],"intro":"flip"},{"n":4,"b":[[0,1,2,2],[0,0,1,2],[0,2,3,0],[1,0,0,0],[1,2,2,0]]},{"n":5,"b":[[1,2,1,2],[1,0,1,2],[3,3,1,0],[0,3,2,0],[4,3,0,0],[3,0,0,0],[1,1,2,0]]},{"n":5,"b":[[4,3,0,2],[2,4,1,2],[0,3,2,2],[2,2,0,0],[0,0,1,0],[2,3,1,0],[1,4,2,0],[4,2,3,0],[0,2,2,0]]},{"n":5,"b":[[1,2,2,1],[0,2,3,1],[4,0,0,2],[3,2,3,2],[4,2,2,0],[3,0,3,0],[4,1,3,0],[1,0,2,0],[0,3,1,0]]},{"n":6,"b":[[5,2,3,1],[5,5,0,1],[4,3,3,2],[2,4,3,2],[3,3,1,2],[5,3,0,0],[4,1,1,0],[2,3,0,0],[1,5,1,0],[2,1,2,0],[2,0,1,0],[2,2,0,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,0]],"k":1,"intro":"nudge"},{"n":5,"b":[[1,4,0,1],[0,2,0,2],[1,0,1,2],[4,1,0,0],[0,4,2,0],[0,0,1,0],[3,0,0,0],[0,3,2,0]],"k":1}];
 const PACKS=[{name:"First Flight",from:0},{name:"Mixed Flock",from:12}];
 const TURN=[1,0,2];
 const DR=[-1,0,1,0],DC=[0,1,0,-1];
@@ -82,7 +87,7 @@ const INTRO={
  use:{h:"Plan the turns",steps:["Now you choose which bird goes first.","Press and hold any bird to preview: its path lights up and the birds that will turn show ↻. Let go on the bird to send it, or slide off it to cancel.","If every bird gets stuck, tap Undo. There is always a way."]},
  owl:{h:"Meet the owl",steps:["Owls are calm. Their feathers never ruffle, so they never turn.","Owls still ruffle their neighbors when they fly.","Use the owl's steady gaze to plan around it."]},
  flip:{h:"Meet the flip bird",steps:["Welcome to the Mixed Flock! The purple bird with the dark eye mask and the white U on its chest is a <b>flip bird</b>.","When a bird beside it takes off, a flip bird turns all the way around (a U-turn) instead of a quarter turn.","Hold a bird to preview: a songbird beside it shows ↻, a flip bird shows U, an owl shows –.","Here the flip bird faces a stuck bird. Send the glowing bird and watch the flip bird turn around."]},
- nudge:{h:"Your Nudge",steps:["Some levels give you one free <b>Nudge</b>. It comes back every time you play the level.","Tap <b>Nudge</b>, then tap a bird. That bird turns a quarter turn ↻ and nobody flies.","Owls won't budge. Tap Nudge again to cancel, or Undo to take it back.","These two birds block each other. Nudge the glowing bird, then send them both home."]}
+ nudge:{h:"Your Nudge",steps:["Some levels give you one free <b>Nudge</b>. It comes back every time you play the level.","Tap <b>Nudge</b>, then tap a bird. That bird turns a quarter turn (90°) clockwise ↻ and nobody flies. A Nudge is always a quarter turn, even on a flip bird.","Owls won't budge. Tap Nudge again to cancel, or Undo to take it back.","These two birds block each other. Nudge the glowing bird, then send them both home."]}
 };
 let store={get(k,d){try{const v=localStorage.getItem("flit."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("flit."+k,JSON.stringify(v))}catch(e){}}};
 let done=store.get("done",{}),seenIntro=store.get("intro",{}),unlocked=/[?&]unlock=1/.test(location.search)||store.get("unlock",false);
@@ -92,7 +97,7 @@ let W=0,dpr=1;
 function n(){return LEVELS[cur].n}
 function seedRand(s){return()=>{s=(s*16807)%2147483647;return s/2147483647}}
 function load(i){cur=i;const L=LEVELS[i];const rnd=seedRand(i*977+13);birds=L.b.map(([r,c,d,t],k)=>({id:nextId++,r,c,d,t,o:t===1,f:t===2,ang:d*Math.PI/2,col:COLORS[Math.floor(rnd()*COLORS.length)],j:rnd()*6.28}));hist=[];undos=0;nudges=L.k||0;nudging=false;blinks=[];startN=birds.length;flying=[];ruffles=[];feathers=[];hintId=null;nudgeBtn();tip();drawDots();
- document.getElementById("lvl").textContent="Level "+(i+1)+" of "+LEVELS.length;
+
  if(L.intro&&!seenIntro[L.intro])showIntro(L.intro);else if(L.intro)tutorialHint();}
 function at(r,c){return birds.find(b=>b.r===r&&b.c===c)}
 function blocker(b){let r=b.r+DR[b.d],c=b.c+DC[b.d];while(r>=0&&c>=0&&r<n()&&c<n()){const x=at(r,c);if(x)return x;r+=DR[b.d];c+=DC[b.d]}return null}
@@ -137,14 +142,22 @@ function win(){done[cur]=Math.max(done[cur]||0,undos===0?3:undos<=2?2:1);store.s
  card('<h2>'+(last?"You cleared every level!":"Level "+(cur+1)+" cleared")+'</h2><div class="stars" aria-label="'+s+' of 3 stars">'+"★".repeat(undos===0?3:undos<=2?2:1)+"☆".repeat(3-(undos===0?3:undos<=2?2:1))+'</div><p class="small">'+(undos===0?"No undos. Perfect flight plan!":"Clear it with no undos for three stars.")+'</p>'+(packEnd?'<p><b>'+PACKS.find(p=>p.from===cur+1).name+'</b> unlocked: new birds are joining the roost.</p>':'')+(last?'<p>Thanks for playing the prototype. Which level did you like most, and where did you get stuck?</p>':'')+'<div class="row">'+(last?'':'<button class="btn main" id="nx">Next level</button>')+'<button class="btn" id="again">Play again</button></div>');
  const nx=document.getElementById("nx");if(nx)nx.onclick=()=>{closeCard();load(cur+1)};document.getElementById("again").onclick=()=>{closeCard();load(cur)};(nx||document.getElementById("again")).focus();}
 function showIntro(k){const it=INTRO[k];card('<h2>'+it.h+'</h2><ol>'+it.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol><div class="row"><button class="btn main" id="ok">Got it</button></div>');const ok=document.getElementById("ok");ok.focus();ok.onclick=()=>{seenIntro[k]=1;store.set("intro",seenIntro);closeCard();tutorialHint();tip()}}
-function card(h){document.getElementById("cardbody").innerHTML=h;document.getElementById("sheet").hidden=false}
+function card(h){if(!/id="dots"/.test(h))picker=false;document.getElementById("cardbody").innerHTML=h;document.getElementById("sheet").hidden=false}
 function closeCard(){document.getElementById("sheet").hidden=true}
 function tip(t,bad){const el=document.getElementById("tip");const L=LEVELS[cur];
  if(t==null&&(L.intro==="block"||L.intro==="startle")&&birds.length<startN)t="Nice! Now tap the <b>glowing bird</b>.";
  if(t==null){t=L.intro==="tap"?"Tap the <b>glowing bird</b>.":L.intro==="block"?"Send the <b>glowing bird</b> first. The other one is blocked.":L.intro==="startle"?"Send the <b>glowing bird</b>. The bird beside it gets ruffled and turns ↻.":L.intro==="owl"?"The brown owl won't turn. Follow the <b>glow</b>.":L.intro==="flip"?(birds.length<startN?"It turned all the way around! Follow the <b>glow</b>.":"Send the <b>glowing bird</b>. The flip bird beside it makes a U-turn."):L.intro==="nudge"?(nudges?"Tap <b>Nudge</b>, then the <b>glowing bird</b>.":"Now send them home. Follow the <b>glow</b>."):"Birds left: <b>"+birds.length+"</b>."+(L.k?" Nudges: <b>"+nudges+"</b>.":"")+" Hold a bird to preview its flight."}
- if(nudging&&!bad)t="Tap a bird to nudge it a quarter turn ↻. Tap <b>Cancel</b> to keep your Nudge.";
+ if(nudging&&!bad)t="Tap a bird to nudge it a quarter turn (90°) ↻. Flip birds too. Tap <b>Cancel</b> to keep your Nudge.";
  el.innerHTML=t;el.classList.toggle("bad",!!bad)}
-function drawDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>load(i);d.appendChild(b)})}
+let picker=false;
+function drawDots(){const lv=document.getElementById("lvl");lv.textContent="Level "+(cur+1)+" ▾";lv.setAttribute("aria-label","Level "+(cur+1)+" of "+LEVELS.length+", choose a level");if(picker)openPicker()}
+function openPicker(){picker=true;card('<h2>Choose a level</h2><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
+function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
+// help: the one-line rules, plus every lesson the player has reached, replayable
+function openHelp(){picker=false;const reached=Object.keys(INTRO).filter(k=>seenIntro[k]||LEVELS.findIndex(L=>L.intro===k)<=cur);
+ card('<h2>How to play</h2><p>Tap a bird to send it the way it faces. It can only go if nothing is in its way. Each takeoff ruffles the birds directly beside it, and they turn: songbirds a quarter turn ↻, flip birds all the way around, owls not at all.</p><h3>Replay a lesson</h3><div class="helplist">'+reached.map(k=>'<button class="btn" data-k="'+k+'">'+INTRO[k].h+'</button>').join("")+'</div><div class="row"><button class="btn main" id="hclose">Back to the game</button></div>');
+ document.querySelectorAll(".helplist .btn").forEach(b=>b.onclick=()=>showIntro(b.dataset.k));document.getElementById("hclose").onclick=closeCard;document.getElementById("hclose").focus()}
+document.getElementById("lvl").onclick=openPicker;document.getElementById("help").onclick=openHelp;
 document.getElementById("undo").onclick=()=>{if(!hist.length)return;const s=hist.pop();birds=s.b;nudges=s.k;nudging=false;undos++;flying=[];ruffles=[];feathers=[];nudgeBtn();tip();tutorialHint()};
 document.getElementById("nudge").onclick=()=>{if(!nudges&&!nudging)return;nudging=!nudging;nudgeBtn();tip()};
 document.getElementById("restart").onclick=()=>load(cur);
@@ -206,10 +219,12 @@ function drawBird(b,x,y,s,ang,flap,glow,puff=0,blink=0){
    cx.save();cx.rotate(-ang);cx.fillStyle="#fff";cx.strokeStyle="#2c2a24";cx.lineWidth=Math.max(1,s*.015);cx.globalAlpha=Math.min(1,puff*1.6);cx.beginPath();cx.ellipse(R*.95,-R*1.05,R*.3,R*.28,0,0,6.3);cx.fill();cx.stroke();cx.fillStyle="#2c2a24";cx.font="900 "+(R*.42)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(b.f?"?!":"!",R*.95,-R*1.03);cx.restore();cx.globalAlpha=1}
   else{cx.fillStyle=b.f?"#fff":"#2c2a24";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*.36,-R*.4,R*.12,0,6.3);cx.fill()}
    cx.fillStyle=b.f?"#2c2a24":"#fff";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*(b.f?.38:.32),-R*(b.f?.4:.45),R*(b.f?.06:.045),0,6.3);cx.fill()}}}
- // beak points forward (up in local space)
- cx.fillStyle="#f4a52a";cx.strokeStyle="#b8741a";cx.lineWidth=Math.max(1,s*.015);cx.beginPath();cx.moveTo(-R*.28,-R*.8);cx.lineTo(0,-R*(b.o?1.25:1.5));cx.lineTo(R*.28,-R*.8);cx.closePath();cx.fill();cx.stroke();
- // direction chevron ahead of the beak
- if(!flap||Math.abs(flap)<1){cx.strokeStyle=b.o?"#7a5a3c":b.f?"#9d86e8":shade(body,-40);cx.globalAlpha=.85;cx.lineWidth=Math.max(2,s*.045);cx.lineCap="round";cx.lineJoin="round";cx.beginPath();cx.moveTo(-R*.32,-R*1.62);cx.lineTo(0,-R*1.9);cx.lineTo(R*.32,-R*1.62);cx.stroke();cx.globalAlpha=1}
+ // beak and chevron keep their normal size while the body puffs, so the direction stays easy to read
+ const R0=s*.3,P=puff>0;
+ cx.fillStyle="#f4a52a";cx.strokeStyle="#b8741a";cx.lineWidth=Math.max(1,s*.015);cx.beginPath();cx.moveTo(-R0*.28,-R0*.8);cx.lineTo(0,-R0*(b.o?1.25:1.5));cx.lineTo(R0*.28,-R0*.8);cx.closePath();cx.fill();cx.stroke();
+ if(!flap||Math.abs(flap)<1){cx.lineCap="round";cx.lineJoin="round";const chev=()=>{cx.beginPath();cx.moveTo(-R0*.32,-R0*1.62);cx.lineTo(0,-R0*1.9);cx.lineTo(R0*.32,-R0*1.62);cx.stroke()};
+  if(P){cx.strokeStyle=css("--card");cx.lineWidth=Math.max(4,s*.08);chev()}
+  cx.strokeStyle=b.o?"#7a5a3c":b.f?"#9d86e8":shade(body,-40);cx.globalAlpha=P?1:.85;cx.lineWidth=Math.max(2,s*.045);chev();cx.globalAlpha=1}
  cx.restore();}
 // a loose feather: quill plus soft vane
 function drawFeather(x,y,len,rot,col,a){cx.save();cx.translate(x,y);cx.rotate(rot);cx.globalAlpha=a;cx.fillStyle=col;cx.beginPath();cx.ellipse(0,0,len*.28,len*.5,0,0,6.3);cx.fill();cx.strokeStyle=shade(col,-50);cx.lineWidth=Math.max(1,len*.06);cx.beginPath();cx.moveTo(0,-len*.5);cx.lineTo(0,len*.62);cx.stroke();cx.restore()}
