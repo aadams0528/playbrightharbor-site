@@ -48,6 +48,12 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(1.5rem,7.5vw,2rem)
 .dots button.done{background:var(--meadow2);border-color:var(--tuft);color:var(--ink)}
 .dots button.cur{border-color:var(--accent);color:var(--accent)}
 .dots button:disabled{opacity:.35;cursor:default}
+.dots button{position:relative;height:40px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.dots button .st{font-size:.6rem;letter-spacing:-.5px;margin-top:2px;color:var(--accent)}
+.dots button .st i{font-style:normal;opacity:.3;color:var(--soft)}
+.dots button .bx{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--card)}
+.pkey{font:600 .78rem var(--body);color:var(--soft);margin:0 0 8px}
+.pkey b{color:var(--accent)}
 /* the board takes what height is left after the header, tip and buttons, so the controls never fall below the fold */
 .boardwrap{position:relative;width:min(100%,max(240px,calc(100vh - 250px)));width:min(100%,max(240px,calc(100dvh - 250px)));aspect-ratio:1;margin:0 auto}
 canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px}
@@ -85,7 +91,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px
     <button class="btn" id="hint">Hint</button>
     <button class="btn" id="nudge" hidden>Nudge (1)</button>
   </div>
-  <div class="small">Prototype v0.6 for testing. Press and hold a bird to see where it will fly. Let go on the bird to send it, or slide off it to cancel.</div>
+  <div class="small">Prototype v0.6.2 for testing. Tap a bird to send it. Press and hold a bird to preview where it will fly; letting go after a hold does not move it.</div>
 </div>
 <div class="sheet" id="sheet" hidden><div class="card" id="cardbody"></div></div>
 <script>
@@ -101,7 +107,7 @@ const INTRO={
  tap:{h:"Send the bird home",steps:["The whole game in one line: birds fly the way they face, and every takeoff ruffles the birds right beside it so they turn. You'll learn it one step at a time.","Each bird looks the way it will fly. Tap the bird and it flies off the roost.","Clear every bird to finish the level."]},
  block:{h:"Birds can't fly through birds",steps:["A bird can only leave if nothing is in its way.","The left bird is facing another bird, so it's stuck for now.","Send the right bird first, then the left bird has a clear sky."]},
  startle:{h:"Flapping ruffles neighbors",steps:["When a bird takes off, the birds directly beside it (above, below, left or right, not diagonal) get their feathers ruffled.","A ruffled bird turns a quarter turn clockwise ↻.","Here the two right birds block each other. Send the middle bird and watch the one beside it turn to face a clear path."]},
- use:{h:"Plan the turns",steps:["Now you choose which bird goes first.","Press and hold any bird to preview: its path lights up, and every bird that will turn shows its new direction. Let go on the bird to send it, or slide off it to cancel.","If every bird gets stuck, tap Undo as often as you like. There is always a way, and the level still counts."]},
+ use:{h:"Plan the turns",steps:["Now you choose which bird goes first.","Press and hold any bird to preview: its path lights up, and every bird that will turn shows its new direction. Letting go after a hold never moves it. Tap the bird when you want it to fly.","If every bird gets stuck, tap Undo as often as you like. There is always a way, and the level still counts."]},
  owl:{h:"Meet the owl",steps:["Owls are calm. Their feathers never ruffle, so they never turn.","Owls still ruffle their neighbors when they fly.","Use the owl's steady gaze to plan around it."]},
  flip:{h:"Meet the flip bird",steps:["Welcome to the Mixed Flock! The purple bird with the dark eye mask and the white U on its chest is a <b>flip bird</b>.","When a bird beside it takes off, a flip bird turns all the way around (a U-turn) instead of a quarter turn.","Hold a bird to preview: a songbird beside it shows ↻, a flip bird shows U, an owl shows –.","Here the flip bird faces a stuck bird. Send the glowing bird and watch the flip bird turn around."]},
  dizzy:{h:"Meet the dizzy bird",steps:["Welcome to the Moonlit Roost! The mint bird with swirly eyes and a curly antenna is a <b>dizzy bird</b>. It can never decide how far to turn.","When a bird beside it takes off, it turns a quarter turn ↻ the first time, a U-turn the next time, then a quarter turn again, and so on.","The little tag on it always shows its <b>next</b> turn: ↻ or U. Hold a bird to preview it too.","A Nudge still turns it a quarter turn and leaves its tag alone.","Follow the glowing birds and watch it turn both ways."]},
@@ -110,7 +116,7 @@ const INTRO={
 };
 let store={get(k,d){try{const v=localStorage.getItem("flit."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("flit."+k,JSON.stringify(v))}catch(e){}}};
 let done=store.get("done",{}),feat=store.get("feat",{}),seenIntro=store.get("intro",{}),unlocked=/[?&]unlock=1/.test(location.search)||store.get("unlock",false);
-let cur=0,birds=[],knots=[],KS=new Set(),hist=[],undos=0,hintUsed=false,lastT=-1,hops=0,tumbles=[],trails=[],nudges=0,nudging=false,blinks=[],startN=0,flying=[],ruffles=[],feathers=[],press=null,hintId=null,shake=null,nextId=0;
+let cur=0,birds=[],knots=[],KS=new Set(),hist=[],undos=0,hintUsed=false,lastT=-1,hops=0,tumbles=[],trails=[],nudges=0,nudging=false,blinks=[],startN=0,flying=[],ruffles=[],feathers=[],press=null,tipHeld=false,hintId=null,shake=null,nextId=0;
 const cv=document.getElementById("cv");let cx=cv.getContext("2d");
 let W=0,dpr=1;
 function n(){return LEVELS[cur].n}
@@ -178,8 +184,9 @@ function tip(t,bad){const el=document.getElementById("tip");const L=LEVELS[cur];
  el.innerHTML=t;el.classList.toggle("bad",!!bad)}
 let picker=false;
 function drawDots(){const lv=document.getElementById("lvl");lv.textContent="Level "+(cur+1)+" ▾";lv.setAttribute("aria-label","Level "+(cur+1)+" of "+LEVELS.length+", choose a level");if(picker)openPicker()}
-function openPicker(){picker=true;card('<h2>Choose a level</h2><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
-function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name+" · "+pk.place;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
+function openPicker(){picker=true;card('<h2>Choose a level</h2><p class="pkey"><b>★</b> stars earned · <b>●</b> bonus goal still open</p><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
+function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name+(pk.place.toLowerCase()===pk.name.toLowerCase()?"":" · "+pk.place);d.appendChild(lb)}const b=document.createElement("button");// best stars under the number, and a dot when the bonus goal is still open
+const st=done[i]||0,open=st>0&&!(feat[i]&&feat[i].x);b.innerHTML=(i+1)+(st?'<span class="st">'+"★".repeat(st)+"<i>"+"★".repeat(3-st)+"</i></span>":"")+(open?'<span class="bx"></span>':"");b.className=(st?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(st?", "+st+" of 3 stars":"")+(open?", bonus goal still open":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
 // help: the rules, a bird guide for every species reached, and every lesson reached, replayable
 const SPECIES=[{t:0,from:0,name:"Songbird",txt:"Turns a quarter turn ↻ when a bird beside it takes off."},{t:1,from:9,name:"Owl",txt:"Unimpressed. Never turns, not even for a Nudge. Still ruffles its neighbours when it flies."},{t:2,from:12,name:"Flip bird",txt:"Tumbles all the way around (a U-turn) when ruffled. A Nudge turns it only a quarter turn."},{t:9,from:28,name:"Knotted branch",txt:"Terrain, not a bird. Blocks any flight lane through it. Never moves, never ruffles, and can't be nudged."},{t:3,from:20,name:"Dizzy bird",txt:"Alternates: a quarter turn ↻, then a U-turn, then ↻ again. Its tag shows the next one. A Nudge is a quarter turn and leaves the tag alone."}];
 function openHelp(){picker=false;const reached=Object.keys(INTRO).filter(k=>seenIntro[k]||LEVELS.findIndex(L=>L.intro===k)<=cur);const sp=SPECIES.filter(q=>unlocked||q.from<=cur||done[q.from]);
@@ -199,10 +206,12 @@ function wobble(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext
 function hoot(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.setValueAtTime(330,ac.currentTime);o.frequency.exponentialRampToValueAtTime(280,ac.currentTime+.25);g.gain.setValueAtTime(.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.07,ac.currentTime+.05);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.3);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.32)}catch(e){}}
 // input
 function cellAt(e){const r=cv.getBoundingClientRect(),s=r.width/n();return [Math.floor((e.clientY-r.top)/s),Math.floor((e.clientX-r.left)/s)]}
-cv.addEventListener("pointerdown",e=>{const [r,c]=cellAt(e),b=at(r,c);if(b){press={id:b.id};cv.setPointerCapture(e.pointerId)}});
-cv.addEventListener("pointerup",e=>{if(!press)return;const [r,c]=cellAt(e),b=at(r,c);if(b&&b.id===press.id)nudging?doNudge(b):send(b);press=null});
+// a quick tap sends the bird; pressing and holding only previews its flight, and letting go after a hold never moves it
+const HOLD=280;
+cv.addEventListener("pointerdown",e=>{const [r,c]=cellAt(e),b=at(r,c);if(b){const p={id:b.id,held:false};press=p;p.tm=setTimeout(()=>{if(press===p)p.held=true},HOLD);cv.setPointerCapture(e.pointerId)}});
+cv.addEventListener("pointerup",e=>{if(!press)return;const p=press;press=null;clearTimeout(p.tm);if(p.held){if(!tipHeld){tipHeld=true;tip("Just a peek. <b>Tap</b> the bird when you want it to fly.")}return}const [r,c]=cellAt(e),b=at(r,c);if(b&&b.id===p.id)nudging?doNudge(b):send(b)});
 cv.addEventListener("click",e=>{const [r,c]=cellAt(e);if(!at(r,c)&&knotAt(r,c))tip("That's a knotted branch. It never moves, so steer birds around it.")});
-cv.addEventListener("pointercancel",()=>press=null);
+cv.addEventListener("pointercancel",()=>{if(press)clearTimeout(press.tm);press=null});
 // drawing
 function resize(){const r=cv.getBoundingClientRect();dpr=window.devicePixelRatio||1;W=r.width;cv.width=W*dpr;cv.height=W*dpr}
 addEventListener("resize",resize);
@@ -310,7 +319,7 @@ function frame(now){
  const bk=cur+"|"+N+"|"+W+"|"+dpr+"|"+css("--leaf");if(bk!==bgKey){bgKey=bk;bg.width=W*dpr;bg.height=W*dpr;const main=cx;cx=bg.getContext("2d");cx.setTransform(dpr,0,0,dpr,0,0);drawRoost(N,s);cx=main}
  cx.drawImage(bg,0,0,W,W);
  // preview
- const pb=press&&birds.find(b=>b.id===press.id);
+ const pb=press&&press.held&&birds.find(b=>b.id===press.id);
  if(pb){const bl=blocker(pb);cx.strokeStyle=bl?css("--warn"):css("--accent");cx.lineWidth=s*.06;cx.setLineDash([s*.06,s*.12]);cx.lineCap="round";cx.beginPath();cx.moveTo((pb.c+.5)*s,(pb.r+.5)*s);
   const ex=bl?(bl.c+.5)*s-DC[pb.d]*s*.35:(pb.c+.5+DC[pb.d]*N*2)*s,ey=bl?(bl.r+.5)*s-DR[pb.d]*s*.35:(pb.r+.5+DR[pb.d]*N*2)*s;cx.lineTo(ex,ey);cx.stroke();cx.setLineDash([]);
   if(!bl){// arrowhead where the bird leaves the roost
