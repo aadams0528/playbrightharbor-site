@@ -22,6 +22,13 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--sky:#17222b;--sky2:#24263a;--ink:#eef2ea;--soft:#a9b7ae;--meadow:#2c3b2c;--meadow2:#334632;--tuft:#5f7e47;--accent:#f0915c;--warn:#ff7a5c;--card:#1f2a2e;--line:#3a4840;--leaf:#203226;--leaf2:#2a4230;--leaf3:#2f4a35;--bark:#7a5434;--bark2:#9b6f47;--barkd:#4a3020;--nest:#8a6f4c;color-scheme:dark}}
 :root[data-theme="dark"]{--sky:#17222b;--sky2:#24263a;--ink:#eef2ea;--soft:#a9b7ae;--meadow:#2c3b2c;--meadow2:#334632;--tuft:#5f7e47;--accent:#f0915c;--warn:#ff7a5c;--card:#1f2a2e;--line:#3a4840;--leaf:#203226;--leaf2:#2a4230;--leaf3:#2f4a35;--bark:#7a5434;--bark2:#9b6f47;--barkd:#4a3020;--nest:#8a6f4c;color-scheme:dark}
+/* themed locations: each pack has its own quiet backdrop behind the board */
+:root[data-pack="woodland"]{--sky:#e4ece2;--sky2:#d5e3cf;--leaf:#a5c48b;--leaf2:#8bb072;--leaf3:#bcd5a6;--bark:#7d5534;--bark2:#a3754a;--barkd:#553820;--nest:#c9a878}
+:root[data-pack="moonlit"]{--sky:#dfe3f1;--sky2:#c6cde6;--leaf:#33456b;--leaf2:#3c5079;--leaf3:#2c3c5f;--bark:#6f5d4c;--bark2:#8f7a66;--barkd:#463a30;--nest:#b6b0d4;--moon:#fff6d8}
+@media (prefers-color-scheme: dark){:root[data-pack="woodland"]:not([data-theme="light"]){--sky:#142019;--sky2:#1b2a20;--leaf:#1c2e22;--leaf2:#243b2a;--leaf3:#2b4631;--bark:#6c4a2e;--bark2:#8d6440;--barkd:#432c1a;--nest:#7d6446}
+ :root[data-pack="moonlit"]:not([data-theme="light"]){--sky:#0f1424;--sky2:#171d36;--leaf:#1b2440;--leaf2:#222d4d;--leaf3:#19213a;--bark:#5e4e40;--bark2:#7a6655;--barkd:#3b3029;--nest:#8a84a8;--moon:#f3ead0}}
+:root[data-theme="dark"][data-pack="woodland"]{--sky:#142019;--sky2:#1b2a20;--leaf:#1c2e22;--leaf2:#243b2a;--leaf3:#2b4631;--bark:#6c4a2e;--bark2:#8d6440;--barkd:#432c1a;--nest:#7d6446}
+:root[data-theme="dark"][data-pack="moonlit"]{--sky:#0f1424;--sky2:#171d36;--leaf:#1b2440;--leaf2:#222d4d;--leaf3:#19213a;--bark:#5e4e40;--bark2:#7a6655;--barkd:#3b3029;--nest:#8a84a8;--moon:#f3ead0}
 html,body{height:100%}
 body{background:linear-gradient(var(--sky2),var(--sky) 40%);background-color:var(--sky);color:var(--ink);font-family:var(--body);font-size:16px;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 .app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:12px;padding-block:12px 20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
@@ -55,6 +62,11 @@ canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px
 .card h3{margin:4px 0 0;font:800 .8rem var(--body);letter-spacing:.6px;text-transform:uppercase;color:var(--soft)}
 .helplist{display:flex;flex-direction:column;gap:8px}
 .helplist .btn{text-align:left;flex:none}
+.goals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-weight:700}
+.goals li.no{color:var(--soft);font-weight:600}
+.guide{display:flex;flex-direction:column;gap:10px}
+.guide div{display:flex;gap:12px;align-items:center;line-height:1.35}
+.guide canvas{width:56px;height:56px;flex:none;border-radius:14px;background:var(--leaf)}
 .card ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px;line-height:1.4}
 .stars{font-size:2rem;letter-spacing:4px;color:var(--accent)}
 .small{color:var(--soft);font-size:.9rem}
@@ -70,102 +82,115 @@ canvas{width:100%;height:100%;display:block;touch-action:none;border-radius:22px
     <button class="btn" id="hint">Hint</button>
     <button class="btn" id="nudge" hidden>Nudge (1)</button>
   </div>
-  <div class="small">Prototype v0.4 for testing. Press and hold a bird to see where it will fly. Let go on the bird to send it, or slide off it to cancel.</div>
+  <div class="small">Prototype v0.5 for testing. Press and hold a bird to see where it will fly. Let go on the bird to send it, or slide off it to cancel.</div>
 </div>
 <div class="sheet" id="sheet" hidden><div class="card" id="cardbody"></div></div>
 <script>
-const LEVELS=[{"n":3,"b":[[1,1,0,0]],"intro":"tap"},{"n":3,"b":[[1,0,1,0],[1,2,0,0]],"intro":"block"},{"n":3,"b":[[1,1,0,0],[1,2,2,0],[2,2,0,0]],"intro":"startle"},{"n":4,"b":[[2,0,1,0],[2,1,3,0],[0,0,1,0],[1,0,1,0]],"intro":"use"},{"n":4,"b":[[2,1,3,0],[2,2,1,0],[0,1,2,0],[1,1,0,0]]},{"n":5,"b":[[3,4,0,0],[3,3,1,0],[2,3,3,0],[2,1,3,0],[4,1,2,0],[3,0,3,0],[0,4,2,0],[2,2,0,0]]},{"n":5,"b":[[1,1,2,0],[0,2,3,0],[3,1,0,0],[4,3,0,0],[3,4,2,0],[4,2,0,0],[4,1,0,0],[3,3,2,0],[0,3,1,0]]},{"n":5,"b":[[2,0,0,0],[1,2,1,0],[3,2,2,0],[1,1,3,0],[3,1,3,0],[0,3,1,0],[4,3,0,0],[1,3,2,0],[4,2,2,0]]},{"n":6,"b":[[2,4,0,0],[2,1,1,0],[5,3,3,0],[5,1,1,0],[4,4,1,0],[4,2,1,0],[5,4,2,0],[5,0,0,0],[4,0,2,0],[2,5,2,0]]},{"n":4,"b":[[0,1,0,0],[1,1,0,1],[1,2,3,0]],"intro":"owl"},{"n":6,"b":[[0,5,0,1],[0,2,1,1],[3,1,1,0],[0,3,1,0],[1,3,3,0],[0,1,1,0],[3,0,3,0],[4,5,0,0],[0,0,0,0],[5,3,3,0],[2,1,1,0],[1,0,0,0],[1,1,1,0],[2,3,3,0]]},{"n":6,"b":[[2,1,0,1],[3,0,1,1],[2,3,1,1],[1,2,2,0],[5,2,0,0],[2,2,0,0],[3,2,0,0],[0,5,0,0],[0,4,1,0],[4,1,2,0],[5,1,0,0],[3,1,0,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,2],[2,1,2,0],[0,1,2,1]],"intro":"flip"},{"n":4,"b":[[0,1,2,2],[0,0,1,2],[0,2,3,0],[1,0,0,0],[1,2,2,0]]},{"n":5,"b":[[1,2,1,2],[1,0,1,2],[3,3,1,0],[0,3,2,0],[4,3,0,0],[3,0,0,0],[1,1,2,0]]},{"n":5,"b":[[4,3,0,2],[2,4,1,2],[0,3,2,2],[2,2,0,0],[0,0,1,0],[2,3,1,0],[1,4,2,0],[4,2,3,0],[0,2,2,0]]},{"n":5,"b":[[1,2,2,1],[0,2,3,1],[4,0,0,2],[3,2,3,2],[4,2,2,0],[3,0,3,0],[4,1,3,0],[1,0,2,0],[0,3,1,0]]},{"n":6,"b":[[5,2,3,1],[5,5,0,1],[4,3,3,2],[2,4,3,2],[3,3,1,2],[5,3,0,0],[4,1,1,0],[2,3,0,0],[1,5,1,0],[2,1,2,0],[2,0,1,0],[2,2,0,0]]},{"n":3,"b":[[1,0,1,0],[1,1,3,0]],"k":1,"intro":"nudge"},{"n":5,"b":[[1,4,0,1],[0,2,0,2],[1,0,1,2],[4,1,0,0],[0,4,2,0],[0,0,1,0],[3,0,0,0],[0,3,2,0]],"k":1}];
-const PACKS=[{name:"First Flight",from:0},{name:"Mixed Flock",from:12}];
-const TURN=[1,0,2];
+const LEVELS=[{"n":3,"b":[[1,1,0,0]],"intro":"tap","ch":"nohint"},{"n":3,"b":[[1,0,1,0],[1,2,0,0]],"intro":"block","ch":"nohint"},{"n":3,"b":[[1,1,0,0],[1,2,2,0],[2,2,0,0]],"intro":"startle","ch":"nohint"},{"n":4,"b":[[2,0,1,0],[2,1,3,0],[0,0,1,0],[1,0,1,0]],"intro":"use","ch":"nohint"},{"n":4,"b":[[2,1,3,0],[2,2,1,0],[0,1,2,0],[1,1,0,0]],"ch":"nohint"},{"n":5,"b":[[3,4,0,0],[3,3,1,0],[2,3,3,0],[2,1,3,0],[4,1,2,0],[3,0,3,0],[0,4,2,0],[2,2,0,0]],"ch":"nohint"},{"n":5,"b":[[1,1,2,0],[0,2,3,0],[3,1,0,0],[4,3,0,0],[3,4,2,0],[4,2,0,0],[4,1,0,0],[3,3,2,0],[0,3,1,0]],"ch":"nohint"},{"n":5,"b":[[2,0,0,0],[1,2,1,0],[3,2,2,0],[1,1,3,0],[3,1,3,0],[0,3,1,0],[4,3,0,0],[1,3,2,0],[4,2,2,0]],"ch":"nohint"},{"n":6,"b":[[2,4,0,0],[2,1,1,0],[5,3,3,0],[5,1,1,0],[4,4,1,0],[4,2,1,0],[5,4,2,0],[5,0,0,0],[4,0,2,0],[2,5,2,0]],"ch":"nohint"},{"n":4,"b":[[0,1,0,0],[1,1,0,1],[1,2,3,0]],"intro":"owl","ch":"nohint"},{"n":6,"b":[[0,5,0,1],[0,2,1,1],[3,1,1,0],[0,3,1,0],[1,3,3,0],[0,1,1,0],[3,0,3,0],[4,5,0,0],[0,0,0,0],[5,3,3,0],[2,1,1,0],[1,0,0,0],[1,1,1,0],[2,3,3,0]],"ch":"owl"},{"n":6,"b":[[2,1,0,1],[3,0,1,1],[2,3,1,1],[1,2,2,0],[5,2,0,0],[2,2,0,0],[3,2,0,0],[0,5,0,0],[0,4,1,0],[4,1,2,0],[5,1,0,0],[3,1,0,0]],"ch":"owl"},{"n":3,"b":[[1,0,1,0],[1,1,3,2],[2,1,2,0],[0,1,2,1]],"intro":"flip","ch":"nohint"},{"n":4,"b":[[0,1,2,2],[0,0,1,2],[0,2,3,0],[1,0,0,0],[1,2,2,0]],"ch":"nohint"},{"n":5,"b":[[1,2,1,2],[1,0,1,2],[3,3,1,0],[0,3,2,0],[4,3,0,0],[3,0,0,0],[1,1,2,0]],"ch":"flip"},{"n":5,"b":[[4,3,0,2],[2,4,1,2],[0,3,2,2],[2,2,0,0],[0,0,1,0],[2,3,1,0],[1,4,2,0],[4,2,3,0],[0,2,2,0]],"ch":"nohint"},{"n":5,"b":[[1,2,2,1],[0,2,3,1],[4,0,0,2],[3,2,3,2],[4,2,2,0],[3,0,3,0],[4,1,3,0],[1,0,2,0],[0,3,1,0]],"ch":"owl"},{"n":6,"b":[[5,2,3,1],[5,5,0,1],[4,3,3,2],[2,4,3,2],[3,3,1,2],[5,3,0,0],[4,1,1,0],[2,3,0,0],[1,5,1,0],[2,1,2,0],[2,0,1,0],[2,2,0,0]],"ch":"owl"},{"n":3,"b":[[1,0,1,0],[1,1,3,0]],"k":1,"intro":"nudge","ch":"nohint"},{"n":5,"b":[[1,4,0,1],[0,2,0,2],[1,0,1,2],[4,1,0,0],[0,4,2,0],[0,0,1,0],[3,0,0,0],[0,3,2,0]],"k":1,"ch":"owl"},{"n":4,"b":[[1,1,1,3,0],[2,2,3,0,0],[2,1,0,0,0],[1,2,1,0,0]],"intro":"dizzy","ch":"nohint"},{"n":4,"b":[[3,3,3,3,1],[3,1,1,0,0],[0,3,2,0,0],[2,3,3,0,0],[2,1,0,0,0]],"ch":"nohint"},{"n":5,"b":[[1,0,2,3,1],[1,3,2,3,1],[0,2,1,0,0],[4,3,0,0,0],[1,2,0,0,0],[0,3,1,0,0],[0,0,0,0,0]],"ch":"dizzy"},{"n":5,"b":[[1,4,2,1,0],[3,4,2,3,0],[0,0,3,3,0],[0,2,3,0,0],[3,2,1,0,0],[0,1,1,0,0],[2,4,3,0,0],[2,2,3,0,0]],"ch":"nohint"},{"n":5,"b":[[3,3,0,1,0],[1,2,1,1,0],[4,1,1,3,0],[2,1,0,3,1],[0,2,0,0,0],[2,4,3,0,0],[1,0,1,0,0],[0,3,2,0,0],[2,0,3,0,0]],"ch":"owl"},{"n":5,"b":[[1,2,3,1,0],[0,1,0,2,0],[0,0,3,3,1],[1,0,0,3,1],[3,3,0,0,0],[3,4,1,0,0],[3,1,3,0,0],[0,3,2,0,0],[1,3,3,0,0]],"k":1,"ch":"owl"},{"n":6,"b":[[0,4,0,1,0],[4,3,3,1,0],[1,3,2,2,0],[1,2,3,2,0],[3,4,3,3,1],[1,4,2,3,0],[5,5,3,0,0],[5,3,1,0,0],[1,5,1,0,0],[1,1,1,0,0],[5,4,0,0,0]],"ch":"owl"},{"n":6,"b":[[0,2,1,1,0],[0,0,0,1,0],[0,4,2,2,0],[5,2,3,2,0],[5,3,0,3,0],[1,0,1,3,1],[2,3,1,3,0],[5,1,1,0,0],[2,0,0,0,0],[2,2,2,0,0],[4,0,1,0,0],[5,4,2,0,0]],"ch":"owl"}];
+const PACKS=[{name:"First Flight",place:"Garden",theme:"garden",from:0},{name:"Mixed Flock",place:"Woodland",theme:"woodland",from:12},{name:"Moonlit Roost",place:"Moonlit roost",theme:"moonlit",from:20}];
+// how far a ruffled bird turns, in quarter turns: songbird 1, owl 0, flip 2, dizzy alternates 1 then 2 (its p says which is next)
+function turnOf(y){return y.t===1?0:y.t===2?2:y.t===3?(y.p?2:1):1}
+const GOAL={owl:"An owl leaves last",flip:"A flip bird leaves last",dizzy:"A dizzy bird leaves last",nonudge:"Clear it without the Nudge",nohint:"Clear it without Hint"};
 const DR=[-1,0,1,0],DC=[0,1,0,-1];
-const COLORS=["#e07a5f","#f2b84b","#8cc084","#f28e6b","#6cc3c1","#e5a3b6","#d9a36a"];
-const FLIP="#7457c9";
+const COLORS=["#e07a5f","#f2b84b","#8cc084","#f28e6b","#e5a3b6","#d9a36a","#7fb3e0"];
+const FLIP="#7457c9",DIZZY="#3fbf9a";
 const INTRO={
  tap:{h:"Send the bird home",steps:["The whole game in one line: birds fly the way they face, and every takeoff ruffles the birds right beside it so they turn. You'll learn it one step at a time.","Each bird looks the way it will fly. Tap the bird and it flies off the roost.","Clear every bird to finish the level."]},
  block:{h:"Birds can't fly through birds",steps:["A bird can only leave if nothing is in its way.","The left bird is facing another bird, so it's stuck for now.","Send the right bird first, then the left bird has a clear sky."]},
  startle:{h:"Flapping ruffles neighbors",steps:["When a bird takes off, the birds directly beside it (above, below, left or right, not diagonal) get their feathers ruffled.","A ruffled bird turns a quarter turn clockwise ↻.","Here the two right birds block each other. Send the middle bird and watch the one beside it turn to face a clear path."]},
- use:{h:"Plan the turns",steps:["Now you choose which bird goes first.","Press and hold any bird to preview: its path lights up and the birds that will turn show ↻. Let go on the bird to send it, or slide off it to cancel.","If every bird gets stuck, tap Undo. There is always a way."]},
+ use:{h:"Plan the turns",steps:["Now you choose which bird goes first.","Press and hold any bird to preview: its path lights up, and every bird that will turn shows its new direction. Let go on the bird to send it, or slide off it to cancel.","If every bird gets stuck, tap Undo as often as you like. There is always a way, and the level still counts."]},
  owl:{h:"Meet the owl",steps:["Owls are calm. Their feathers never ruffle, so they never turn.","Owls still ruffle their neighbors when they fly.","Use the owl's steady gaze to plan around it."]},
  flip:{h:"Meet the flip bird",steps:["Welcome to the Mixed Flock! The purple bird with the dark eye mask and the white U on its chest is a <b>flip bird</b>.","When a bird beside it takes off, a flip bird turns all the way around (a U-turn) instead of a quarter turn.","Hold a bird to preview: a songbird beside it shows ↻, a flip bird shows U, an owl shows –.","Here the flip bird faces a stuck bird. Send the glowing bird and watch the flip bird turn around."]},
- nudge:{h:"Your Nudge",steps:["Some levels give you one free <b>Nudge</b>. It comes back every time you play the level.","Tap <b>Nudge</b>, then tap a bird. That bird turns a quarter turn (90°) clockwise ↻ and nobody flies. A Nudge is always a quarter turn, even on a flip bird.","Owls won't budge. Tap Nudge again to cancel, or Undo to take it back.","These two birds block each other. Nudge the glowing bird, then send them both home."]}
+ dizzy:{h:"Meet the dizzy bird",steps:["Welcome to the Moonlit Roost! The mint bird with swirly eyes and a curly antenna is a <b>dizzy bird</b>. It can never decide how far to turn.","When a bird beside it takes off, it turns a quarter turn ↻ the first time, a U-turn the next time, then a quarter turn again, and so on.","The little tag on it always shows its <b>next</b> turn: ↻ or U. Hold a bird to preview it too.","A Nudge still turns it a quarter turn and leaves its tag alone.","Follow the glowing birds and watch it turn both ways."]},
+ nudge:{h:"Your Nudge",steps:["Some levels give you one free <b>Nudge</b>. It comes back every time you play the level.","Tap <b>Nudge</b>, then tap a bird. That bird turns a quarter turn (90°) clockwise ↻ and nobody flies. A Nudge is always a quarter turn, even on a flip bird or a dizzy bird.","Owls won't budge. Tap Nudge again to cancel, or Undo to take it back.","These two birds block each other. Nudge the glowing bird, then send them both home."]}
 };
 let store={get(k,d){try{const v=localStorage.getItem("flit."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("flit."+k,JSON.stringify(v))}catch(e){}}};
-let done=store.get("done",{}),seenIntro=store.get("intro",{}),unlocked=/[?&]unlock=1/.test(location.search)||store.get("unlock",false);
-let cur=0,birds=[],hist=[],undos=0,nudges=0,nudging=false,blinks=[],startN=0,flying=[],ruffles=[],feathers=[],press=null,hintId=null,shake=null,nextId=0;
+let done=store.get("done",{}),feat=store.get("feat",{}),seenIntro=store.get("intro",{}),unlocked=/[?&]unlock=1/.test(location.search)||store.get("unlock",false);
+let cur=0,birds=[],hist=[],undos=0,hintUsed=false,lastT=-1,hops=0,tumbles=[],trails=[],nudges=0,nudging=false,blinks=[],startN=0,flying=[],ruffles=[],feathers=[],press=null,hintId=null,shake=null,nextId=0;
 const cv=document.getElementById("cv");let cx=cv.getContext("2d");
 let W=0,dpr=1;
 function n(){return LEVELS[cur].n}
 function seedRand(s){return()=>{s=(s*16807)%2147483647;return s/2147483647}}
-function load(i){cur=i;const L=LEVELS[i];const rnd=seedRand(i*977+13);birds=L.b.map(([r,c,d,t],k)=>({id:nextId++,r,c,d,t,o:t===1,f:t===2,ang:d*Math.PI/2,col:COLORS[Math.floor(rnd()*COLORS.length)],j:rnd()*6.28}));hist=[];undos=0;nudges=L.k||0;nudging=false;blinks=[];startN=birds.length;flying=[];ruffles=[];feathers=[];hintId=null;nudgeBtn();tip();drawDots();
+function load(i){cur=i;const L=LEVELS[i];const rnd=seedRand(i*977+13);birds=L.b.map(([r,c,d,t,p])=>({id:nextId++,r,c,d,t,p:p||0,o:t===1,f:t===2,z:t===3,ang:d*Math.PI/2,col:COLORS[Math.floor(rnd()*COLORS.length)],j:rnd()*6.28}));hist=[];undos=0;hintUsed=false;lastT=-1;tumbles=[];trails=[];setTheme();nudges=L.k||0;nudging=false;blinks=[];startN=birds.length;flying=[];ruffles=[];feathers=[];hintId=null;nudgeBtn();tip();drawDots();
 
  if(L.intro&&!seenIntro[L.intro])showIntro(L.intro);else if(L.intro)tutorialHint();}
+function packOf(i){let p=PACKS[0];for(const q of PACKS)if(i>=q.from)p=q;return p}
+function setTheme(){const t=packOf(cur).theme;if(document.documentElement.dataset.pack!==t){document.documentElement.dataset.pack=t;bgKey=""}}
 function at(r,c){return birds.find(b=>b.r===r&&b.c===c)}
 function blocker(b){let r=b.r+DR[b.d],c=b.c+DC[b.d];while(r>=0&&c>=0&&r<n()&&c<n()){const x=at(r,c);if(x)return x;r+=DR[b.d];c+=DC[b.d]}return null}
 function neighbors(b){return birds.filter(y=>y!==b&&Math.abs(y.r-b.r)+Math.abs(y.c-b.c)===1)}
 function snapshot(){return {b:birds.map(b=>({...b})),k:nudges}}
 function canMove(){return birds.some(b=>!blocker(b))}
 function nudgeBtn(){const el=document.getElementById("nudge");el.hidden=!(LEVELS[cur].k);el.textContent=nudging?"Cancel":"Nudge ("+nudges+")";el.disabled=!nudges&&!nudging;el.classList.toggle("main",nudging)}
-// solver for hints: birds as [r,c,d,t], k = nudges left; returns moves ["f"|"n",r,c]
+// solver for hints: birds as [r,c,d,t,p], k = nudges left; returns moves ["f"|"n",r,c]
+function ruf(y){const t=y[3];return t===1?y:t===3?[y[0],y[1],(y[2]+(y[4]?2:1))%4,3,1-y[4]]:[y[0],y[1],(y[2]+(t===2?2:1))%4,t,0]}
 function key(s,k){return k+"#"+s.map(x=>x.join(",")).sort().join("|")}
 function solve(s,k,N,m){if(!s.length)return[];const sk=key(s,k);if(m.has(sk))return m.get(sk);m.set(sk,null);
  const tryIt=(t,x,ns,nk)=>{const sol=solve(ns,nk,N,m);if(sol){const res=[[t,x[0],x[1]],...sol];m.set(sk,res);return res}return null};
- for(let i=0;i<s.length;i++){const x=s[i];let r=x[0]+DR[x[2]],c=x[1]+DC[x[2]],ok=true;while(r>=0&&c>=0&&r<N&&c<N){if(s.some(y=>y[0]===r&&y[1]===c)){ok=false;break}r+=DR[x[2]];c+=DC[x[2]]}if(!ok)continue;const ns=s.filter((_,j)=>j!==i).map(y=>Math.abs(y[0]-x[0])+Math.abs(y[1]-x[1])===1?[y[0],y[1],(y[2]+TURN[y[3]])%4,y[3]]:y);const res=tryIt("f",x,ns,k);if(res)return res}
- if(k>0)for(let i=0;i<s.length;i++){const x=s[i];if(x[3]===1)continue;const res=tryIt("n",x,s.map((y,j)=>j===i?[y[0],y[1],(y[2]+1)%4,y[3]]:y),k-1);if(res)return res}
+ for(let i=0;i<s.length;i++){const x=s[i];let r=x[0]+DR[x[2]],c=x[1]+DC[x[2]],ok=true;while(r>=0&&c>=0&&r<N&&c<N){if(s.some(y=>y[0]===r&&y[1]===c)){ok=false;break}r+=DR[x[2]];c+=DC[x[2]]}if(!ok)continue;const ns=s.filter((_,j)=>j!==i).map(y=>Math.abs(y[0]-x[0])+Math.abs(y[1]-x[1])===1?ruf(y):y);const res=tryIt("f",x,ns,k);if(res)return res}
+ if(k>0)for(let i=0;i<s.length;i++){const x=s[i];if(x[3]===1)continue;const res=tryIt("n",x,s.map((y,j)=>j===i?[y[0],y[1],(y[2]+1)%4,y[3],y[4]]:y),k-1);if(res)return res}
  return null}
-function nextStep(){const s=solve(birds.map(b=>[b.r,b.c,b.d,b.t]),nudges,n(),new Map());return s&&s.length?{t:s[0][0],b:at(s[0][1],s[0][2])}:null}
+function nextStep(){const s=solve(birds.map(b=>[b.r,b.c,b.d,b.t,b.p]),nudges,n(),new Map());return s&&s.length?{t:s[0][0],b:at(s[0][1],s[0][2])}:null}
 function nextMove(){const s=nextStep();return s?s.b:null}
-function tutorialHint(){const L=LEVELS[cur];if(["tap","block","startle","owl","flip","nudge"].includes(L.intro)&&birds.length){const m=nextMove();hintId=m?m.id:null}}
+function tutorialHint(){const L=LEVELS[cur];if(["tap","block","startle","owl","flip","nudge","dizzy"].includes(L.intro)&&birds.length){const m=nextMove();hintId=m?m.id:null}}
 function send(b){
  const bl=blocker(b);
  if(bl){shake={id:b.id,t:performance.now(),bl:bl.id};chirp(220,.08);tip("That bird is blocked by the bird in its way. Free the path first.",true);return}
  hist.push(snapshot());nudging=false;
- const nb=neighbors(b);birds=birds.filter(x=>x!==b);
- flying.push({...b,t:performance.now()});
- for(const y of nb){if(y.o){blinks.push({id:y.id,t:performance.now()});continue}y.d=(y.d+TURN[y.t])%4;ruffle(y)}
+ const nb=neighbors(b);birds=birds.filter(x=>x!==b);lastT=b.t;const now=performance.now();
+ flying.push({...b,t:now});hops=now;
+ for(const y of nb){if(y.o){blinks.push({id:y.id,t:now});continue}const q=turnOf(y);y.d=(y.d+q)%4;if(y.z)y.p=1-y.p;if(q===2&&!calm.matches)tumbles.push({id:y.id,t:now});ruffle(y)}
  if(nb.some(y=>y.o))setTimeout(()=>hoot(),120);
  chirp(660+Math.random()*200,.12);hintId=null;nudgeBtn();
- if(!birds.length){setTimeout(win,650);tip("Clear sky!");return}
+ if(!birds.length){setTimeout(burst,350);setTimeout(win,900);tip("Clear sky!");return}
  stuckTip();
  tutorialHint();
 }
 function stuckTip(){if(canMove())tip();else if(nudges)tip("No bird can fly. Use your <b>Nudge</b>, or tap <b>Undo</b>.",true);else tip("No bird can fly now. Tap <b>Undo</b> to take the last move back.",true)}
-function doNudge(b){if(b.o){shake={id:b.id,t:performance.now()};hoot();tip("Owls won't budge. Nudge a songbird or a flip bird.",true);return}
+function doNudge(b){if(b.o){shake={id:b.id,t:performance.now()};hoot();tip("Owls won't budge. Nudge any other bird.",true);return}
  hist.push(snapshot());nudges--;nudging=false;b.d=(b.d+1)%4;ruffle(b,true);hintId=null;nudgeBtn();stuckTip();tutorialHint()}
 const calm=matchMedia("(prefers-reduced-motion: reduce)");
 // feather ruffle: the bird puffs up and a few loose feathers drift off
 function ruffle(y,soft){const t=performance.now();ruffles.push({id:y.id,t});if(soft){setTimeout(()=>chirp(520,.06),40);return}const k=calm.matches?2:6;
  for(let i=0;i<k;i++){const a=Math.random()*6.283,v=.6+Math.random()*.9;feathers.push({r:y.r,c:y.c,t:t+i*25,vx:Math.cos(a)*v,vy:Math.sin(a)*v-.4,rot:Math.random()*6.28,vr:(Math.random()-.5)*8,col:y.col,len:.2+Math.random()*.08})}
- setTimeout(()=>y.f?squawk():chirp(380+Math.random()*80,.05),90)}
-function win(){done[cur]=Math.max(done[cur]||0,undos===0?3:undos<=2?2:1);store.set("done",done);drawDots();
- const s=done[cur],last=cur===LEVELS.length-1;
- const packEnd=PACKS.some(p=>p.from===cur+1);
- card('<h2>'+(last?"You cleared every level!":"Level "+(cur+1)+" cleared")+'</h2><div class="stars" aria-label="'+s+' of 3 stars">'+"★".repeat(undos===0?3:undos<=2?2:1)+"☆".repeat(3-(undos===0?3:undos<=2?2:1))+'</div><p class="small">'+(undos===0?"No undos. Perfect flight plan!":"Clear it with no undos for three stars.")+'</p>'+(packEnd?'<p><b>'+PACKS.find(p=>p.from===cur+1).name+'</b> unlocked: new birds are joining the roost.</p>':'')+(last?'<p>Thanks for playing the prototype. Which level did you like most, and where did you get stuck?</p>':'')+'<div class="row">'+(last?'':'<button class="btn main" id="nx">Next level</button>')+'<button class="btn" id="again">Play again</button></div>');
+ setTimeout(()=>y.f?squawk():y.z?wobble():chirp(380+Math.random()*80,.05),90)}
+// stars: one for clearing (Undo is always fine), one for no Undo, one for the level's bonus goal; earned across attempts
+function goalMet(){const g=LEVELS[cur].ch;return g==="owl"?lastT===1:g==="flip"?lastT===2:g==="dizzy"?lastT===3:g==="nonudge"?nudges===(LEVELS[cur].k||0):!hintUsed}
+function burst(){const N=n(),c=(N-1)/2,t=performance.now(),k=calm.matches?8:26;for(let i=0;i<k;i++){const a=i/k*6.283,v=1.2+Math.random()*1.4;feathers.push({r:c,c:c,t:t+Math.random()*120,vx:Math.cos(a)*v,vy:Math.sin(a)*v-.6,rot:Math.random()*6.28,vr:(Math.random()-.5)*9,col:COLORS[i%COLORS.length],len:.24+Math.random()*.1})}[784,988,1175].forEach((f,i)=>setTimeout(()=>chirp(f,.09),i*90))}
+function win(){const g=LEVELS[cur].ch,f=feat[cur]||{};const u=undos===0,x=goalMet();f.u=f.u||u;f.x=f.x||x;feat[cur]=f;store.set("feat",feat);
+ done[cur]=1+(f.u?1:0)+(f.x?1:0);store.set("done",done);drawDots();
+ const s=done[cur],last=cur===LEVELS.length-1,pk=PACKS.find(p=>p.from===cur+1);
+ const li=(ok,t)=>'<li class="'+(ok?"":"no")+'">'+(ok?"★ ":"☆ ")+t+'</li>';
+ card('<h2>'+(last?"You cleared every level!":"Level "+(cur+1)+" cleared!")+'</h2><div class="stars" aria-label="'+s+' of 3 stars">'+"★".repeat(s)+"☆".repeat(3-s)+'</div><ul class="goals">'+li(true,"Clear the roost")+li(f.u,"No Undo")+li(f.x,"Bonus: "+GOAL[g||"nohint"])+'</ul><p class="small">'+(s===3?"Every star in this level. Lovely flying!":"Bonus stars are optional. Undo and Hint are always there when you want them.")+'</p>'+(pk?'<p><b>'+pk.name+'</b> unlocked: new birds are waiting in the '+pk.place.toLowerCase()+'.</p>':'')+(last?'<p>Thanks for playing the prototype. Which level did you like most, and where did you get stuck?</p>':'')+'<div class="row">'+(last?'':'<button class="btn main" id="nx">Next level</button>')+'<button class="btn" id="again">Play again</button></div>');
  const nx=document.getElementById("nx");if(nx)nx.onclick=()=>{closeCard();load(cur+1)};document.getElementById("again").onclick=()=>{closeCard();load(cur)};(nx||document.getElementById("again")).focus();}
 function showIntro(k){const it=INTRO[k];card('<h2>'+it.h+'</h2><ol>'+it.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol><div class="row"><button class="btn main" id="ok">Got it</button></div>');const ok=document.getElementById("ok");ok.focus();ok.onclick=()=>{seenIntro[k]=1;store.set("intro",seenIntro);closeCard();tutorialHint();tip()}}
 function card(h){if(!/id="dots"/.test(h))picker=false;document.getElementById("cardbody").innerHTML=h;document.getElementById("sheet").hidden=false}
 function closeCard(){document.getElementById("sheet").hidden=true}
 function tip(t,bad){const el=document.getElementById("tip");const L=LEVELS[cur];
  if(t==null&&(L.intro==="block"||L.intro==="startle")&&birds.length<startN)t="Nice! Now tap the <b>glowing bird</b>.";
- if(t==null){t=L.intro==="tap"?"Tap the <b>glowing bird</b>.":L.intro==="block"?"Send the <b>glowing bird</b> first. The other one is blocked.":L.intro==="startle"?"Send the <b>glowing bird</b>. The bird beside it gets ruffled and turns ↻.":L.intro==="owl"?"The brown owl won't turn. Follow the <b>glow</b>.":L.intro==="flip"?(birds.length<startN?"It turned all the way around! Follow the <b>glow</b>.":"Send the <b>glowing bird</b>. The flip bird beside it makes a U-turn."):L.intro==="nudge"?(nudges?"Tap <b>Nudge</b>, then the <b>glowing bird</b>.":"Now send them home. Follow the <b>glow</b>."):"Birds left: <b>"+birds.length+"</b>."+(L.k?" Nudges: <b>"+nudges+"</b>.":"")+" Hold a bird to preview its flight."}
- if(nudging&&!bad)t="Tap a bird to nudge it a quarter turn (90°) ↻. Flip birds too. Tap <b>Cancel</b> to keep your Nudge.";
+ if(t==null){t=L.intro==="tap"?"Tap the <b>glowing bird</b>.":L.intro==="block"?"Send the <b>glowing bird</b> first. The other one is blocked.":L.intro==="startle"?"Send the <b>glowing bird</b>. The bird beside it gets ruffled and turns ↻.":L.intro==="owl"?"The brown owl won't turn. Follow the <b>glow</b>.":L.intro==="flip"?(birds.length<startN?"It turned all the way around! Follow the <b>glow</b>.":"Send the <b>glowing bird</b>. The flip bird beside it makes a U-turn."):L.intro==="nudge"?(nudges?"Tap <b>Nudge</b>, then the <b>glowing bird</b>.":"Now send them home. Follow the <b>glow</b>."):L.intro==="dizzy"?(birds.length<startN?"Watch the dizzy bird's tag: it shows its next turn. Follow the <b>glow</b>.":"Send the <b>glowing bird</b>. The dizzy bird turns ↻ first, then U next time."):"Birds left: <b>"+birds.length+"</b>."+(L.k?" Nudges: <b>"+nudges+"</b>.":"")+(L.ch&&!L.intro?" Bonus: "+GOAL[L.ch].toLowerCase()+".":" Hold a bird to preview its flight.")}
+ if(nudging&&!bad)t="Tap a bird to nudge it a quarter turn (90°) ↻. Flip and dizzy birds too. Tap <b>Cancel</b> to keep your Nudge.";
  el.innerHTML=t;el.classList.toggle("bad",!!bad)}
 let picker=false;
 function drawDots(){const lv=document.getElementById("lvl");lv.textContent="Level "+(cur+1)+" ▾";lv.setAttribute("aria-label","Level "+(cur+1)+" of "+LEVELS.length+", choose a level");if(picker)openPicker()}
 function openPicker(){picker=true;card('<h2>Choose a level</h2><div class="dots" id="dots"></div><div class="row"><button class="btn" id="pclose">Close</button></div>');fillDots();document.getElementById("pclose").onclick=()=>{picker=false;closeCard()}}
-function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
-// help: the one-line rules, plus every lesson the player has reached, replayable
-function openHelp(){picker=false;const reached=Object.keys(INTRO).filter(k=>seenIntro[k]||LEVELS.findIndex(L=>L.intro===k)<=cur);
- card('<h2>How to play</h2><p>Tap a bird to send it the way it faces. It can only go if nothing is in its way. Each takeoff ruffles the birds directly beside it, and they turn: songbirds a quarter turn ↻, flip birds all the way around, owls not at all.</p><h3>Replay a lesson</h3><div class="helplist">'+reached.map(k=>'<button class="btn" data-k="'+k+'">'+INTRO[k].h+'</button>').join("")+'</div><div class="row"><button class="btn main" id="hclose">Back to the game</button></div>');
+function fillDots(){const d=document.getElementById("dots");d.innerHTML="";LEVELS.forEach((_,i)=>{const pk=PACKS.find(p=>p.from===i);if(pk){const lb=document.createElement("div");lb.className="pack";lb.textContent=pk.name+" · "+pk.place;d.appendChild(lb)}const b=document.createElement("button");b.textContent=i+1;b.className=(done[i]?"done ":"")+(i===cur?"cur":"");b.disabled=!(unlocked||i===0||done[i-1]||done[i]);b.setAttribute("aria-label","Level "+(i+1)+(done[i]?", cleared":""));b.onclick=()=>{picker=false;closeCard();load(i)};d.appendChild(b)})}
+// help: the rules, a bird guide for every species reached, and every lesson reached, replayable
+const SPECIES=[{t:0,from:0,name:"Songbird",txt:"Turns a quarter turn ↻ when a bird beside it takes off."},{t:1,from:9,name:"Owl",txt:"Unimpressed. Never turns, not even for a Nudge. Still ruffles its neighbours when it flies."},{t:2,from:12,name:"Flip bird",txt:"Tumbles all the way around (a U-turn) when ruffled. A Nudge turns it only a quarter turn."},{t:3,from:20,name:"Dizzy bird",txt:"Alternates: a quarter turn ↻, then a U-turn, then ↻ again. Its tag shows the next one. A Nudge is a quarter turn and leaves the tag alone."}];
+function openHelp(){picker=false;const reached=Object.keys(INTRO).filter(k=>seenIntro[k]||LEVELS.findIndex(L=>L.intro===k)<=cur);const sp=SPECIES.filter(q=>unlocked||q.from<=cur||done[q.from]);
+ card('<h2>How to play</h2><p>Tap a bird to send it the way it faces. It can only go if nothing is in its way. Each takeoff ruffles the birds directly beside it (not diagonal), and they turn.</p><h3>Bird guide</h3><div class="guide">'+sp.map(q=>'<div><canvas data-t="'+q.t+'" width="112" height="112"></canvas><span><b>'+q.name+'.</b> '+q.txt+'</span></div>').join("")+(LEVELS.slice(0,cur+1).some(L=>L.k)||unlocked?'<div><span><b>Nudge.</b> Always turns one bird a quarter turn (90°) ↻, whatever kind of bird it is. Owls won\'t budge.</span></div>':'')+'</div><h3>Replay a lesson</h3><div class="helplist">'+reached.map(k=>'<button class="btn" data-k="'+k+'">'+INTRO[k].h+'</button>').join("")+'</div><div class="row"><button class="btn main" id="hclose">Back to the game</button></div>');
+ document.querySelectorAll(".guide canvas").forEach(c=>{const main=cx;cx=c.getContext("2d");const t=+c.dataset.t;drawBird({t,o:t===1,f:t===2,z:t===3,p:0,col:COLORS[0],j:1.3},56,62,112,0,0,false);cx=main});
  document.querySelectorAll(".helplist .btn").forEach(b=>b.onclick=()=>showIntro(b.dataset.k));document.getElementById("hclose").onclick=closeCard;document.getElementById("hclose").focus()}
 document.getElementById("lvl").onclick=openPicker;document.getElementById("help").onclick=openHelp;
-document.getElementById("undo").onclick=()=>{if(!hist.length)return;const s=hist.pop();birds=s.b;nudges=s.k;nudging=false;undos++;flying=[];ruffles=[];feathers=[];nudgeBtn();tip();tutorialHint()};
+document.getElementById("undo").onclick=()=>{if(!hist.length)return;const s=hist.pop();birds=s.b;nudges=s.k;nudging=false;undos++;flying=[];ruffles=[];feathers=[];tumbles=[];nudgeBtn();tip();tutorialHint()};
 document.getElementById("nudge").onclick=()=>{if(!nudges&&!nudging)return;nudging=!nudging;nudgeBtn();tip()};
 document.getElementById("restart").onclick=()=>load(cur);
-document.getElementById("hint").onclick=()=>{const m=nextStep();if(m){hintId=m.b.id;tip(m.t==="n"?"Use your <b>Nudge</b> on the <b>glowing bird</b>.":"Try the <b>glowing bird</b>.")}else tip("This position can't be cleared. Tap <b>Undo</b> or <b>Restart</b>.",true)};
+document.getElementById("hint").onclick=()=>{hintUsed=true;const m=nextStep();if(m){hintId=m.b.id;tip(m.t==="n"?"Use your <b>Nudge</b> on the <b>glowing bird</b>.":"Try the <b>glowing bird</b>.")}else tip("This position can't be cleared. Tap <b>Undo</b> or <b>Restart</b>.",true)};
 let taps=0,tapT=0;document.getElementById("title").onclick=()=>{const t=Date.now();taps=t-tapT<600?taps+1:1;tapT=t;if(taps>=5){unlocked=true;store.set("unlock",true);drawDots();tip("Tester mode: every level is open.")}};
 // sound
 let ac=null;function chirp(f,d){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.setValueAtTime(f,ac.currentTime);o.frequency.exponentialRampToValueAtTime(f*1.6,ac.currentTime+d);g.gain.setValueAtTime(.08,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d+.05);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d+.06)}catch(e){}}
 function squawk(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type="triangle";o.frequency.setValueAtTime(900,ac.currentTime);o.frequency.exponentialRampToValueAtTime(420,ac.currentTime+.16);g.gain.setValueAtTime(.07,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.22)}catch(e){}}
+function wobble(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain(),l=ac.createOscillator(),lg=ac.createGain();o.type="sine";o.frequency.setValueAtTime(560,ac.currentTime);l.frequency.value=18;lg.gain.value=60;l.connect(lg).connect(o.frequency);g.gain.setValueAtTime(.06,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.28);o.connect(g).connect(ac.destination);o.start();l.start();o.stop(ac.currentTime+.3);l.stop(ac.currentTime+.3)}catch(e){}}
 function hoot(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.setValueAtTime(330,ac.currentTime);o.frequency.exponentialRampToValueAtTime(280,ac.currentTime+.25);g.gain.setValueAtTime(.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.07,ac.currentTime+.05);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.3);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.32)}catch(e){}}
 // input
 function cellAt(e){const r=cv.getBoundingClientRect(),s=r.width/n();return [Math.floor((e.clientY-r.top)/s),Math.floor((e.clientX-r.left)/s)]}
@@ -179,7 +204,7 @@ function css(v){return getComputedStyle(document.documentElement).getPropertyVal
 function blob(x,y,rad,seed,pts=11,j=.12){cx.beginPath();for(let i=0;i<=pts;i++){const a=i/pts*6.283,k=1+Math.sin(a*3+seed)*j*.6+Math.sin(a*5+seed*2)*j*.4,px=x+Math.cos(a)*rad*k,py=y+Math.sin(a)*rad*k;i?cx.lineTo(px,py):cx.moveTo(px,py)}cx.closePath()}
 function drawBird(b,x,y,s,ang,flap,glow,puff=0,blink=0){
  cx.save();cx.translate(x,y);cx.rotate(ang);const R=s*.3*(1+puff*.22);
- const body=b.o?"#9b7652":b.f?FLIP:b.col,dark=shade(body,-45),mid=shade(body,-22);
+ const body=b.o?"#9b7652":b.f?FLIP:b.z?DIZZY:b.col,dark=shade(body,-45),mid=shade(body,-22);
  if(glow){cx.fillStyle=css("--accent");cx.globalAlpha=.4+.2*Math.sin(performance.now()/250);blob(0,0,R*1.7,b.j,14,.08);cx.fill();cx.globalAlpha=1}
  // soft shadow on the perch
  cx.fillStyle="rgba(40,25,10,.18)";cx.beginPath();cx.ellipse(R*.08,R*.22,R*1.05,R*.95,0,0,6.3);cx.fill();
@@ -203,20 +228,28 @@ function drawBird(b,x,y,s,ang,flap,glow,puff=0,blink=0){
   if(blink>0){// slow, unbothered blink: lids close then open
    cx.fillStyle="#b88f60";for(const sd of[-1,1]){cx.beginPath();cx.ellipse(sd*R*.32,-R*.3,R*.26,R*.26*blink,0,0,6.3);cx.fill()}
    cx.strokeStyle="#6b4a2e";cx.lineWidth=Math.max(1,s*.014);for(const sd of[-1,1]){cx.beginPath();cx.moveTo(sd*R*.32-R*.2,-R*.3);cx.lineTo(sd*R*.32+R*.2,-R*.3);cx.stroke()}}
+  {const lid=Math.max(.45,blink);// unimpressed: lids always half down
+   cx.fillStyle="#b88f60";for(const sd of[-1,1]){cx.save();cx.beginPath();cx.arc(sd*R*.32,-R*.3,R*.26,0,6.3);cx.clip();cx.fillRect(sd*R*.32-R*.3,-R*.3-R*.3,R*.6,R*.6*lid);cx.restore()}}
   if(blink<.9){cx.fillStyle="#2c2a24";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*.32,-R*.32,R*.13*(1-blink),0,6.3);cx.fill()}
   cx.fillStyle="#fff";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*.28,-R*.37,R*.045*(1-blink),0,6.3);cx.fill()}}
   cx.strokeStyle="#6b4a2e";cx.lineWidth=Math.max(1.5,s*.02);cx.lineCap="round";cx.beginPath();cx.moveTo(-R*.6,-R*.62);cx.lineTo(0,-R*.48);cx.lineTo(R*.6,-R*.62);cx.stroke()}
- else{if(b.f){// flip bird: two curled crest feathers, white U-turn mark on the chest, dark eye mask
+ else{if(b.z){// dizzy bird: one curly antenna with a star, swirl on the belly
+   cx.strokeStyle=dark;cx.lineWidth=Math.max(2,s*.03);cx.lineCap="round";cx.beginPath();cx.moveTo(0,-R*.75);cx.quadraticCurveTo(R*.3,-R*1.15,0,-R*1.25);cx.arc(-R*.08,-R*1.18,R*.08,0,4.5);cx.stroke();
+   cx.strokeStyle="rgba(255,255,255,.8)";cx.lineWidth=Math.max(1.5,s*.025);cx.beginPath();for(let a=0;a<12;a+=.4){const rr=R*.04*a;cx.lineTo(Math.cos(a)*rr,R*.3+Math.sin(a)*rr)}cx.stroke()}
+  if(b.f){// flip bird: two curled crest feathers, white U-turn mark on the chest, dark eye mask
    cx.strokeStyle=dark;cx.lineWidth=Math.max(2,s*.035);cx.lineCap="round";for(const sd of[-1,1]){cx.beginPath();cx.moveTo(sd*R*.12,-R*.72);cx.quadraticCurveTo(sd*R*.2,-R*1.18,sd*R*.48,-R*1.08);cx.quadraticCurveTo(sd*R*.62,-R*.92,sd*R*.42,-R*.88);cx.stroke()}
    cx.strokeStyle="#fff";cx.globalAlpha=.92;cx.lineWidth=Math.max(2,s*.04);cx.beginPath();cx.moveTo(-R*.24,R*.02);cx.lineTo(-R*.24,R*.3);cx.arc(0,R*.3,R*.24,Math.PI,0,true);cx.lineTo(R*.24,R*.06);cx.stroke();
    cx.fillStyle="#fff";cx.beginPath();cx.moveTo(R*.24,-R*.08);cx.lineTo(R*.38,R*.1);cx.lineTo(R*.1,R*.1);cx.closePath();cx.fill();cx.globalAlpha=1;
    cx.fillStyle="#2a2342";cx.beginPath();cx.ellipse(0,-R*.4,R*.62,R*.17,0,0,6.3);cx.fill()}
-  else{// songbird: crest, rosy cheeks
+  else if(!b.z){// songbird: crest, rosy cheeks
    cx.fillStyle=dark;for(const k of[-1,0,1]){cx.save();cx.translate(k*R*.16,-R*.72);cx.rotate(k*.5);cx.beginPath();cx.ellipse(0,R*.12,R*.08,R*.24,0,0,6.3);cx.fill();cx.restore()}
    cx.fillStyle="rgba(240,120,130,.45)";for(const sd of[-1,1]){cx.beginPath();cx.ellipse(sd*R*.58,-R*.18,R*.13,R*.09,0,0,6.3);cx.fill()}}
   if(puff>.15){// ruffled: eyes squeeze shut into > <, with a little squawk mark
    cx.strokeStyle=b.f?"#fff":"#2c2a24";cx.lineWidth=Math.max(1.5,s*.025);cx.lineCap="round";for(const sd of[-1,1]){cx.beginPath();cx.moveTo(sd*R*.48,-R*.52);cx.lineTo(sd*R*.26,-R*.42);cx.lineTo(sd*R*.48,-R*.32);cx.stroke()}
-   cx.save();cx.rotate(-ang);cx.fillStyle="#fff";cx.strokeStyle="#2c2a24";cx.lineWidth=Math.max(1,s*.015);cx.globalAlpha=Math.min(1,puff*1.6);cx.beginPath();cx.ellipse(R*.95,-R*1.05,R*.3,R*.28,0,0,6.3);cx.fill();cx.stroke();cx.fillStyle="#2c2a24";cx.font="900 "+(R*.42)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(b.f?"?!":"!",R*.95,-R*1.03);cx.restore();cx.globalAlpha=1}
+   cx.save();cx.rotate(-ang);cx.fillStyle="#fff";cx.strokeStyle="#2c2a24";cx.lineWidth=Math.max(1,s*.015);cx.globalAlpha=Math.min(1,puff*1.6);cx.beginPath();cx.ellipse(R*.95,-R*1.05,R*.3,R*.28,0,0,6.3);cx.fill();cx.stroke();cx.fillStyle="#2c2a24";cx.font="900 "+(R*.42)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(b.f?"?!":b.z?"@":"!",R*.95,-R*1.03);cx.restore();cx.globalAlpha=1}
+  else if(b.z){// spiral eyes
+   cx.fillStyle="#fff";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*.36,-R*.4,R*.16,0,6.3);cx.fill()}
+   cx.strokeStyle="#2c2a24";cx.lineWidth=Math.max(1,s*.014);for(const sd of[-1,1]){cx.beginPath();for(let a=0;a<11;a+=.35){const rr=R*.013*a;cx.lineTo(sd*R*.36+Math.cos(a*sd+performance.now()/400)*rr,-R*.4+Math.sin(a*sd+performance.now()/400)*rr)}cx.stroke()}}
   else{cx.fillStyle=b.f?"#fff":"#2c2a24";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*.36,-R*.4,R*.12,0,6.3);cx.fill()}
    cx.fillStyle=b.f?"#2c2a24":"#fff";for(const sd of[-1,1]){cx.beginPath();cx.arc(sd*R*(b.f?.38:.32),-R*(b.f?.4:.45),R*(b.f?.06:.045),0,6.3);cx.fill()}}}
  // beak and chevron keep their normal size while the body puffs, so the direction stays easy to read
@@ -224,7 +257,7 @@ function drawBird(b,x,y,s,ang,flap,glow,puff=0,blink=0){
  cx.fillStyle="#f4a52a";cx.strokeStyle="#b8741a";cx.lineWidth=Math.max(1,s*.015);cx.beginPath();cx.moveTo(-R0*.28,-R0*.8);cx.lineTo(0,-R0*(b.o?1.25:1.5));cx.lineTo(R0*.28,-R0*.8);cx.closePath();cx.fill();cx.stroke();
  if(!flap||Math.abs(flap)<1){cx.lineCap="round";cx.lineJoin="round";const chev=()=>{cx.beginPath();cx.moveTo(-R0*.32,-R0*1.62);cx.lineTo(0,-R0*1.9);cx.lineTo(R0*.32,-R0*1.62);cx.stroke()};
   if(P){cx.strokeStyle=css("--card");cx.lineWidth=Math.max(4,s*.08);chev()}
-  cx.strokeStyle=b.o?"#7a5a3c":b.f?"#9d86e8":shade(body,-40);cx.globalAlpha=P?1:.85;cx.lineWidth=Math.max(2,s*.045);chev();cx.globalAlpha=1}
+  cx.strokeStyle=b.o?"#7a5a3c":b.f?"#9d86e8":b.z?"#2f8f74":shade(body,-40);cx.globalAlpha=P?1:.85;cx.lineWidth=Math.max(2,s*.045);chev();cx.globalAlpha=1}
  cx.restore();}
 // a loose feather: quill plus soft vane
 function drawFeather(x,y,len,rot,col,a){cx.save();cx.translate(x,y);cx.rotate(rot);cx.globalAlpha=a;cx.fillStyle=col;cx.beginPath();cx.ellipse(0,0,len*.28,len*.5,0,0,6.3);cx.fill();cx.strokeStyle=shade(col,-50);cx.lineWidth=Math.max(1,len*.06);cx.beginPath();cx.moveTo(0,-len*.5);cx.lineTo(0,len*.62);cx.stroke();cx.restore()}
@@ -233,8 +266,11 @@ const bg=document.createElement("canvas");let bgKey="";
 function drawRoost(N,s){
  cx.fillStyle=css("--leaf");cx.beginPath();cx.roundRect?cx.roundRect(0,0,W,W,22):cx.rect(0,0,W,W);cx.fill();
  cx.save();cx.beginPath();cx.rect(0,0,W,W);cx.clip();
+ const moon=css("--moon");if(moon){const g=cx.createRadialGradient(W*.8,W*.16,0,W*.8,W*.16,W*.3);g.addColorStop(0,moon);g.addColorStop(.25,moon);g.addColorStop(.26,"rgba(255,246,216,.25)");g.addColorStop(1,"rgba(255,246,216,0)");cx.fillStyle=g;cx.fillRect(0,0,W,W);
+  cx.fillStyle=moon;for(let i=0;i<24;i++){const x=((Math.sin(i*91.7)*4375.5)%1+1)%1*W,y=((Math.sin(i*17.3)*1234.5)%1+1)%1*W;cx.globalAlpha=.5+.5*((i*7)%3)/2;cx.beginPath();cx.arc(x,y,Math.max(1,W*.004),0,6.3);cx.fill()}cx.globalAlpha=1}
  // background leaf clusters
  for(let i=0;i<N*N*1.6;i++){const x=((Math.sin(i*12.9898)*43758.5453)%1+1)%1*W,y=((Math.sin(i*78.233)*12345.678)%1+1)%1*W,rot=i*1.7;cx.fillStyle=i%3?css("--leaf2"):css("--leaf3");cx.save();cx.translate(x,y);cx.rotate(rot);cx.beginPath();cx.ellipse(0,0,s*.09,s*.2,0,0,6.3);cx.fill();cx.restore()}
+ if(document.documentElement.dataset.pack==="garden")for(let i=0;i<N*3;i++){const x=((Math.sin(i*33.1)*9631.7)%1+1)%1*W,y=((Math.sin(i*57.9)*2717.3)%1+1)%1*W;cx.fillStyle=i%2?"rgba(255,255,255,.75)":"rgba(240,150,170,.75)";for(let k=0;k<5;k++){cx.beginPath();cx.arc(x+Math.cos(k*1.256)*s*.035,y+Math.sin(k*1.256)*s*.035,s*.03,0,6.3);cx.fill()}cx.fillStyle="#f2c94c";cx.beginPath();cx.arc(x,y,s*.022,0,6.3);cx.fill()}
  for(let r=0;r<N;r++){const y=(r+.5)*s+s*.1,th=s*.17;
   // branch with a gentle wave
   const wave=x=>Math.sin(x/W*Math.PI*2+r*1.7)*s*.04;
@@ -256,18 +292,32 @@ function frame(now){
  const pb=press&&birds.find(b=>b.id===press.id);
  if(pb){const bl=blocker(pb);cx.strokeStyle=bl?css("--warn"):css("--accent");cx.lineWidth=s*.06;cx.setLineDash([s*.06,s*.12]);cx.lineCap="round";cx.beginPath();cx.moveTo((pb.c+.5)*s,(pb.r+.5)*s);
   const ex=bl?(bl.c+.5)*s-DC[pb.d]*s*.35:(pb.c+.5+DC[pb.d]*N*2)*s,ey=bl?(bl.r+.5)*s-DR[pb.d]*s*.35:(pb.r+.5+DR[pb.d]*N*2)*s;cx.lineTo(ex,ey);cx.stroke();cx.setLineDash([]);
-  if(!bl)for(const y of neighbors(pb)){const x0=(y.c+.5)*s,y0=(y.r+.5)*s;cx.fillStyle=css("--card");cx.beginPath();cx.arc(x0+s*.3,y0-s*.3,s*.16,0,6.3);cx.fill();cx.fillStyle=y.o?css("--soft"):y.f?FLIP:css("--accent");cx.font="800 "+(s*.22)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(y.o?"–":y.f?"U":"↻",x0+s*.3,y0-s*.29)}}
+  if(!bl){// arrowhead where the bird leaves the roost
+   const ax=(pb.c+.5+DC[pb.d]*(N))*s,ay=(pb.r+.5+DR[pb.d]*(N))*s,bx=Math.max(s*.2,Math.min(W-s*.2,(pb.c+.5)*s+DC[pb.d]*W)),by=Math.max(s*.2,Math.min(W-s*.2,(pb.r+.5)*s+DR[pb.d]*W));
+   cx.save();cx.translate(DC[pb.d]?bx:(pb.c+.5)*s,DR[pb.d]?by:(pb.r+.5)*s);cx.rotate(pb.d*Math.PI/2);cx.fillStyle=css("--accent");cx.beginPath();cx.moveTo(0,-s*.16);cx.lineTo(s*.14,s*.06);cx.lineTo(-s*.14,s*.06);cx.closePath();cx.fill();cx.restore()}
+  if(!bl)for(const y of neighbors(pb)){const x0=(y.c+.5)*s,y0=(y.r+.5)*s,q=turnOf(y),nd=(y.d+q)%4;
+   // ghost arrow: where this bird will face after the takeoff
+   if(q){cx.save();cx.translate(x0,y0);cx.rotate(nd*Math.PI/2);cx.strokeStyle=css("--card");cx.lineWidth=s*.11;cx.lineCap="round";cx.lineJoin="round";const g=()=>{cx.beginPath();cx.moveTo(-s*.13,-s*.36);cx.lineTo(0,-s*.47);cx.lineTo(s*.13,-s*.36);cx.stroke()};g();cx.strokeStyle=css("--accent");cx.lineWidth=s*.06;g();cx.restore()}
+   cx.fillStyle=css("--card");cx.beginPath();cx.arc(x0+s*.3,y0-s*.3,s*.16,0,6.3);cx.fill();cx.fillStyle=q===0?css("--soft"):q===2?FLIP:css("--accent");cx.font="800 "+(s*.22)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(q===0?"–":q===2?"U":"↻",x0+s*.3,y0-s*.29)}}
  // birds
  for(const b of birds){const tgt=b.d*Math.PI/2;let diff=tgt-b.ang;while(diff<-Math.PI)diff+=Math.PI*2;while(diff>Math.PI)diff-=Math.PI*2;if(Math.abs(diff)>=Math.PI-.01)diff=Math.PI;b.ang+=diff*(b.f?.16:.25);
   let x=(b.c+.5)*s,y=(b.r+.5)*s;
+  // the flock hops a little when a bird leaves; birds farther away hop a moment later
+  if(hops&&!calm.matches){const t=(now-hops)/260-((b.r+b.c)%3)*.12;if(t>0&&t<1)y-=Math.sin(t*Math.PI)*s*.05}
+  const tb=tumbles.find(q=>q.id===b.id);let extra=0;if(tb){const t=(now-tb.t)/520;if(t<1)extra=(1-(1-t)*(1-t))*Math.PI*2-Math.PI*2}
   if(shake&&shake.id===b.id){const t=(now-shake.t)/400;if(t<1)x+=Math.sin(t*30)*s*.06*(1-t);else shake=null}
   if(shake&&shake.bl===b.id&&(now-shake.t)<600){cx.strokeStyle=css("--warn");cx.lineWidth=s*.05;blob(x,y,s*.42,b.j,12,.06);cx.stroke()}
   const rf=ruffles.find(q=>q.id===b.id);let puff=0;if(rf&&!calm.matches){const t=(now-rf.t)/520;if(t<1)puff=Math.sin(t*Math.PI)*(1-t*.3)}
   const bk=blinks.find(q=>q.id===b.id);let blink=0;if(bk){const t=(now-bk.t)/700;if(t<1)blink=Math.sin(t*Math.PI)}
   if(nudging&&!b.o){cx.strokeStyle=css("--accent");cx.globalAlpha=.55;cx.lineWidth=s*.035;cx.setLineDash([s*.05,s*.07]);blob(x,y,s*.42,b.j,12,.06);cx.stroke();cx.setLineDash([]);cx.globalAlpha=1}
-  drawBird(b,x,y,s,b.ang,Math.sin(now/600+b.j)*.15+puff*Math.sin(now/30)*.4,b.id===hintId,puff,blink)}
+  drawBird(b,x,y,s,b.ang+extra,Math.sin(now/600+b.j)*.15+puff*Math.sin(now/30)*.4,b.id===hintId,puff,blink);
+  if(b.z){// dizzy tag: its next turn, always upright
+   cx.fillStyle=css("--card");cx.strokeStyle=DIZZY;cx.lineWidth=Math.max(1.5,s*.025);cx.beginPath();cx.arc(x+s*.32,y+s*.3,s*.14,0,6.3);cx.fill();cx.stroke();cx.fillStyle=b.p?FLIP:"#2f8f74";cx.font="900 "+(s*.18)+"px "+css("--body");cx.textAlign="center";cx.textBaseline="middle";cx.fillText(b.p?"U":"↻",x+s*.32,y+s*.31)}}
+ tumbles=tumbles.filter(q=>now-q.t<520);
  ruffles=ruffles.filter(q=>now-q.t<520);blinks=blinks.filter(q=>now-q.t<700);
- for(const f of flying){const t=(now-f.t)/700;if(t>1)continue;const dist=t*t*N*1.4*s;drawBird(f,(f.c+.5)*s+DC[f.d]*dist,(f.r+.5)*s+DR[f.d]*dist,s*(1+t*.3),f.d*Math.PI/2,now/40,false)}
+ for(const f of flying){const t=(now-f.t)/700;if(t>1)continue;const dist=t*t*N*1.4*s;
+  // a short fading flight trail
+  if(!calm.matches){cx.strokeStyle=f.o?"#9b7652":f.f?FLIP:f.z?DIZZY:f.col;cx.globalAlpha=.45*(1-t);cx.lineWidth=s*.08*(1-t*.5);cx.lineCap="round";cx.beginPath();cx.moveTo((f.c+.5)*s+DC[f.d]*dist*.35,(f.r+.5)*s+DR[f.d]*dist*.35);cx.lineTo((f.c+.5)*s+DC[f.d]*dist*.9,(f.r+.5)*s+DR[f.d]*dist*.9);cx.stroke();cx.globalAlpha=1}drawBird(f,(f.c+.5)*s+DC[f.d]*dist,(f.r+.5)*s+DR[f.d]*dist,s*(1+t*.3),f.d*Math.PI/2,now/40,false)}
  flying=flying.filter(f=>now-f.t<700);
  for(const f of feathers){const t=(now-f.t)/1100;if(t<0||t>1)continue;const e=1-(1-t)*(1-t);const fx=(f.c+.5)*s+f.vx*e*s*.9+Math.sin(t*9+f.rot)*s*.05,fy=(f.r+.5)*s+f.vy*e*s*.9+t*t*s*.6;drawFeather(fx,fy,f.len*s,f.rot+f.vr*t,f.col,(1-t)*.9)}
  feathers=feathers.filter(f=>now-f.t<1100);
