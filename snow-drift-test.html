@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<!-- Snow Drift prototype (working title; idea pipeline, 2026-10-20 pitch). Unlisted test page: not linked from the site. Replace this file to update. -->
+<title>Snow Drift (test version)</title>
+<style>
+:root {
+  --sky1: #cfe6f7; --sky2: #eef6fc; --ink: #24405a; --ink2: #5a7690; --card: #ffffff;
+  --accent: #3b82c4; --accent2: #e86a5c; --snow: #ffffff; --snowShade: #c9dcec; --line: #7fa6c8;
+  --ghost: rgba(59,130,196,.35); --bad: #e0574a; --btn: #ffffff; --btnInk: #24405a; --hill: #e3eef7; --trayBg: #bcd8ee; --hill2: #d6e7f4; --snowLow: #e6f0f8; --snowEdge: rgba(80,125,170,.55); --pic: rgba(255,255,255,.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sky1: #14243a; --sky2: #24395a; --ink: #e6eef7; --ink2: #9fb4ca; --card: #1d2f47;
+    --accent: #7ab8f0; --accent2: #f08a7c; --snow: #f2f7fc; --snowShade: #9db6cf; --line: #8fb5da;
+    --ghost: rgba(122,184,240,.35); --bad: #ff7a6b; --btn: #24395a; --btnInk: #e6eef7; --hill: #2c4466; --trayBg: #2f4c73; --hill2: #233a58; --snowLow: #cfdeec; --snowEdge: rgba(20,40,70,.8); --pic: rgba(255,255,255,.07);
+  }
+}
+:root[data-theme="dark"] {
+  --sky1: #14243a; --sky2: #24395a; --ink: #e6eef7; --ink2: #9fb4ca; --card: #1d2f47;
+  --accent: #7ab8f0; --accent2: #f08a7c; --snow: #f2f7fc; --snowShade: #9db6cf; --line: #8fb5da;
+  --ghost: rgba(122,184,240,.35); --bad: #ff7a6b; --btn: #24395a; --btnInk: #e6eef7; --hill: #2c4466; --trayBg: #2f4c73; --hill2: #233a58; --snowLow: #cfdeec; --snowEdge: rgba(20,40,70,.8); --pic: rgba(255,255,255,.07);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: linear-gradient(var(--sky1), var(--sky2)); color: var(--ink);
+  font-family: "Nunito", "Trebuchet MS", system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none; user-select: none; -webkit-user-select: none; overflow: hidden;
+}
+#app { max-width: 520px; margin: 0 auto; height: 100%; display: flex; flex-direction: column;
+  padding: max(8px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom)); }
+header { display: flex; align-items: center; gap: 8px; }
+#title { font-weight: 800; font-size: 22px; letter-spacing: .3px; flex: 1; cursor: default; }
+#title small { font-weight: 600; font-size: 12px; color: var(--ink2); margin-left: 4px; }
+.hbtn { border: 0; background: var(--btn); color: var(--btnInk); border-radius: 14px; padding: 8px 12px;
+  font: inherit; font-weight: 700; font-size: 15px; box-shadow: 0 1px 4px rgba(0,0,0,.12); cursor: pointer; }
+#step { min-height: 42px; margin: 6px 2px 4px; font-size: 15px; line-height: 1.35; color: var(--ink); }
+#step b { color: var(--accent); }
+#step.warn { color: var(--bad); font-weight: 700; }
+#boardWrap { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+canvas#board { touch-action: none; display: block; }
+#tray { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 6px; min-height: 76px; }
+.cl { position: relative; border: 2px solid transparent; background: var(--trayBg); border-radius: 16px; padding: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.12); cursor: pointer; }
+.cl.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ghost); }
+.cl.empty { display: none; }
+.cl.pulse { animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px var(--ghost); } }
+.cl canvas { display: block; }
+.cl .n { position: absolute; right: -4px; top: -6px; background: var(--accent); color: #fff; font-weight: 800;
+  font-size: 13px; border-radius: 10px; padding: 1px 7px; }
+#controls { display: flex; gap: 8px; justify-content: center; }
+#controls .hbtn { flex: 1; max-width: 140px; padding: 11px 0; }
+.ov { position: fixed; inset: 0; background: rgba(10,25,45,.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+.ov.on { display: flex; }
+#winOv { background: transparent; align-items: flex-start; padding-top: max(64px, calc(env(safe-area-inset-top) + 56px)); }
+#winOv .card { box-shadow: 0 6px 30px rgba(0,0,0,.3); }
+.card { background: var(--card); color: var(--ink); border-radius: 22px; padding: 20px 20px 16px; max-width: 380px; width: 100%;
+  box-shadow: 0 10px 40px rgba(0,0,0,.25); max-height: 90vh; overflow: auto; }
+.card h2 { margin: 0 0 10px; font-size: 22px; }
+.card ol { padding-left: 22px; margin: 0 0 14px; }
+.card li { margin: 6px 0; line-height: 1.35; }
+.card p { line-height: 1.4; margin: 8px 0; }
+.card .row { display: flex; gap: 8px; margin-top: 12px; }
+.card .row .hbtn { flex: 1; padding: 12px 0; }
+.hbtn.main { background: var(--accent); color: #fff; }
+.stars { font-size: 34px; text-align: center; letter-spacing: 6px; margin: 4px 0 2px; color: #f2b632; }
+.stars .off { color: var(--ink2); opacity: .35; }
+#lvGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+#lvGrid button { padding: 10px 0 6px; font-size: 17px; }
+#lvGrid button small { display: block; font-size: 11px; color: #f2b632; min-height: 13px; }
+#lvGrid button:disabled { opacity: .35; }
+.packh { grid-column: 1 / -1; font-weight: 800; font-size: 13px; color: var(--ink2); margin-top: 6px; }
+#toast { position: fixed; left: 50%; top: 40%; transform: translateX(-50%); background: var(--card); color: var(--ink);
+  padding: 10px 16px; border-radius: 14px; box-shadow: 0 4px 18px rgba(0,0,0,.2); font-weight: 700; opacity: 0;
+  transition: opacity .25s; pointer-events: none; z-index: 6; text-align: center; max-width: 80vw; }
+#toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="title">Snow Drift<small>prototype v0.1</small></div>
+    <button class="hbtn" id="lvBtn">Level 1 ▾</button>
+    <button class="hbtn" id="helpBtn" aria-label="Help">?</button>
+  </header>
+  <div id="step"></div>
+  <div id="boardWrap"><canvas id="board"></canvas></div>
+  <div id="tray"></div>
+  <div id="controls">
+    <button class="hbtn" id="undoBtn">↶ Undo</button>
+    <button class="hbtn" id="restartBtn">⟲ Restart</button>
+    <button class="hbtn" id="hintBtn">💡 Hint</button>
+  </div>
+</div>
+
+<div class="ov" id="introOv"><div class="card"><h2 id="introT"></h2><ol id="introL"></ol>
+  <div class="row"><button class="hbtn main" id="introGo">Let's go</button></div></div></div>
+<div class="ov" id="winOv"><div class="card"><h2 id="winT">Picture finished!</h2><div class="stars" id="winS"></div>
+  <p id="winP" style="text-align:center"></p>
+  <div class="row"><button class="hbtn" id="winAgain">Play again</button><button class="hbtn main" id="winNext">Next ›</button></div></div></div>
+<div class="ov" id="stuckOv"><div class="card"><h2>No cloud fits now</h2>
+  <p>Every cloud left would spill outside the picture or leave a hole. Undo a step, or start this picture again.</p>
+  <div class="row"><button class="hbtn" id="stuckRestart">⟲ Restart</button><button class="hbtn main" id="stuckUndo">↶ Undo</button></div></div></div>
+<div class="ov" id="lvOv"><div class="card"><h2>Pick a picture</h2><div id="lvGrid"></div>
+  <div class="row"><button class="hbtn" id="lvClose">Close</button></div></div></div>
+<div class="ov" id="helpOv"><div class="card"><h2>How to play</h2>
+  <ol>
+    <li>Fill the <b>dotted picture</b> with snow, exactly.</li>
+    <li>Tap a cloud below to pick it. Press on the snow field to aim; a ghost shows where the snow will land. Let go to drop it. Slide off the field to cancel.</li>
+    <li>A cloud's snow falls as one clump and stops when any part touches snow.</li>
+    <li>Snow can't spill outside the picture, and it can't leave a hole under it inside the picture. Holes are fine where there are no dots, so you can build bridges.</li>
+    <li>Undo is free. Hint always shows a move that works.</li>
+  </ol>
+  <p><b>Stars:</b> ★ finish the picture · ★ no Undo · ★ no Hint.</p>
+  <div id="lessons"></div>
+  <div class="row"><button class="hbtn" id="soundBtn">Sound: on</button><button class="hbtn main" id="helpClose">Close</button></div></div></div>
+<div id="toast"></div>
+
+<script>
+// Snow Drift rules + solver. Shared by the generator (node) and the page.
+// Board: W columns, H rows, row 0 = ground. target[c][r] = 1 where the picture is.
+// A cloud shape is a list of columns [b, h]: that column's flakes start b rows above
+// the shape's base and stack h tall. The whole shape falls as one piece and stops
+// when any flake touches snow or the ground.
+var SD = (function () {
+  var SHAPES = {
+    dot:  [[0, 1]],
+    bar2: [[0, 1], [0, 1]],
+    bar3: [[0, 1], [0, 1], [0, 1]],
+    tall: [[0, 2]],
+    J:    [[0, 1], [0, 2]],
+    L:    [[0, 2], [0, 1]],
+    up:   [[0, 1], [1, 1]],
+    down: [[1, 1], [0, 1]],
+    peak: [[0, 1], [0, 2], [0, 1]],
+    vee:  [[1, 1], [0, 1], [1, 1]]
+  };
+
+  function parse(rows) {
+    // rows: strings top to bottom, '#' = picture
+    var H = rows.length, W = rows[0].length, t = [];
+    for (var c = 0; c < W; c++) {
+      t.push([]);
+      for (var r = 0; r < H; r++) t[c].push(rows[H - 1 - r][c] === '#' ? 1 : 0);
+    }
+    return { W: W, H: H, t: t };
+  }
+
+  // state: tops[c] = rows of snow in column c counted to its highest flake (0 = none)
+  // snow[c][r] booleans kept for drawing; the rules only need tops.
+  function newState(lv) {
+    var s = { tops: [], snow: [], left: lv.pieces.map(function (p) { return p.n; }) };
+    for (var c = 0; c < lv.W; c++) { s.tops.push(0); s.snow.push(new Array(lv.H).fill(0)); }
+    return s;
+  }
+
+  function clone(s) {
+    return { tops: s.tops.slice(), snow: s.snow.map(function (a) { return a.slice(); }), left: s.left.slice() };
+  }
+
+  // Where shape lands at column x. Returns {y, cells:[[c,r]], ok, why, bad:[[c,r]]}
+  function place(lv, s, shapeName, x) {
+    var sh = SHAPES[shapeName], y = 0, i, c;
+    if (x < 0 || x + sh.length > lv.W) return null;
+    for (i = 0; i < sh.length; i++) y = Math.max(y, s.tops[x + i] - sh[i][0]);
+    var cells = [], bad = [], gaps = [], why = '';
+    for (i = 0; i < sh.length; i++) {
+      c = x + i;
+      var b = y + sh[i][0];
+      for (var r = b; r < b + sh[i][1]; r++) {
+        cells.push([c, r]);
+        if (r >= lv.H || !lv.t[c][r]) bad.push([c, r]);
+      }
+      for (r = s.tops[c]; r < b; r++) if (lv.t[c][r]) gaps.push([c, r]);
+    }
+    if (bad.length) why = 'spill';
+    else if (gaps.length) why = 'gap';
+    return { y: y, cells: cells, ok: !why, why: why, bad: bad, gaps: gaps };
+  }
+
+  function apply(lv, s, pi, x) {
+    var p = place(lv, s, lv.pieces[pi].s, x);
+    var n = clone(s);
+    p.cells.forEach(function (cr) {
+      if (cr[1] < lv.H) n.snow[cr[0]][cr[1]] = 1;
+      n.tops[cr[0]] = Math.max(n.tops[cr[0]], cr[1] + 1);
+    });
+    n.left[pi]--;
+    return n;
+  }
+
+  function moves(lv, s) {
+    var out = [];
+    for (var pi = 0; pi < lv.pieces.length; pi++) {
+      if (!s.left[pi]) continue;
+      var w = SHAPES[lv.pieces[pi].s].length;
+      for (var x = 0; x + w <= lv.W; x++) {
+        var p = place(lv, s, lv.pieces[pi].s, x);
+        if (p.ok) out.push([pi, x]);
+      }
+    }
+    return out;
+  }
+
+  function won(lv, s) {
+    for (var c = 0; c < lv.W; c++) for (var r = 0; r < lv.H; r++) if (lv.t[c][r] !== s.snow[c][r]) return false;
+    return true;
+  }
+
+  function key(s) { return s.tops.join(',') + '|' + s.left.join(','); }
+
+  // Returns a winning move list from s, or null. memo shared per level.
+  function solve(lv, s, memo) {
+    memo = memo || {};
+    if (won(lv, s)) return [];
+    var k = key(s);
+    if (memo[k] === false) return null;
+    var ms = moves(lv, s);
+    for (var i = 0; i < ms.length; i++) {
+      var r = solve(lv, apply(lv, s, ms[i][0], ms[i][1]), memo);
+      if (r) return [ms[i]].concat(r);
+    }
+    memo[k] = false;
+    return null;
+  }
+
+  return { SHAPES: SHAPES, parse: parse, newState: newState, clone: clone, place: place, apply: apply, moves: moves, won: won, solve: solve, key: key };
+})();
+
+
+var LEVELS = [{"name":"Snow ledge","pack":1,"rows":["####"],"pieces":[{"s":"bar2","n":2}],"deco":[{"k":"bird","c":1.5,"r":1}],"intro":{"title":"Fill the picture with snow","steps":["The dotted outline is the picture you are making.","Press on the snow field. The cloud follows your finger and a ghost shows where its snow will land.","Let go to drop it. Fill every dotted spot to finish the picture."]},"tint":null,"trunk":null},{"name":"Little hill","pack":1,"rows":[".#.","###"],"pieces":[{"s":"bar3","n":1},{"s":"dot","n":1}],"deco":[{"k":"flag","c":1,"r":2}],"intro":{"title":"Order matters","steps":["Now you have two clouds. Tap a cloud below to pick it.","Snow lands on top of the snow already there.","Snow can never leave a hole under it inside the picture, so think about which cloud goes first."]},"tint":null,"trunk":null},{"name":"Snowy steps","pack":1,"rows":["..#",".##","###"],"pieces":[{"s":"bar3","n":1},{"s":"J","n":1}],"deco":[{"k":"lantern","c":2,"r":3}],"intro":{"title":"Shaped clouds","steps":["Some clouds carry a shaped clump of snow.","The clump falls as one piece and stops as soon as any part of it touches snow.","Match the clump to the shape of the ground under it."]},"tint":null,"trunk":null},{"name":"Snow bank","pack":1,"rows":["#####","#####"],"pieces":[{"s":"bar3","n":1},{"s":"bar2","n":1},{"s":"dot","n":1},{"s":"tall","n":2}],"deco":[{"k":"bird","c":3.5,"r":2}],"intro":{"title":"Plan ahead","steps":["Every cloud must be used, and the snow exactly fills the picture.","Before you drop, picture where the last clouds will have to go.","Stuck? Undo is free, and Hint always shows a move that works."]},"tint":null,"trunk":null},{"name":"Snow fort","pack":1,"rows":["#.#.#","#####","#####"],"pieces":[{"s":"bar3","n":1},{"s":"bar2","n":1},{"s":"tall","n":1},{"s":"J","n":2}],"deco":[{"k":"flag","c":0,"r":3},{"k":"flag","c":4,"r":3}],"intro":null,"tint":null,"trunk":null},{"name":"Snowman","pack":1,"rows":[".###.",".###.","#####","#####"],"pieces":[{"s":"bar3","n":4},{"s":"dot","n":1},{"s":"J","n":1}],"deco":[{"k":"eye","c":1.65,"r":3.1},{"k":"eye","c":2.35,"r":3.1},{"k":"nose","c":2,"r":2.75},{"k":"scarf","c":2,"r":2,"w":3},{"k":"button","c":2,"r":1.4},{"k":"button","c":2,"r":0.6}],"intro":null,"tint":null,"trunk":null},{"name":"Little pine","pack":1,"rows":["...#...","..###..",".#####.","#######"],"pieces":[{"s":"peak","n":1},{"s":"bar2","n":1},{"s":"up","n":1},{"s":"down","n":4}],"deco":[{"k":"star","c":3,"r":4},{"k":"ball","c":2,"r":1.5,"h":0},{"k":"ball","c":4.2,"r":0.6,"h":1},{"k":"ball","c":3.4,"r":2.4,"h":2},{"k":"ball","c":1.2,"r":0.5,"h":3},{"k":"ball","c":5.2,"r":1.6,"h":1}],"intro":null,"tint":"pine","trunk":null},{"name":"Hillside","pack":1,"rows":[".....##","....###","..#####","#######"],"pieces":[{"s":"down","n":1},{"s":"J","n":1},{"s":"bar2","n":4},{"s":"bar3","n":1},{"s":"dot","n":1}],"deco":[{"k":"sled","c":2.2,"r":2},{"k":"tree","c":6,"r":4}],"intro":null,"tint":null,"trunk":null},{"name":"Big snowman","pack":1,"rows":["..###..","..###..",".#####.",".#####.","#######","#######"],"pieces":[{"s":"bar3","n":1},{"s":"vee","n":1},{"s":"L","n":1},{"s":"J","n":4},{"s":"bar2","n":1},{"s":"tall","n":3},{"s":"dot","n":1}],"deco":[{"k":"hat","c":3,"r":6,"w":3},{"k":"eye","c":2.6,"r":5.1},{"k":"eye","c":3.4,"r":5.1},{"k":"nose","c":3,"r":4.7},{"k":"scarf","c":3,"r":4,"w":3},{"k":"button","c":3,"r":3.3},{"k":"button","c":3,"r":2.5},{"k":"button","c":3,"r":1.2}],"intro":null,"tint":null,"trunk":null},{"name":"Snow bridge","pack":2,"rows":["###","#.#"],"pieces":[{"s":"dot","n":2},{"s":"bar3","n":1}],"deco":[{"k":"icicles","c":1,"r":1},{"k":"lantern","c":1,"r":2}],"intro":{"title":"Bridges","steps":["Spots without dots are not part of the picture.","A hole under the snow is fine there, so you can build a bridge across it.","Build the two posts first, then lay the long cloud across them."]},"tint":null,"trunk":null},{"name":"Cabin","pack":2,"rows":["...#...","..###..",".#####.",".##.##.",".##.##."],"pieces":[{"s":"tall","n":1},{"s":"L","n":1},{"s":"J","n":2},{"s":"up","n":1},{"s":"down","n":2}],"deco":[{"k":"door","c":3,"r":0},{"k":"window","c":1.5,"r":1.5},{"k":"window","c":4.5,"r":1.5},{"k":"smoke","c":4.5,"r":4}],"intro":null,"tint":"cabin","trunk":null},{"name":"Tall pine","pack":2,"rows":["...#...","..###..",".#####.","#######","...#...","...#..."],"pieces":[{"s":"up","n":2},{"s":"down","n":2},{"s":"peak","n":2},{"s":"tall","n":1}],"deco":[{"k":"star","c":3,"r":6},{"k":"ball","c":2,"r":3.5,"h":0},{"k":"ball","c":4.2,"r":2.6,"h":1},{"k":"ball","c":3.4,"r":4.4,"h":2},{"k":"ball","c":1.2,"r":2.5,"h":3},{"k":"ball","c":5.2,"r":3.6,"h":1}],"intro":null,"tint":"pine","trunk":[[3,0],[3,1]]}];
+
+// ---------- storage (one helper, fails quietly) ----------
+var store = {
+  get: function (k, d) { try { var v = localStorage.getItem('snowdrift.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem('snowdrift.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+var qs = new URLSearchParams(location.search);
+if (qs.get('fresh') === '1') { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('snowdrift.') === 0) localStorage.removeItem(k); }); } catch (e) {} }
+var unlocked = qs.get('unlock') === '1' || store.get('unlock', false);
+var best = store.get('best', {});
+var reached = store.get('reached', 0);
+var soundOn = store.get('sound', true);
+var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- level state ----------
+var L, S, hist, li, sel, undos, hints, aim = null, anim = null, done = false, memo = {}, hintMove = null, warnT = 0;
+var css = getComputedStyle(document.documentElement);
+function col(n) { return css.getPropertyValue(n).trim(); }
+
+function loadLevel(i, skipIntro) {
+  li = i;
+  var d = LEVELS[i], p = SD.parse(d.rows);
+  L = { W: p.W, H: p.H, t: p.t, pieces: d.pieces, d: d };
+  S = SD.newState(L); hist = []; undos = 0; hints = 0; done = false; memo = {}; hintMove = null; aim = null;
+  sel = 0;
+  document.getElementById('lvBtn').textContent = 'Level ' + (i + 1) + ' ▾';
+  if (i > reached) { reached = i; store.set('reached', reached); }
+  store.set('last', i);
+  resize(); buildTray(); updateStep();
+  if (d.intro && !skipIntro && !store.get('seen' + i, false)) showIntro(i);
+}
+function guided() { return !!LEVELS[li].intro && !hints; }
+
+function showIntro(i) {
+  var d = LEVELS[i];
+  document.getElementById('introT').textContent = d.intro.title;
+  document.getElementById('introL').innerHTML = d.intro.steps.map(function (s) { return '<li>' + s + '</li>'; }).join('');
+  ov('introOv', true);
+  store.set('seen' + i, true);
+}
+function ov(id, on) { document.getElementById(id).classList.toggle('on', on); }
+
+// ---------- sizing ----------
+var cv = document.getElementById('board'), cx = cv.getContext('2d'), cell = 40, ox = 0, gy = 0, skyH = 0, CW = 0, CH = 0, dpr = 1;
+function resize() {
+  var wrap = document.getElementById('boardWrap');
+  var w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!L) return;
+  var mh0 = 1; L.pieces.forEach(function (p) { mh0 = Math.max(mh0, shapeH(SD.SHAPES[p.s])); });
+  cell = Math.floor(Math.min((w - 8) / Math.max(L.W, 4), (h - 6) / (L.H + 1.75 + mh0), 64));
+  var mh = 1; L.pieces.forEach(function (p) { mh = Math.max(mh, shapeH(SD.SHAPES[p.s])); });
+  skyH = cell * (1.35 + mh);
+  CW = Math.min(w, Math.max(L.W, 5) * cell + 24); CH = skyH + L.H * cell + cell * 0.4;
+  dpr = window.devicePixelRatio || 1;
+  cv.width = CW * dpr; cv.height = CH * dpr; cv.style.width = CW + 'px'; cv.style.height = CH + 'px';
+  ox = (CW - L.W * cell) / 2; gy = skyH + L.H * cell;
+  buildFlakes();
+}
+window.addEventListener('resize', function () { resize(); });
+
+// ---------- tray ----------
+function shapeOf(pi) { return SD.SHAPES[L.pieces[pi].s]; }
+function shapeH(sh) { var m = 0; sh.forEach(function (c) { m = Math.max(m, c[0] + c[1]); }); return m; }
+function buildTray() {
+  var tr = document.getElementById('tray'); tr.innerHTML = '';
+  if (S.left[sel] === 0) { for (var k = 0; k < S.left.length; k++) if (S.left[k]) { sel = k; break; } }
+  L.pieces.forEach(function (p, pi) {
+    var b = document.createElement('div'); b.className = 'cl' + (pi === sel && S.left[pi] ? ' sel' : '') + (S.left[pi] ? '' : ' empty');
+    var sh = SD.SHAPES[p.s], u = 13, w = Math.max(3, sh.length) * u + 18, h = 26 + 3 * u;
+    var c = document.createElement('canvas'); c.width = w * dpr; c.height = h * dpr; c.style.width = w + 'px'; c.style.height = h + 'px';
+    var g = c.getContext('2d'); g.scale(dpr, dpr);
+    var sx = (w - sh.length * u) / 2;
+    drawCloud(g, w / 2, 13, Math.max(sh.length, 2) * u * 0.5 + 5, 1);
+    drawClump(g, sh, sx, 24 + 3 * u - 4, u, 1, true);
+    b.appendChild(c);
+    var n = document.createElement('span'); n.className = 'n'; n.textContent = '×' + S.left[pi]; b.appendChild(n);
+    b.onclick = function () { if (!S.left[pi] || anim) return; sel = pi; hintMove = null; buildTray(); updateStep(); tone(660, .05, .04); };
+    if (hintMove && hintMove[0] === pi && pi !== sel) b.classList.add('pulse');
+    tr.appendChild(b);
+  });
+}
+
+// ---------- drawing ----------
+var flakes = [];
+function buildFlakes() { flakes = []; if (reduce) return; for (var i = 0; i < 28; i++) flakes.push({ x: Math.random() * CW, y: Math.random() * CH, r: .8 + Math.random() * 1.8, v: .15 + Math.random() * .35, p: Math.random() * 6 }); }
+
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+function drawCloud(g, x, y, rx, a) {
+  g.save(); g.globalAlpha = a;
+  g.fillStyle = 'rgba(255,255,255,.96)'; g.strokeStyle = 'rgba(120,150,180,.35)'; g.lineWidth = 1.2;
+  var bumps = [[-.75, .25, .42], [-.35, -.1, .55], [.1, -.22, .62], [.55, 0, .5], [.85, .28, .36], [0, .3, .5]];
+  g.beginPath();
+  bumps.forEach(function (b) { g.moveTo(x + b[0] * rx + b[2] * rx * .9, y + b[1] * rx * .6); g.arc(x + b[0] * rx, y + b[1] * rx * .6, b[2] * rx * .9 * .62, 0, 7); });
+  g.fill(); g.stroke(); g.fill();
+  g.restore();
+}
+function flake(g, x, y, r, fill, edge) {
+  // a soft lumpy snowball
+  g.fillStyle = fill; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  if (edge) { g.strokeStyle = edge; g.lineWidth = 1; g.stroke(); }
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); g.arc(x - r * .3, y - r * .32, r * .35, 0, 7); g.fill();
+}
+function drawClump(g, sh, x0, yBase, u, a, strong) {
+  // yBase = y of the bottom edge of the clump's lowest row
+  g.save(); g.globalAlpha = a;
+  sh.forEach(function (cdef, i) {
+    for (var k = 0; k < cdef[1]; k++) {
+      var r = cdef[0] + k;
+      flake(g, x0 + i * u + u / 2, yBase - r * u - u / 2, u * .46, col('--snow'), strong ? '#5f8fb8' : col('--snowShade'));
+    }
+  });
+  g.restore();
+}
+function cellXY(c, r) { return [ox + c * cell, gy - (r + 1) * cell]; }
+
+function drawTargetOutline(g) {
+  var W = L.W, H = L.H, t = L.t;
+  g.save(); g.strokeStyle = col('--line'); g.lineWidth = 2; g.setLineDash([5, 5]); g.beginPath();
+  for (var c = 0; c < W; c++) for (var r = 0; r < H; r++) {
+    if (!t[c][r]) continue;
+    var p = cellXY(c, r), x = p[0], y = p[1];
+    if (c === 0 || !t[c - 1][r]) { g.moveTo(x, y); g.lineTo(x, y + cell); }
+    if (c === W - 1 || !t[c + 1][r]) { g.moveTo(x + cell, y); g.lineTo(x + cell, y + cell); }
+    if (r === H - 1 || !t[c][r + 1]) { g.moveTo(x, y); g.lineTo(x + cell, y); }
+    if (r === 0 || !t[c][r - 1]) { g.moveTo(x, y + cell); g.lineTo(x + cell, y + cell); }
+  }
+  g.stroke(); g.restore();
+  g.fillStyle = col('--pic');
+  for (var c1 = 0; c1 < W; c1++) for (var r1 = 0; r1 < H; r1++) if (t[c1][r1]) { var q1 = cellXY(c1, r1); g.fillRect(q1[0], q1[1], cell, cell); }
+  g.fillStyle = col('--line');
+  for (c = 0; c < W; c++) for (r = 0; r < H; r++) if (t[c][r] && !S.snow[c][r]) {
+    var q = cellXY(c, r); g.beginPath(); g.arc(q[0] + cell / 2, q[1] + cell / 2, Math.max(2, cell * .07), 0, 7); g.fill();
+  }
+}
+
+function tintFor(c, r) {
+  var d = L.d;
+  if (d.trunk && d.trunk.some(function (q) { return q[0] === c && q[1] === r; })) return '#8a5a3b';
+  if (d.tint === 'pine') return '#3f8a5a';
+  if (d.tint === 'cabin') { var top = !L.t[c][r + 1]; return top ? null : '#a36a43'; }
+  return null;
+}
+
+function snowPath(g, c, r, x, y) {
+  var s = S.snow, H = L.H, W = L.W, R = cell * .34;
+  function has(cc, r2) { return cc >= 0 && cc < W && r2 >= 0 && r2 < H && s[cc][r2]; }
+  var up = has(c, r + 1), dn = has(c, r - 1) || r === 0, lf = has(c - 1, r), rt = has(c + 1, r);
+  var tl = !up && !lf ? R : 0, tr = !up && !rt ? R : 0, br = !dn && !rt ? R : 0, bl = !dn && !lf ? R : 0;
+  var x2 = x + cell + .5, y2 = y + cell + .5; x -= .5; y -= .5;
+  g.beginPath(); g.moveTo(x + tl, y); g.lineTo(x2 - tr, y); if (tr) g.arcTo(x2, y, x2, y + tr, tr);
+  g.lineTo(x2, y2 - br); if (br) g.arcTo(x2, y2, x2 - br, y2, br);
+  g.lineTo(x + bl, y2); if (bl) g.arcTo(x, y2, x, y2 - bl, bl);
+  g.lineTo(x, y + tl); if (tl) g.arcTo(x, y, x + tl, y, tl); g.closePath();
+}
+function drawSnow(g, revealA) {
+  var W = L.W, H = L.H;
+  var grad = g.createLinearGradient(0, gy - H * cell, 0, gy);
+  grad.addColorStop(0, col('--snow')); grad.addColorStop(1, col('--snowLow'));
+  // soft blue edge first, then the white fills cover the inner seams
+  g.strokeStyle = col('--snowEdge'); g.lineWidth = 3;
+  for (var c0 = 0; c0 < W; c0++) for (var r0 = 0; r0 < H; r0++) if (S.snow[c0][r0]) { var p0 = cellXY(c0, r0); snowPath(g, c0, r0, p0[0], p0[1]); g.stroke(); }
+  for (var c = 0; c < W; c++) for (var r = 0; r < H; r++) {
+    if (!S.snow[c][r]) continue;
+    var p = cellXY(c, r), x = p[0], y = p[1];
+    var tint = revealA > 0 ? tintFor(c, r) : null;
+    g.fillStyle = grad; snowPath(g, c, r, x, y); g.fill();
+    if (tint) { g.save(); g.globalAlpha = revealA; g.fillStyle = tint; snowPath(g, c, r, x, y); g.fill(); g.restore(); }
+    var exposed = r === H - 1 || !S.snow[c][r + 1];
+    if (exposed && !tint) {
+      g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); g.arc(x + cell * .3, y + cell * .16, cell * .05, 0, 7); g.fill();
+    }
+    if (exposed && tint) {
+      // a soft lumpy cap of fresh snow on the revealed picture
+      g.save(); g.globalAlpha = revealA;
+      g.fillStyle = col('--snow');
+      var lf = c > 0 && S.snow[c - 1][r] && !(r + 1 < H && S.snow[c - 1][r + 1]);
+      var rt = c < W - 1 && S.snow[c + 1][r] && !(r + 1 < H && S.snow[c + 1][r + 1]);
+      g.beginPath(); g.ellipse(x + cell / 2, y + cell * .16, cell * (lf && rt ? .56 : .44), cell * .2, 0, 0, 7); g.fill();
+      var seed = (c * 7 + r * 13) % 5;
+      g.beginPath(); g.arc(x + cell * (.28 + seed * .08), y + cell * .05, cell * .15, 0, 7); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); g.arc(x + cell * .3, y + cell * .12, cell * .05, 0, 7); g.fill();
+      g.fillStyle = 'rgba(170,205,235,.9)'; g.beginPath(); g.arc(x + cell * (.62 + seed * .04), y + cell * .3, cell * .025, 0, 7); g.fill();
+      g.restore();
+    }
+  }
+}
+
+function drawGround(g) {
+  g.fillStyle = col('--hill2');
+  g.beginPath(); g.moveTo(0, gy - cell * .9);
+  g.quadraticCurveTo(CW * .25, gy - cell * 2.4, CW * .55, gy - cell * 1.1); g.quadraticCurveTo(CW * .8, gy - cell * .3, CW, gy - cell * 1.6);
+  g.lineTo(CW, gy); g.lineTo(0, gy); g.fill();
+  g.fillStyle = col('--hill');
+  g.beginPath(); g.moveTo(0, gy);
+  for (var x = 0; x <= CW; x += 8) g.lineTo(x, gy - 2 + Math.sin(x / 37) * 2);
+  g.lineTo(CW, CH); g.lineTo(0, CH); g.fill();
+  g.fillStyle = col('--snow'); g.fillRect(ox - 6, gy, L.W * cell + 12, cell * .4);
+  g.fillStyle = 'rgba(120,160,200,.18)'; g.fillRect(ox - 6, gy + cell * .25, L.W * cell + 12, cell * .15);
+}
+
+function drawDeco(g, a) {
+  if (a <= 0) return;
+  g.save(); g.globalAlpha = a;
+  L.d.deco.forEach(function (d) {
+    var x = ox + d.c * cell + cell / 2, y = gy - d.r * cell - cell / 2, u = cell;
+    if (d.k === 'eye' || d.k === 'button') { g.fillStyle = '#2a2f36'; g.beginPath(); g.arc(x, y, u * (d.k === 'eye' ? .09 : .1), 0, 7); g.fill(); }
+    else if (d.k === 'nose') { g.fillStyle = '#ee8a2c'; g.beginPath(); g.moveTo(x, y - u * .07); g.lineTo(x + u * .42, y + u * .02); g.lineTo(x, y + u * .09); g.fill(); }
+    else if (d.k === 'scarf') { g.fillStyle = '#d94c4c'; rr(g, x - d.w * u / 2 + 2, gy - (d.r + 1) * u + u * .02, d.w * u - 4, u * .28, u * .1); g.fill();
+      g.fillRect(x + u * .55, gy - (d.r + 1) * u + u * .2, u * .26, u * .6); g.fillStyle = '#f3d36b'; g.fillRect(x - u * .9, gy - (d.r + 1) * u + u * .05, u * .12, u * .22); }
+    else if (d.k === 'hat') { var hy = gy - d.r * u; g.fillStyle = '#2a2f36'; g.fillRect(x - u * 1.2, hy - u * .14, u * 2.4, u * .16); g.fillRect(x - u * .75, hy - u * 1.0, u * 1.5, u * .9); g.fillStyle = '#d94c4c'; g.fillRect(x - u * .75, hy - u * .38, u * 1.5, u * .14); }
+    else if (d.k === 'star') { star(g, x, y + u * .2, u * .38, '#f2c232'); }
+    else if (d.k === 'ball') { g.fillStyle = ['#e5484d', '#f2c232', '#4c8ee8', '#e8e8f0'][d.h]; g.beginPath(); g.arc(x, y, u * .14, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(x - u * .04, y - u * .05, u * .045, 0, 7); g.fill(); }
+    else if (d.k === 'flag') { g.strokeStyle = '#6b4a33'; g.lineWidth = Math.max(2, u * .06); g.beginPath(); g.moveTo(x, y + u * .5); g.lineTo(x, y - u * .45); g.stroke(); g.fillStyle = '#e5484d'; g.beginPath(); g.moveTo(x, y - u * .45); g.lineTo(x + u * .45, y - u * .3); g.lineTo(x, y - u * .15); g.fill(); }
+    else if (d.k === 'bird') { g.fillStyle = '#d9534f'; g.beginPath(); g.ellipse(x, y + u * .3, u * .22, u * .17, 0, 0, 7); g.fill(); g.beginPath(); g.arc(x + u * .17, y + u * .14, u * .11, 0, 7); g.fill(); g.fillStyle = '#2a2f36'; g.beginPath(); g.arc(x + u * .2, y + u * .12, u * .025, 0, 7); g.fill(); g.fillStyle = '#f2a832'; g.beginPath(); g.moveTo(x + u * .27, y + u * .12); g.lineTo(x + u * .36, y + u * .16); g.lineTo(x + u * .27, y + u * .19); g.fill(); g.fillStyle = '#7a3a36'; g.beginPath(); g.moveTo(x - u * .18, y + u * .27); g.lineTo(x - u * .4, y + u * .18); g.lineTo(x - u * .2, y + u * .38); g.fill(); }
+    else if (d.k === 'lantern') { g.fillStyle = 'rgba(255,200,90,.35)'; g.beginPath(); g.arc(x, y + u * .2, u * .45, 0, 7); g.fill(); g.fillStyle = '#3a3f46'; g.fillRect(x - u * .14, y + u * .02, u * .28, u * .06); g.fillStyle = '#ffd36b'; rr(g, x - u * .11, y + u * .08, u * .22, u * .3, u * .05); g.fill(); g.fillStyle = '#3a3f46'; g.fillRect(x - u * .14, y + u * .38, u * .28, u * .06); }
+    else if (d.k === 'icicles') { g.fillStyle = 'rgba(190,225,250,.95)'; var iy = gy - (d.r + 1) * u + u; for (var k = 0; k < 4; k++) { var ix = ox + d.c * u + u * (.15 + k * .23); g.beginPath(); g.moveTo(ix - u * .07, iy); g.lineTo(ix + u * .07, iy); g.lineTo(ix, iy + u * (.25 + (k % 2) * .18)); g.fill(); } }
+    else if (d.k === 'door') { var dx = ox + d.c * u, dy = gy - 2 * u; g.fillStyle = '#6b4227'; rr(g, dx + u * .08, dy + u * .1, u * .84, u * 1.9, u * .3); g.fill(); g.fillStyle = '#f2c232'; g.beginPath(); g.arc(dx + u * .72, dy + u * 1.1, u * .06, 0, 7); g.fill(); }
+    else if (d.k === 'window') { g.fillStyle = '#ffd36b'; rr(g, x - u * .32, y - u * .3, u * .64, u * .6, u * .06); g.fill(); g.strokeStyle = '#6b4227'; g.lineWidth = Math.max(2, u * .07); g.beginPath(); g.moveTo(x, y - u * .3); g.lineTo(x, y + u * .3); g.moveTo(x - u * .32, y); g.lineTo(x + u * .32, y); g.stroke(); }
+    else if (d.k === 'smoke') { var t = performance.now() / 900; g.fillStyle = '#7a4a2e'; g.fillRect(x - u * .18, y + u * .1, u * .36, u * .5); g.fillStyle = 'rgba(200,210,225,.7)'; for (k = 0; k < 3; k++) { var ph = (t + k / 3) % 1; g.beginPath(); g.arc(x + Math.sin((t + k) * 2) * u * .15 + ph * u * .3, y - ph * u * 1.2, u * (.12 + ph * .18), 0, 7); g.fill(); } }
+    else if (d.k === 'sled') { g.strokeStyle = '#6b4227'; g.lineWidth = Math.max(2, u * .07); g.beginPath(); g.moveTo(x - u * .6, y + u * .45); g.lineTo(x + u * .5, y + u * .45); g.quadraticCurveTo(x + u * .75, y + u * .45, x + u * .7, y + u * .25); g.stroke(); g.fillStyle = '#d94c4c'; g.fillRect(x - u * .55, y + u * .15, u * 1.05, u * .2); }
+    else if (d.k === 'tree') { g.fillStyle = '#3f8a5a'; g.beginPath(); g.moveTo(x, y - u * .5); g.lineTo(x + u * .4, y + u * .35); g.lineTo(x - u * .4, y + u * .35); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(x, y - u * .5); g.lineTo(x + u * .16, y - u * .15); g.lineTo(x - u * .16, y - u * .15); g.fill(); g.fillStyle = '#7a4a2e'; g.fillRect(x - u * .06, y + u * .35, u * .12, u * .15); }
+  });
+  g.restore();
+}
+function star(g, x, y, r, c) { g.fillStyle = c; g.beginPath(); for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr2 = i % 2 ? r * .45 : r; g.lineTo(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2); } g.closePath(); g.fill(); }
+
+var revealStart = 0, sparks = [];
+function frame(now) {
+  var g = cx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, CW, CH);
+  if (!L) { requestAnimationFrame(frame); return; }
+  // ambient snowfall
+  g.fillStyle = 'rgba(255,255,255,.8)';
+  flakes.forEach(function (f) { f.y += f.v; f.x += Math.sin(now / 1500 + f.p) * .2; if (f.y > CH) { f.y = -4; f.x = Math.random() * CW; } g.beginPath(); g.arc(f.x, f.y, f.r, 0, 7); g.fill(); });
+  drawGround(g);
+  var rev = done ? Math.min(1, (now - revealStart) / 700) : 0;
+  if (!done || rev < 1) { g.save(); g.globalAlpha = 1 - rev; drawTargetOutline(g); g.restore(); }
+  drawSnow(g, rev);
+  drawDeco(g, rev);
+  // hint glow
+  if (hintMove && !anim && !aim && !done) {
+    var hp = SD.place(L, S, L.pieces[hintMove[0]].s, hintMove[1]);
+    if (hp) { var pul = .45 + .3 * Math.sin(now / 220); drawGhost(g, hp, pul, true); }
+  }
+  // aiming
+  if (aim && !anim && !done) {
+    var sh = shapeOf(sel), pl = SD.place(L, S, L.pieces[sel].s, aim.x);
+    if (pl) {
+      drawGhost(g, pl, 1, false);
+      var cxm = ox + (aim.x + sh.length / 2) * cell;
+      drawClump(g, sh, ox + aim.x * cell, cell * 1.2 + shapeH(sh) * cell, cell, .9);
+      drawCloud(g, cxm, cell * .55, Math.max(sh.length, 2) * cell * .55 + cell * .2, .97);
+    }
+  }
+  // falling clump
+  if (anim) {
+    var t = Math.min(1, (now - anim.t0) / anim.dur), e = t * t;
+    var shA = SD.SHAPES[L.pieces[anim.pi].s];
+    var cx0 = ox + (anim.x + shA.length / 2) * cell;
+    drawCloud(g, cx0, cell * .55, Math.max(shA.length, 2) * cell * .55 + cell * .2, 1 - t * .7);
+    var yEnd = gy - anim.y * cell, yStart = cell * 1.2 + shapeH(shA) * cell;
+    drawClump(g, shA, ox + anim.x * cell, yStart + (yEnd - yStart) * e, cell, 1);
+    if (t >= 1) finishDrop();
+  }
+  // sparkles
+  sparks = sparks.filter(function (s) { return now - s.t0 < s.life; });
+  sparks.forEach(function (s) { var k = (now - s.t0) / s.life; g.globalAlpha = 1 - k; g.fillStyle = s.c; g.beginPath(); g.arc(s.x + s.vx * k * 30, s.y + s.vy * k * 30 + k * k * 10, s.r * (1 - k * .5), 0, 7); g.fill(); g.globalAlpha = 1; });
+  requestAnimationFrame(frame);
+}
+function drawGhost(g, pl, a, isHint) {
+  var badSet = {}; pl.bad.forEach(function (q) { badSet[q[0] + ',' + q[1]] = 1; });
+  g.save(); g.globalAlpha = a;
+  pl.cells.forEach(function (q) {
+    var p = cellXY(q[0], q[1]), bad = badSet[q[0] + ',' + q[1]];
+    g.fillStyle = bad ? 'rgba(224,87,74,.55)' : (isHint ? 'rgba(242,194,50,.55)' : col('--ghost'));
+    g.strokeStyle = bad ? col('--bad') : (isHint ? '#e0a820' : col('--accent'));
+    g.lineWidth = 2; rr(g, p[0] + 3, p[1] + 3, cell - 6, cell - 6, cell * .2); g.fill(); g.stroke();
+  });
+  pl.gaps.forEach(function (q) {
+    var p = cellXY(q[0], q[1]);
+    g.strokeStyle = col('--bad'); g.lineWidth = 2.5; g.setLineDash([4, 3]); rr(g, p[0] + 5, p[1] + 5, cell - 10, cell - 10, cell * .2); g.stroke(); g.setLineDash([]);
+    g.fillStyle = col('--bad'); g.font = 'bold ' + Math.round(cell * .3) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('hole', p[0] + cell / 2, p[1] + cell / 2);
+  });
+  g.restore();
+}
+
+// ---------- input ----------
+function aimAt(ev) {
+  var r = cv.getBoundingClientRect(), px = ev.clientX - r.left;
+  var w = shapeOf(sel).length;
+  var x = Math.round((px - ox) / cell - w / 2);
+  x = Math.max(0, Math.min(L.W - w, x));
+  if (!aim || aim.x !== x) { aim = { x: x }; var pl = SD.place(L, S, L.pieces[sel].s, x); showReason(pl); }
+}
+function showReason(pl) {
+  var st = document.getElementById('step');
+  if (!pl) return;
+  if (pl.ok) { updateStep(); return; }
+  st.className = 'warn';
+  st.textContent = pl.why === 'spill' ? 'That snow would spill outside the picture (red).' : 'That would leave a hole inside the picture under the snow.';
+}
+cv.addEventListener('pointerdown', function (ev) {
+  if (anim || done || !S.left[sel]) return;
+  cv.setPointerCapture(ev.pointerId); aimAt(ev); hintMove = hintMove && hintMove[0] === sel ? hintMove : null;
+});
+cv.addEventListener('pointermove', function (ev) {
+  if (!aim) return;
+  var r = cv.getBoundingClientRect();
+  if (ev.clientY < r.top - 30 || ev.clientY > r.bottom + 30 || ev.clientX < r.left - 30 || ev.clientX > r.right + 30) { aim = null; updateStep(); toast('Cancelled'); return; }
+  aimAt(ev);
+});
+cv.addEventListener('pointerup', function () {
+  if (!aim) return;
+  var pl = SD.place(L, S, L.pieces[sel].s, aim.x), x = aim.x; aim = null;
+  if (!pl.ok) { tone(180, .12, .05); showReason(pl); warnT = performance.now(); return; }
+  startDrop(sel, x, pl);
+});
+cv.addEventListener('pointercancel', function () { aim = null; updateStep(); });
+
+function startDrop(pi, x, pl) {
+  hist.push(SD.clone(S));
+  anim = { pi: pi, x: x, y: pl.y, t0: performance.now(), dur: reduce ? 1 : 260 + (L.H - pl.y) * 22, pl: pl };
+  hintMove = null;
+}
+function finishDrop() {
+  var a = anim; anim = null;
+  S = SD.apply(L, S, a.pi, a.x);
+  tone(300 + Math.random() * 60, .09, .06, 'triangle');
+  a.pl.cells.forEach(function (q) { var p = cellXY(q[0], q[1]); for (var i = 0; i < 3; i++) sparks.push({ x: p[0] + cell * Math.random(), y: p[1] + cell, vx: Math.random() - .5, vy: -Math.random() * .6, r: 1.5 + Math.random() * 2, c: 'rgba(255,255,255,.95)', t0: performance.now(), life: 450 }); });
+  if (!S.left[sel]) { for (var k = 0; k < S.left.length; k++) if (S.left[k]) { sel = k; break; } }
+  buildTray();
+  if (SD.won(L, S)) return win();
+  if (!SD.moves(L, S).length) { setTimeout(function () { ov('stuckOv', true); }, 350); }
+  updateStep();
+}
+
+function starCount() { return 1 + (undos === 0 ? 1 : 0) + (hints === 0 ? 1 : 0); }
+function win() {
+  done = true; revealStart = performance.now();
+  var st = starCount(), prev = best[li] || 0;
+  if (st > prev) { best[li] = st; store.set('best', best); }
+  if (li + 1 > reached && li + 1 < LEVELS.length) { reached = li + 1; store.set('reached', reached); }
+  [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { tone(f, .18, .05); }, i * 110); });
+  for (var i = 0; i < 40; i++) sparks.push({ x: ox + Math.random() * L.W * cell, y: gy - Math.random() * L.H * cell, vx: (Math.random() - .5) * 2, vy: -Math.random() * 1.5, r: 2 + Math.random() * 2.5, c: ['#fff', '#cfe6ff', '#f2c232'][i % 3], t0: performance.now() + Math.random() * 300, life: 1100 });
+  document.getElementById('step').className = '';
+  document.getElementById('step').innerHTML = '<b>' + LEVELS[li].name + '</b> is finished!';
+  setTimeout(function () {
+    document.getElementById('winT').textContent = LEVELS[li].name + ' finished!';
+    document.getElementById('winS').innerHTML = [1, 2, 3].map(function (k) { return k <= st ? '★' : '<span class="off">★</span>'; }).join('');
+    var notes = []; if (undos) notes.push('Finish without Undo for a star.'); if (hints) notes.push('Finish without Hint for a star.');
+    document.getElementById('winP').textContent = li + 1 >= LEVELS.length ? 'That is every picture in this prototype. Thanks for playing!' : (notes.join(' ') || 'A perfect drift!');
+    document.getElementById('winNext').style.display = li + 1 >= LEVELS.length ? 'none' : '';
+    ov('winOv', true);
+  }, reduce ? 300 : 1300);
+}
+
+// ---------- step line (state-aware tips) ----------
+function updateStep() {
+  var st = document.getElementById('step'); st.className = '';
+  if (done) return;
+  var spots = 0; for (var c = 0; c < L.W; c++) for (var r = 0; r < L.H; r++) if (L.t[c][r] && !S.snow[c][r]) spots++;
+  var clouds = S.left.reduce(function (a, b) { return a + b; }, 0);
+  var tip = '';
+  if (guided()) {
+    var sol = SD.solve(L, S, memo);
+    if (sol && sol.length) {
+      hintMove = sol[0];
+      if (hintMove[0] !== sel) tip = 'Tap the glowing cloud below to pick it.';
+      else tip = 'Press on the glowing spot, then let go to drop the snow.';
+      if (li === 1 && hist.length === 0) tip = 'The long cloud goes first. ' + tip;
+      if (li === 9 && hist.length < 2) tip = 'Build a post on each side first. ' + tip;
+      if (li === 9 && hist.length === 2) tip = 'Now lay the long cloud across both posts. ' + tip;
+      buildTrayPulse();
+    } else if (!sol) tip = 'This snow can’t be finished now. Tap <b>Undo</b>.';
+  }
+  st.innerHTML = tip || ('<b>' + spots + '</b> spots to fill · <b>' + clouds + '</b> cloud' + (clouds === 1 ? '' : 's') + ' left');
+}
+function buildTrayPulse() {
+  var els = document.querySelectorAll('.cl');
+  els.forEach(function (e, i) { e.classList.toggle('pulse', !!hintMove && hintMove[0] === i && i !== sel); });
+}
+
+// ---------- buttons ----------
+document.getElementById('undoBtn').onclick = function () {
+  if (anim || done || !hist.length) return;
+  S = hist.pop(); undos++; hintMove = null; ov('stuckOv', false); buildTray(); updateStep(); tone(440, .06, .04);
+};
+document.getElementById('restartBtn').onclick = function () {
+  if (anim) return;
+  // Restart doesn't cost stars
+  var u = undos, h = hints; loadLevel(li, true); undos = u; hints = h; ov('stuckOv', false);
+};
+document.getElementById('hintBtn').onclick = function () {
+  if (anim || done) return;
+  var sol = SD.solve(L, S, memo);
+  if (!sol) { toast('This snow can’t be finished. Undo a step.'); return; }
+  hints++; hintMove = sol[0]; sel = hintMove[0]; buildTray();
+  document.getElementById('step').innerHTML = 'Hint: drop the <b>glowing</b> snow where it glows.';
+};
+document.getElementById('stuckUndo').onclick = function () { ov('stuckOv', false); document.getElementById('undoBtn').onclick(); };
+document.getElementById('stuckRestart').onclick = function () { ov('stuckOv', false); document.getElementById('restartBtn').onclick(); };
+document.getElementById('introGo').onclick = function () { ov('introOv', false); };
+document.getElementById('winNext').onclick = function () { ov('winOv', false); loadLevel(li + 1); };
+document.getElementById('winAgain').onclick = function () { ov('winOv', false); loadLevel(li, true); };
+document.getElementById('lvBtn').onclick = function () {
+  var gr = document.getElementById('lvGrid'); gr.innerHTML = '';
+  var packs = { 1: 'First Snow', 2: 'Bridges' }, lastPack = 0;
+  LEVELS.forEach(function (d, i) {
+    if (d.pack !== lastPack) { lastPack = d.pack; var h = document.createElement('div'); h.className = 'packh'; h.textContent = packs[d.pack]; gr.appendChild(h); }
+    var b = document.createElement('button'); b.className = 'hbtn'; b.disabled = !unlocked && i > reached;
+    b.innerHTML = (i + 1) + '<small>' + (best[i] ? '★'.repeat(best[i]) : '') + '</small>';
+    b.onclick = function () { ov('lvOv', false); loadLevel(i); };
+    gr.appendChild(b);
+  });
+  ov('lvOv', true);
+};
+document.getElementById('lvClose').onclick = function () { ov('lvOv', false); };
+document.getElementById('helpBtn').onclick = function () {
+  var ls = document.getElementById('lessons'); ls.innerHTML = '';
+  var any = false;
+  LEVELS.forEach(function (d, i) {
+    if (!d.intro || (!unlocked && i > reached)) return;
+    if (!any) { ls.innerHTML = '<p><b>Replay a lesson:</b></p>'; any = true; }
+    var b = document.createElement('button'); b.className = 'hbtn'; b.style.margin = '0 6px 6px 0'; b.textContent = d.intro.title;
+    b.onclick = function () { ov('helpOv', false); showIntro(i); };
+    ls.appendChild(b);
+  });
+  document.getElementById('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off');
+  ov('helpOv', true);
+};
+document.getElementById('helpClose').onclick = function () { ov('helpOv', false); };
+document.getElementById('soundBtn').onclick = function () { soundOn = !soundOn; store.set('sound', soundOn); this.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
+var taps = 0, tapT = 0;
+document.getElementById('title').onclick = function () {
+  var n = Date.now(); taps = n - tapT < 600 ? taps + 1 : 1; tapT = n;
+  if (taps >= 5) { unlocked = !unlocked; store.set('unlock', unlocked); toast(unlocked ? 'Tester mode: every level open' : 'Tester mode off'); taps = 0; }
+};
+
+var toastT;
+function toast(m) { var t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('on'); }, 1600); }
+
+// ---------- sound ----------
+var ac;
+function tone(f, d, v, type) {
+  if (!soundOn) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine'; o.frequency.value = f; g.gain.value = v || .05;
+    g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d + .02);
+  } catch (e) {}
+}
+
+var start = qs.get('level') ? Math.max(0, Math.min(LEVELS.length - 1, +qs.get('level') - 1)) : Math.min(store.get('last', 0), LEVELS.length - 1);
+requestAnimationFrame(function () { loadLevel(start); requestAnimationFrame(frame); });
+</script>
+</body>
+</html>
