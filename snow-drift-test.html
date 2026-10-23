@@ -41,7 +41,8 @@ header { display: flex; align-items: center; gap: 8px; }
 #step { height: 44px; overflow: hidden; margin: 6px 2px 4px; font-size: 15px; line-height: 1.35; color: var(--ink); }
 #step b { color: var(--accent); }
 #step.warn { color: var(--bad); font-weight: 700; }
-#boardWrap { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+#boardWrap { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; position: relative; overflow: hidden; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 canvas#board { touch-action: none; display: block; }
 #tray { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 6px; min-height: 76px; }
 .cl { position: relative; border: 3px solid transparent; background: var(--trayBg); border-radius: 16px; padding: 4px;
@@ -92,7 +93,7 @@ canvas#board { touch-action: none; display: block; }
 <body>
 <div id="app">
   <header>
-    <div id="title">Snow Drift<small>prototype v0.2</small></div>
+    <div id="title">Snow Drift<small>prototype v0.3</small></div>
     <button class="hbtn" id="lvBtn">Level 1 ▾</button>
     <button class="hbtn" id="helpBtn" aria-label="Help">?</button>
   </header>
@@ -105,7 +106,7 @@ canvas#board { touch-action: none; display: block; }
     <button class="hbtn" id="restartBtn">⟲ Restart</button>
     <button class="hbtn" id="hintBtn">💡 Hint</button>
   </div>
-  <div id="winOv" role="status"><div class="card"><h2><span id="winT">Picture finished!</span><span class="stars" id="winS"></span></h2>
+  <div id="winOv" role="status"><div class="card"><h2><span id="winT">Picture finished!</span><span class="stars" id="winS" aria-hidden="true"></span><span class="sr" id="winSr"></span></h2>
     <p id="winP"></p>
     <div class="row"><button class="hbtn" id="winAgain">Play again</button><button class="hbtn main" id="winNext">Next picture ›</button></div></div></div>
   </div>
@@ -273,7 +274,7 @@ function loadLevel(i, skipIntro) {
   document.getElementById('lvBtn').textContent = 'Level ' + (i + 1) + ' ▾';
   if (i > reached) { reached = i; store.set('reached', reached); }
   store.set('last', i);
-  resize(); buildTray(); updateStep();
+  buildTray(); resize(); buildTray(); updateStep();
   if (d.intro && !skipIntro && !store.get('seen' + i, false)) showIntro(i);
 }
 function guided() { var d = LEVELS[li]; return !!d.intro && !hints && !(d.guideUntil && hist.length >= d.guideUntil); }
@@ -294,9 +295,9 @@ function resize() {
   var w = wrap.clientWidth, h = wrap.clientHeight;
   if (!L) return;
   var mh0 = 1; L.pieces.forEach(function (p) { mh0 = Math.max(mh0, shapeH(SD.SHAPES[p.s])); });
-  cell = Math.floor(Math.min((w - 8) / Math.max(L.W, 4), (h - 6) / (L.H + 1.75 + mh0), 64));
+  cell = Math.floor(Math.min((w - 8) / Math.max(L.W, 4), (h - 6) / (L.H + 2.0 + mh0), 64));
   var mh = 1; L.pieces.forEach(function (p) { mh = Math.max(mh, shapeH(SD.SHAPES[p.s])); });
-  skyH = cell * (1.35 + mh);
+  skyH = cell * (1.6 + mh);
   CW = Math.min(w, Math.max(L.W, 5) * cell + 24); CH = skyH + L.H * cell + cell * 0.4;
   dpr = window.devicePixelRatio || 1;
   cv.width = CW * dpr; cv.height = CH * dpr; cv.style.width = CW + 'px'; cv.style.height = CH + 'px';
@@ -511,8 +512,8 @@ function frame(now) {
   // idle preview of the picked cloud, so its shape reads at full size
   if (!aim && !anim && !done && !failed && S.left[sel] && !hintMove) {
     var shI = shapeOf(sel), xi = lastX == null ? Math.floor((L.W - shI.length) / 2) : Math.min(lastX, L.W - shI.length);
-    drawClump(g, shI, ox + xi * cell, cell * 1.2 + shapeH(shI) * cell, cell, .55);
-    drawCloud(g, ox + (xi + shI.length / 2) * cell, cell * .55, Math.max(shI.length, 2) * cell * .55 + cell * .2, .6);
+    drawClump(g, shI, ox + xi * cell, cell * 1.45 + shapeH(shI) * cell, cell, .55);
+    drawCloud(g, ox + (xi + shI.length / 2) * cell, cell * .9, Math.max(shI.length, 2) * cell * .55 + cell * .2, .6);
   }
   // aiming
   if (aim && !anim && !done) {
@@ -520,8 +521,8 @@ function frame(now) {
     if (pl) {
       drawGhost(g, pl, 1, false);
       var cxm = ox + (aim.x + sh.length / 2) * cell;
-      drawClump(g, sh, ox + aim.x * cell, cell * 1.2 + shapeH(sh) * cell, cell, .9);
-      drawCloud(g, cxm, cell * .55, Math.max(sh.length, 2) * cell * .55 + cell * .2, .97);
+      drawClump(g, sh, ox + aim.x * cell, cell * 1.45 + shapeH(sh) * cell, cell, .9);
+      drawCloud(g, cxm, cell * .9, Math.max(sh.length, 2) * cell * .55 + cell * .2, .97);
     }
   }
   // falling clump
@@ -529,8 +530,8 @@ function frame(now) {
     var t = Math.min(1, (now - anim.t0) / anim.dur), e = t * t;
     var shA = SD.SHAPES[L.pieces[anim.pi].s];
     var cx0 = ox + (anim.x + shA.length / 2) * cell;
-    drawCloud(g, cx0, cell * .55, Math.max(shA.length, 2) * cell * .55 + cell * .2, 1 - t * .7);
-    var yEnd = gy - anim.y * cell, yStart = cell * 1.2 + shapeH(shA) * cell;
+    drawCloud(g, cx0, cell * .9, Math.max(shA.length, 2) * cell * .55 + cell * .2, 1 - t * .7);
+    var yEnd = gy - anim.y * cell, yStart = cell * 1.45 + shapeH(shA) * cell;
     drawClump(g, shA, ox + anim.x * cell, yStart + (yEnd - yStart) * e, cell, 1);
     if (t >= 1) finishDrop();
   }
@@ -608,23 +609,27 @@ function finishDrop() {
   updateStep();
 }
 
+// the next main level; optional challenge levels are skipped (they open at the same time)
+function nextLevel(i) { var n = i + 1; while (n < LEVELS.length && LEVELS[n].challenge) n++; return n; }
 function starCount() { return 1 + (undos === 0 ? 1 : 0) + (hints === 0 ? 1 : 0); }
 function win() {
   done = true; revealStart = performance.now();
   var st = starCount(), prev = best[li] || 0;
   if (st > prev) { best[li] = st; store.set('best', best); }
-  if (li + 1 > reached && li + 1 < LEVELS.length) { reached = li + 1; store.set('reached', reached); }
+  var nx = nextLevel(li); if (nx < LEVELS.length && nx > reached) { reached = nx; store.set('reached', reached); }
   [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { tone(f, .18, .05); }, i * 110); });
   for (var i = 0; i < 40; i++) sparks.push({ x: ox + Math.random() * L.W * cell, y: gy - Math.random() * L.H * cell, vx: (Math.random() - .5) * 2, vy: -Math.random() * 1.5, r: 2 + Math.random() * 2.5, c: ['#fff', '#cfe6ff', '#f2c232'][i % 3], t0: performance.now() + Math.random() * 300, life: 1100 });
   document.getElementById('step').className = '';
   document.getElementById('step').innerHTML = '<b>' + LEVELS[li].name + '</b> is finished!';
   setTimeout(function () {
     document.getElementById('winT').textContent = LEVELS[li].name + ' finished!';
+    document.getElementById('winSr').textContent = st + ' of 3 stars';
     document.getElementById('winS').innerHTML = [1, 2, 3].map(function (k) { return k <= st ? '★' : '<span class="off">★</span>'; }).join('');
     var note = undos && hints ? 'Unlimited Undo and Hint. Replay without them for bonus stars.' : undos ? 'Unlimited Undo. Replay without it for a bonus star.' : hints ? 'Replay without Hint for a bonus star.' : 'All three stars!';
     if (li + 1 >= LEVELS.length) note += ' That is every picture in this prototype. Thanks for playing!';
     document.getElementById('winP').textContent = note;
-    document.getElementById('winNext').style.display = li + 1 >= LEVELS.length ? 'none' : '';
+    if (LEVELS[li + 1] && LEVELS[li + 1].challenge) document.getElementById('winP').textContent += ' Optional challenge unlocked: ' + LEVELS[li + 1].name + ' (Level ' + (li + 2) + ').';
+    document.getElementById('winNext').style.display = nextLevel(li) >= LEVELS.length ? 'none' : '';
     ov('winOv', true);
   }, reduce ? 400 : 1600);
 }
@@ -649,7 +654,7 @@ function updateStep() {
   } else if (LEVELS[li].guideDone && !hints) {
     hintMove = null; buildTrayPulse();
     tip = LEVELS[li].guideDone + ' <b>' + spots + '</b> spots · <b>' + clouds + '</b> cloud' + (clouds === 1 ? '' : 's') + ' left';
-  } else if (LEVELS[li].challenge && hist.length === 0) tip = '<b>Challenge picture.</b> The biggest one yet, so take your time.';
+  } else if (LEVELS[li].challenge && hist.length === 0) tip = '<b>Optional challenge.</b> The biggest picture yet. Skip it any time; the next level is already open.';
   st.innerHTML = tip || ('<b>' + spots + '</b> spots to fill · <b>' + clouds + '</b> cloud' + (clouds === 1 ? '' : 's') + ' left');
 }
 function buildTrayPulse() {
@@ -677,7 +682,7 @@ document.getElementById('hintBtn').onclick = function () {
 document.getElementById('stuckUndo').onclick = function () { ov('stuckOv', false); document.getElementById('undoBtn').onclick(); };
 document.getElementById('stuckRestart').onclick = function () { ov('stuckOv', false); document.getElementById('restartBtn').onclick(); };
 document.getElementById('introGo').onclick = function () { ov('introOv', false); };
-document.getElementById('winNext').onclick = function () { loadLevel(li + 1); };
+document.getElementById('winNext').onclick = function () { loadLevel(nextLevel(li)); };
 document.getElementById('winAgain').onclick = function () { loadLevel(li, true); };
 document.getElementById('lvBtn').onclick = function () {
   var gr = document.getElementById('lvGrid'); gr.innerHTML = '';
@@ -685,7 +690,7 @@ document.getElementById('lvBtn').onclick = function () {
   LEVELS.forEach(function (d, i) {
     if (d.pack !== lastPack) { lastPack = d.pack; var h = document.createElement('div'); h.className = 'packh'; h.textContent = packs[d.pack]; gr.appendChild(h); }
     var b = document.createElement('button'); b.className = 'hbtn'; b.disabled = !unlocked && i > reached;
-    b.innerHTML = (i + 1) + '<small>' + (best[i] ? '★'.repeat(best[i]) : (d.challenge ? 'challenge' : '')) + '</small>';
+    b.innerHTML = (i + 1) + '<small>' + (best[i] ? '★'.repeat(best[i]) : (d.challenge ? 'optional' : '')) + '</small>';
     b.onclick = function () { ov('lvOv', false); loadLevel(i); };
     gr.appendChild(b);
   });
