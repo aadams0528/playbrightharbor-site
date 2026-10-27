@@ -1154,7 +1154,19 @@ function stats(){
   ${NATIVE?`<label class="remindset">🔔 Daily reminder ${timeSelect("rSet",S.remind||"off",true)}</label>`:""}`);
   const rs=$("#rSet");if(rs)rs.onchange=()=>setRemind(rs.value==="off"?false:rs.value);
   if($("#sNoAds"))$("#sNoAds").onclick=buyNoAds;if($("#sRestore"))$("#sRestore").onclick=restoreNoAds;renderCloud()}
-let toastT;function toast(t){document.querySelectorAll(".toast").forEach(x=>x.remove());const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);clearTimeout(toastT);toastT=setTimeout(()=>d.remove(),2600)}
+// Messages show one at a time, each long enough to read; a new one waits its turn instead of
+// wiping the current one. Repeats are skipped, and at most 3 wait so a burst can't pile up.
+let toastQ=[],toastNow=null;
+function toast(t){
+  if(toastNow===t||toastQ.includes(t))return;
+  toastQ.push(t);if(toastQ.length>3)toastQ.shift();
+  if(toastNow==null)nextToast();
+}
+function nextToast(){
+  const t=toastNow=toastQ.shift()??null;if(t==null)return;
+  const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);
+  setTimeout(()=>{d.remove();nextToast()},t.length>60?3600:2600);
+}
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
 const NATIVE=!!window.Capacitor?.isNativePlatform?.(),PLUG=NATIVE?window.Capacitor.Plugins:{};
 // Crash reporting (Firebase Crashlytics in the apps). Native crashes are caught by the plugin itself;
@@ -1200,12 +1212,15 @@ const noAds=()=>!!S.noAds;
 const adsAllowed=()=>adsReady&&!noAds()&&S.firstDay!=null&&dayNum()>S.firstDay;
 async function initAds(){
   if(!AdMob)return;
+  // Consent and start-up are separate steps: a consent hiccup must not stop ads from loading.
   try{
     let info=await AdMob.requestConsentInfo();
     if(info.isConsentFormAvailable&&info.status==="REQUIRED")info=await AdMob.showConsentForm();
     // Analytics starts switched off (Info.plist, AndroidManifest.xml) and turns on once the consent step is done.
     if(info.status==="OBTAINED"||info.status==="NOT_REQUIRED")PLUG.FirebaseAnalytics?.setEnabled({enabled:true}).catch(()=>{});
-    if(PLATFORM==="ios")await AdMob.requestTrackingAuthorization().catch(()=>{});
+  }catch(e){console.warn("Ads: consent failed",e)}
+  if(PLATFORM==="ios")await AdMob.requestTrackingAuthorization().catch(()=>{});
+  try{
     await AdMob.initialize({initializeForTesting:ADS_TESTING});
     adsReady=true;if(G&&G.done)showBanner();
   }catch(e){console.warn("Ads unavailable",e)}
