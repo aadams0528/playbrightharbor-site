@@ -1821,14 +1821,18 @@ watchAd = function (onReward, onSkip = () => {}, title, forced = false) {
 };
 
 // Product IDs must match the ones set up in App Store Connect and Google Play Console.
+// The game uses `id` everywhere. On iPhone the coin packs have their own store IDs (`ios`), because the
+// first App Store Connect copies were made with the wrong type and Apple never reuses a deleted ID.
 const REMOVE_ADS = "wordglow.removeads";
 const PRODUCTS = [
   { id: REMOVE_ADS,               name: "Remove ads",   note: "No more between-level ads. Videos for rewards stay optional.", price: "$3.99" },
-  { id: "wordglow.coins.300",   name: "300 coins",    coins: 300,  price: "$0.99" },
-  { id: "wordglow.coins.1000",  name: "1,000 coins",  coins: 1000, price: "$2.99", note: "Most popular" },
-  { id: "wordglow.coins.2500",  name: "2,500 coins",  coins: 2500, price: "$4.99" },
-  { id: "wordglow.coins.6000",  name: "6,000 coins",  coins: 6000, price: "$9.99", note: "Best value" },
+  { id: "wordglow.coins.300",   ios: "wordglow.coinpack.300",  name: "300 coins",    coins: 300,  price: "$0.99" },
+  { id: "wordglow.coins.1000",  ios: "wordglow.coinpack.1000", name: "1,000 coins",  coins: 1000, price: "$2.99", note: "Most popular" },
+  { id: "wordglow.coins.2500",  ios: "wordglow.coinpack.2500", name: "2,500 coins",  coins: 2500, price: "$4.99" },
+  { id: "wordglow.coins.6000",  ios: "wordglow.coinpack.6000", name: "6,000 coins",  coins: 6000, price: "$9.99", note: "Best value" },
 ];
+const storeId = p => (PLATFORM === "ios" && p.ios) || p.id;                 // the ID this phone's store knows
+const fromStore = sid => PRODUCTS.find(p => p.id === sid || p.ios === sid);  // a store ID back to our product
 // Analytics (Firebase in the apps; does nothing in a browser). Shows where players stop.
 // Session end: logged each time the app goes to the background, with how long it was open.
 let sessionStart = Date.now();
@@ -1880,8 +1884,8 @@ function grantOnce(id, t) {
 // Android lists purchases that were never finished; iPhone sends them as transaction updates when the app starts.
 async function finishUnfinishedPurchases() {
   if (!Purchases) return;
-  const ours = t => PRODUCTS.some(p => p.id === t?.productIdentifier);
-  const recover = t => { if (ours(t) && grantOnce(t.productIdentifier, t)) track("shop_recovered", { item: t.productIdentifier }); };
+  const ours = t => !!fromStore(t?.productIdentifier);
+  const recover = t => { const p = fromStore(t?.productIdentifier); if (p && grantOnce(p.id, t)) track("shop_recovered", { item: p.id }); };
   try {
     if (PLATFORM !== "android") { await Purchases.addListener("transactionUpdated", recover); return; }
     const { transactions } = await Purchases.getUnfinishedTransactions();
@@ -1895,8 +1899,8 @@ async function finishUnfinishedPurchases() {
 async function loadPrices() {
   if (!Purchases) return;
   try {
-    const { products } = await Purchases.getProducts({ productIdentifiers: PRODUCTS.map(p => p.id), productType: "inapp" });
-    products.forEach(s => { const p = PRODUCTS.find(x => x.id === s.identifier); if (p && s.priceString) p.price = s.priceString; });
+    const { products } = await Purchases.getProducts({ productIdentifiers: PRODUCTS.map(storeId), productType: "inapp" });
+    products.forEach(s => { const p = fromStore(s.identifier); if (p && s.priceString) p.price = s.priceString; });
   } catch (e) { console.warn("Store unavailable", e); }
 }
 async function checkOwnedRemoveAds() {
@@ -1909,7 +1913,7 @@ async function checkOwnedRemoveAds() {
 async function buy(id) {
   if (!Purchases) { toast("Purchases work in the\niPhone and Android apps.", false, READ_MS); return; }
   try {
-    const t = await Purchases.purchaseProduct({ productIdentifier: id, productType: "inapp", quantity: 1, isConsumable: id !== REMOVE_ADS });
+    const t = await Purchases.purchaseProduct({ productIdentifier: storeId(PRODUCTS.find(p => p.id === id)), productType: "inapp", quantity: 1, isConsumable: id !== REMOVE_ADS });
     grantOnce(id, t); closeSheet(); track("shop_purchase", { item: id });
   } catch (e) {
     if (!/cancel/i.test(String(e?.message || e))) toast("The purchase didn't go through.\nYou were not charged.", false, READ_MS);
@@ -2033,6 +2037,7 @@ function renderCloudHelp() {
   };
 }
 if (window.BHCloud) {
+  BHCloud.config.appleReady = true;   // Sign in with Apple is set up for Wordglow (App.entitlements)
   BHCloud.init().then(afterSync);
   document.addEventListener("visibilitychange", () => { if (document.hidden) BHCloud.flush(); });
 }
