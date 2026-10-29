@@ -93,6 +93,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .tile.star{background:conic-gradient(var(--n1),var(--n3),var(--n4),var(--n5),var(--n7),var(--n1))}
 .tile .bomb{position:absolute;top:1px;right:2px;font-size:.5em}
 .cell.erasable .tile{animation:wob .5s ease-in-out infinite}
+.cell.movable .tile{outline:2px dashed rgba(255,255,255,.9);outline-offset:-4px;cursor:grab}
 @keyframes wob{25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
 .shake1{animation:shake .3s}
 .shake2{animation:shake .45s 2}
@@ -646,6 +647,7 @@ function renderBoard(pv){
     if(pv&&pv.ghost.has(i)){html=tileHTML(pv.tiles.get(i));cls+=' ghost'}
     if(i===tutCell()&&!t&&!(pv&&pv.ghost.has(i)))cls+=' target-cell';
     if(erasing&&t)cls+=' erasable';
+    if(t&&!erasing&&!(pv&&pv.ghost.has(i))&&movable&&movable.keys.includes(i))cls+=' movable';
     el.className=cls;
     if(el._h!==html){el.innerHTML=html;el._h=html}
     const tile=el.firstElementChild;
@@ -699,6 +701,7 @@ function setHint(){
   }
   else if(stuck)h.innerHTML=`No piece can make <b>${T}</b> right now. Drop one in any empty spot`+
     (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
+  else if(movable&&moveHintNow)h.innerHTML='Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.';
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
   else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
 }
@@ -712,6 +715,7 @@ function startDrag(i,e,slot){
   const p=tray[i];if(!p)return;
   e.preventDefault();
   if(!tut&&!canFit(p)){toast("That piece doesn't fit anywhere");buzz(15);return}
+  lockMovable();                                    // picking up the next piece locks the last one in
   const {cs}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap='4px';document.body.appendChild(fl);
   const {rows,cols}=pieceSize(p),w=cols*cs+(cols-1)*4,h=rows*cs+(rows-1)*4,step=cs+4;
   // The square you grab stays under your pointer, so a 2-square piece lands where you expect.
@@ -744,22 +748,56 @@ function moveDrag(e){
 function endDrag(){
   if(!drag)return;
   removeEventListener('pointermove',moveDrag);removeEventListener('pointerup',endDrag);removeEventListener('pointercancel',endDrag);
-  const d=drag;drag=null;d.fl.remove();d.slot.style.opacity='';
-  if(d.pos)place(d.i,d.pos);
+  const d=drag;drag=null;d.fl.remove();if(d.slot)d.slot.style.opacity='';
+  if(d.move){
+    if(d.pos)put(d.p,d.pos,true);
+    else{putTiles(d.p,d.origin);movable={p:d.p,pos:d.origin,keys:keysAt(d.p,d.origin)};renderBoard()}  // dropped off the board: back where it was
+  }
+  else if(d.pos)place(d.i,d.pos);
   else{renderBoard();if(tut)toast('Drop it on the glowing square')}
 }
+// The piece dropped last (if it didn't blast) stays movable until the next piece, an Eraser or a Shuffle,
+// so a slip of the finger can be fixed. Press it and drag: it lifts off the board while it moves.
+let movable=null,moveHints=store.get('nb-move-hints',0),moveHintNow=false;
+const keysAt=(p,pos)=>p.cells.map(x=>(pos.r+x.r)*N+pos.c+x.c);
+function putTiles(p,pos){p.cells.forEach(x=>board[(pos.r+x.r)*N+pos.c+x.c]=x.t)}
+function lockMovable(){if(movable){movable=null;moveHintNow=false}}
+boardEl.addEventListener('pointerdown',e=>{
+  if(!movable||busy||erasing||over||tut||drag||!$('modal').hidden)return;
+  const c=e.target.closest('.cell');if(!c)return;const k=+c.dataset.i;
+  const n=movable.keys.indexOf(k);if(n<0)return;
+  e.preventDefault();
+  // Only a real drag moves it: a tap leaves it where it is.
+  const sx=e.clientX,sy=e.clientY,mouse=e.pointerType==='mouse';
+  const stop=()=>{removeEventListener('pointermove',go);removeEventListener('pointerup',stop);removeEventListener('pointercancel',stop)};
+  const go=ev=>{
+    if(Math.hypot(ev.clientX-sx,ev.clientY-sy)<8)return;
+    stop();if(!movable||busy||drag)return;clearHint();
+    const {p,pos}=movable,g=p.cells[n];
+    movable.keys.forEach(key=>board[key]=null);movable=null;
+    const {cs,step}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap='4px';document.body.appendChild(fl);
+    const {rows}=pieceSize(p),h=rows*cs+(rows-1)*4;
+    drag={p,fl,slot:null,pos:null,move:true,origin:pos,dx:g.c*step+cs/2,dy:mouse?g.r*step+cs/2:h+cs*.9};
+    moveDrag(ev);
+    addEventListener('pointermove',moveDrag);addEventListener('pointerup',endDrag);addEventListener('pointercancel',endDrag);
+  };
+  addEventListener('pointermove',go);addEventListener('pointerup',stop);addEventListener('pointercancel',stop);
+});
 
 // ---------- play ----------
-function place(i,pos){
-  const p=tray[i],placed=[];
-  p.cells.forEach(x=>{const k=(pos.r+x.r)*N+pos.c+x.c;board[k]=x.t;placed.push(k)});
-  tray[i]=null;
-  if(!tut&&chain&&--chainMoves<0)chain=0;          // too many drops since the last blast
+function place(i,pos){const p=tray[i];tray[i]=null;put(p,pos,false)}
+// moved: the movable piece dropped in a new spot. It's still the same drop, so the chain isn't spent again.
+function put(p,pos,moved){
+  putTiles(p,pos);const placed=keysAt(p,pos);
+  if(!moved&&!tut&&chain&&--chainMoves<0)chain=0;          // too many drops since the last blast
   justTutored=false;levelStartHint=false;
+  movable=tut?null:{p,pos,keys:placed};
   renderBoard();renderTray();
   placed.forEach(k=>{const t=boardEl.children[k].firstElementChild;t&&t.classList.add('land')});
   SFX.place();buzz(8);
-  if(!blast())finishTurn();
+  if(blast()){movable=null;moveHintNow=false;return}
+  if(movable&&!moved&&moveHints<3){moveHintNow=true;store.set('nb-move-hints',++moveHints)}
+  finishTurn();
 }
 // Blasts every sum the last drop finished. Bombs in a sum also clear the 8 blocks around them.
 function blast(){
@@ -855,7 +893,7 @@ function finishTurn(){
   best=Math.max(best,score);store.set(bestKey(),best);
   saveGame();
   if(!tray.some(p=>p&&canFit(p))){
-    if(shuffles||erasers){erasing=!shuffles;renderAll();toast(shuffles?'No room!\nTry a shuffle':'No room!\nUse an eraser',false,READ_MS)}
+    if(shuffles||erasers){erasing=!shuffles;if(erasing)lockMovable();renderAll();toast(shuffles?'No room!\nTry a shuffle':'No room!\nUse an eraser',false,READ_MS)}
     else gameOver();
   }
 }
@@ -870,7 +908,7 @@ function seedStarters(n){
   }
 }
 function levelUp(){
-  busy=true;erasing=false;clearPending(true);track('level_complete',{mode,level});
+  busy=true;erasing=false;lockMovable();clearPending(true);track('level_complete',{mode,level});
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
@@ -916,6 +954,7 @@ function keepPlaying(){
   setTimeout(()=>{cells.forEach(k=>board[k]=null);busy=false;toast('Keep going!');finishTurn()},450);
 }
 function gameOver(){
+  lockMovable();
   over=true;clearPending();SFX.over();buzz([30,60,30]);
   track('game_over',{mode,level,score,continued});
   if(mode==='daily')store.set('nb-save-daily',null);else store.set('nb-save-endless',null);
@@ -1296,7 +1335,7 @@ function resumeGame(key='nb-save',welcome=true){
   if(g.goals.some(x=>!GOALS.find(d=>d.id===x.id)))return false;
   ({mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,chain,chainMoves,continued,levelsSinceAd,goalCount,lastV,blastsGame,bestRun}=g);
   goals=g.goals.map(x=>({...GOALS.find(d=>d.id===x.id),...x}));
-  rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;$('over').hidden=true;
+  rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;movable=null;$('over').hidden=true;
   best=Math.max(store.get(bestKey(),0),score);
   renderModeTab();finishTurn();
   if(!over&&welcome)news(`Welcome back!\nLevel ${level} · make ${T}`);
@@ -1306,7 +1345,7 @@ function newGame(m){
   mode=m;clearPending();track('game_start',{mode:m});
   rng=mode==='daily'?mulberry(hash('numberblast-'+dayKey())):mulberry(Math.floor(Math.random()*2**31));
   level=1;levelBase=0;score=0;T=targetFor(1);board=Array(N*N).fill(null);erasers=0;shuffles=0;toShuffle=0;chain=0;chainMoves=0;
-  continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;tut=null;lastV=0;blastsGame=0;bestRun=null;
+  continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;movable=null;tut=null;lastV=0;blastsGame=0;bestRun=null;
   resetGoals();closeSheet();$('over').hidden=true;
   best=store.get(bestKey(),0);
   seedStarters(4);newTray();
@@ -1325,7 +1364,7 @@ const LESSONS=[
 ];
 function startTutorial(){
   clearPending();closeSheet();$('over').hidden=true;
-  mode='endless';level=1;levelBase=0;score=0;T=10;chain=0;erasers=0;shuffles=0;over=false;busy=false;erasing=false;
+  mode='endless';level=1;levelBase=0;score=0;T=10;chain=0;erasers=0;shuffles=0;over=false;busy=false;erasing=false;movable=null;
   tut={step:0};loadLesson();
 }
 function loadLesson(){
@@ -1357,7 +1396,7 @@ $('eraser').onclick=()=>{
   if(tut||busy||over)return;
   if(erasing){erasing=false;renderAll();return}
   if(!erasers)return offerPowerup('eraser');
-  erasing=true;renderAll();toast('Tap a block to erase it');
+  lockMovable();erasing=true;renderAll();toast('Tap a block to erase it');
 };
 boardEl.addEventListener('pointerdown',e=>{
   if(!erasing||busy)return;const c=e.target.closest('.cell');if(!c)return;const k=+c.dataset.i;if(!board[k])return;
@@ -1391,7 +1430,7 @@ $('hintbtn').onclick=()=>{
 $('shuffle').onclick=()=>{
   if(tut||busy||over)return;
   if(!shuffles)return offerPowerup('shuffle');
-  shuffles--;erasing=false;newTray();SFX.shuffle();finishTurn();
+  shuffles--;erasing=false;lockMovable();newTray();SFX.shuffle();finishTurn();
 };
 function renderSound(){$('sound').textContent=muted?'🔇':'🔊';$('sound').setAttribute('aria-pressed',!muted);$('sound').setAttribute('aria-label',muted?'Sound off':'Sound on')}
 $('sound').onclick=()=>{muted=!muted;store.set('nb-muted',muted);renderSound()};
@@ -1415,10 +1454,11 @@ buildBoard();renderSound();
 if(!store.get('nb-tutorial-done',false))startTutorial();
 else if(!resumeGame())newGame('endless');
 checkStreakAtRisk();
+if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple is set up for Sumburst (App.entitlements)
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut,levelsSinceAd}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
 })();
 </script>
 
