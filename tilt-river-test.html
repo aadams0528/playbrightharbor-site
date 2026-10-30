@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="robots" content="noindex, nofollow">
-<!-- Tilt River prototype v0.1 (working title; backlog L1 "Tilt boat run"). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Tilt River prototype v0.2 (working title; backlog L1 "Tilt boat run"). Unlisted test page: not linked from the site. Replace this file to update. -->
 <title>Tilt River (test version)</title>
 <style>
 :root {
@@ -38,12 +38,15 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 #hull span.lost { background: transparent; border-color: rgba(107,68,37,.35); }
 #delta.good { color: #2f9b5a; } #delta.bad { color: #d4553f; }
 #tip { position: fixed; left: 50%; transform: translateX(-50%); top: calc(max(10px, env(safe-area-inset-top)) + 52px);
-  width: min(92vw, 400px); background: var(--card); color: var(--ink); border-radius: 18px; padding: 12px 14px 12px 12px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.25); display: flex; gap: 12px; align-items: center; pointer-events: none; }
+  width: min(88vw, 340px); background: var(--card); color: var(--ink); border-radius: 16px; padding: 8px 12px 8px 8px;
+  box-shadow: 0 3px 14px rgba(0,0,0,.22); display: flex; gap: 10px; align-items: center; pointer-events: none; transition: opacity .3s; }
+#tip.compact { opacity: .88; }
+#tip.compact .sub { display: none; }
+#tip .goal { font-size: 14px; font-weight: 800; color: var(--accent); margin-top: 3px; }
 #tip .step { font-size: 12px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; }
-#tip .txt { font-size: 17px; font-weight: 700; line-height: 1.3; }
-#tip .sub { font-size: 14px; color: var(--ink2); margin-top: 2px; line-height: 1.3; }
-#tipIcon { flex: none; width: 54px; height: 54px; }
+#tip .txt { font-size: 16px; font-weight: 700; line-height: 1.3; }
+#tip .sub { font-size: 13px; color: var(--ink2); margin-top: 2px; line-height: 1.3; }
+#tipIcon { flex: none; width: 42px; height: 42px; }
 #toast { position: fixed; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 10px); transform: translateX(-50%);
   background: var(--card); color: var(--ink); padding: 10px 14px; border-radius: 14px; font-weight: 700; font-size: 15px;
   box-shadow: 0 3px 12px rgba(0,0,0,.25); width: max-content; max-width: 90vw; text-align: center; pointer-events: none; }
@@ -69,6 +72,18 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 .new { color: var(--warm); font-weight: 800; }
 .foot { font-size: 12px; color: var(--ink2); margin-top: 12px; }
 #tester { margin-top: 10px; }
+.boats { display: flex; gap: 6px; margin-top: 8px; justify-content: space-between; }
+.boats button { flex: 1; border: 2px solid var(--cardLine); background: var(--btn); border-radius: 12px; padding: 6px 2px 4px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; color: var(--ink2); }
+.boats button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.boats button:disabled { opacity: .5; cursor: default; }
+.boats canvas { display: block; margin: 0 auto 2px; width: 22px; height: 34px; }
+.bar { height: 8px; border-radius: 6px; background: rgba(47,143,125,.15); overflow: hidden; margin-top: 4px; }
+.bar i { display: block; height: 100%; background: var(--warm); border-radius: 6px; }
+#dprog { position: fixed; left: 50%; transform: translateX(-50%); top: calc(max(10px, env(safe-area-inset-top)) + 42px); width: min(60vw, 240px); height: 6px; border-radius: 4px; background: rgba(255,251,240,.55); overflow: hidden; pointer-events: none; }
+#dprog i { display: block; height: 100%; width: 0; background: #e0893a; }
+#hull.hit { animation: hitp .5s; }
+@keyframes hitp { 30% { transform: scale(1.18); background: #ffd9cf; } }
+.unlock { color: var(--warm); font-weight: 800; }
 </style>
 </head>
 <body>
@@ -83,16 +98,17 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
   </div>
   <div class="pill" id="hull" aria-label="Boat health"></div>
 </div>
+<div id="dprog" class="hide"><i id="dprogFill"></i></div>
 
 <div id="tip" class="hide" role="status" aria-live="polite">
   <canvas id="tipIcon" width="108" height="108"></canvas>
-  <div><div class="step" id="tipStep"></div><div class="txt" id="tipTxt"></div><div class="sub" id="tipSub"></div></div>
+  <div><div class="step" id="tipStep"></div><div class="txt" id="tipTxt"></div><div class="sub" id="tipSub"></div><div class="goal" id="tipGoal"></div></div>
 </div>
 <div id="toast" class="hide" role="status" aria-live="polite"></div>
 
 <div id="menu" class="screen">
   <div class="panel">
-    <h1 id="title">Tilt River<small>prototype v0.1 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.2 · working title</small></h1>
     <p>Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
@@ -105,8 +121,20 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
       <button id="howBtn">How to play</button>
       <button id="soundBtn" aria-pressed="true">Sound on</button>
     </div>
+    <div class="lbl">Boat</div>
+    <div class="boats" id="boatRow"></div>
     <div class="foot" id="walletLine"></div>
     <div id="tester" class="hide row"><button id="resetTut">Reset lesson</button><button id="resetAll">Reset all</button></div>
+  </div>
+</div>
+
+<div id="dailyIntro" class="screen dim hide">
+  <div class="panel">
+    <h2 id="diTitle">Daily River</h2>
+    <p>1500 m to the finish rope. The river is the same for everyone today, and a new one comes tomorrow.</p>
+    <p id="diGhost"></p>
+    <button class="big" id="diStart">Start</button>
+    <button class="big alt" id="diBack">Back</button>
   </div>
 </div>
 
@@ -156,6 +184,30 @@ function dailyNumber() { var d = new Date(); var a = Date.UTC(d.getFullYear(), d
 function fmtTime(t) { var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1); }
 function $(id) { return document.getElementById(id); }
 
+// ---------- boats (colors only; every boat handles the same) ----------
+var BOATS = [
+  { id: 'oak', name: 'Oak', need: 0, hull: '#7a4a26', deck: '#b07a46', seat: '#8a5a30', shirt: '#d4553f' },
+  { id: 'sky', name: 'Sky', need: 60, hull: '#2f5f86', deck: '#73a8cc', seat: '#3f6f94', shirt: '#f2c84b' },
+  { id: 'moss', name: 'Moss', need: 180, hull: '#3e5f2c', deck: '#83a35a', seat: '#4e6f3a', shirt: '#f4efe4' },
+  { id: 'ember', name: 'Ember', need: 400, hull: '#8a3424', deck: '#d0694a', seat: '#9a4430', shirt: '#2f8f7d' },
+  { id: 'birch', name: 'Birch', need: 800, hull: '#9c8c6c', deck: '#ece3cf', seat: '#cdbf9f', shirt: '#3b6fa0' }
+];
+function boatById(id) { for (var i = 0; i < BOATS.length; i++) if (BOATS[i].id === id) return BOATS[i]; return BOATS[0]; }
+function dailyBest() { var d = store.get('daily.' + todayKey(), null); return d && d.v === RIVER_V ? d : null; }
+function earned() { return store.get('wallet', 0); }
+var boatPal = boatById(store.get('boat', 'oak'));
+if (earned() < boatPal.need) boatPal = BOATS[0];
+
+// ---------- scenery palettes (picked per river) ----------
+var PALS = [
+  { name: 'summer', ground: '#6c8546', m1: 'rgba(132,150,86,.45)', m2: 'rgba(90,112,58,.55)', sand1: '#b9a271', sand2: '#cdb98a', water: '#3f9aa0', deep: 'rgba(28,104,118,.55)',
+    pine: ['#2f5a2c', '#3d7035', '#4f8541'], leafy: ['#4f7a33', '#669443', '#7fae52'], bush: ['#557a35', '#6d9443'], flowers: ['#f4efe4', '#f2c84b', '#e88aa0'], reed: '#5f8a3a' },
+  { name: 'autumn', ground: '#7a7f45', m1: 'rgba(160,150,80,.4)', m2: 'rgba(105,105,55,.5)', sand1: '#b49a6a', sand2: '#cbb184', water: '#3a8f96', deep: 'rgba(26,96,108,.55)',
+    pine: ['#2f5a2c', '#3d7035', '#4f8541'], leafy: ['#b0602a', '#d08a35', '#e8b44a'], bush: ['#8a7a35', '#a8923f'], flowers: ['#f4efe4', '#e8b44a', '#c96a4a'], reed: '#8a8a3e' },
+  { name: 'misty', ground: '#5f7d5c', m1: 'rgba(120,150,130,.4)', m2: 'rgba(80,105,85,.5)', sand1: '#a9a088', sand2: '#c2baa2', water: '#4593a8', deep: 'rgba(30,92,118,.55)',
+    pine: ['#264d3a', '#336248', '#467a5a'], leafy: ['#3f6f55', '#548a6a', '#6ea583'], bush: ['#4c7354', '#628c68'], flowers: ['#f4efe4', '#b9c8f0', '#e6d6f2'], reed: '#5a8060' }
+];
+
 // ---------- canvas ----------
 var cv = $('c'), ctx = cv.getContext('2d');
 var VW = 400;            // world width in units
@@ -168,6 +220,7 @@ function resize() {
 addEventListener('resize', resize); resize();
 
 // ---------- world ----------
+var RIVER_V = 2; // bump when river generation changes, so old ghosts are dropped
 var STEP = 10; // river sample spacing (units). 10 units = 1 m
 var DAILY_LEN = 15000; // 1500 m
 var game = null;
@@ -197,9 +250,10 @@ function River(seed, gentleUntil) {
     for (var side = -1; side <= 1; side += 2) {
       var n = r() < 0.45 ? 1 : 2;
       for (var k = 0; k < n; k++) {
-        var gap = 2 + r() * 95, roll = r(), type = roll < 0.5 ? 'pine' : roll < 0.72 ? 'bush' : roll < 0.9 ? 'boulder' : 'slab';
-        if (gap < 10 && type === 'pine') type = r() < 0.5 ? 'bush' : 'boulder';
-        self.decor.push({ d: d + r() * 40, side: side, gap: gap, type: type, s: type === 'pine' ? 13 + r() * 12 : type === 'slab' ? 18 + r() * 22 : type === 'bush' ? 7 + r() * 7 : 6 + r() * 9, seed: r() * 1000 });
+        var gap = 2 + r() * 95, roll = r(), type = roll < 0.3 ? 'pine' : roll < 0.45 ? 'leafy' : roll < 0.6 ? 'bush' : roll < 0.7 ? 'flowers' : roll < 0.8 ? 'boulder' : roll < 0.87 ? 'log' : roll < 0.93 ? 'slab' : 'reeds';
+        if (gap < 10 && (type === 'pine' || type === 'leafy')) type = r() < 0.5 ? 'bush' : 'reeds';
+        var sz = { pine: 13 + r() * 12, leafy: 12 + r() * 10, slab: 18 + r() * 22, bush: 7 + r() * 7, flowers: 9 + r() * 8, boulder: 6 + r() * 9, log: 14 + r() * 10, reeds: 7 + r() * 6 }[type];
+        self.decor.push({ d: d + r() * 40, side: side, gap: gap, type: type, s: sz, seed: r() * 1000 });
       }
     }
   };
@@ -213,13 +267,14 @@ function newGame(mode) {
   var riv = new River(seed, mode === 'tutorial' ? 99999 : 1500);
   riv.ext(400);
   var g = {
+    pal: mode === 'attract' ? PALS[0] : PALS[seed % 3], texts: [], lineId: 0, lineN: {}, lineGot: {}, nextMile: mode === 'daily' ? 500 : 250, passedBest: false,
     mode: mode, river: riv, objR: mulberry(seed ^ 0x9e3779b9), d: 0, x: riv.cx[0], vx: 0, t: 0, coins: 0, hull: 3, invuln: 0,
     boost: 0, slow: 0, scrape: 0, rocks: [], coinsArr: [], boosts: [], parts: [], wake: [], spawnD: mode === 'tutorial' ? 1e12 : 1400,
     safeO: 0, safeD: 0, over: false, finished: false, ghostRec: [], ghostT: 0, ghost: null, best: 0, shake: 0, flow: 0, tut: null, lastMoveL: 0, lastMoveR: 0
   };
-  if (daily) { g.ghost = store.get('ghost.' + todayKey(), null); }
+  if (daily) { g.ghost = store.get('ghost.' + todayKey(), null); if (g.ghost && g.ghost.v !== RIVER_V) g.ghost = null; }
   if (mode === 'endless') g.best = store.get('bestEndless', 0);
-  if (mode === 'tutorial') g.tut = { step: 0, t: 0, minX: g.x, maxX: g.x, startX: g.x, endD: 0, tries: 0, hitOnce: false };
+  if (mode === 'tutorial') g.tut = { coins0: 0, passed: 0, step: 0, t: 0, minX: g.x, maxX: g.x, startX: g.x, endD: 0, tries: 0, hitOnce: false };
   return g;
 }
 
@@ -231,12 +286,13 @@ function rockShape(r, seedv) {
 }
 function addRock(g, d, x, r) { g.rocks.push({ d: d, x: x, r: r, pts: rockShape(r, d * 0.37 + x), seed: d + x }); }
 function addCoinLine(g, d, offset, n, drift) {
-  var riv = g.river;
+  var riv = g.river, id = ++g.lineId, cnt = 0;
   for (var k = 0; k < n; k++) {
     var dd = d + k * 30, a = riv.at(dd), o = clamp(offset + Math.sin(k * 0.55) * drift, -0.75, 0.75), cx = a.x + o * a.h;
     var near = g.rocks.some(function (rk) { return Math.abs(rk.d - dd) < rk.r + 16 && Math.abs(rk.x - cx) < rk.r + 14; });
-    if (!near) g.coinsArr.push({ d: dd, x: cx, got: false });
+    if (!near) { g.coinsArr.push({ d: dd, x: cx, got: false, line: id }); cnt++; }
   }
+  g.lineN[id] = cnt; g.lineGot[id] = 0;
   return d + n * 30;
 }
 function spawn(g) {
@@ -408,13 +464,14 @@ function update(g, dt) {
       burst(g, g.x, g.d + 8, '#ffffff', 14);
       if (g.mode !== 'attract') { noise(0.28, 0.45, 380); tone(110, 0.25, 'triangle', 0.18, 60); buzz(70); }
       if (g.mode === 'tutorial') { g.tut.hitOnce = true; }
-      else if (g.mode !== 'attract') { g.hull--; if (g === game) updHull(); if (g.hull <= 0) { if (g === game) sink(g); else g.over = true; return; } }
+      else if (g.mode !== 'attract') { g.hull--; if (g === game) { updHull(); var hp = $('hull'); hp.classList.remove('hit'); void hp.offsetWidth; hp.classList.add('hit'); } if (g.hull > 0) floatText(g, g.hull === 1 ? 'Ouch! Last bump left' : 'Ouch! ' + g.hull + ' bumps left', '#ffd0c4'); if (g.hull <= 0) { if (g === game) sink(g); else g.over = true; return; } }
     }
   }
   // coins
   for (i = 0; i < g.coinsArr.length; i++) {
     var co = g.coinsArr[i]; if (co.got) continue; var cdy = co.d - g.d; if (cdy < -20 || cdy > 30) continue;
-    if (Math.hypot(g.x - co.x, cdy) < 17) { co.got = true; g.coins++; co.gotT = g.t; if (g.mode !== 'attract') tone(1180 + (g.coins % 5) * 90, 0.12, 'sine', 0.12, 1600); if (g === game && g.mode !== 'attract') $('coins').textContent = g.coins; }
+    if (Math.hypot(g.x - co.x, cdy) < 17) { co.got = true; g.coins++; co.gotT = g.t;
+      if (co.line && ++g.lineGot[co.line] === g.lineN[co.line] && g.lineN[co.line] >= 4 && g.mode !== 'attract' && g.mode !== 'tutorial') { g.coins += 2; floatText(g, 'Perfect line +2', '#ffe08a'); if (g === game) setTimeout(function () { tone(1560, 0.18, 'sine', 0.1, 2100); }, 90); } if (g.mode !== 'attract') tone(1180 + (g.coins % 5) * 90, 0.12, 'sine', 0.12, 1600); if (g === game && g.mode !== 'attract') $('coins').textContent = g.coins; }
   }
   // boosts
   for (i = 0; i < g.boosts.length; i++) {
@@ -430,49 +487,71 @@ function update(g, dt) {
     g.ghostT += dt; if (g.ghostT >= 0.05) { g.ghostT = 0; g.ghostRec.push([Math.round(g.t * 100) / 100, Math.round(g.d), Math.round(g.x)]); }
     if (g.d >= DAILY_LEN) finishDaily(g);
   }
+  if (g.mode === 'endless' || g.mode === 'daily') {
+    var mt = g.d / 10;
+    if (mt >= g.nextMile && (g.mode === 'endless' || g.nextMile < 1500)) { floatText(g, g.nextMile + ' m!', '#ffffff'); if (g === game) tone(740, 0.2, 'sine', 0.08, 1110); g.nextMile += g.mode === 'daily' ? 500 : 250; }
+    if (g.mode === 'endless' && g.best > 100 && !g.passedBest && mt > g.best) { g.passedBest = true; floatText(g, 'New best!', '#ffe08a'); if (g === game) tone(990, 0.3, 'sine', 0.1, 1480); }
+  }
+  for (i = g.texts.length - 1; i >= 0; i--) { g.texts[i].t += dt; if (g.texts[i].t > 1.6) g.texts.splice(i, 1); }
   if (g.tut) tutUpdate(g, dt);
   if (g === game && g.mode !== 'attract') hudTick(g);
 }
+function floatText(g, txt, col) { g.texts.push({ txt: txt, col: col, t: 0, side: g.x > g.river.at(g.d).x ? -1 : 1 }); }
 function burst(g, x, d, col, n) { for (var i = 0; i < n; i++) { var a = Math.random() * Math.PI * 2, s = 30 + Math.random() * 70; g.parts.push({ x: x, d: d, vx: Math.cos(a) * s, vd: Math.sin(a) * s, t: 0, life: 0.4 + Math.random() * 0.4, col: col, r: 1.5 + Math.random() * 2 }); } }
 
 // ---------- tutorial ----------
 var TUT = [
-  { tilt: ['Tilt your phone left and right to steer', 'Try both ways now.'], thumb: ['Drag your thumb left and right to steer', 'Put your thumb anywhere on the river. Try both ways.'], icon: 'tilt' },
-  { all: ['Steer through the coins', 'Coins will buy new boats later.'], icon: 'coin' },
-  { all: ['Miss the rocks', 'Each bump cracks your boat. Three bumps and it sinks.'], icon: 'rock' },
+  { tilt: ['Tilt your phone left and right to steer', 'Try both ways now.'], thumb: ['Drag your thumb left and right to steer', 'Put your thumb anywhere on the river. Try both ways.'],
+    keys: ['Press \u2190 and \u2192 to steer', 'Or drag with the mouse. Try both ways.'], icon: 'tilt' },
+  { all: ['Steer through the coins', 'Coins unlock new boat colors.'], icon: 'coin' },
+  { all: ['Miss the rocks', 'Each bump cracks your boat. Three bumps and it sinks. Bumps are free in the lesson.'], icon: 'rock' },
   { all: ['Ride the white rapids', 'Steer onto the white wave for a burst of speed.'], icon: 'boost' },
   { all: ['You’re ready!', 'The river gets faster and twistier the farther you go.'], icon: 'boat' }
 ];
 function tutShow(g) {
-  var s = TUT[g.tut.step], m = s.all || (steerMode === 'tilt' ? s.tilt : s.thumb);
+  var s = TUT[g.tut.step], m = s.all || (steerMode === 'tilt' ? s.tilt : coarse ? s.thumb : s.keys);
   $('tipStep').textContent = g.tut.step < 4 ? 'Step ' + (g.tut.step + 1) + ' of 4' : 'Lesson done';
-  $('tipTxt').textContent = m[0]; $('tipSub').textContent = m[1]; $('tip').classList.remove('hide'); tipIconKind = s.icon;
+  $('tipTxt').textContent = m[0]; $('tipSub').textContent = m[1]; $('tip').classList.remove('hide', 'compact'); tipIconKind = s.icon;
+  tutGoal(g);
+}
+function tutGoal(g) {
+  var T = g.tut, txt = '';
+  if (T.step === 0) txt = (T.startX - T.minX > 35 ? '\u2713' : '\u25cb') + ' Left    ' + (T.maxX - T.startX > 35 ? '\u2713' : '\u25cb') + ' Right';
+  else if (T.step === 1) txt = 'Coins: ' + Math.min(3, g.coins - T.coins0) + ' of 3';
+  else if (T.step === 2) txt = 'Rocks passed: ' + T.passed + ' of 3';
+  else if (T.step === 3) txt = 'Rapids ridden: ' + (T.boosted ? 1 : 0) + ' of 1';
+  if ($('tipGoal').textContent !== txt) $('tipGoal').textContent = txt;
 }
 function tutUpdate(g, dt) {
   var T = g.tut; T.t += dt;
   var top = g.d + VH - BOAT_SY + 60, riv = g.river;
+  if (T.t > 3.5 && T.step < 4) $('tip').classList.add('compact');
+  if (T.step === 2 && T.rocksD) T.passed = T.rocksD.filter(function (d) { return g.d > d + 20; }).length;
+  tutGoal(g);
   if (T.step === 0) {
     T.minX = Math.min(T.minX, g.x); T.maxX = Math.max(T.maxX, g.x);
     if (T.startX - T.minX > 35 && T.maxX - T.startX > 35 && T.t > 1.5) tutNext(g);
   } else if (T.step === 1) {
     if (!T.placed) { var a = riv.at(top); T.endD = addCoinLine(g, top, -0.5, 4, 0) ; addCoinLine(g, T.endD, 0.5, 4, 0); T.endD += 4 * 30; T.placed = true; }
-    if (g.d > T.endD + 10) { if (g.coins >= 3) tutNext(g); else { T.placed = false; $('tipSub').textContent = 'Almost! Steer right over the coins. Here come some more.'; } }
+    if (g.coins - T.coins0 >= 3) tutNext(g);
+    else if (g.d > T.endD + 10) { T.placed = false; $('tip').classList.remove('compact'); T.t = 0; $('tipSub').textContent = 'Almost! Steer right over the coins. Here come some more.'; }
   } else if (T.step === 2) {
     if (!T.placed) {
       var p = [[-0.45, 0], [0.45, 190], [0, 380]];
-      p.forEach(function (q) { var a2 = riv.at(top + q[1]); addRock(g, top + q[1], a2.x + q[0] * a2.h, 17); });
+      T.rocksD = []; T.passed = 0;
+      p.forEach(function (q) { var a2 = riv.at(top + q[1]); addRock(g, top + q[1], a2.x + q[0] * a2.h, 17); T.rocksD.push(top + q[1]); });
       T.endD = top + 400; T.placed = true;
     }
-    if (g.d > T.endD) { if (T.hitOnce && T.tries < 1) { T.tries++; T.hitOnce = false; T.placed = false; $('tipSub').textContent = 'Bump! (No harm in the lesson.) Try these ones.'; } else tutNext(g); }
+    if (g.d > T.endD) { if (T.hitOnce && T.tries < 1) { T.tries++; T.hitOnce = false; T.placed = false; T.t = 0; $('tip').classList.remove('compact'); $('tipSub').textContent = 'Bump! No harm done. Try these ones.'; } else tutNext(g); }
   } else if (T.step === 3) {
     if (!T.placed) { var a3 = riv.at(top); g.boosts.push({ d: top, x: a3.x + 0.3 * a3.h, w: 62, used: false }); T.endD = top + 30; T.placed = true; T.boosted = false; }
     if (T.boosted && g.boost < 1.2) tutNext(g);
-    else if (!T.boosted && g.d > T.endD + 40) { T.placed = false; $('tipSub').textContent = 'Missed it. Here comes another one. Steer onto it.'; }
+    else if (!T.boosted && g.d > T.endD + 40) { T.placed = false; T.t = 0; $('tip').classList.remove('compact'); $('tipSub').textContent = 'Missed it. Here comes another one. Steer onto it.'; }
   } else if (T.step === 4) {
     if (T.t > 2.6) endTutorial(g);
   }
 }
-function tutNext(g) { g.tut.step++; g.tut.t = 0; g.tut.placed = false; g.tut.tries = 0; tone(880, 0.12, 'sine', 0.1, 1320); tutShow(g); }
+function tutNext(g) { g.tut.step++; g.tut.t = 0; g.tut.placed = false; g.tut.tries = 0; g.tut.coins0 = g.coins; tone(880, 0.12, 'sine', 0.1, 1320); tutShow(g); }
 
 // ---------- draw ----------
 var tipIconKind = 'tilt';
@@ -488,8 +567,8 @@ function blob(c, x, y, r, seedv, n, sq) {
 function edgeJit(i, s) { return (h1(i, s) - 0.5) * 5 + Math.sin(i * 0.9 + s) * 2; }
 function draw(g) {
   var c = ctx; c.setTransform(DPR, 0, 0, DPR, 0, 0);
-  c.fillStyle = '#6c8546'; c.fillRect(0, 0, W, H);
-  var sh = g.shake > 0 ? (Math.random() - 0.5) * 6 * g.shake : 0;
+  var P = g.pal; c.fillStyle = P.ground; c.fillRect(0, 0, W, H);
+  var sh = g.shake > 0 ? (Math.random() - 0.5) * 3 * g.shake : 0;
   c.setTransform(DPR * SC, 0, 0, DPR * SC, (OX + sh) * DPR, 0);
   var riv = g.river, dTop = g.d + BOAT_SY + 40, dBot = g.d - (VH - BOAT_SY) - 40;
   var i0 = Math.floor(dBot / STEP), i1 = Math.ceil(dTop / STEP) + 1; riv.ext(i1 + 2);
@@ -499,7 +578,7 @@ function draw(g) {
   for (var i = i0 - (i0 % 3); i <= i1; i += 3) {
     for (var k = 0; k < 2; k++) {
       var gx = h1(i, 11 + k) * (VW + ext * 2) - ext, gy = sy(g, i * STEP + h1(i, 13 + k) * 30);
-      c.fillStyle = k ? 'rgba(90,112,58,.55)' : 'rgba(132,150,86,.45)'; blob(c, gx, gy, 14 + h1(i, 17 + k) * 22, i * 3 + k, 8, 0.7); c.fill();
+      c.fillStyle = k ? P.m2 : P.m1; blob(c, gx, gy, 14 + h1(i, 17 + k) * 22, i * 3 + k, 8, 0.7); c.fill();
     }
   }
   // sand bank, then water
@@ -509,8 +588,8 @@ function draw(g) {
     for (j = i1; j >= i0; j--) { x = CX(j) + HW(j) + off + edgeJit(j, jitS + 3); y = sy(g, j * STEP); c.lineTo(x, y); }
     c.closePath();
   }
-  edgePath(15, 21); c.fillStyle = '#b9a271'; c.fill();
-  edgePath(9, 23); c.fillStyle = '#cdb98a'; c.fill();
+  edgePath(15, 21); c.fillStyle = P.sand1; c.fill();
+  edgePath(9, 23); c.fillStyle = P.sand2; c.fill();
   // pebbles on the bank
   for (i = i0; i <= i1; i++) {
     for (var s2 = -1; s2 <= 1; s2 += 2) {
@@ -519,13 +598,13 @@ function draw(g) {
       c.fillStyle = h1(i, 37 + s2) < 0.5 ? '#9a917f' : '#857c6b'; c.beginPath(); c.ellipse(px, py, 1.6 + h1(i, 39) * 2.4, 1.2 + h1(i, 41) * 1.6, h1(i, 43) * 3, 0, 7); c.fill();
     }
   }
-  edgePath(0, 1); c.fillStyle = '#3f9aa0'; c.fill();
+  edgePath(0, 1); c.fillStyle = P.water; c.fill();
   c.save(); c.clip();
   // deep channel
   c.beginPath();
   for (i = i0; i <= i1; i++) { var dx2 = CX(i) - HW(i) * 0.55 + Math.sin(i * 0.2) * 4; if (i === i0) c.moveTo(dx2, sy(g, i * STEP)); else c.lineTo(dx2, sy(g, i * STEP)); }
   for (i = i1; i >= i0; i--) c.lineTo(CX(i) + HW(i) * 0.55 + Math.sin(i * 0.23 + 1) * 4, sy(g, i * STEP));
-  c.closePath(); c.fillStyle = 'rgba(28,104,118,.55)'; c.fill();
+  c.closePath(); c.fillStyle = P.deep; c.fill();
   // shallows glow along the shore
   c.lineWidth = 10; c.strokeStyle = 'rgba(140,205,195,.35)'; edgePath(-1, 1); c.stroke();
   // flow streaks (move with the current, a bit slower than the boat)
@@ -609,7 +688,8 @@ function draw(g) {
   for (i = 0; i < dec.length; i++) {
     var de = dec[i]; if (de.d < dBot - 60 || de.d > dTop + 60) continue;
     var ra2 = riv.at(de.d), x = ra2.x + de.side * (ra2.h + 18 + de.gap), y = sy(g, de.d);
-    drawDecor(c, de, x, y);
+    if (de.type === 'reeds') x = ra2.x + de.side * (ra2.h + 2 + de.gap * 0.1);
+    drawDecor(c, de, x, y, P);
   }
   // ghost
   if (g.ghost && g.mode === 'daily') {
@@ -624,18 +704,54 @@ function draw(g) {
     c.globalAlpha = blink ? 0.45 : 1; drawBoat(c, g.x, BOAT_SY, g.vx / MAX_LAT * 0.35, false, g.boost > 0); c.globalAlpha = 1;
   }
   g.parts.forEach(function (p) { var k3 = p.t / p.life; c.fillStyle = p.col; c.globalAlpha = 1 - k3; c.beginPath(); c.arc(p.x, sy(g, p.d), p.r, 0, 7); c.fill(); c.globalAlpha = 1; });
+  // small floating words beside the boat (never over the river ahead)
+  c.textAlign = 'center'; c.font = '800 12px system-ui, sans-serif';
+  g.texts.forEach(function (tx, j) {
+    var k4 = tx.t / 1.6, xx = clamp(g.x + tx.side * 46, 50, VW - 50), yy = BOAT_SY + 18 - k4 * 26 + j * 15;
+    c.globalAlpha = k4 < 0.15 ? k4 / 0.15 : 1 - Math.max(0, (k4 - 0.6) / 0.4);
+    c.lineWidth = 3; c.strokeStyle = 'rgba(20,40,40,.6)'; c.strokeText(tx.txt, xx, yy); c.fillStyle = tx.col; c.fillText(tx.txt, xx, yy); c.globalAlpha = 1;
+  });
 }
-function drawDecor(c, de, x, y) {
+function drawDecor(c, de, x, y, P) {
   var s = de.s;
+  if (de.type === 'reeds') {
+    c.lineCap = 'round';
+    for (var k = 0; k < 7; k++) {
+      var bx = x + (h1(de.seed + k, 3) - 0.5) * s * 1.6, by = y + (h1(de.seed + k, 5) - 0.5) * s * 1.2, len = s * (0.6 + h1(de.seed + k, 7) * 0.6), lean = (h1(de.seed + k, 9) - 0.5) * 6;
+      c.strokeStyle = P.reed; c.lineWidth = 1.3; c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx + lean * 0.5, by - len * 0.5, bx + lean, by - len); c.stroke();
+      if (k % 3 === 0) { c.fillStyle = '#6b4a2a'; c.beginPath(); c.ellipse(bx + lean, by - len, 1.2, 2.6, lean * 0.05, 0, 7); c.fill(); }
+    }
+    return;
+  }
+  if (de.type === 'flowers') {
+    c.fillStyle = 'rgba(70,110,45,.35)'; blob(c, x, y, s, de.seed, 8, 0.7); c.fill();
+    for (var f = 0; f < 9; f++) { c.fillStyle = P.flowers[f % 3]; c.beginPath(); c.arc(x + (h1(de.seed + f, 11) - 0.5) * s * 1.6, y + (h1(de.seed + f, 13) - 0.5) * s * 1.1, 1.3 + h1(de.seed + f, 15) * 0.9, 0, 7); c.fill(); }
+    return;
+  }
+  if (de.type === 'log') { // fallen branch, always on dry land
+    c.save(); c.translate(x, y); c.rotate((h1(de.seed, 17) - 0.5) * 1.6);
+    c.fillStyle = 'rgba(30,30,15,.3)'; c.beginPath(); c.ellipse(2, 3, s, 3.4, 0, 0, 7); c.fill();
+    c.strokeStyle = '#6b4a2a'; c.lineCap = 'round'; c.lineWidth = 5; c.beginPath(); c.moveTo(-s, 0); c.quadraticCurveTo(0, -2, s, 1); c.stroke();
+    c.strokeStyle = '#8a6440'; c.lineWidth = 2; c.beginPath(); c.moveTo(-s * 0.9, -1); c.quadraticCurveTo(0, -3, s * 0.9, 0); c.stroke();
+    c.strokeStyle = '#6b4a2a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-s * 0.2, -1); c.lineTo(-s * 0.35, -7); c.moveTo(s * 0.4, 0); c.lineTo(s * 0.6, 6); c.stroke();
+    c.restore(); return;
+  }
+  if (de.type === 'leafy') {
+    c.fillStyle = 'rgba(30,45,20,.33)'; blob(c, x + s * 0.35, y + s * 0.4, s, de.seed, 10, 0.9); c.fill();
+    c.fillStyle = P.leafy[0]; blob(c, x, y, s, de.seed + 1, 12); c.fill();
+    c.fillStyle = P.leafy[1]; blob(c, x - s * 0.3, y - s * 0.2, s * 0.55, de.seed + 2, 9); c.fill(); blob(c, x + s * 0.25, y + s * 0.1, s * 0.45, de.seed + 4, 9); c.fill();
+    c.fillStyle = P.leafy[2]; blob(c, x - s * 0.35, y - s * 0.35, s * 0.28, de.seed + 3, 7); c.fill();
+    return;
+  }
   if (de.type === 'pine') {
     c.fillStyle = 'rgba(30,45,20,.35)'; blob(c, x + s * 0.35, y + s * 0.4, s, de.seed, 10, 0.9); c.fill();
-    c.fillStyle = '#2f5a2c'; blob(c, x, y, s, de.seed + 1, 11); c.fill();
-    c.fillStyle = '#3d7035'; blob(c, x - s * 0.15, y - s * 0.15, s * 0.68, de.seed + 2, 9); c.fill();
-    c.fillStyle = '#4f8541'; blob(c, x - s * 0.25, y - s * 0.28, s * 0.35, de.seed + 3, 7); c.fill();
+    c.fillStyle = P.pine[0]; blob(c, x, y, s, de.seed + 1, 11); c.fill();
+    c.fillStyle = P.pine[1]; blob(c, x - s * 0.15, y - s * 0.15, s * 0.68, de.seed + 2, 9); c.fill();
+    c.fillStyle = P.pine[2]; blob(c, x - s * 0.25, y - s * 0.28, s * 0.35, de.seed + 3, 7); c.fill();
   } else if (de.type === 'bush') {
     c.fillStyle = 'rgba(30,45,20,.3)'; blob(c, x + 2, y + 3, s, de.seed, 8, 0.8); c.fill();
-    c.fillStyle = '#557a35'; blob(c, x, y, s, de.seed + 1, 8, 0.85); c.fill();
-    c.fillStyle = '#6d9443'; blob(c, x - s * 0.2, y - s * 0.25, s * 0.55, de.seed + 2, 7); c.fill();
+    c.fillStyle = P.bush[0]; blob(c, x, y, s, de.seed + 1, 8, 0.85); c.fill();
+    c.fillStyle = P.bush[1]; blob(c, x - s * 0.2, y - s * 0.25, s * 0.55, de.seed + 2, 7); c.fill();
   } else if (de.type === 'boulder') {
     c.fillStyle = 'rgba(30,40,20,.3)'; blob(c, x + 2, y + 3, s, de.seed, 8, 0.8); c.fill();
     c.fillStyle = '#8c8475'; blob(c, x, y, s, de.seed + 1, 7, 0.8); c.fill();
@@ -647,21 +763,22 @@ function drawDecor(c, de, x, y) {
     c.strokeStyle = 'rgba(90,55,30,.45)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - s * 0.6, y + s * 0.05); c.lineTo(x + s * 0.5, y - s * 0.05); c.stroke();
   }
 }
-function drawBoat(c, x, y, tilt, ghost, boosting) {
+function drawBoat(c, x, y, tilt, ghost, boosting, bp) {
+  bp = bp || boatPal;
   c.save(); c.translate(x, y); c.rotate(tilt); c.scale(1.2, 1.2);
   if (!ghost) { c.fillStyle = 'rgba(15,45,50,.35)'; c.beginPath(); c.ellipse(3, 5, 9, 18, 0, 0, 7); c.fill(); }
   // bow spray
   if (!ghost) { c.strokeStyle = 'rgba(255,255,255,' + (boosting ? 0.9 : 0.6) + ')'; c.lineWidth = boosting ? 2.4 : 1.6; c.beginPath(); c.moveTo(-6, -11); c.quadraticCurveTo(-10, -4, -12, 4); c.moveTo(6, -11); c.quadraticCurveTo(10, -4, 12, 4); c.stroke(); }
   // hull
   c.beginPath(); c.moveTo(0, -19); c.bezierCurveTo(8, -13, 9.5, -2, 8.5, 9); c.quadraticCurveTo(8, 15, 0, 15.5); c.quadraticCurveTo(-8, 15, -8.5, 9); c.bezierCurveTo(-9.5, -2, -8, -13, 0, -19); c.closePath();
-  c.fillStyle = ghost ? '#ffffff' : '#7a4a26'; c.fill();
+  c.fillStyle = ghost ? '#ffffff' : bp.hull; c.fill();
   if (!ghost) {
     c.beginPath(); c.moveTo(0, -16); c.bezierCurveTo(6, -11, 7, -2, 6.4, 8.5); c.quadraticCurveTo(6, 12.5, 0, 13); c.quadraticCurveTo(-6, 12.5, -6.4, 8.5); c.bezierCurveTo(-7, -2, -6, -11, 0, -16); c.closePath();
-    c.fillStyle = '#b07a46'; c.fill();
+    c.fillStyle = bp.deck; c.fill();
     c.strokeStyle = 'rgba(90,55,25,.55)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-2.5, -12); c.lineTo(-3.5, 11); c.moveTo(2.5, -12); c.lineTo(3.5, 11); c.stroke();
-    c.fillStyle = '#8a5a30'; c.fillRect(-6.5, -4, 13, 2.6); c.fillRect(-6.2, 6, 12.4, 2.4);
+    c.fillStyle = bp.seat; c.fillRect(-6.5, -4, 13, 2.6); c.fillRect(-6.2, 6, 12.4, 2.4);
     // rower: hat + shoulders
-    c.fillStyle = '#d4553f'; c.beginPath(); c.ellipse(0, 1.5, 4.6, 3.2, 0, 0, 7); c.fill();
+    c.fillStyle = bp.shirt; c.beginPath(); c.ellipse(0, 1.5, 4.6, 3.2, 0, 0, 7); c.fill();
     c.fillStyle = '#e9c27a'; c.beginPath(); c.arc(0, 1, 2.6, 0, 7); c.fill();
     // oars
     c.strokeStyle = '#5b3a1e'; c.lineWidth = 1.3; var o = Math.sin(performance.now() / 160) * 0.35;
@@ -713,8 +830,9 @@ var paused = false, last = 0, toastT = 0;
 function toast(msg, sec) { $('toast').textContent = msg; $('toast').classList.remove('hide'); toastT = sec || 3; }
 function updHull() { var h = ''; for (var i = 0; i < 3; i++) h += '<span class="' + (i < game.hull ? '' : 'lost') + '"></span>'; $('hull').innerHTML = h; }
 function hudTick(g) {
-  $('dist').textContent = Math.floor(g.d / 10);
+  $('dist').textContent = Math.floor(g.d / 10) + (g.mode === 'daily' ? ' / 1500' : '');
   if (g.mode === 'daily') {
+    $('dprogFill').style.width = Math.min(100, g.d / DAILY_LEN * 100) + '%';
     $('time').textContent = fmtTime(g.t);
     var dl = $('delta');
     if (g.ghost) { var gt = ghostTimeAtD(g.ghost, g.d); if (gt != null && g.t > 2) { var df = g.t - gt; if (Math.abs(df) < 0.05) { dl.textContent = 'even'; dl.className = ''; } else { dl.textContent = (df > 0 ? '+' : '−') + Math.abs(df).toFixed(1) + 's'; dl.className = df > 0 ? 'bad' : 'good'; } } else dl.textContent = ''; }
@@ -724,8 +842,8 @@ function show(id, on) { $(id).classList.toggle('hide', !on); }
 function startRun(mode) {
   if (mode !== 'tutorial' && !store.get('tutDone', false)) { pendingMode = mode; mode = 'tutorial'; }
   game = newGame(mode); tiltZero = null; paused = false;
-  show('menu', false); show('result', false); show('pause', false); show('hud', true); show('tip', false);
-  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('hull', mode !== 'tutorial');
+  show('menu', false); show('result', false); show('pause', false); show('dailyIntro', false); show('hud', true); show('tip', false);
+  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial');
   $('coins').textContent = '0'; $('delta').textContent = ''; updHull();
   if (mode === 'tutorial') tutShow(game);
   if (steerMode === 'tilt') setTimeout(function () { if (game && game.mode !== 'attract' && !tiltSeen) { steerMode = 'thumb'; toast('No tilt sensor here, so drag your thumb to steer.', 4); if (game.tut && game.tut.step === 0) tutShow(game); } }, 1500);
@@ -737,28 +855,35 @@ function endTutorial(g) {
   setTimeout(function () { startRun(next); toast(next === 'daily' ? 'Daily River #' + dailyNumber() + ': same river for everyone today' : 'Endless river: how far can you go?', 3); }, 200);
 }
 function sink(g) {
-  g.over = true; g.sunk = true; burst(g, g.x, g.d, '#b07a46', 18); burst(g, g.x, g.d, '#ffffff', 16); noise(0.6, 0.4, 300);
+  g.over = true; g.sunk = true; burst(g, g.x, g.d, boatPal.deck, 18); burst(g, g.x, g.d, '#ffffff', 16); noise(0.6, 0.4, 300);
   var m = Math.floor(g.d / 10);
-  addWallet(g.coins);
+  var got = addWallet(g.coins);
   setTimeout(function () {
     if (g.mode === 'endless') {
       var best = store.get('bestEndless', 0), isNew = m > best; if (isNew) store.set('bestEndless', m);
-      result('Your boat sank', isNew ? '<span class="new">New best!</span>' : 'Best: ' + best + ' m', [[m + ' m', 'distance'], [g.coins, 'coins']], 'The river gets faster and twistier the farther you go.');
+      result('Your boat sank', (isNew ? '<span class="new">New best!</span>' : 'Best: ' + best + ' m') + unlockLine(got), [[m + ' m', 'distance'], [g.coins, 'coins']], 'The river gets faster and twistier the farther you go.');
     } else {
-      result('Your boat sank', 'Daily River #' + dailyNumber(), [[m + ' m', 'of 1500 m'], [g.coins, 'coins']], 'Reach the finish rope to set a time. Your best run races you as a ghost.');
+      result('Your boat sank', 'Daily River #' + dailyNumber() + unlockLine(got), [[m + ' m', 'of 1500 m'], [g.coins, 'coins']], g.ghost ? 'Your ghost made it to the finish. Try to catch it!' : 'Reach the finish rope to set a time. Your best run then races you as a ghost.', g.ghost ? 'Race my ghost' : 'Go again');
     }
   }, 900);
 }
 function finishDaily(g) {
-  g.over = true; addWallet(g.coins); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
-  var key = 'daily.' + todayKey(), prev = store.get(key, null), t = Math.round(g.t * 10) / 10, isNew = !prev || t < prev.time;
-  if (isNew) { store.set(key, { time: t, coins: g.coins }); store.set('ghost.' + todayKey(), { s: g.ghostRec }); clearOldGhosts(); }
-  result('Finished!', 'Daily River #' + dailyNumber() + (isNew && prev ? ' · <span class="new">New best!</span>' : isNew ? '' : ' · Best ' + fmtTime(prev.time)),
-    [[fmtTime(t), 'time'], [g.coins, 'coins'], [3 - g.hull, 'bumps']], isNew ? 'Go again to race your ghost. A new river comes tomorrow.' : 'Your ghost still has the best time. Try again!');
+  g.over = true; var got = addWallet(g.coins); burst(g, g.x, g.d + 20, '#ffe08a', 16); burst(g, g.x, g.d + 20, '#ffffff', 12); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
+  var key = 'daily.' + todayKey(), prev = store.get(key, null); if (prev && prev.v !== RIVER_V) prev = null; var t = Math.round(g.t * 10) / 10, isNew = !prev || t < prev.time;
+  if (isNew) { store.set(key, { v: RIVER_V, time: t, coins: g.coins }); store.set('ghost.' + todayKey(), { v: RIVER_V, s: g.ghostRec }); clearOldGhosts(); }
+  result('Finished!', 'Daily River #' + dailyNumber() + (isNew && prev ? ' · <span class="new">New best!</span>' : isNew ? '' : ' · Best ' + fmtTime(prev.time)) + unlockLine(got),
+    [[fmtTime(t), 'time'], [g.coins, 'coins'], [3 - g.hull, 'bumps']], isNew ? 'Your run is saved as a white ghost boat. Race it to beat your time. A new river comes tomorrow.' : 'Your ghost still has the best time. Catch it!', 'Race my ghost');
 }
 function clearOldGhosts() { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(PFX + 'ghost.') === 0 && k !== PFX + 'ghost.' + todayKey()) localStorage.removeItem(k); }); } catch (e) {} }
-function addWallet(n) { store.set('wallet', store.get('wallet', 0) + n); }
-function result(title, line, stats, note) {
+function addWallet(n) {
+  var before = earned(), after = before + n; store.set('wallet', after);
+  var got = BOATS.filter(function (b) { return b.need > before && b.need <= after; });
+  if (got.length) { boatPal = got[got.length - 1]; store.set('boat', boatPal.id); }
+  return got;
+}
+function unlockLine(got) { return got.length ? '<br><span class="unlock">New boat unlocked: ' + got[got.length - 1].name + '! It\u2019s on now.</span>' : ''; }
+function result(title, line, stats, note, againLabel) {
+  $('again').textContent = againLabel || 'Go again'; show('dprog', false);
   $('resTitle').textContent = title; $('resLine').innerHTML = line; $('resNote').textContent = note;
   $('resStats').innerHTML = stats.map(function (s) { return '<div><b>' + s[0] + '</b><span>' + s[1] + '</span></div>'; }).join('');
   show('hud', false); show('result', true);
@@ -766,13 +891,23 @@ function result(title, line, stats, note) {
 var lastMode = 'endless';
 function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('pause', true); }
 function toMenu() {
-  show('pause', false); show('result', false); show('hud', false); show('tip', false); paused = false;
+  show('pause', false); show('result', false); show('hud', false); show('tip', false); show('dprog', false); show('dailyIntro', false); paused = false;
   game = newGame('attract'); refreshMenu(); show('menu', true);
 }
 function refreshMenu() {
   var be = store.get('bestEndless', 0); $('bestEndless').textContent = be ? 'Best: ' + be + ' m' : 'Go as far as you can';
-  var dd = store.get('daily.' + todayKey(), null); $('bestDaily').textContent = '#' + dailyNumber() + ' · ' + (dd ? 'Your best today: ' + fmtTime(dd.time) : 'Same river for everyone today');
-  var wl = store.get('wallet', 0); $('walletLine').textContent = wl ? 'Coins saved: ' + wl + ' (a boat shop comes later)' : 'Tip: on a computer, use the arrow keys or drag with the mouse.';
+  var dd = dailyBest(); $('bestDaily').textContent = '#' + dailyNumber() + ' · ' + (dd ? 'Your best today: ' + fmtTime(dd.time) : 'Same river for everyone today');
+  var wl = earned(), next = BOATS.filter(function (b) { return b.need > wl; })[0];
+  $('walletLine').innerHTML = next ? 'Coins: ' + wl + ' \u00b7 next boat (' + next.name + ') at ' + next.need + '<div class="bar"><i style="width:' + Math.round(wl / next.need * 100) + '%"></i></div>' : 'Coins: ' + wl + ' \u00b7 every boat unlocked!';
+  var row = $('boatRow'); row.innerHTML = '';
+  BOATS.forEach(function (b) {
+    var bt = document.createElement('button'), cv2 = document.createElement('canvas'), locked = wl < b.need;
+    cv2.width = 44; cv2.height = 68; bt.appendChild(cv2); bt.appendChild(document.createTextNode(locked ? b.need + ' coins' : b.name));
+    bt.disabled = locked; bt.setAttribute('aria-pressed', String(b.id === boatPal.id)); bt.setAttribute('aria-label', b.name + ' boat' + (locked ? ', unlocks at ' + b.need + ' coins' : ''));
+    var c2 = cv2.getContext('2d'); c2.setTransform(1.5, 0, 0, 1.5, 0, 0); if (locked) c2.globalAlpha = 0.6; drawBoat(c2, 14.7, 24, 0, false, false, b);
+    bt.onclick = function () { boatPal = b; store.set('boat', b.id); refreshMenu(); };
+    row.appendChild(bt);
+  });
   document.querySelectorAll('#steerRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.steer === steerMode)); });
   $('soundBtn').textContent = soundOn ? 'Sound on' : 'Sound off'; $('soundBtn').setAttribute('aria-pressed', String(soundOn));
 }
@@ -782,7 +917,16 @@ function play(mode) {
   else startRun(mode);
 }
 $('playEndless').onclick = function () { play('endless'); };
-$('playDaily').onclick = function () { play('daily'); };
+$('playDaily').onclick = function () {
+  if (!store.get('tutDone', false)) { play('daily'); return; }
+  var dd = dailyBest();
+  $('diTitle').textContent = 'Daily River #' + dailyNumber();
+  $('diGhost').textContent = dd ? 'Your best today is ' + fmtTime(dd.time) + '. That run comes back as a white ghost boat. The number by the clock shows if you\u2019re ahead (green) or behind (red).' : 'Reach the finish to set a time. Next time, your best run comes back as a white ghost boat for you to race.';
+  $('diStart').textContent = dd ? 'Race my ghost' : 'Start';
+  show('menu', false); show('dailyIntro', true);
+};
+$('diStart').onclick = function () { show('dailyIntro', false); play('daily'); };
+$('diBack').onclick = function () { show('dailyIntro', false); show('menu', true); };
 $('howBtn').onclick = function () { store.set('tutDone', false); pendingMode = 'endless'; play('tutorial'); };
 $('soundBtn').onclick = function () { soundOn = !soundOn; store.set('sound', soundOn); refreshMenu(); };
 document.querySelectorAll('#steerRow button').forEach(function (b) { b.onclick = function () { steerMode = b.dataset.steer; store.set('steer', steerMode); if (steerMode === 'tilt') askTilt(); refreshMenu(); }; });
