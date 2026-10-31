@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.8 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.8.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -164,7 +164,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 @keyframes swipeU { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 80% { transform: translateY(-70px); opacity: 1; } 100% { transform: translateY(-70px); opacity: 0; } }
 @keyframes tap { 0%,100% { transform: scale(1); } 50% { transform: scale(.85); } }
 
-#toast { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); z-index: 45; padding: 8px 16px; border-radius: 14px; background: rgba(0,0,0,.7); font-weight: 800; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+#toast { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); z-index: 45; padding: 8px 16px; border-radius: 14px; background: rgba(0,0,0,.7); font-weight: 800; font-size: 18px; pointer-events: none; opacity: 0; transition: opacity .25s; width: max-content; max-width: calc(100vw - 32px); text-align: center; }
 #toast.on { opacity: 1; }
 #banner { position: absolute; left: 0; right: 0; top: 38%; text-align: center; z-index: 44; pointer-events: none; opacity: 0; transition: opacity .5s; }
 #banner.on { opacity: 1; }
@@ -362,7 +362,7 @@ const MIMIC = [{ hp: 26, atk: 5 }, { hp: 58, atk: 9 }, { hp: 100, atk: 14 }];
 MONSTERS.mimic = { name: 'Mimic', hp: 26, atk: 5, int: 1.1, def: 1 };
 // ---- Story mode: The Lost Heir. Each level is a short fixed delve with a goal room and 2 bonus goals. ----
 const LEVELS = [
-  { id: '1-1', ch: 1, name: 'The Lantern Wakes', len: 3, end: 'stairs', ease: 0.75, plain: true, free: true, events: false,
+  { id: '1-1', ch: 1, name: 'The Lantern Wakes', len: 3, end: 'stairs', ease: 0.75, plain: true, plainRooms: 1, free: true, events: false,
     script: [[{ kind: 'fight', mon: 'blob' }, { kind: 'fight', mon: 'bat' }], [{ kind: 'chest' }, { kind: 'fight', mon: 'crab' }]],
     intro: 'Stay close to the light, little one. The stairs down are near. Follow the sound of dripping water.',
     outro: 'Good. The lantern remembers you. Rowan came this way, and so must we.',
@@ -372,7 +372,7 @@ const LEVELS = [
     outro: 'A scrap of blue cloth on a thorn. Rowan\'s cloak. We are on the right path.',
     bonus: [{ t: 'chests', n: 1 }, { t: 'hp', p: 0.6 }] },
   { id: '1-3', ch: 1, name: 'Whispers in the Dark', len: 5, end: 'stairs', ease: 1.0, events: false, shrineW: 20,
-    intro: 'From here on the doors only whisper. Listen. Glitter, growling, mist... each one tells you something.',
+    intro: 'The moss grows thick here. Trust the clues, but not too much. Even a growl can be a friend in a cage.',
     outro: 'Little footprints in the moss, and bigger ones beside them. Something is carrying Rowan.',
     bonus: [{ t: 'foes', n: 4 }, { t: 'nopotion' }] },
   { id: '1-4', ch: 1, name: 'The Glittering Trap', len: 5, end: 'vault', ease: 1.1, events: false, chestW: 34, mimic: 0.5, maxChests: 3,
@@ -616,16 +616,16 @@ const CLUES = {
   silence: { name: 'Silence', line: 'not a sound' },
 };
 const CLUE_ODDS = {
-  fight: [['growl', 62], ['rustle', 30], ['silence', 8]], elite: [['growl', 65], ['rustle', 20], ['silence', 15]],
-  chest: [['glitter', 82], ['silence', 18]], spring: [['mist', 86], ['silence', 14]],
+  fight: [['growl', 55], ['rustle', 35], ['silence', 10]], elite: [['growl', 60], ['rustle', 25], ['silence', 15]],
+  chest: [['glitter', 75], ['silence', 25]], spring: [['mist', 75], ['whisper', 10], ['silence', 15]],
   shrine: [['whisper', 55], ['mist', 20], ['glitter', 17], ['silence', 8]],
-  explorer: [['voice', 65], ['rustle', 27], ['silence', 8]], cage: [['voice', 65], ['rustle', 27], ['silence', 8]],
+  explorer: [['voice', 65], ['rustle', 27], ['silence', 8]], cage: [['voice', 50], ['growl', 25], ['rustle', 20], ['silence', 5]],
   gamble: [['whisper', 55], ['glitter', 35], ['silence', 10]], relic: [['whisper', 55], ['glitter', 35], ['silence', 10]],
 };
 function clueFor(d, rng) { const k = d.kind === 'fight' ? (d.elite ? 'elite' : 'fight') : d.kind === 'event' ? d.ev : d.kind; return pickWeighted(CLUE_ODDS[k].map(([c, w]) => ({ c, w })), rng).c; }
 // the very first rooms stay readable; the Dusk Owl sees through one door in every room
 function addClues(run, doors, rng) {
-  const plain = LV(run) ? !!LV(run).plain : firstDelve(run) && run.room < 2;
+  const plain = LV(run) ? run.room < (LV(run).plainRooms || 0) : firstDelve(run) && run.room < 2;
   for (const d of doors) { if (d.kind === 'guard' || d.kind === 'stairs' || d.kind === 'vault') { d.rev = true; continue; } d.clue = clueFor(d, rng); d.rev = plain; }
   // never two doors with the same clue: a repeat is redrawn from that kind's other clues; if none is left, redraw the whole set
   const kindOf = d => d.kind === 'fight' ? (d.elite ? 'elite' : 'fight') : d.kind === 'event' ? d.ev : d.kind;
@@ -1542,7 +1542,7 @@ let campCoachT = 0, campCoachOn = false;
 let campCoachKey = '';
 function nextCampLesson() {
   const L2 = [
-    { key: 'camp', on: (S.runs >= 1 || Object.keys(S.levels || {}).length > 0) && S.owned.length > 2, el: 'slots', text: 'Gear you find stays yours forever. Tap a slot to wear something better. The next delve gets easier.' },
+    { key: 'camp', on: (S.runs >= 1 || Object.keys(S.levels || {}).length > 0) && S.owned.length > 2, el: 'slots', text: 'Gear you find stays yours forever. Tap a slot to equip something better. The next delve gets easier.' },
     { key: 'forge', on: (S.gold || 0) >= 30, el: 'forgeBtn', text: 'You have enough gold for the <b>Forge</b>! Each star makes a piece of gear stronger, for good.' },
     { key: 'heroes', on: Object.keys(CLASSES).some(k => k !== 'warden' && classUnlocked(k, S)), el: 'heroRow', text: 'A <b>new hero</b> is ready! Tap here to switch. Each hero has their own Flare.' },
     { key: 'bestiary', on: Object.keys(S.bestiary || {}).length >= 3, el: 'bestBtn', text: 'Your <b>Bestiary</b> fills in as you beat new foes. Each new page pays 5 gold, and tells you their tricks.' },
@@ -1621,7 +1621,7 @@ function openForge() {
   for (const id of ids) {
     const n = S.stars[id] || 0, c = forgeCost(id, n), worn = Object.values(S.eq).includes(id);
     const next = c != null ? statLines(gearStats(id, n)).join(' · ') + ' → <span style="color:var(--amber2);font-weight:700">' + statLines(gearStats(id, n + 1)).join(' · ') + '</span>' : '';
-    h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="f:${id}" ${c == null || c > (S.gold || 0) ? 'style="opacity:.6"' : ''}>${gearCardHTML(id, `${worn ? '<span class="tag r" style="display:block;margin-top:2px">Wearing</span>' : ''}${c == null ? '<span class="stars">Fully forged</span>' : `<span style="display:block;font-size:12.5px">Next ★: ${next}</span><span class="gold" style="display:block;font-size:13px">Forge for 🪙 ${c}</span>`}`)}</button>`;
+    h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="f:${id}" ${c == null || c > (S.gold || 0) ? 'style="opacity:.6"' : ''}>${gearCardHTML(id, `${worn ? '<span class="tag r" style="display:block;margin-top:2px">Equipped</span>' : ''}${c == null ? '<span class="stars">Fully forged</span>' : `<span style="display:block;font-size:12.5px">Next ★: ${next}</span><span class="gold" style="display:block;font-size:13px">Forge for 🪙 ${c}</span>`}`)}</button>`;
   }
   h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
   openSheet(h, { close: () => { closeSheet(); renderCamp(); }, '*': a => { if (!a.startsWith('f:')) return; const id = a.slice(2), n = S.stars[id] || 0, c = forgeCost(id, n);
@@ -1670,9 +1670,9 @@ function gearCardHTML(id, extra) {
 function openBag(slot) {
   const ids = S.owned.filter(id => GEAR_BY_ID[id].slot === slot);
   S.newIds = S.newIds.filter(n => GEAR_BY_ID[n].slot !== slot); save();
-  let h = `<h2>${SLOT_NAME[slot]}</h2><p>Tap to wear. Your choice comes with you on the next delve.</p>`;
+  let h = `<h2>${SLOT_NAME[slot]}</h2><p>Tap to equip. Your choice comes with you on the next delve.</p>`;
   if (slot === 'charm') h += `<button class="card" data-a="none"><div class="ic">○</div><div class="tx"><b>No charm</b><span>Leave the slot empty</span></div></button>`;
-  for (const id of ids) h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="eq:${id}" style="${S.eq[slot] === id ? 'box-shadow:0 0 0 2px var(--amber)' : ''}">${gearCardHTML(id, S.eq[slot] === id ? '<span class="tag r" style="display:block;margin-top:2px">Wearing</span>' : '')}</button>`;
+  for (const id of ids) h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="eq:${id}" style="${S.eq[slot] === id ? 'box-shadow:0 0 0 2px var(--amber)' : ''}">${gearCardHTML(id, S.eq[slot] === id ? '<span class="tag r" style="display:block;margin-top:2px">Equipped</span>' : '')}</button>`;
   if (!ids.length) h += `<p>No ${SLOT_NAME[slot].toLowerCase()} found yet. Open chests in the delve!</p>`;
   h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
   openSheet(h, { close: () => { closeSheet(); renderCamp(); }, none: () => { S.eq.charm = null; save(); closeSheet(); renderCamp(); }, '*': a => { if (a.startsWith('eq:')) { S.eq[slot] = a.slice(3); save(); SFX.pick(); closeSheet(); renderCamp(); } } });
@@ -1755,7 +1755,7 @@ $('bagBtn').onclick = () => {
   let h = `<h2>This delve</h2><div class="statlist"><div>Attack <b>${st.atk}</b></div><div>Health <b>${st.maxHp}</b></div><div>Armor <b>${st.def}</b></div><div>Swings/sec <b>${(1 / st.interval).toFixed(1)}</b></div><div>Double hit <b>${Math.round(st.crit * 100)}%</b></div><div>Flare <b>x${st.flareMult.toFixed(1)}</b></div></div>`;
   h += Object.keys(counts).length ? Object.keys(counts).map(id => `<div class="card"><div class="ic">${UP_BY_ID[id].icon}</div><div class="tx"><b>${UP_BY_ID[id].name}${counts[id] > 1 ? ' ×' + counts[id] : ''}</b><span>${UP_BY_ID[id].desc}</span>${UP_BY_ID[id].curse ? `<span class="curse">Curse: ${UP_BY_ID[id].curse}</span>` : ''}</div></div>`).join('') : '<p>No upgrades yet. Win fights to pick some.</p>';
   h += `<div class="cmp" style="text-align:left"><b>Door clues</b><br>${Object.keys(CLUES).map(k => `<b>${CLUES[k].name}</b>: ${CLUE_HELP[k]}`).join('<br>')}</div>`;
-  h += `<p style="font-size:13px">Wearing: ${['weapon', 'armor', 'charm'].map(s => run.eq[s] ? GEAR_BY_ID[run.eq[s]].name : null).filter(Boolean).join(', ')}</p><div class="foot"><button class="btn" data-a="close">Back</button></div>`;
+  h += `<p style="font-size:13px">Equipped: ${['weapon', 'armor', 'charm'].map(s => run.eq[s] ? GEAR_BY_ID[run.eq[s]].name : null).filter(Boolean).join(', ')}</p><div class="foot"><button class="btn" data-a="close">Back</button></div>`;
   paused = true; openSheet(h, { close: () => { closeSheet(); paused = false; } });
 };
 
@@ -1784,7 +1784,7 @@ async function chooseLessons() {
   // everything else these doors show for the first time goes on one card
   const st = heroStats(), parts = [];
   const add = (key, on, text) => { if (on && !S.seen[key]) { S.seen[key] = 1; parts.push(text); } };
-  add('clues', doors.some(d => !d.rev), 'From now on, doors only give a <b>clue</b>. <b>Glitter</b> is often treasure (or a Mimic!). <b>Growling</b> or <b>Rustling</b> means a foe. <b>Warm Mist</b> is often a spring. <b>Whispers</b> mean magic. <b>A Voice</b> is someone in need. <b>Silence</b> could be anything! Tap <b>Upgrades</b> any time to see this list.');
+  add('clues', doors.some(d => !d.rev), 'From now on, doors only give a <b>clue</b>. <b>Glitter</b> is often treasure (or a Mimic!). <b>Growling</b> or <b>Rustling</b> is usually a foe, but not always. <b>Warm Mist</b> is often a spring. <b>Whispers</b> mean magic. <b>A Voice</b> is someone in need. <b>Silence</b> could be anything! Tap <b>Upgrades</b> any time to see this list.');
   const doors0 = doors; { const doors = doors0.filter(d => d.rev);
   const costly = doors.some(d => (d.kind === 'chest' || d.kind === 'shrine') && doorCost(run, d.kind) > 0);
   add('guard', doors.some(d => d.kind === 'guard'), 'A <b>guardian</b> blocks the stairs down. Beat it to reach the next depth. It is tough, so use your Flare!');
@@ -1826,6 +1826,7 @@ document.addEventListener('keydown', e => {
 
 function goDoor(i) {
   const d = doors[i]; const xs = doorSlots(doors.length); SFX.step(); buzz(8);
+  if (!$('voice').classList.contains('hidden')) { clearInterval(voiceT); clearTimeout(voiceT); show($('voice'), false); }
   if (run.level) { run.path = (run.path || '') + i; (run.trail = run.trail || []).push({ k: d.elite ? 'elite' : d.kind, n: doors.length, i }); }
   phase = 'walk'; $('hint').textContent = '';
   A.walk = { t: 0, x0: L.heroX, y0: L.heroY, x1: xs[i] * W, y1: L.wallB - L.u * 0.1, door: d };
@@ -1950,7 +1951,7 @@ function doFlare() {
 }
 $('flare').addEventListener('click', e => { e.stopPropagation(); doFlare(); if (flareLessonOn) { flareLessonOn = false; $('flare').classList.remove('lift'); if (flareLessonOn === false && coachDone) coachDone(); } });
 let coachDone = null;
-const CLUE_HELP = { glitter: 'usually a chest, sometimes a shrine or a relic', growl: 'a foe (could be an Elite)', rustle: 'a quick foe, or someone in need', mist: 'usually a spring, sometimes a shrine', whisper: 'a shrine, relic altar or gamble', voice: 'someone in need, or a caged creature', silence: 'anything at all' };
+const CLUE_HELP = { glitter: 'usually a chest, sometimes a shrine or a relic', growl: 'usually a foe (could be an Elite), sometimes a caged creature', rustle: 'a quick foe, or someone in need', mist: 'usually a spring, sometimes a shrine', whisper: 'a shrine, relic altar or gamble, now and then a spring', voice: 'someone in need, or a caged creature', silence: 'anything at all' };
 function updatePotion() {
   const b = $('potion'); if (!run || !run.potion || !(phase === 'fight' || (phase === 'choose' && run.potion === 'heal'))) { show(b, false); return; }
   show(b, true); b.innerHTML = POTIONS[run.potion].icon + '<small>' + POTIONS[run.potion].name.split(' ')[0] + '</small>';
@@ -2044,8 +2045,8 @@ function gearFound(id, then) {
   const cur = run.eq[g.slot];
   if (g.rar !== 'c' || questDone) { SFX.chest(); buzz([10, 40, 20]); }
   let h = (questDone ? `<h2>Quest complete!</h2>` : '') + `<div class="tag ${g.rar}" style="text-align:center">${RAR[g.rar]} ${SLOT_NAME[g.slot].toLowerCase()} · new!</div><div class="gearBig ${g.rar !== 'c' || questDone ? 'reveal ' + g.rar : ''}"><div class="ic">${gearImg(id, 120)}</div><b style="color:var(--${g.rar})">${g.name}</b><ul>${statLines(g.s).map(s => `<li>${s}</li>`).join('')}</ul></div>`;
-  h += cur ? `<div class="cmp">Now wearing: <b>${GEAR_BY_ID[cur].name}</b> ${starTxt(cur)}<ul><li>${statLines(gearStats(cur, S.stars[cur])).join(' · ')}</li></ul></div>` : `<div class="cmp">Your ${SLOT_NAME[g.slot].toLowerCase()} slot is empty.</div>`;
-  h += `${questDone && S.quest ? `<p style="font-size:13px;color:var(--amber2)">New quest: find the ${GEAR_BY_ID[S.quest].name}.</p>` : ''}<p style="font-size:13px">It is saved to your collection either way. What you wear stays on for your next delve.</p><div class="row2"><button class="btn" data-a="keep">Keep in bag</button><button class="btn main" data-a="wear">Wear it</button></div>`;
+  h += cur ? `<div class="cmp">Now equipped: <b>${GEAR_BY_ID[cur].name}</b> ${starTxt(cur)}<ul><li>${statLines(gearStats(cur, S.stars[cur])).join(' · ')}</li></ul></div>` : `<div class="cmp">Your ${SLOT_NAME[g.slot].toLowerCase()} slot is empty.</div>`;
+  h += `${questDone && S.quest ? `<p style="font-size:13px;color:var(--amber2)">New quest: find the ${GEAR_BY_ID[S.quest].name}.</p>` : ''}<p style="font-size:13px">It is saved to your collection either way. What you equip stays on for your next delve.</p><div class="row2"><button class="btn" data-a="keep">Keep in bag</button><button class="btn main" data-a="wear">Equip it</button></div>`;
   openSheet(h, {
     keep: () => { closeSheet(); then(); },
     wear: () => { const before = heroStats().maxHp; run.eq[g.slot] = id; S.eq[g.slot] = id; save(); const after = heroStats().maxHp; if (after > before) run.hp += after - before; run.hp = Math.min(run.hp, after); SFX.pick(); closeSheet(); updateHud(); then(); },
@@ -2073,7 +2074,7 @@ function onDeath() {
   const found = run.found;
   let h = `<h2>Your lantern went out</h2><p>You reached <b>${DEPTHS[run.depth].name}</b>, ${run.room > ROOMS_PER_DEPTH ? 'at the guardian' : 'room ' + Math.max(1, run.room)}.</p>`;
   h += found.length ? `<p>Gear found this delve (yours to keep):</p>` + found.map(id => `<div class="card rar-${GEAR_BY_ID[id].rar}">${gearCardHTML(id)}</div>`).join('') : `<p>No gear this time. Chests and guardians drop gear.</p>`;
-  if (!S.seen.death) { S.seen.death = 1; save(); h += `<p style="color:var(--amber2)">Losing is part of delving. You keep every piece of gear, and you can wear it next time.</p>`; }
+  if (!S.seen.death) { S.seen.death = 1; save(); h += `<p style="color:var(--amber2)">Losing is part of delving. You keep every piece of gear, and you can equip it next time.</p>`; }
   h += `<div class="foot"><button class="btn main" data-a="camp">Back to camp</button></div>`;
   openSheet(h, { camp: () => { closeSheet(); run = null; renderCamp(); } });
 }
