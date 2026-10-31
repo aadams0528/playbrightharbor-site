@@ -126,6 +126,9 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 #hull.hit { animation: hitp .5s; }
 @keyframes hitp { 30% { transform: scale(1.18); background: #ffd9cf; } }
 .unlock { color: var(--warm); font-weight: 800; }
+.badge { display: inline-block; background: rgba(46,143,125,.14); color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 800; }
+.hzList { display: block; margin-top: 10px; text-align: left; } .hz { display: flex; justify-content: space-between; gap: 8px; padding: 5px 2px; border-bottom: 1px solid var(--cardLine); font-size: 13px; font-weight: 700; }
+.hz small { color: var(--ink2); font-weight: 600; } .drillBtn { margin-left: 6px; border: 1.5px solid var(--accent); background: transparent; color: var(--accent); border-radius: 999px; padding: 1px 8px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; } .hz .ok { color: var(--accent); } .hz .seen { color: #c98f1e; } .hz .nope { color: var(--ink2); }
 .unlockBox { display: flex; align-items: center; gap: 10px; justify-content: center; margin: 10px auto 0; padding: 8px 14px; border-radius: 14px;
   background: rgba(255,224,138,.22); box-shadow: 0 0 0 2px rgba(201,143,30,.45); animation: unlockPop .7s cubic-bezier(.2,1.6,.4,1) both, unlockGlow 1.6s .7s ease-in-out 2; }
 .unlockBox canvas { width: 30px; height: 46px; animation: unlockBob 1.2s .5s ease-in-out infinite; }
@@ -159,11 +162,11 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 <div id="menu" class="screen">
   <div class="panel">
     <div class="colA">
-    <h1 id="title">Tilt River<small>prototype v0.7 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.7.2 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
-    <button class="big alt" id="playCalm">Practice river<small>Slow, no sinking. Try every hazard early.</small></button>
+    <button class="big alt" id="playCalm">Practice river<small>Slow, no sinking. Try every hazard early. Coins aren’t saved.</small></button>
     </div><div class="colB">
     <div class="lbl">Steering</div>
     <div class="row" id="steerRow">
@@ -211,7 +214,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 
 <div id="practiceDone" class="screen dim hide">
   <div class="panel">
-    <h2>Practice complete!</h2>
+    <h2>Steering lesson complete!</h2>
     <p id="pdCoins"></p>
     <p>Your real run starts now, at 0 m.</p>
     <button class="big" id="pdStart">Start my run</button>
@@ -222,6 +225,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
   <div class="panel">
     <h2 id="diTitle">Daily River</h2>
     <p>1500 m to the finish rope. The river is the same for everyone today, and a new one comes tomorrow.</p>
+    <p><span class="badge">Standard Rowboat stats</span><br>Everyone rides the same boat stats today, so times are fair. Your boat still looks like yours.</p>
     <p id="diGhost"></p>
     <button class="big" id="diStart">Start</button>
     <button class="big alt" id="diBack">Back</button>
@@ -434,6 +438,8 @@ function addCoinLine(g, d, offset, n, drift) {
 // ---------- advanced river features (unlock by distance; each gets a lesson the first time) ----------
 var HZ = { rough: 4000, ramp: 7000, whirl: 10000, log: 13000, fall: 16000 };
 var HZ_ORDER = ['rough', 'ramp', 'whirl', 'log', 'fall'];
+var DRILL_N = 4, drillKind = null;
+function hzList(g, k) { return { rough: g.rough, ramp: g.ramps, whirl: g.whirls, log: g.logs, fall: g.falls }[k]; }
 var HZ_PRACTICE = { rough: 1500, ramp: 2800, whirl: 4000, log: 5200, fall: 6400 }; // Practice river: every feature in the first 650 m
 var ROUGH_RAMP_D = 25000; // from 2.5 km, some rough stretches hide a ramp (an advanced combo)
 var LESSONS = {
@@ -452,6 +458,11 @@ function budgetAt(g, d, df) { return MAX_LAT * 0.45 * ((d - g.safeD) / (lerp(200
 function pickOffset(g, R, budget, lim) { var lo = Math.max(-lim, g.safeO - budget), hi = Math.min(lim, g.safeO + budget); if (lo > hi) return clamp(g.safeO, -lim, lim); return lo + R() * (hi - lo); }
 function pickHazard(g, d, df, R) {
   if (g.mode !== 'endless' && g.mode !== 'daily' && g.mode !== 'calm') return null;
+  if (g.drill) { // hazard drill from the Practice checklist: the same hazard 4 times, nicely spaced
+    if (d < 1500 || hzList(g, g.drill).length >= DRILL_N || d - g.lastHaz < 1200) return null;
+    var lr = g.rough[g.rough.length - 1]; if (lr && d < lr.d1 + 150) return null;
+    return g.drill;
+  }
   var at = g.mode === 'calm' ? HZ_PRACTICE : HZ;
   var lastRough = g.rough[g.rough.length - 1];
   if (lastRough && d < lastRough.d1 + 150) return null; // new features (and their first lesson) always arrive in calm water
@@ -718,6 +729,7 @@ function update(g, dt) {
   for (i = 0; i < g.falls.length; i++) { var fl = g.falls[i]; if (!fl.used && g.d >= fl.d) { fl.used = true; g.nFalls = (g.nFalls || 0) + 1; g.fall = 0.7; if (g === game) { noise(0.7, 0.35, 500); buzz(30); } } }
   var rr = inRough(g);
   if (rr && g.air <= 0) { g.x += (Math.sin(g.t * 3.7 + rr.seed) * 75 + Math.sin(g.t * 8.3 + rr.seed * 2) * 45) * dt; if (Math.random() < 0.25) burst(g, g.x + (Math.random() - 0.5) * 30, g.d + 20, 'rgba(255,255,255,.8)', 1); }
+  trackHazards(g);
   // first-time lessons for each feature
   if (g.mode === 'endless' || g.mode === 'daily' || g.mode === 'calm') {
     var lists = [g.rough.map(function (o) { return { o: o, d: o.d0 }; }), g.ramps, g.whirls, g.logs, g.falls];
@@ -756,6 +768,7 @@ function update(g, dt) {
   if (g === game && g.mode !== 'attract') hudTick(g);
 }
 function bump(g, side) {
+  if (g.mode !== 'attract') (g.bumps = g.bumps || []).push(g.d);
   g.invuln = 1.3; g.slow = 1; g.shake = 1; g.vx = side * 220;
   burst(g, g.x, g.d + 8, '#ffffff', 10); chips(g, 9);
   if (g.mode !== 'attract') { noise(0.28, 0.45, 380); tone(110, 0.25, 'triangle', 0.18, 60); buzz(70); }
@@ -1364,8 +1377,9 @@ function show(id, on) { $(id).classList.toggle('hide', !on); }
 function startRun(mode) {
   if (mode !== 'tutorial' && !store.get('tutDone', false)) { pendingMode = mode; mode = 'tutorial'; }
   game = newGame(mode); tiltZero = null; paused = false;
+  if (mode === 'calm' && drillKind) game.drill = drillKind; else if (mode !== 'calm') drillKind = null;
   show('menu', false); show('result', false); show('pause', false); show('dailyIntro', false); show('practiceDone', false); show('hud', true); show('tip', false);
-  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial' && mode !== 'calm'); show('calmPill', mode === 'calm');
+  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial' && mode !== 'calm'); show('calmPill', mode === 'calm'); $('calmPill').textContent = game.drill ? HZ_NAMES[game.drill][0] + ' 1/' + DRILL_N : 'Practice';
   $('coins').textContent = '0'; $('delta').textContent = ''; $('streakTag').textContent = ''; updHull();
   if (mode === 'tutorial') tutShow(game);
   if (steerMode === 'tilt') setTimeout(function () { if (game && game.mode !== 'attract' && !tiltSeen && steerMode === 'tilt') { steerMode = 'thumb'; tiltAutoOff = true; toast('Waiting for tilt, so drag your thumb for now.', 4); if (game.tut && game.tut.step === 0) tutShow(game); } }, 2500);
@@ -1374,11 +1388,41 @@ var pendingMode = null;
 function endTutorial(g) {
   store.set('tutDone', true); g.over = true; show('tip', false);
   var next = pendingMode || 'endless', got = addWallet(payout(g)); pendingMode = null;
-  $('pdCoins').innerHTML = (g.coins ? 'Your ' + g.coins + ' practice coins are saved toward new boat colors.' : 'Nice steering!') + unlockLine(got);
+  $('pdCoins').innerHTML = (g.coins ? 'Your ' + g.coins + ' lesson coins are banked toward new boat colors.' : 'Nice steering!') + unlockLine(got);
   if (got.length) setTimeout(celebrate, 0);
   $('pdStart').textContent = next === 'daily' ? 'Start Daily River' : next === 'calm' ? 'Start Practice river' : 'Start my run';
   $('pdStart').onclick = function () { show('practiceDone', false); startRun(next); if (next === 'endless') toast('Endless river: how far can you go?', 2.5); };
   show('hud', false); show('practiceDone', true);
+}
+// which hazards the player met ("seen") and got through cleanly ("handled"), for the Practice summary
+function bumpedIn(g, a, b) { return (g.bumps || []).some(function (d) { return d >= a && d <= b; }); }
+function trackHazards(g) {
+  if (g.mode !== 'calm') return;
+  var S = g.hzSeen = g.hzSeen || {}, O = g.hzOk = g.hzOk || {};
+  function mark(k, ok) {
+    S[k] = true; if (ok) O[k] = true;
+    if (g.drill === k) { g.drillDone = (g.drillDone || 0) + 1; if (ok) g.drillOk = (g.drillOk || 0) + 1; if (g === game) $('calmPill').textContent = HZ_NAMES[k][0] + ' ' + Math.min(DRILL_N, g.drillDone + 1) + '/' + DRILL_N;
+      if (g.drillDone >= DRILL_N && !g.drillEnd) { g.drillEnd = true; setTimeout(function () { if (g === game && !g.over) finishDrill(g); }, 700); } }
+  }
+  g.rough.forEach(function (o) { if (!o.done && g.d > o.d1 + 20) { o.done = true; mark('rough', !bumpedIn(g, o.d0 - 10, o.d1 + 20)); } });
+  g.ramps.forEach(function (o) { if (!o.done && g.d > o.d + 40) { o.done = true; mark('ramp', !!o.used); } });
+  g.whirls.forEach(function (o) { if (!o.done && g.d > o.d + o.R + 10) { o.done = true; mark('whirl', !o.hit); } });
+  g.logs.forEach(function (o) { if (!o.done && g.d > o.d + 30) { o.done = true; mark('log', !o.hit); } });
+  g.falls.forEach(function (o) { if (!o.done && g.d > o.d + 140) { o.done = true; mark('fall', !bumpedIn(g, o.d - 10, o.d + 140)); } });
+}
+var HZ_NAMES = { rough: ['Rough rapids', 'rode through with no bump'], ramp: ['Ramp', 'jumped'], whirl: ['Whirlpool', 'escaped the center'], log: ['Drifting log', 'dodged'], fall: ['Waterfall', 'landed with no bump'] };
+function hazardChecklist(g) {
+  var S = g.hzSeen || {}, O = g.hzOk || {};
+  return '<span class="hzList">' + HZ_ORDER.map(function (k) {
+    var st = O[k] ? '<b class="ok">\u2713 Handled</b> <small>' + HZ_NAMES[k][1] + '</small>' : S[k] ? '<b class="seen">Seen</b> <small>try again to get it clean</small>' : '<b class="nope">Not reached</b>';
+    return '<span class="hz"><span>' + HZ_NAMES[k][0] + '<button class="drillBtn" data-hz="' + k + '">' + (S[k] ? 'Try again' : 'Try it') + '</button></span><span>' + st + '</span></span>';
+  }).join('') + '</span>';
+}
+function finishDrill(g) {
+  g.over = true; clearLesson(g); paused = false; show('pause', false);
+  var k = g.drill, ok = g.drillOk || 0, done = g.drillDone || 0;
+  result('Drill finished', HZ_NAMES[k][0] + ' drill', [[ok + ' of ' + done, 'handled'], [Math.floor(g.d / 10) + ' m', 'distance']],
+    (ok === DRILL_N ? 'Perfect! You\u2019ve got the ' + HZ_NAMES[k][0].toLowerCase() + ' down.' : 'Handled means ' + HZ_NAMES[k][1] + '. Keep at it!') + ' Practice coins aren\u2019t saved.', 'Drill again');
 }
 function clearLesson(g) { if (g) { g.lessonT = 0; g.lessonSlow = 0; } show('tip', false); }
 function sink(g) {
@@ -1403,8 +1447,8 @@ function finishDaily(g) {
 }
 function finishCalm(g) {
   g.over = true; clearLesson(g); paused = false; show('pause', false);
-  var m = Math.floor(g.d / 10), tried = HZ_ORDER.filter(function (k) { return g.hzFirst[k]; }).length;
-  result('Practice finished', 'Practice river', [[m + ' m', 'distance'], [tried + ' of 5', 'hazards tried']], tried < 5 ? 'Keep going next time to meet all five: rapids, ramps, whirlpools, logs and waterfalls. Practice coins aren\u2019t saved.' : 'You\u2019ve tried every hazard. Ready for Endless! Practice coins aren\u2019t saved.', 'Practice again');
+  trackHazards(g); var m = Math.floor(g.d / 10), ok = HZ_ORDER.filter(function (k) { return (g.hzOk || {})[k]; }).length, tried = HZ_ORDER.filter(function (k) { return (g.hzSeen || {})[k]; }).length;
+  result('Practice finished', 'Practice river' + hazardChecklist(g), [[m + ' m', 'distance'], [ok + ' of 5', 'hazards handled']], tried < 5 ? 'Keep going next time to meet all five: rapids, ramps, whirlpools, logs and waterfalls. Practice coins aren\u2019t saved.' : (ok === 5 ? 'You handled every hazard. Ready for Endless!' : 'You\u2019ve met every hazard. Practice again to handle the ones marked Seen.') + ' Practice coins aren\u2019t saved.', 'Practice again');
 }
 function clearOldGhosts() { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(PFX + 'ghost.') === 0 && k !== PFX + 'ghost.' + todayKey()) localStorage.removeItem(k); }); } catch (e) {} }
 function payout(g) { return Math.round(g.coins * (g.coinM || 1)); }
@@ -1541,7 +1585,7 @@ function play(mode) {
   else startRun(mode);
 }
 $('playEndless').onclick = function () { play('endless'); };
-$('playCalm').onclick = function () { play('calm'); };
+$('playCalm').onclick = function () { drillKind = null; play('calm'); };
 // ---------- boat shop ----------
 var shopSel = 'row', shopTimer = 0;
 function previewBoat(cv, look, rot) { // draw a boat centred and scaled to fit a small canvas
@@ -1634,7 +1678,7 @@ function applyOrient(fromTap) {
     wentFull = false; return;
   }
   var mismatch = function () { return want === 'landscape' ? innerWidth < innerHeight : innerWidth > innerHeight; };
-  var hint = function () { if (fromTap && mismatch()) toast(want === 'landscape' ? 'Turn your phone sideways. On iPhone, turn off Rotation Lock first.' : 'Turn your phone upright.', 4); };
+  var hint = function () { if (fromTap && mismatch()) toast(!coarse ? (want === 'landscape' ? 'Landscape is on. Make the window wider than it is tall to fill it.' : 'Portrait is on. The river shows as a tall strip in the middle of the window.') : want === 'landscape' ? 'Turn your phone sideways. On iPhone, turn off Rotation Lock first.' : 'Turn your phone upright.', 4); };
   if (!so || !so.lock) { hint(); return; }
   var full = document.fullscreenElement || !document.documentElement.requestFullscreen ? Promise.resolve() : document.documentElement.requestFullscreen().then(function () { wentFull = true; });
   full.catch(function () {}).then(function () { return so.lock(want); }).catch(hint);
@@ -1642,7 +1686,8 @@ function applyOrient(fromTap) {
 document.querySelectorAll('#orientRow button').forEach(function (b) { b.onclick = function () { orientPref = b.dataset.orient; store.set('orient', orientPref); applyOrient(true); refreshMenu(); }; });
 $('pauseBtn').onclick = pauseGame;
 $('resume').onclick = function () { paused = false; show('pause', false); if (game && (game.lessonT > 0 || game.tut)) show('tip', true); };
-$('finishRide').onclick = function () { if (game && game.mode === 'calm' && !game.over) finishCalm(game); };
+$('finishRide').onclick = function () { if (game && game.mode === 'calm' && !game.over) { if (game.drill) finishDrill(game); else finishCalm(game); } };
+$('resLine').addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.drillBtn'); if (!b) return; drillKind = b.dataset.hz; play('calm'); });
 $('recenter').onclick = function () { tiltZero = tiltRaw; paused = false; show('pause', false); toast('Tilt recentered', 1.5); };
 $('quit').onclick = toMenu;
 $('again').onclick = function () { play(lastMode); };
