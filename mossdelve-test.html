@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.3 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.4 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -51,6 +51,13 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #flare.ready span { color: #3a2408; }
 #flare:active { transform: scale(.94); }
 #flare.lift { z-index: 60; }
+#flare.urgent { animation: urgent .45s infinite alternate; }
+@keyframes urgent { from { box-shadow: 0 0 0 0 rgba(255,80,60,.9); } to { box-shadow: 0 0 0 16px rgba(255,80,60,0); } }
+.btnrow { display: flex; align-items: center; gap: 18px; }
+#potion { pointer-events: auto; width: 58px; height: 58px; border-radius: 50%; font-size: 28px; background: radial-gradient(circle at 50% 40%, #3a3024, #18130d); border: 2px solid rgba(242,181,74,.55); box-shadow: 0 2px 8px rgba(0,0,0,.6); position: relative; }
+#potion:active { transform: scale(.92); }
+#potion small { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 800; color: var(--ink2); white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.card .curse { display: block; color: #ff8a7a; font-size: 13px; }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(242,181,74,.7); } 50% { box-shadow: 0 0 0 14px rgba(242,181,74,0); } }
 
 /* camp */
@@ -189,7 +196,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
     </div>
     <div id="bottom">
       <div id="hint"></div>
-      <button id="flare" class="hidden" aria-label="Flare"><span>FLARE<small id="flareDmg"></small></span></button>
+      <div class="btnrow"><button id="potion" class="hidden" aria-label="Use potion"></button><button id="flare" class="hidden" aria-label="Flare"><span>FLARE<small id="flareDmg"></small></span></button></div>
     </div>
   </div>
 
@@ -256,7 +263,25 @@ const UPGRADES = [
   { id: 'laststand', name: 'Last Light', icon: '🕯️', rar: 'r', desc: 'Once this delve, a knockout leaves you at 1 health', s: { lastStand: 1 }, unique: true },
   { id: 'giant', name: 'Heart of Oak', icon: '🌳', rar: 'r', desc: '+30 max health, and heal 30', s: { maxHp: 30 }, heal: 30 },
 ];
-const UP_BY_ID = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
+// Cursed relics: big power with a catch. Found at a relic altar (a story room). They last for the delve.
+const RELICS = [
+  { id: 'bloodfang', name: 'Bloodfang', icon: '🦷', rar: 'relic', desc: '+5 attack', curse: '−15 max health', s: { atk: 5, maxHp: -15 } },
+  { id: 'glasslamp', name: 'Glass Lantern', icon: '🏮', rar: 'relic', desc: 'Flare damage: +2 × your attack', curse: 'Lantern charges 25% slower', s: { flareMult: 2, flareRate: -0.04 } },
+  { id: 'thorncrown', name: 'Thorn Crown', icon: '👑', rar: 'relic', desc: 'Foes take 5 damage each time they hit you', curse: 'Take 1 more damage from every hit', s: { thorns: 5, def: -1 } },
+  { id: 'luckcoin', name: "Gambler's Coin", icon: '🪙', rar: 'relic', desc: '+20% chance to hit for double damage', curse: '−2 attack', s: { crit: 0.2, atk: -2 } },
+  { id: 'hungryblade', name: 'Hungry Blade', icon: '🗡️', rar: 'relic', desc: 'Heal 15% of the damage you deal', curse: '−10 max health', s: { life: 0.15, maxHp: -10 } },
+  { id: 'aegis', name: 'Heavy Aegis', icon: '🛡️', rar: 'relic', desc: 'Take 3 less damage from every hit', curse: 'Attack 20% slower', s: { def: 3, spd: -0.2 } },
+];
+const UP_BY_ID = Object.fromEntries(UPGRADES.concat(RELICS).map(u => [u.id, u]));
+function rollRelics(run, rng) { const pool = RELICS.filter(r => !run.ups.includes(r.id)); const out = []; while (out.length < 2 && pool.length) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0].id); return out; }
+
+// Potion belt: carry one at a time. Every delve starts with a Healing Draught.
+const POTIONS = {
+  heal: { name: 'Healing Draught', icon: '🧪', desc: 'Heal 30% of your max health. Use it any time.' },
+  fire: { name: 'Fire Flask', icon: '🔥', desc: 'Throw it in a fight: 3 × your attack, ignores armor.' },
+  ward: { name: 'Ironbark Tonic', icon: '🛡️', desc: 'In a fight: take half damage for 6 seconds.' },
+};
+function potionDrop(run, rng, chance) { if (rng() >= chance) return null; const x = rng(); return x < 0.5 ? 'heal' : x < 0.75 ? 'fire' : 'ward'; }
 
 // trait: fast | armored | spiky | regrow
 const MONSTERS = {
@@ -273,6 +298,10 @@ const MONSTERS = {
   hulk:   { name: 'Stone Hulk',    hp: 84, atk: 14, int: 1.8, def: 5, trait: 'armored' },
   warden: { name: 'The Deep Warden', hp: 360, atk: 17, int: 1.4, def: 3, thorns: 2, trait: 'spiky', boss: true },
 };
+// Mimic: a chest that bites. Stats grow with depth; beat it and you still get the gear.
+const MIMIC = [{ hp: 26, atk: 5 }, { hp: 58, atk: 9 }, { hp: 100, atk: 14 }];
+MONSTERS.mimic = { name: 'Mimic', hp: 26, atk: 5, int: 1.1, def: 1 };
+function isMimic(run, rng) { return !(run.no === 1 && run.depth === 0) && rng() < 0.15; }
 const TRAITS = {
   fast: { name: 'Fast', tip: 'Fast foes hit often but softly. Barkskin and armor shine here.' },
   armored: { name: 'Armored', tip: 'Armored foes block a little of every hit. Big hits and your Flare cut through.' },
@@ -304,9 +333,9 @@ function monScale(run) {
   return ease * (1 + 0.05 * Math.max(0, run.room - 1));
 }
 function makeMonster(type, run, elite) {
-  const b = MONSTERS[type]; const k = (elite ? 1.35 : 1) * (b.boss ? (run.no === 1 && run.depth === 0 ? 0.85 : 1) : monScale(run)) * (1 + 0.15 * ((run.tier || 1) - 1));
+  const b = type === 'mimic' ? Object.assign({}, MONSTERS.mimic, MIMIC[run.depth]) : MONSTERS[type]; const k = (elite ? 1.35 : 1) * (b.boss ? (run.no === 1 && run.depth === 0 ? 0.85 : 1) : monScale(run)) * (1 + 0.15 * ((run.tier || 1) - 1));
   return { type, name: b.name, max: Math.round(b.hp * k), hp: Math.round(b.hp * k), atk: Math.max(1, Math.round(b.atk * k)),
-    int: b.int, def: b.def || 0, regen: b.regen || 0, thorns: b.thorns || 0, trait: b.trait || null, boss: !!b.boss, elite: !!elite, timer: b.int, stun: 0 };
+    int: b.int, def: b.def || 0, regen: b.regen || 0, thorns: b.thorns || 0, trait: b.trait || null, boss: !!b.boss, elite: !!elite, timer: b.int, stun: 0, tellCd: b.boss ? 4 : 0, tell: 0 };
 }
 
 function newFight(run, type, elite) {
@@ -332,20 +361,38 @@ function fightStep(run, f, dt, rng) {
   if (m.regen && m.hp < m.max) { m.hp = Math.min(m.max, m.hp + m.regen * dt); }
   f.hTimer -= dt;
   if (f.hTimer <= 0) { f.hTimer += st.interval; heroHit(run, f, 1, rng, ev, false); ev.push({ t: 'swingH' }); }
-  if (m.stun > 0) m.stun -= dt; else {
+  if (f.ward > 0) f.ward -= dt;
+  const hurt = d => { const x = f.ward > 0 ? Math.max(1, Math.round(d / 2)) : d; run.hp -= x; return x; };
+  // guardians wind up a big blow every few seconds (TELL_TIME to react); a Flare during the wind-up interrupts it
+  if (m.boss && m.stun <= 0 && m.hp > 0) {
+    if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = TELL_EVERY; const dmg = hurt(Math.max(1, Math.round(m.atk * 2.5) - st.def)); ev.push({ t: 'hitH', dmg, heavy: true }); ev.push({ t: 'swingM' }); } }
+    else { m.tellCd -= dt; if (m.tellCd <= 0) { m.tell = TELL_TIME; ev.push({ t: 'tell' }); } }
+  }
+  if (m.stun > 0) m.stun -= dt; else if (!(m.tell > 0)) {
     m.timer -= dt;
     if (m.timer <= 0 && m.hp > 0) {
       m.timer += m.int;
-      const dmg = Math.max(1, m.atk - st.def); run.hp -= dmg; ev.push({ t: 'hitH', dmg }); ev.push({ t: 'swingM' });
+      const dmg = hurt(Math.max(1, m.atk - st.def)); ev.push({ t: 'hitH', dmg }); ev.push({ t: 'swingM' });
       if (st.thorns) { m.hp -= st.thorns; ev.push({ t: 'hitM', dmg: st.thorns, thorn: true }); }
     }
   }
   checkEnd(run, f, ev);
   return ev;
 }
+const TELL_TIME = 1.8, TELL_EVERY = 6;
+// potions: heal works any time; fire and ward need a fight
+function usePotion(run, f, rng) {
+  const p = run.potion, ev = []; if (!p) return ev;
+  if (p === 'heal') { const st = calcStats(run); const a = Math.min(st.maxHp - run.hp, Math.round(st.maxHp * 0.3)); run.hp += a; ev.push({ t: 'heal', amt: a, potion: true }); }
+  else if (!f || f.over) return ev;
+  else if (p === 'fire') { heroHit(run, f, 3, rng, ev, true); ev.push({ t: 'fireFlask' }); checkEnd(run, f, ev); }
+  else if (p === 'ward') { f.ward = 6; ev.push({ t: 'ward' }); }
+  run.potion = null; return ev;
+}
 function useFlare(run, f, rng) {
   const ev = []; if (f.over || f.flare < 1) return ev;
   f.flare = 0; heroHit(run, f, f.st.flareMult, rng, ev, true); f.m.stun = 1.5; ev.push({ t: 'flare' });
+  if (f.m.tell > 0) { f.m.tell = 0; f.m.tellCd = TELL_EVERY; f.m.stun = 2.5; ev.push({ t: 'interrupt' }); }
   checkEnd(run, f, ev); return ev;
 }
 function checkEnd(run, f, ev) {
@@ -374,6 +421,7 @@ function rollUpgrades(run, rng, shrine) {
 function applyUpgrade(run, id) {
   const u = UP_BY_ID[id];
   if (u.s) run.ups.push(id);
+  if (u.rar === 'relic') { const st = calcStats(run); run.hp = Math.max(1, Math.min(run.hp, st.maxHp)); return; }
   const st = calcStats(run);
   if (u.heal) run.hp = Math.min(st.maxHp, run.hp + u.heal);
   run.hp = Math.min(run.hp, st.maxHp);
@@ -401,8 +449,8 @@ function springEffect(run) {
 // Event rooms: a small story choice, at most one per depth (not in the first delve's first depth).
 // explorer: share health with a wounded explorer; they give you gear or a rare upgrade. Or walk past.
 // gamble: pay health at an old shrine; 50% a rare upgrade, 20% a blessing (+8 max health, full heal), 30% nothing. Or leave.
-const EVENT_COST = { explorer: [6, 10, 14], gamble: [5, 8, 11] };
-const EVENTS = ['explorer', 'gamble'];
+const EVENT_COST = { explorer: [6, 10, 14], gamble: [5, 8, 11], relic: [0, 0, 0] };
+const EVENTS = ['explorer', 'gamble', 'relic'];
 function eventCost(run, ev) { return EVENT_COST[ev][run.depth]; }
 function payEvent(run, ev) { const c = Math.min(eventCost(run, ev), Math.max(0, Math.ceil(run.hp) - 1)); run.hp -= c; return c; }
 function explorerGift(run, owned, rng) { const g = rng() < 0.5 ? pickGear(run.depth + (run.tier || 1) - 1, owned, rng, 'f') : null; return g ? { gear: g } : { up: true }; }
@@ -446,7 +494,7 @@ function pickGear(depth, owned, rng, minRar, quest) {
 }
 
 function newRun(save) {
-  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), found: [], chests: 0, freeChests: 0, events: 0, bonusHp: 0, fights: 0, lastStandUsed: false };
+  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), found: [], chests: 0, freeChests: 0, events: 0, potion: 'heal', bonusHp: 0, fights: 0, lastStandUsed: false };
 }
 // Collection quest: one missing piece to look for, with a clue about where it turns up.
 function pickQuest(owned, rng) {
@@ -513,6 +561,8 @@ const SFX = {
   heal() { tone(440, 0.25, 'sine', 0.08, 880); }, step() { tone(90, 0.06, 'sine', 0.05); },
   win() { [392, 523, 659].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'triangle', 0.09), i * 90)); },
   lose() { tone(220, 0.6, 'sine', 0.1, 70); },
+  tell() { tone(140, 0.5, 'sawtooth', 0.07, 260); setTimeout(() => tone(150, 0.4, 'sawtooth', 0.06, 300), 250); },
+  potion() { tone(600, 0.1, 'sine', 0.08, 900); setTimeout(() => tone(900, 0.15, 'sine', 0.07, 1200), 90); },
 };
 function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
 
@@ -798,6 +848,19 @@ const MON_DRAW = {
     blob(ctx, -s * 0.05, -s * 0.38, s * 0.1, s * 0.05, 8, 0.2, r, '#6d9a42');
     ctx.strokeStyle = '#5a4a3a'; ctx.lineWidth = 2; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * s * 0.08, -s * 0.4); ctx.lineTo(sx * s * 0.1, -s * 0.5); ctx.stroke(); }
     eyes(0, -s * 0.52, s * 0.1, s * 0.045, 1); },
+  mimic(s, t, r) { const jaw = 0.35 + Math.abs(Math.sin(t * 5)) * 0.35; ctx.save(); ctx.translate(0, Math.sin(t * 6) * s * 0.02);
+    // body
+    ctx.fillStyle = '#6b4424'; ctx.beginPath(); ctx.moveTo(-s * 0.42, 0); ctx.lineTo(-s * 0.44, -s * 0.4); ctx.lineTo(s * 0.44, -s * 0.4); ctx.lineTo(s * 0.42, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#8c7a4a'; ctx.fillRect(-s * 0.3, -s * 0.4, s * 0.07, s * 0.4); ctx.fillRect(s * 0.23, -s * 0.4, s * 0.07, s * 0.4);
+    // mouth, tongue, teeth
+    ctx.fillStyle = '#3a0c0c'; ctx.beginPath(); ctx.ellipse(0, -s * 0.42, s * 0.42, s * 0.24 * jaw, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#c4505a'; ctx.beginPath(); ctx.ellipse(s * 0.05, -s * 0.44, s * 0.16, s * 0.07 * jaw + 1, 0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f2ead6'; for (let i = 0; i < 7; i++) { const x = -s * 0.36 + i * s * 0.12; ctx.beginPath(); ctx.moveTo(x - s * 0.04, -s * 0.4); ctx.lineTo(x + s * 0.04, -s * 0.4); ctx.lineTo(x, -s * 0.4 - s * 0.08); ctx.fill(); }
+    // lid
+    ctx.save(); ctx.translate(0, -s * 0.42 - s * 0.24 * jaw); smooth(ctx, [[-s * 0.46, 0], [-s * 0.4, -s * 0.22], [0, -s * 0.3], [s * 0.4, -s * 0.22], [s * 0.46, 0]]); ctx.fillStyle = '#7a5030'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.stroke();
+    ctx.fillStyle = '#f2ead6'; for (let i = 0; i < 6; i++) { const x = -s * 0.3 + i * s * 0.12; ctx.beginPath(); ctx.moveTo(x - s * 0.04, 0); ctx.lineTo(x + s * 0.04, 0); ctx.lineTo(x, s * 0.08); ctx.fill(); }
+    glowEyes(0, -s * 0.15, s * 0.14, s * 0.035, '#ffcf4a'); ctx.restore();
+    ctx.restore(); },
   toad(s, t, r) { const br = Math.sin(t * 2) * 0.03; shadow(0, 0, s * 0.5);
     blob(ctx, 0, -s * 0.32, s * 0.5, s * 0.34 * (1 + br), 18, 0.07, r, '#6a7a3a', 'rgba(0,0,0,.45)', 2);
     blob(ctx, 0, -s * 0.2, s * 0.38, s * 0.16, 14, 0.06, r, '#a6a46a');
@@ -864,7 +927,7 @@ const MON_DRAW = {
     for (let i = 0; i < 8; i++) blob(ctx, (r() - 0.5) * s * 0.5, -s * 0.1 - r() * s * 0.5, s * 0.06, s * 0.04, 8, 0.3, r, ['#2f6b66', '#3f8a82'][i % 2]);
     glowEyes(0, -s * 0.66 + b, s * 0.1, s * 0.045, 'rgba(170,140,255,.95)'); },
 };
-const MON_SIZE = { blob: 1.9, bat: 1.8, crab: 1.9, toad: 2.9, creeper: 2.1, spore: 1.8, beetle: 2.0, rootmother: 2.8, glowcap: 2.0, moth: 1.9, hulk: 2.3, warden: 2.9 };
+const MON_SIZE = { mimic: 2.2, blob: 1.9, bat: 1.8, crab: 1.9, toad: 2.9, creeper: 2.1, spore: 1.8, beetle: 2.0, rootmother: 2.8, glowcap: 2.0, moth: 1.9, hulk: 2.3, warden: 2.9 };
 function drawMonster(type, x, y, s, t, o) {
   o = o || {}; ctx.save(); ctx.translate(x + (o.shake || 0), y + (o.lunge ? o.lunge * s * 0.2 : 0));
   if (o.alpha != null) ctx.globalAlpha = o.alpha; if (o.scale) ctx.scale(o.scale, o.scale);
@@ -932,6 +995,19 @@ function drawGamble(x, y, s, t, state) {
   ctx.fillStyle = '#2a1840'; ctx.font = `800 ${Math.round(s * 0.16)}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillText(dark ? '·' : '?', x, cy + s * 0.055);
   moss(ctx, x, y - s * 0.02, s * 0.4, r, THEMES[0]);
 }
+// a cracked altar with a relic floating in a red-black haze
+function drawRelicAltar(x, y, s, t, taken) {
+  const r = rngS(31); shadow(x, y, s * 0.4);
+  ctx.fillStyle = '#4a4650'; ctx.beginPath(); ctx.moveTo(x - s * 0.34, y); ctx.lineTo(x - s * 0.28, y - s * 0.36); ctx.lineTo(x + s * 0.28, y - s * 0.36); ctx.lineTo(x + s * 0.34, y); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - s * 0.05, y - s * 0.36); ctx.lineTo(x + s * 0.02, y - s * 0.2); ctx.lineTo(x - s * 0.04, y - s * 0.05); ctx.stroke();
+  ctx.fillStyle = '#5a5662'; ctx.fillRect(x - s * 0.36, y - s * 0.42, s * 0.72, s * 0.07);
+  if (!taken) { const cy = y - s * 0.7 + Math.sin(t * 1.8) * s * 0.04;
+    const g = ctx.createRadialGradient(x, cy, 0, x, cy, s * 0.6); g.addColorStop(0, 'rgba(200,40,60,.55)'); g.addColorStop(1, 'rgba(60,0,20,0)'); ctx.fillStyle = g; ctx.fillRect(x - s * 0.6, cy - s * 0.6, s * 1.2, s * 1.2);
+    ctx.save(); ctx.translate(x, cy); ctx.rotate(Math.sin(t) * 0.3); ctx.fillStyle = '#d8b46a'; ctx.strokeStyle = '#3a1a10'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, -s * 0.14); ctx.lineTo(s * 0.06, -s * 0.02); ctx.lineTo(0, s * 0.14); ctx.lineTo(-s * 0.06, -s * 0.02); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c0182c'; ctx.beginPath(); ctx.arc(0, -s * 0.02, s * 0.03, 0, 7); ctx.fill(); ctx.restore();
+    for (let i = 0; i < 4; i++) { const ph = (t * 0.5 + i / 4) % 1; ctx.fillStyle = `rgba(180,30,50,${(1 - ph) * 0.7})`; ctx.beginPath(); ctx.arc(x + Math.sin(i * 4 + t) * s * 0.2, cy + s * 0.1 - ph * s * 0.5, 1.6, 0, 7); ctx.fill(); } }
+  moss(ctx, x, y - s * 0.02, s * 0.4, r, THEMES[0]);
+}
 function drawDoorIcon(d, x, y, s, t, i) {
   const bob = Math.sin(t * 2.4 + i) * s * 0.05;
   ctx.save();
@@ -941,7 +1017,7 @@ function drawDoorIcon(d, x, y, s, t, i) {
   else if (d.kind === 'chest') drawChest(x, y + bob, s * 0.62, 0, t);
   else if (d.kind === 'spring') drawSpring(x, y + bob, s * 0.6, t);
   else if (d.kind === 'shrine') drawShrine(x, y + bob, s * 0.55, t);
-  else if (d.kind === 'event') { if (d.ev === 'explorer') drawExplorer(x, y + bob, s * 0.7, t); else drawGamble(x, y + bob, s * 0.6, t); }
+  else if (d.kind === 'event') { if (d.ev === 'explorer') drawExplorer(x, y + bob, s * 0.7, t); else if (d.ev === 'relic') drawRelicAltar(x, y + bob, s * 0.6, t); else drawGamble(x, y + bob, s * 0.6, t); }
   ctx.restore();
 }
 function doorHint(d) {
@@ -949,13 +1025,13 @@ function doorHint(d) {
   if (d.kind === 'guard') return MONSTERS[d.mon].name;
   if (d.kind === 'chest') { const c = doorCost(run, 'chest'); return c ? 'gear · ' + costTxt(c) : 'gear'; }
   if (d.kind === 'shrine') return 'rare upgrade · ' + costTxt(doorCost(run, 'shrine'));
-  if (d.kind === 'event') return (d.ev === 'explorer' ? 'gift · −' : 'luck · −') + eventCost(run, d.ev) + ' ♥?';
+  if (d.kind === 'event') return d.ev === 'relic' ? 'power · with a curse' : (d.ev === 'explorer' ? 'gift · −' : 'luck · −') + eventCost(run, d.ev) + ' ♥?';
   if (d.kind === 'spring') return run.hp >= heroStats().maxHp * 0.9 ? '+4 max ♥' : 'heal ♥';
   return '';
 }
 // with heal-per-room, the cost is paid now and partly won back when the room is done: show the net
 function costTxt(c) { const st = heroStats(); if (!st.regen) return `−${c} ♥`; const back = Math.min(st.regen, st.maxHp - (run.hp - c)); const net = back - c; return net >= 0 ? `net +${net} ♥` : `net −${-net} ♥`; }
-function doorLabel(d) { return d.kind === 'fight' ? MONSTERS[d.mon].name : d.kind === 'guard' ? 'Guardian' : d.kind === 'event' ? (d.ev === 'explorer' ? 'Wounded Explorer' : 'Gamble Shrine') : d.kind === 'chest' ? 'Chest' : d.kind === 'spring' ? 'Spring' : 'Shrine'; }
+function doorLabel(d) { return d.kind === 'fight' ? MONSTERS[d.mon].name : d.kind === 'guard' ? 'Guardian' : d.kind === 'event' ? (d.ev === 'explorer' ? 'Wounded Explorer' : d.ev === 'relic' ? 'Relic Altar' : 'Gamble Shrine') : d.kind === 'chest' ? 'Chest' : d.kind === 'spring' ? 'Spring' : 'Shrine'; }
 
 // camp scene
 let campBg = null, campKey = '';
@@ -1082,7 +1158,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.3';
+const VERSION = 'v0.4';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1251,14 +1327,14 @@ function updateHud() {
 $('bagBtn').onclick = () => {
   if (coachOpen || !run) return; const st = heroStats(); const counts = {}; run.ups.forEach(u => counts[u] = (counts[u] || 0) + 1);
   let h = `<h2>This delve</h2><div class="statlist"><div>Attack <b>${st.atk}</b></div><div>Health <b>${st.maxHp}</b></div><div>Armor <b>${st.def}</b></div><div>Swings/sec <b>${(1 / st.interval).toFixed(1)}</b></div><div>Double hit <b>${Math.round(st.crit * 100)}%</b></div><div>Flare <b>x${st.flareMult.toFixed(1)}</b></div></div>`;
-  h += Object.keys(counts).length ? Object.keys(counts).map(id => `<div class="card"><div class="ic">${UP_BY_ID[id].icon}</div><div class="tx"><b>${UP_BY_ID[id].name}${counts[id] > 1 ? ' ×' + counts[id] : ''}</b><span>${UP_BY_ID[id].desc}</span></div></div>`).join('') : '<p>No upgrades yet. Win fights to pick some.</p>';
+  h += Object.keys(counts).length ? Object.keys(counts).map(id => `<div class="card"><div class="ic">${UP_BY_ID[id].icon}</div><div class="tx"><b>${UP_BY_ID[id].name}${counts[id] > 1 ? ' ×' + counts[id] : ''}</b><span>${UP_BY_ID[id].desc}</span>${UP_BY_ID[id].curse ? `<span class="curse">Curse: ${UP_BY_ID[id].curse}</span>` : ''}</div></div>`).join('') : '<p>No upgrades yet. Win fights to pick some.</p>';
   h += `<p style="font-size:13px">Wearing: ${['weapon', 'armor', 'charm'].map(s => run.eq[s] ? GEAR_BY_ID[run.eq[s]].name : null).filter(Boolean).join(', ')}</p><div class="foot"><button class="btn" data-a="close">Back</button></div>`;
   paused = true; openSheet(h, { close: () => { closeSheet(); paused = false; } });
 };
 
 function setPhase(p) {
   phase = p; updateHud();
-  const hint = $('hint'); show($('flare'), p === 'fight');
+  const hint = $('hint'); show($('flare'), p === 'fight'); updatePotion();
   if (p === 'choose') {
     hint.textContent = doors.length === 1 ? 'Swipe up (or tap) to face the guardian' : 'Swipe toward a door';
     snapshot(); chooseLessons();
@@ -1341,6 +1417,14 @@ function runEvent(ev) {
   const c = eventCost(run, ev); content.state = null;
   const pay = () => { const p = payEvent(run, ev); if (p) { floatText(L.heroX + 20, L.heroY - L.u * 2.4, '-' + p, '#ff7a6a', 1.1); A.heroHurt = 0.6; updateHud(); } };
   const leave = () => { closeSheet(); toast(ev === 'explorer' ? 'You wish them luck and move on' : 'You leave the shrine alone', 1300); roomDone(); };
+  if (ev === 'relic') {
+    const ids = rollRelics(run, Math.random); if (!ids.length) { leave(); return; }
+    let h = `<h2>Relic Altar</h2><p>Two old relics hum with power. Each one has a <b style="color:#ff8a7a">curse</b>. Take one for this delve, or leave them.</p>`;
+    ids.forEach((id, i) => { const u = UP_BY_ID[id]; h += `<button class="card rar-r" data-a="r${i}"><div class="ic">${u.icon}</div><div class="tx"><b>${u.name}</b><span>${u.desc}</span><span class="curse">Curse: ${u.curse}</span></div></button>`; });
+    h += `<button class="card" data-a="leave"><div class="ic">👣</div><div class="tx"><b>Leave them</b><span>No power, no curse</span></div></button>`;
+    const acts = { leave }; ids.forEach((id, i) => acts['r' + i] = () => { closeSheet(); applyUpgrade(run, id); content.state = 'taken'; SFX.flare(); A.flash = RM ? 0.3 : 0.7; sparkle(L.heroX, L.heroY - L.u, '#ff6a7a', 22); toast(UP_BY_ID[id].name + ' is yours, curse and all', 1600); updateHud(); setTimeout(() => roomDone(), 700); });
+    openSheet(h, acts); return;
+  }
   if (ev === 'explorer') {
     openSheet(`<h2>Wounded Explorer</h2><p>"I took a bad fall. Could you spare a little of your strength? I will make it worth your while."</p>
       <button class="card" data-a="help"><div class="ic">💚</div><div class="tx"><b>Share health (−${c} ♥)</b><span>They give you a piece of gear or a rare upgrade</span></div></button>
@@ -1374,6 +1458,7 @@ async function fightLessons() {
   if (!fight || fight.m !== m) return;
   const parts = []; const add = (key, on, text) => { if (on && !S.seen[key]) { S.seen[key] = 1; parts.push(text); } };
   add('fight', true, '<b>Fights are automatic.</b> Your hero swings on their own. Watch the health bars over each of you.');
+  add('potion', !!run.potion && S.seen.flare, '<b>Potion belt:</b> the small button holds one potion. Your <b>Healing Draught</b> heals 30% of your health. Tap it any time, even between rooms. You find more potions after some fights.');
   add('eliteFight', m.elite, '<b>Elite foe!</b> Tougher than usual. Win, and you choose from <b>rare upgrades</b>.');
   if (m.trait) add('trait_' + m.trait, true, `<b>${TRAITS[m.trait].name}:</b> ${TRAITS[m.trait].tip}`);
   if (parts.length) { S.seen.eliteDoor = S.seen.eliteDoor || (m.elite ? 1 : 0); save(); await coach({ text: parts.join('<br><br>'), btn: 'Got it' }); }
@@ -1386,6 +1471,18 @@ function doFlare() {
 }
 $('flare').addEventListener('click', e => { e.stopPropagation(); doFlare(); if (flareLessonOn) { flareLessonOn = false; $('flare').classList.remove('lift'); if (flareLessonOn === false && coachDone) coachDone(); } });
 let coachDone = null;
+function updatePotion() {
+  const b = $('potion'); if (!run || !run.potion || !(phase === 'fight' || (phase === 'choose' && run.potion === 'heal'))) { show(b, false); return; }
+  show(b, true); b.innerHTML = POTIONS[run.potion].icon + '<small>' + POTIONS[run.potion].name.split(' ')[0] + '</small>';
+}
+$('potion').addEventListener('click', e => {
+  e.stopPropagation(); if (!run || !run.potion || coachOpen || overlayOpen) return;
+  if (run.potion !== 'heal' && (phase !== 'fight' || !fight || fight.over)) return;
+  const st = heroStats(); if (run.potion === 'heal' && run.hp >= st.maxHp) { toast('Already at full health', 1000); return; }
+  const ev = usePotion(run, phase === 'fight' ? fight : null, Math.random); SFX.potion(); buzz(15);
+  if (phase === 'fight' && fight) handleEvents(ev); else { for (const x of ev) if (x.t === 'heal') floatText(L.heroX - 26, L.heroY - L.u * 2.2, '+' + x.amt, '#8fcf6a', 1.3); updateHud(); }
+  updatePotion();
+});
 function flareLesson() {
   if (S.seen.flare) return; S.seen.flare = 1; save(); flareLessonOn = true; $('flare').classList.add('lift');
   coach({ text: 'Your lantern is charged! <b>Tap FLARE</b> for a big hit that also stuns the foe for a moment.', target: $('flare'), finger: 'tap', fingerAt: (() => { const b = $('flare').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), until: done => { coachDone = () => { coachDone = null; done(); }; } });
@@ -1399,9 +1496,13 @@ function handleEvents(ev) {
     else if (e.t === 'hitM') { A.monFlash = 1; if (!e.thorn) { A.shake = RM ? 0 : e.crit || e.flare ? 7 : 3; (e.crit ? SFX.crit : SFX.hit)(); if (!e.flare) slashes.push({ t: 0, crit: e.crit, a: (Math.random() - 0.5) * 0.9, flip: Math.random() < 0.5 }); if (e.crit && !RM) A.hitStop = 0.07; }
       floatText(L.monX + (Math.random() - 0.5) * ms * 0.4, L.monY - ms * 0.55, (e.crit ? 'x2 ' : '') + e.dmg, e.flare ? '#ffe08a' : e.crit ? '#ffcf5a' : e.thorn ? '#c8b89a' : '#fff', e.crit || e.flare ? 1.5 : e.thorn ? 0.8 : 1);
       sparkle(L.monX, L.monY - ms * 0.35, e.flare ? '#ffd47a' : '#f2e2c0', e.flare ? 24 : 6); }
-    else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); } floatText(L.heroX + 20, L.heroY - u * 2.4, '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
-    else if (e.t === 'heal') floatText(L.heroX - 26, L.heroY - u * 2.2, '+' + e.amt, '#8fcf6a', 0.8);
+    else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; floatText(L.heroX, L.heroY - u * 3.1, 'Big hit!', '#ff7a6a', 1.1); } } floatText(L.heroX + 20, L.heroY - u * 2.4, '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
+    else if (e.t === 'heal') floatText(L.heroX - 26, L.heroY - u * 2.2, '+' + e.amt, '#8fcf6a', e.potion ? 1.3 : 0.8);
     else if (e.t === 'flare') { A.flash = RM ? 0.4 : 1; A.burst = 1; A.rune = 1; if (!RM) A.hitStop = 0.1; SFX.flare(); buzz(25); floatText(L.monX, L.monY - ms * 1.05, 'Stunned!', '#ffe58a', 0.9); }
+    else if (e.t === 'tell') { SFX.tell(); buzz(30); if (!S.seen.tell) setTimeout(() => lesson('tell', [{ text: '<b>Watch out!</b> The guardian is winding up a <b>big attack</b>. Tap <b>FLARE</b> while the red bar fills to interrupt it. If your lantern is not charged yet, brace yourself!', target: $('flare') }]), 60); }
+    else if (e.t === 'interrupt') { floatText(L.monX, L.monY - ms * 1.25, 'Interrupted!', '#ffd27a', 1.2); sparkle(L.monX, L.monY - ms * 0.5, '#ffd27a', 30); A.shake = RM ? 0 : 9; buzz([15, 30, 15]); }
+    else if (e.t === 'fireFlask') { A.flash = RM ? 0.3 : 0.8; sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 36); deathBurst(L.monX, L.monY - ms * 0.4, ms * 0.6, false); SFX.flare(); }
+    else if (e.t === 'ward') { toast('Ironbark! Half damage for 6 s', 1500); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 20); SFX.heal(); }
     else if (e.t === 'laststand') { toast('Last Light saves you!', 1600); A.flash = 0.6; }
     else if (e.t === 'win') { SFX.win(); phase = 'won'; leaves(L.monX, L.monY - ms * 0.4, 18); deathBurst(L.monX, L.monY - ms * 0.4, ms, fight.m.boss); setTimeout(() => afterWin(), 900); }
     else if (e.t === 'lose') { SFX.lose(); phase = 'lost'; setTimeout(() => onDeath(), 1300); }
@@ -1411,6 +1512,8 @@ function handleEvents(ev) {
 
 async function afterWin() {
   run.fights++;
+  if (content.mimic) { const id = pickGear(run.depth + run.tier - 1, S.owned, Math.random, null, S.quest); if (id) gearFound(id, () => roomDone()); else roomDone(); return; }
+  if (!run.potion && content.kind !== 'guard') { const p = potionDrop(run, Math.random, 0.15); if (p) { run.potion = p; toast('Found a ' + POTIONS[p].name + '!', 1600); updatePotion(); } }
   const wasGuard = content.kind === 'guard';
   const elite = fight && fight.m.elite;
   await showUpgrades(elite, wasGuard ? 'Guardian defeated!' : elite ? 'Elite defeated!' : 'Victory!', elite ? 'Pick a rare upgrade' : 'Pick one upgrade');
@@ -1435,10 +1538,17 @@ function openChest() {
   const t0 = performance.now(); const anim = () => { A.chestOpen = Math.min(1, (performance.now() - t0) / 400); if (A.chestOpen < 1) requestAnimationFrame(anim); }; anim();
   sparkle(L.monX, L.monY - L.u * 0.5, '#ffd47a', 22);
   setTimeout(() => {
+    if (isMimic(run, Math.random)) { mimicAttack(); return; }
     const id = pickGear(run.depth + run.tier - 1, S.owned, Math.random, null, S.quest);
     if (!id) { showUpgrades(false, 'The chest holds a gift', 'You have every piece of gear! Pick an upgrade'); return; }
     gearFound(id, () => roomDone());
   }, 550);
+}
+// the chest was a mimic: it bites, you fight it, and the gear is still inside
+function mimicAttack() {
+  A.shake = RM ? 0 : 8; SFX.hurt(); buzz([20, 30, 20]); toast("It's a Mimic!", 1400);
+  content = { kind: 'fight', mon: 'mimic', mimic: true }; fight = newFight(run, 'mimic'); A.monAlpha = 1; A.monScale = 1; setPhase('fight');
+  if (!S.seen.mimic) setTimeout(() => lesson('mimic', [{ text: '<b>Mimic!</b> Some chests are monsters in disguise. Beat it and the gear inside is still yours.' }]), 300);
 }
 function gearFound(id, then) {
   const g = GEAR_BY_ID[id]; S.owned.push(id); S.newIds.push(id); run.found.push(id);
@@ -1516,7 +1626,7 @@ function update(dt) {
     A.monAlpha = Math.min(1, A.monAlpha + dt * 3);
     if (A.hitStop > 0) A.hitStop -= dt;
     else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt, Math.random); if (ev.length) handleEvents(ev); }
-    const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); $('flareDmg').textContent = Math.round(fight.st.atk * fight.st.flareMult);
+    const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); $('flareDmg').textContent = Math.round(fight.st.atk * fight.st.flareMult);
     if (fight.flare >= 1 && !S.seen.flare && !paused) flareLesson();
   }
   if (phase === 'won' && fight) { A.monAlpha = Math.max(0, A.monAlpha - dt * 1.5); A.monScale = 1 + (1 - A.monAlpha) * 0.15; }
@@ -1578,15 +1688,17 @@ function draw() {
   if ((ck === 'fight' || ck === 'guard') && fight) {
     const m = fight.m, ms = MON_SIZE[m.type] * u;
     if (A.rune > 0) drawRune(L.monX, L.monY, ms * 0.75, A.rune);
+    if (m.tell > 0) { const k = 1 - m.tell / TELL_TIME, pr = 0.5 + 0.5 * Math.sin(T * 18); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const tg = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * (0.8 + k * 0.3)); tg.addColorStop(0, `rgba(255,40,30,${0.25 + 0.25 * pr})`); tg.addColorStop(1, 'rgba(255,40,30,0)'); ctx.fillStyle = tg; ctx.fillRect(L.monX - ms * 1.2, L.monY - ms * 1.6, ms * 2.4, ms * 2.4); ctx.restore(); }
     if (m.elite && A.monAlpha > 0) { const ag = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * 0.9); ag.addColorStop(0, `rgba(255,80,60,${0.35 * A.monAlpha})`); ag.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = ag; ctx.fillRect(L.monX - ms, L.monY - ms * 1.3, ms * 2, ms * 1.8); }
     drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha, scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, stun: m.stun, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
     if (phase === 'fight') { const by = L.monY - ms * (m.boss ? 1.12 : 0.95); bar(L.monX, by, Math.min(W * 0.5, ms * 0.9), m.hp / m.max, m.boss ? '#e0574a' : '#d77a4a');
+      if (m.tell > 0) { bar(L.monX, by - u * 0.75, Math.min(W * 0.5, ms * 0.9), 1 - m.tell / TELL_TIME, '#ff4a3a'); ctx.font = `800 ${Math.max(12, Math.round(u * 0.36))}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ff9a8a'; ctx.fillText('BIG ATTACK!', L.monX, by - u * 0.85); }
       ctx.font = `700 ${Math.max(12, Math.round(u * 0.34))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#f4ead6'; ctx.fillText((m.elite ? 'Elite ' : '') + m.name + (m.trait ? ' · ' + TRAITS[m.trait].name : '') + (m.stun > 0 ? ' · Stunned' : ''), L.monX, by - 6); }
   } else if (ck === 'chest') drawChest(L.monX, L.monY, u * 1.5, A.chestOpen, T);
   else if (ck === 'spring') drawSpring(L.monX, L.monY, u * 1.6, T);
   else if (ck === 'shrine') drawShrine(L.monX, L.monY, u * 1.6, T, phase === 'shrine');
-  else if (ck === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else drawGamble(L.monX, L.monY, u * 1.8, T * (1 + (A.gambleSpin || 0) * 6), content.state); }
-  else if (content && content.kind === 'cleared' && content.was === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else drawGamble(L.monX, L.monY, u * 1.8, T, content.state); }
+  else if (ck === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else if (content.ev === 'relic') drawRelicAltar(L.monX, L.monY, u * 1.8, T, content.state === 'taken'); else drawGamble(L.monX, L.monY, u * 1.8, T * (1 + (A.gambleSpin || 0) * 6), content.state); }
+  else if (content && content.kind === 'cleared' && content.was === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else if (content.ev === 'relic') drawRelicAltar(L.monX, L.monY, u * 1.8, T, content.state === 'taken'); else drawGamble(L.monX, L.monY, u * 1.8, T, content.state); }
   else if (content && content.kind === 'cleared' && content.was === 'chest') drawChest(L.monX, L.monY, u * 1.5, 1, T);
   else if (content && content.kind === 'cleared' && content.was === 'spring') drawSpring(L.monX, L.monY, u * 1.6, T);
   else if (content && content.kind === 'cleared' && content.was === 'shrine') drawShrine(L.monX, L.monY, u * 1.6, T, false);
@@ -1594,7 +1706,8 @@ function draw() {
   let hx = L.heroX, hy = L.heroY, hs = u * 2.2;
   if (A.walk) { const k = Math.min(1, A.walk.t), e = k * k * (3 - 2 * k); hx = A.walk.x0 + (A.walk.x1 - A.walk.x0) * e; hy = A.walk.y0 + (A.walk.y1 - A.walk.y0) * e; hs *= 1 - 0.45 * e; }
   drawHero(hx, hy, hs, { t: T, lunge: A.heroLunge, hurt: A.heroHurt, down: A.heroDown, dim: phase === 'lost' });
-  if (phase === 'fight' && fight) { bar(hx, hy + 8, u * 1.6, run.hp / fight.st.maxHp, '#8fcf6a'); }
+  if (phase === 'fight' && fight) { bar(hx, hy + 8, u * 1.6, run.hp / fight.st.maxHp, '#8fcf6a');
+    if (fight.ward > 0) { ctx.save(); ctx.strokeStyle = `rgba(140,220,120,${0.5 + 0.3 * Math.sin(T * 6)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(hx, hy - hs * 0.42, hs * 0.42, hs * 0.55, 0, 0, 7); ctx.stroke(); ctx.restore(); } }
   // ambient dust motes drifting in the lantern light
   // ambient particles: dust in the halls, drifting seeds in the hollows, rising glow spores in the deep
   { const nm = RM ? 6 : 16, span = L.bot - L.top, dp = run.depth;
