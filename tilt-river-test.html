@@ -115,7 +115,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <div class="pill" id="coinPill"><span id="coins">0</span><small>coins</small> <small id="streakTag"></small></div>
   </div>
   <div class="pill" id="hull" aria-label="Boat health"></div>
-  <div class="pill hide" id="calmPill">Calm</div>
+  <div class="pill hide" id="calmPill">Practice</div>
 </div>
 <div id="dprog" class="hide"><i id="dprogFill"></i></div>
 
@@ -128,11 +128,11 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 <div id="menu" class="screen">
   <div class="panel">
     <div class="colA">
-    <h1 id="title">Tilt River<small>prototype v0.4.1 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.5 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
-    <button class="big alt" id="playCalm">Calm river<small>Slower, no sinking. Just enjoy the ride.</small></button>
+    <button class="big alt" id="playCalm">Practice river<small>Slow, no sinking. Try every hazard early.</small></button>
     </div><div class="colB">
     <div class="lbl">Steering</div>
     <div class="row" id="steerRow">
@@ -185,7 +185,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <button class="big alt" id="recenter">Recenter tilt<small>Hold the phone how you like, then tap</small></button>
     <label class="sens zoomRow">River size <b class="zoomVal"></b><input type="range" min="1" max="5" step="1" class="zoomIn" aria-label="River size in landscape"></label>
     <label class="sens" id="pauseSens">Tilt sensitivity <b class="sensVal"></b><input type="range" min="1" max="5" step="1" class="sensIn" aria-label="Tilt sensitivity"></label>
-    <button class="big alt hide" id="finishRide">Finish ride<small>See how far you went</small></button>
+    <button class="big alt hide" id="finishRide">Finish practice<small>See what you tried</small></button>
     <button class="big alt" id="quit">Back to menu</button>
   </div>
 </div>
@@ -347,6 +347,7 @@ function addCoinLine(g, d, offset, n, drift) {
 // ---------- advanced river features (unlock by distance; each gets a lesson the first time) ----------
 var HZ = { rough: 4000, ramp: 7000, whirl: 10000, log: 13000, fall: 16000 };
 var HZ_ORDER = ['rough', 'ramp', 'whirl', 'log', 'fall'];
+var HZ_PRACTICE = { rough: 1500, ramp: 2800, whirl: 4000, log: 5200, fall: 6400 }; // Practice river: every feature in the first 650 m
 var ROUGH_RAMP_D = 25000; // from 2.5 km, some rough stretches hide a ramp (an advanced combo)
 var LESSONS = {
   rough: ['Rough rapids ahead!', 'Choppy water shoves your boat around. Keep steering to hold your line.'],
@@ -363,12 +364,13 @@ function logX(g, lg) { // triangle wave between the banks, driven by game time
 function budgetAt(g, d, df) { return MAX_LAT * 0.45 * ((d - g.safeD) / (lerp(200, 360, df) * 1.65)); }
 function pickOffset(g, R, budget, lim) { var lo = Math.max(-lim, g.safeO - budget), hi = Math.min(lim, g.safeO + budget); if (lo > hi) return clamp(g.safeO, -lim, lim); return lo + R() * (hi - lo); }
 function pickHazard(g, d, df, R) {
-  if (g.mode !== 'endless' && g.mode !== 'daily') return null;
+  if (g.mode !== 'endless' && g.mode !== 'daily' && g.mode !== 'calm') return null;
+  var at = g.mode === 'calm' ? HZ_PRACTICE : HZ;
   var lastRough = g.rough[g.rough.length - 1];
   if (lastRough && d < lastRough.d1 + 150) return null; // new features (and their first lesson) always arrive in calm water
-  for (var i = 0; i < HZ_ORDER.length; i++) { var k = HZ_ORDER[i]; if (d >= HZ[k] && !g.hzFirst[k]) { g.hzFirst[k] = true; return k; } }
+  for (var i = 0; i < HZ_ORDER.length; i++) { var k = HZ_ORDER[i]; if (d >= at[k] && !g.hzFirst[k]) { g.hzFirst[k] = true; return k; } }
   if (d - g.lastHaz < lerp(2200, 1200, df)) return null;
-  var open = HZ_ORDER.filter(function (k) { return d >= HZ[k]; });
+  var open = HZ_ORDER.filter(function (k) { return d >= at[k]; });
   if (!open.length || R() > 0.35) return null;
   return open[Math.floor(R() * open.length)];
 }
@@ -382,10 +384,10 @@ function rockLine(g, d, gapX, gapW, tag) { // rocks across the whole river, opti
 }
 function placeHazard(g, k, d, a, df, R) {
   var first = !g.hzFirst['_' + k]; g.hzFirst['_' + k] = true;
-  var budget = budgetAt(g, d, df), lesson = first && !(store.get('seen', {})[k]) ? k : null;
+  var budget = budgetAt(g, d, df), lesson = first && (g.mode === 'calm' || !(store.get('seen', {})[k])) ? k : null; // Practice always explains
   if (k === 'rough') {
     var len = 350 + R() * 250; g.rough.push({ d0: d, d1: d + len, seed: R() * 99, lesson: lesson }); g.lastHaz = d + len;
-    if (!first && d >= ROUGH_RAMP_D && g.hzFirst._ramp && R() < 0.4) { // advanced: a ramp in the middle of the rapids, a bit wider to allow for the shove
+    if (!first && g.mode !== 'calm' && d >= ROUGH_RAMP_D && g.hzFirst._ramp && R() < 0.4) { // advanced: a ramp in the middle of the rapids, a bit wider to allow for the shove
       var dm = d + len * 0.5, am = g.river.at(dm), om = pickOffset(g, R, budgetAt(g, dm, df), am.h - 40);
       g.ramps.push({ d: dm, x: am.x + om, w: 60, lesson: null });
       rockLine(g, dm + 50, 0, 0, 'jump');
@@ -629,7 +631,7 @@ function update(g, dt) {
   var rr = inRough(g);
   if (rr && g.air <= 0) { g.x += (Math.sin(g.t * 3.7 + rr.seed) * 75 + Math.sin(g.t * 8.3 + rr.seed * 2) * 45) * dt; if (Math.random() < 0.25) burst(g, g.x + (Math.random() - 0.5) * 30, g.d + 20, 'rgba(255,255,255,.8)', 1); }
   // first-time lessons for each feature
-  if (g.mode === 'endless' || g.mode === 'daily') {
+  if (g.mode === 'endless' || g.mode === 'daily' || g.mode === 'calm') {
     var lists = [g.rough.map(function (o) { return { o: o, d: o.d0 }; }), g.ramps, g.whirls, g.logs, g.falls];
     lists.forEach(function (L) { L.forEach(function (it) { var o = it.o || it; if (o.lesson && !o.lessonShown && (it.d - g.d) < VH * 0.8) { o.lessonShown = true; showLesson(g, o.lesson); } }); });
     if (g.lessonT > 0) { g.lessonT -= dt; g.lessonSlow = Math.max(0, g.lessonSlow - dt); if (g.lessonT <= 0 && g === game) show('tip', false); }
@@ -1190,7 +1192,7 @@ function endTutorial(g) {
   var next = pendingMode || 'endless', got = addWallet(g.coins); pendingMode = null;
   $('pdCoins').innerHTML = (g.coins ? 'Your ' + g.coins + ' practice coins are saved toward new boat colors.' : 'Nice steering!') + unlockLine(got);
   if (got.length) setTimeout(celebrate, 0);
-  $('pdStart').textContent = next === 'daily' ? 'Start Daily River' : next === 'calm' ? 'Start Calm river' : 'Start my run';
+  $('pdStart').textContent = next === 'daily' ? 'Start Daily River' : next === 'calm' ? 'Start Practice river' : 'Start my run';
   $('pdStart').onclick = function () { show('practiceDone', false); startRun(next); if (next === 'endless') toast('Endless river: how far can you go?', 2.5); };
   show('hud', false); show('practiceDone', true);
 }
@@ -1217,8 +1219,8 @@ function finishDaily(g) {
 }
 function finishCalm(g) {
   g.over = true; clearLesson(g); paused = false; show('pause', false);
-  var m = Math.floor(g.d / 10), got = addWallet(g.coins);
-  result('Ride finished', 'Calm river' + unlockLine(got), [[m + ' m', 'distance'], [g.coins, 'coins']], 'Your coins are saved toward new boat colors. Come back for a quiet ride any time.', 'Ride again');
+  var m = Math.floor(g.d / 10), tried = HZ_ORDER.filter(function (k) { return g.hzFirst[k]; }).length;
+  result('Practice finished', 'Practice river', [[m + ' m', 'distance'], [tried + ' of 5', 'hazards tried']], tried < 5 ? 'Keep going next time to meet all five: rapids, ramps, whirlpools, logs and waterfalls. Practice coins aren\u2019t saved.' : 'You\u2019ve tried every hazard. Ready for Endless! Practice coins aren\u2019t saved.', 'Practice again');
 }
 function clearOldGhosts() { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(PFX + 'ghost.') === 0 && k !== PFX + 'ghost.' + todayKey()) localStorage.removeItem(k); }); } catch (e) {} }
 function addWallet(n) {
@@ -1250,7 +1252,7 @@ function result(title, line, stats, note, againLabel) {
 var lastMode = 'endless';
 function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('recenter', steerMode === 'tilt' && tiltSeen); show('pauseSens', steerMode === 'tilt'); syncSens(); syncZoom(); show('finishRide', game.mode === 'calm'); show('quit', game.mode !== 'calm'); show('tip', false); show('pause', true); }
 function toMenu() {
-  if (game && game.mode === 'calm' && !game.over) { game.over = true; addWallet(game.coins); }
+  if (game && game.mode === 'calm' && !game.over) { game.over = true; } // practice coins aren't saved
   show('quit', true); show('finishRide', false);
   show('pause', false); show('result', false); show('hud', false); show('tip', false); show('dprog', false); show('dailyIntro', false); show('practiceDone', false); paused = false;
   game = newGame('attract'); refreshMenu(); show('menu', true);
