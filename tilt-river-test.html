@@ -163,7 +163,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 <div id="menu" class="screen">
   <div class="panel">
     <div class="colA">
-    <h1 id="title">Tilt River<small>prototype v0.7.3 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.7.4 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
@@ -208,7 +208,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
       <div class="lbl">Color</div><div class="boats" id="colorRow"></div>
       <div class="lbl">Accessories <small>(earned from river goals)</small></div><div class="accs" id="accRow"></div>
     </div>
-    <p class="note">Boats come in order. When you buy the next one, your current boat is traded in for half its price, and its color and accessories move over. Better boats earn more coins in Endless. Daily River uses the same standard boat for everyone, so times stay fair.</p>
+    <p class="note">Boats come in order, and you keep every boat you buy. Half the price of your best boat counts as upgrade credit toward the next one. Better boats earn more coins in Endless. Daily River uses the same standard boat for everyone, so times stay fair.</p>
     <button class="big alt" id="shopBack">Back</button>
   </div>
 </div>
@@ -294,17 +294,17 @@ var BOATS = [
 function boatById(id) { for (var i = 0; i < BOATS.length; i++) if (BOATS[i].id === id) return BOATS[i]; return BOATS[0]; }
 function dailyBest() { var d = store.get('daily.' + todayKey(), null); return d && d.v === RIVER_V ? d : null; }
 function earned() { return store.get('wallet', 0); }
-// ---------- boat types (bought in order with coins; your current boat is traded in for half its price). Steering always rises at least as much as speed, so every river stays passable ----------
+// ---------- boat types (bought in order with coins; you keep every boat, and half your best boat's price counts as upgrade credit). Steering always rises at least as much as speed, so every river stays passable ----------
 var HULLS = [
   { id: 'row', name: 'Rowboat', price: 0, spd: 1.00, str: 1.00, hp: 3, cm: 1.0, blurb: 'Steady and simple. Everyone starts here.' },
   { id: 'canoe', name: 'Canoe', price: 300, spd: 1.02, str: 1.08, hp: 3, cm: 1.15, blurb: 'Light and quick to turn.' },
   { id: 'kayak', name: 'Kayak', price: 700, spd: 1.04, str: 1.15, hp: 3, cm: 1.3, blurb: 'Slim and nimble, darts between rocks.' },
   { id: 'jon', name: 'Fishing boat', price: 1500, spd: 1.06, str: 1.12, hp: 4, cm: 1.45, blurb: 'Sturdy little motorboat. Takes 4 bumps.' },
   { id: 'pontoon', name: 'Pontoon', price: 3000, spd: 1.07, str: 1.10, hp: 5, cm: 1.6, blurb: 'The toughest boat: takes 5 bumps.' },
-  { id: 'sail', name: 'Sailboat', price: 6000, spd: 1.10, str: 1.17, hp: 3, cm: 1.8, blurb: 'Catches the breeze for extra speed.' },
-  { id: 'speed', name: 'Speedboat', price: 11000, spd: 1.14, str: 1.23, hp: 3, cm: 2.0, blurb: 'Fast, with sharp steering.' },
-  { id: 'jetski', name: 'Jet ski', price: 20000, spd: 1.16, str: 1.34, hp: 2, cm: 2.25, blurb: 'The sharpest turns, but only 2 bumps.' },
-  { id: 'cigar', name: 'Cigar boat', price: 35000, spd: 1.22, str: 1.33, hp: 3, cm: 2.5, blurb: 'The fastest boat on the river.' }
+  { id: 'sail', name: 'Sailboat', price: 5500, spd: 1.10, str: 1.17, hp: 3, cm: 1.8, blurb: 'Catches the breeze for extra speed.' },
+  { id: 'speed', name: 'Speedboat', price: 9000, spd: 1.14, str: 1.23, hp: 3, cm: 2.0, blurb: 'Fast, with sharp steering.' },
+  { id: 'jetski', name: 'Jet ski', price: 14000, spd: 1.16, str: 1.34, hp: 2, cm: 2.25, blurb: 'The sharpest turns, but only 2 bumps.' },
+  { id: 'cigar', name: 'Cigar boat', price: 20000, spd: 1.22, str: 1.33, hp: 3, cm: 2.5, blurb: 'The fastest boat on the river.' }
 ];
 var ACCS = [ // earned from river goals (every 2nd goal), then usable on any boat
   { id: 'flag', name: 'Flag' }, { id: 'duck', name: 'Duck buddy' }, { id: 'lantern', name: 'Lantern' },
@@ -322,6 +322,11 @@ if (!fleet.acc) { fleet.acc = {}; Object.keys(fleet.cust).forEach(function (k) {
 function saveFleet() { store.set('fleet', fleet); }
 function hullIdx(id) { for (var i = 0; i < HULLS.length; i++) if (HULLS[i].id === id) return i; return 0; }
 function topOwned() { var t = 0; fleet.owned.forEach(function (id) { t = Math.max(t, hullIdx(id)); }); return HULLS[t]; }
+(function () { // boats are kept now: anyone who traded boats in v0.7 gets every boat up to their best one back
+  var t = hullIdx(topOwned().id), fix = false;
+  for (var i = 0; i <= t; i++) if (!owns(HULLS[i].id)) { fleet.owned.push(HULLS[i].id); fix = true; }
+  if (fix) saveFleet();
+})();
 function nextHull() { return HULLS[hullIdx(topOwned().id) + 1] || null; }
 function tradeVal() { return Math.round(topOwned().price * TRADE_IN); }
 function netCost(h) { return Math.max(0, h.price - tradeVal()); }
@@ -1609,7 +1614,7 @@ function refreshMenu() {
   var ch = curHull(), nx = nextHull();
   $('curBoatName').textContent = ch.name; $('bankLine').textContent = fmtN(bank()) + ' coins to spend';
   previewBoat($('curBoatCv'), lookOf(ch.id));
-  $('walletLine').innerHTML = nx ? 'Next boat: ' + nx.name + ' (' + fmtN(netCost(nx)) + ' coins after trade-in)<div class="bar"><i style="width:' + Math.min(100, Math.round(bank() / Math.max(1, netCost(nx)) * 100)) + '%"></i></div>' : 'You have the best boat!';
+  $('walletLine').innerHTML = nx ? 'Next boat: ' + nx.name + ' (' + fmtN(netCost(nx)) + ' coins with upgrade credit)<div class="bar"><i style="width:' + Math.min(100, Math.round(bank() / Math.max(1, netCost(nx)) * 100)) + '%"></i></div>' : 'You have the best boat!';
   renderGoals();
   document.querySelectorAll('#steerRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.steer === steerMode)); });
   document.querySelectorAll('#orientRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.orient === orientPref)); });
@@ -1642,7 +1647,7 @@ function renderShop() {
   HULLS.forEach(function (hh) {
     var bt = document.createElement('button'), cv = document.createElement('canvas'), o = owns(hh.id);
     cv.width = 60; cv.height = 92; bt.appendChild(cv); bt.setAttribute('role', 'listitem');
-    var lab = document.createElement('div'); lab.innerHTML = hh.name + '<br>' + (curHull().id === hh.id ? '<span class="using">Using</span>' : o ? 'Owned' : nextHull() === hh ? fmtN(hh.price) + ' coins' : hullIdx(hh.id) < hullIdx(topOwned().id) ? 'Traded in' : 'Locked'); bt.appendChild(lab);
+    var lab = document.createElement('div'); lab.innerHTML = hh.name + '<br>' + (curHull().id === hh.id ? '<span class="using">Using</span>' : o ? 'Owned' : nextHull() === hh ? fmtN(netCost(hh)) + ' coins' : 'Locked'); bt.appendChild(lab);
     if (!o) bt.classList.add('locked'); bt.setAttribute('aria-pressed', String(hh.id === shopSel));
     bt.onclick = function () { shopSel = hh.id; renderShop(); };
     fr.appendChild(bt); previewBoat(cv, lookOf(hh.id));
@@ -1655,15 +1660,14 @@ function renderShop() {
   else if (own) { act.textContent = 'Use this boat'; act.disabled = false; act.onclick = function () { fleet.cur = h.id; saveFleet(); boatPal = palOf(h.id); tone(880, 0.12, 'sine', 0.1, 1100); renderShop(); }; }
   else if (nextHull() === h) {
     var top = topOwned(), tv = tradeVal(), net = netCost(h);
-    $('shopStats').innerHTML += '<div class="price">Price ' + fmtN(h.price) + (tv ? ' \u2212 trade in your ' + top.name + ' ' + fmtN(tv) + ' = <b>' + fmtN(net) + ' coins</b>' : ' coins') + '</div>';
-    act.textContent = bk >= net ? (tv ? 'Trade in and buy for ' : 'Buy for ') + fmtN(net) + ' coins' : 'Need ' + fmtN(net - bk) + ' more coins'; act.disabled = bk < net;
+    $('shopStats').innerHTML += '<div class="price">Price ' + fmtN(h.price) + (tv ? ' \u2212 upgrade credit ' + fmtN(tv) + ' (half your ' + top.name + ') = <b>' + fmtN(net) + ' coins</b>' : ' coins') + '<br><small>You keep all your boats.</small></div>';
+    act.textContent = bk >= net ? 'Buy for ' + fmtN(net) + ' coins' : 'Need ' + fmtN(net - bk) + ' more coins'; act.disabled = bk < net;
     act.onclick = function () {
       var top = topOwned(), net = netCost(h); if (bank() < net) return;
-      var oc = custOf(top.id), nc = custOf(h.id); nc.color = oc.color; nc.on = JSON.parse(JSON.stringify(oc.on || {})); // color and accessories move to the new boat
-      store.set('bank', bank() - net); fleet.owned = fleet.owned.filter(function (id) { return id !== top.id; }); fleet.owned.push(h.id); fleet.cur = h.id; saveFleet(); boatPal = palOf(h.id);
-      celebrate(); toast('The ' + h.name + ' is yours!' + (top.price ? ' Your ' + top.name + ' was traded in.' : ''), 3); renderShop();
+      var oc = custOf(curHull().id), nc = custOf(h.id); nc.color = oc.color; nc.on = JSON.parse(JSON.stringify(oc.on || {})); // start the new boat with your current look
+      store.set('bank', bank() - net); fleet.owned.push(h.id); fleet.cur = h.id; saveFleet(); boatPal = palOf(h.id);
+      celebrate(); toast('The ' + h.name + ' is yours! Switch boats anytime in the shop.', 3); renderShop();
     };
-  } else if (hullIdx(h.id) < hullIdx(topOwned().id)) { act.textContent = 'Traded in for a better boat'; act.disabled = true;
   } else { var pv = HULLS[hullIdx(h.id) - 1]; act.textContent = 'Buy the ' + pv.name + ' first'; act.disabled = true; }
   show('custBox', own);
   var cr = $('colorRow'); cr.innerHTML = ''; var cu = custOf(h.id), wl = earned();
