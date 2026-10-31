@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.6 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.6.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -517,17 +517,24 @@ const CLUES = {
   silence: { name: 'Silence', line: 'not a sound' },
 };
 const CLUE_ODDS = {
-  fight: [['growl', 60], ['rustle', 25], ['silence', 15]], elite: [['growl', 55], ['rustle', 15], ['silence', 30]],
-  chest: [['glitter', 70], ['silence', 30]], spring: [['mist', 75], ['silence', 25]],
-  shrine: [['whisper', 50], ['mist', 20], ['glitter', 15], ['silence', 15]],
-  explorer: [['voice', 60], ['rustle', 25], ['silence', 15]], cage: [['voice', 60], ['rustle', 25], ['silence', 15]],
-  gamble: [['whisper', 50], ['glitter', 30], ['silence', 20]], relic: [['whisper', 50], ['glitter', 30], ['silence', 20]],
+  fight: [['growl', 62], ['rustle', 30], ['silence', 8]], elite: [['growl', 65], ['rustle', 20], ['silence', 15]],
+  chest: [['glitter', 82], ['silence', 18]], spring: [['mist', 86], ['silence', 14]],
+  shrine: [['whisper', 55], ['mist', 20], ['glitter', 17], ['silence', 8]],
+  explorer: [['voice', 65], ['rustle', 27], ['silence', 8]], cage: [['voice', 65], ['rustle', 27], ['silence', 8]],
+  gamble: [['whisper', 55], ['glitter', 35], ['silence', 10]], relic: [['whisper', 55], ['glitter', 35], ['silence', 10]],
 };
 function clueFor(d, rng) { const k = d.kind === 'fight' ? (d.elite ? 'elite' : 'fight') : d.kind === 'event' ? d.ev : d.kind; return pickWeighted(CLUE_ODDS[k].map(([c, w]) => ({ c, w })), rng).c; }
 // the very first rooms stay readable; the Dusk Owl sees through one door in every room
 function addClues(run, doors, rng) {
   const plain = run.no === 1 && run.depth === 0 && run.room < 2;
   for (const d of doors) { if (d.kind === 'guard') { d.rev = true; continue; } d.clue = clueFor(d, rng); d.rev = plain; }
+  // never two doors with the same clue: a repeat is redrawn from that kind's other clues; if none is left, redraw the whole set
+  const kindOf = d => d.kind === 'fight' ? (d.elite ? 'elite' : 'fight') : d.kind === 'event' ? d.ev : d.kind;
+  for (let tries = 0; tries < 6; tries++) { let ok = true;
+    for (let i = 1; i < doors.length; i++) { const d = doors[i]; if (!d.clue) continue; const used = doors.slice(0, i).map(o => o.clue);
+      if (!used.includes(d.clue)) continue; let left = CLUE_ODDS[kindOf(d)].filter(([c]) => !used.includes(c)); if (left.some(([c]) => c !== 'silence')) left = left.filter(([c]) => c !== 'silence'); // Silence stays rare
+      if (left.length) d.clue = pickWeighted(left.map(([c, w]) => ({ c, w })), rng).c; else ok = false; }
+    if (ok) break; for (const d of doors) if (d.clue) d.clue = clueFor(d, rng); }
   if (run.pet === 'owl') { const hid = doors.filter(d => !d.rev); if (hid.length) { hid[Math.floor(rng() * hid.length)].rev = true; hid.forEach(d => { if (d.rev) d.owl = true; }); } }
   return doors;
 }
@@ -1296,7 +1303,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.6';
+const VERSION = 'v0.6.1';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1396,11 +1403,12 @@ function openHeroes() {
   h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
   openSheet(h, { close: () => { closeSheet(); renderCamp(); }, '*': a => { if (!a.startsWith('c:')) return; const k = a.slice(2); if (!classUnlocked(k, S)) { toast('Locked: ' + CLASSES[k].unlock, 1500); return; } S.hero = k; save(); SFX.pick(); openHeroes(); } });
 }
+const PET_HINT = { fox: 'Something small and warm whimpers behind a door. Listen for “A Voice” from the second depth on.', owl: 'Soft wingbeats behind a door. Listen for “A Voice” or “Rustling” from the second depth on.', sprite: 'A tiny glow calls for help. Listen for “A Voice” from the second depth on.' };
 function openPets() {
   const own = S.pets || [];
   let h = `<h2>Companions</h2><p>Free caged creatures in story rooms. One can come with you on each delve.</p>`;
   for (const k of Object.keys(PETS)) { const P = PETS[k], ok = own.includes(k);
-    h += `<button class="card ${ok ? '' : 'lockd'}" data-a="p:${k}" style="${S.pet === k ? 'box-shadow:0 0 0 2px var(--amber)' : ''}"><div class="ic"><img src="${petImg(k)}" width="52" height="52" alt="" style="display:block;margin:0 auto${ok ? '' : ';filter:brightness(0)'}"></div><div class="tx"><b>${ok ? P.name : '???'}</b><span>${ok ? P.desc : 'Look for a caged creature behind a door.'}</span></div></button>`; }
+    h += `<button class="card ${ok ? '' : 'lockd'}" data-a="p:${k}" style="${S.pet === k ? 'box-shadow:0 0 0 2px var(--amber)' : ''}"><div class="ic"><img src="${petImg(k)}" width="52" height="52" alt="" style="display:block;margin:0 auto${ok ? '' : ';filter:brightness(0)'}"></div><div class="tx"><b>${ok ? P.name : '???'}</b><span>${ok ? P.desc : PET_HINT[k]}</span></div></button>`; }
   if (own.length) h += `<button class="card" data-a="none"><div class="ic">○</div><div class="tx"><b>Go alone</b><span>No companion this time</span></div></button>`;
   h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
   openSheet(h, { close: () => { closeSheet(); renderCamp(); }, none: () => { S.pet = null; save(); openPets(); }, '*': a => { if (!a.startsWith('p:')) return; const k = a.slice(2); if (!own.includes(k)) { toast('Not found yet', 1100); return; } S.pet = k; save(); SFX.pick(); openPets(); } });
@@ -1413,11 +1421,11 @@ $('bestBtn').onclick = () => openBestiary();
 function canForgeAny() { return Object.values(S.eq).some(id => id && forgeCost(id, S.stars[id]) != null && forgeCost(id, S.stars[id]) <= (S.gold || 0)); }
 // the forge: spend gold to add stars to gear; stars stay forever and apply from the next delve (or right away at camp)
 function openForge() {
-  let h = `<h2>The Forge</h2><p>Spend gold to make gear stronger. Each star adds about 15%, up to 3 stars. You have <span class="gold">🪙 ${S.gold || 0}</span>.</p>`;
+  let h = `<h2>The Forge</h2><p>Spend gold to make gear stronger, up to 3 stars. Each star raises every stat by about 15%, and always by at least +1. The exact numbers are shown below. You have <span class="gold">🪙 ${S.gold || 0}</span>.</p>`;
   const ids = S.owned.slice().sort((a, b) => (Object.values(S.eq).includes(b) ? 1 : 0) - (Object.values(S.eq).includes(a) ? 1 : 0));
   for (const id of ids) {
     const n = S.stars[id] || 0, c = forgeCost(id, n), worn = Object.values(S.eq).includes(id);
-    const next = c != null ? statLines(gearStats(id, n + 1)).join(' · ') : '';
+    const next = c != null ? statLines(gearStats(id, n)).join(' · ') + ' → <span style="color:var(--amber2);font-weight:700">' + statLines(gearStats(id, n + 1)).join(' · ') + '</span>' : '';
     h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="f:${id}" ${c == null || c > (S.gold || 0) ? 'style="opacity:.6"' : ''}>${gearCardHTML(id, `${worn ? '<span class="tag r" style="display:block;margin-top:2px">Wearing</span>' : ''}${c == null ? '<span class="stars">Fully forged</span>' : `<span style="display:block;font-size:12.5px">Next ★: ${next}</span><span class="gold" style="display:block;font-size:13px">Forge for 🪙 ${c}</span>`}`)}</button>`;
   }
   h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
@@ -1587,9 +1595,6 @@ async function chooseLessons() {
   add('guard', doors.some(d => d.kind === 'guard'), 'A <b>guardian</b> blocks the stairs down. Beat it to reach the next depth. It is tough, so use your Flare!');
   add('eliteDoor', doors.some(d => d.elite), 'A red glow means an <b>Elite</b> foe: a harder fight, but you pick a <b>rare upgrade</b> if you win.');
   if (S.seen.eliteDoor) S.seen.eliteFight = 1;
-  add('shrineDoor', doors.some(d => d.kind === 'shrine'), 'A <b>shrine</b> offers a choice of rare upgrades, with no fight.');
-  add('costDoor', costly, 'Chests and shrines <b>cost health</b>, shown under the door. Fights give upgrades, springs give health back.');
-  add('netDoor', costly && st.regen > 0, `You heal ${st.regen} after every room, so those doors show your <b>net</b> health change.`);
   add('eventDoor', doors.some(d => d.kind === 'event'), 'A purple glow means a <b>story room</b>. Inside you choose what to do, and you can always walk away. Only one per depth!');
   add('springDoor', doors.some(d => d.kind === 'spring'), 'A <b>spring</b> heals half your health. If you are already healthy, it adds 4 max health instead.');
   }
@@ -1632,8 +1637,6 @@ function goDoor(i) {
 function roomLessons(d) {
   const parts = []; const add = (key, on, text) => { if (on && !S.seen[key]) { S.seen[key] = 1; parts.push(text); } };
   add('eliteDoor', d.elite, 'An <b>Elite</b> foe: a harder fight, but you pick a <b>rare upgrade</b> if you win.'); if (d.elite) S.seen.eliteFight = 1;
-  add('costDoor', (d.kind === 'chest' || d.kind === 'shrine') && doorCost(run, d.kind) > 0, 'Chests and shrines <b>cost a little health</b> to use. Fights give upgrades, springs give health back.');
-  add('shrineDoor', d.kind === 'shrine', 'A <b>shrine</b> offers a choice of rare upgrades, with no fight.');
   add('springDoor', d.kind === 'spring', 'A <b>spring</b> heals half your health. If you are already healthy, it adds 4 max health instead.');
   add('eventDoor', d.kind === 'event', 'A <b>story room</b>. You choose what to do, and you can always walk away. Only one per depth!');
   if (parts.length) { save(); return coach({ text: parts.join('<br><br>'), btn: 'Got it' }); }
@@ -1653,10 +1656,10 @@ function enterRoom2(d) {
   doors = genDoors(run, Math.random);
   A.monAlpha = 0; A.monScale = 1; A.chestOpen = 0; A.heroDown = 0;
   if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; setPhase('fight'); fightLessons(); }
-  else if (d.kind === 'chest') { setPhase('chest'); payRoom('chest'); lesson('chest', [{ text: 'A <b>chest</b>! Chests hold <b>gear</b>. Gear is yours forever, even after this delve ends. Tap it to open.' }]); }
+  else if (d.kind === 'chest') payGate('chest', () => { setPhase('chest'); payRoom('chest'); lesson('chest', [{ text: 'A <b>chest</b>! Chests hold <b>gear</b>. Gear is yours forever, even after this delve ends. Tap it to open.' }]); });
   else if (d.kind === 'spring') { setPhase('spring'); setTimeout(() => { const ef = springEffect(run); SFX.heal(); floatText(L.heroX, L.heroY - L.u * 2.4, ef.grow ? '+' + ef.grow + ' max ♥' : '+' + ef.heal, '#8fcf6a', 1.3); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 18); updateHud(); setTimeout(() => roomDone(), 700); }, 500); }
   else if (d.kind === 'event') { setPhase('event'); setTimeout(() => runEvent(d.ev), 650); }
-  else if (d.kind === 'shrine') { setPhase('shrine'); payRoom('shrine'); setTimeout(() => showUpgrades(true, 'The shrine glows', 'Pick a rare gift'), 600); }
+  else if (d.kind === 'shrine') payGate('shrine', () => { setPhase('shrine'); payRoom('shrine'); setTimeout(() => showUpgrades(true, 'The shrine glows', 'Pick a rare gift'), 600); });
 }
 // story rooms: one choice, a clear price, and a way out
 function runEvent(ev) {
@@ -1707,6 +1710,24 @@ function runEvent(ev) {
     });
   }
 }
+// chests and shrines show their health price once you are inside, and you can walk past
+function heroUnlockCheck(best) {
+  const before = Object.keys(CLASSES).filter(k => classUnlocked(k, S)); S.best = Math.max(S.best, best); save();
+  const fresh = Object.keys(CLASSES).filter(k => classUnlocked(k, S) && !before.includes(k));
+  if (fresh.length) setTimeout(() => toast(`${CLASSES[fresh[0]].icon} ${CLASSES[fresh[0]].name} unlocked! Pick them at camp for your next delve.`, 3000), 1600);
+}
+function payGate(kind, go) {
+  const c = doorCost(run, kind); if (!c) { go(); return; }
+  const chest = kind === 'chest', regen = heroStats().regen || 0;
+  setPhase('gate');
+  setTimeout(() => openSheet(`<h2>${chest ? 'A Chest' : 'A Shrine'}</h2><p>${chest ? 'An old chest, bound shut with thorny vines. Prying it open will cut your hands.' : 'A shrine hums with old magic. It asks for a little of your life in return for a rare gift.'}</p>
+    <button class="card" data-a="pay"><div class="ic">${chest ? '🗝️' : '✨'}</div><div class="tx"><b>${chest ? 'Open it' : 'Make an offering'} (−${c} ♥)</b><span>${chest ? 'A piece of gear (unless it bites!)' : 'Pick 1 of 3 rare upgrades'}${regen ? ` · you heal ${regen} after the room` : ''}</span></div></button>
+    <button class="card" data-a="leave"><div class="ic">👣</div><div class="tx"><b>Walk past</b><span>Keep your health</span></div></button>
+    <p style="font-size:12.5px;opacity:.8;margin:6px 0 0">You have ${run.hp} ♥.</p>`, {
+    pay: () => { closeSheet(); go(); },
+    leave: () => { closeSheet(); if (chest) run.chests = Math.max(0, (run.chests || 0) - 1); toast(chest ? 'You leave the chest shut' : 'You leave the shrine alone', 1200); roomDone(); },
+  }), 450);
+}
 function payRoom(kind) { const c = payCost(run, kind); if (c) { floatText(L.heroX + 20, L.heroY - L.u * 2.4, '-' + c, '#ff7a6a', 1.1); A.heroHurt = 0.6; updateHud(); } }
 async function fightLessons() {
   const m = fight.m;
@@ -1715,8 +1736,11 @@ async function fightLessons() {
   const parts = []; const add = (key, on, text) => { if (on && !S.seen[key]) { S.seen[key] = 1; parts.push(text); } };
   add('fight', true, '<b>Fights are automatic.</b> Your hero swings on their own. Watch the health bars over each of you.');
   add('potion', !!run.potion && S.seen.flare, '<b>Potion belt:</b> the small button holds one potion. Your <b>Healing Draught</b> heals 30% of your health. Tap it any time, even between rooms. You find more potions after some fights.');
-  add('eliteFight', m.elite, '<b>Elite foe!</b> Tougher than usual. Win, and you choose from <b>rare upgrades</b>.');
-  if (m.trait) add('trait_' + m.trait, true, `<b>${TRAITS[m.trait].name}:</b> ${TRAITS[m.trait].tip}`);
+  // short labels instead of cards for foe tricks
+  const tip = [];
+  if (m.elite && !S.seen.eliteFight) { S.seen.eliteFight = 1; tip.push('Elite foe: win for a rare upgrade'); }
+  if (m.trait && !S.seen['trait_' + m.trait]) { S.seen['trait_' + m.trait] = 1; tip.push(TRAITS[m.trait].name + ': ' + TRAITS[m.trait].tip); }
+  if (tip.length) { save(); toast(tip.join(' · '), 3400); }
   if (parts.length) { S.seen.eliteDoor = S.seen.eliteDoor || (m.elite ? 1 : 0); save(); await coach({ text: parts.join('<br><br>'), btn: 'Got it' }); }
 }
 
@@ -1834,7 +1858,7 @@ function descend() {
   if (run.depth >= DEPTHS.length - 1) { onVictory(); return; }
   phase = 'descend'; A.fadeDir = 1;
   setTimeout(() => {
-    run.depth++; run.room = 0; run.chests = 0; run.events = 0; roomSeed += 101; content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = [];
+    run.depth++; heroUnlockCheck(run.depth + 1); run.room = 0; run.chests = 0; run.events = 0; roomSeed += 101; content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = [];
     A.fadeDir = -1; banner('Depth ' + (run.depth + 1), DEPTHS[run.depth].name, 1800); setPhase('choose');
   }, 600);
 }
