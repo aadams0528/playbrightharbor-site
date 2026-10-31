@@ -85,6 +85,13 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 #hull.hit { animation: hitp .5s; }
 @keyframes hitp { 30% { transform: scale(1.18); background: #ffd9cf; } }
 .unlock { color: var(--warm); font-weight: 800; }
+.unlockBox { display: flex; align-items: center; gap: 10px; justify-content: center; margin: 10px auto 0; padding: 8px 14px; border-radius: 14px;
+  background: rgba(255,224,138,.22); box-shadow: 0 0 0 2px rgba(201,143,30,.45); animation: unlockPop .7s cubic-bezier(.2,1.6,.4,1) both, unlockGlow 1.6s .7s ease-in-out 2; }
+.unlockBox canvas { width: 30px; height: 46px; animation: unlockBob 1.2s .5s ease-in-out infinite; }
+@keyframes unlockPop { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes unlockGlow { 50% { box-shadow: 0 0 0 2px rgba(201,143,30,.6), 0 0 18px 4px rgba(255,214,110,.75); } }
+@keyframes unlockBob { 50% { transform: translateY(-3px) rotate(4deg); } }
+#calmPill { color: #2f7a5a !important; }
 </style>
 </head>
 <body>
@@ -98,6 +105,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <div class="pill" id="coinPill"><span id="coins">0</span><small>coins</small> <small id="streakTag"></small></div>
   </div>
   <div class="pill" id="hull" aria-label="Boat health"></div>
+  <div class="pill hide" id="calmPill">Calm</div>
 </div>
 <div id="dprog" class="hide"><i id="dprogFill"></i></div>
 
@@ -109,7 +117,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 
 <div id="menu" class="screen">
   <div class="panel">
-    <h1 id="title">Tilt River<small>prototype v0.3 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.3.1 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
@@ -154,6 +162,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <h2>Paused</h2>
     <button class="big" id="resume">Keep going</button>
     <button class="big alt" id="recenter">Recenter tilt<small>Hold the phone how you like, then tap</small></button>
+    <button class="big alt hide" id="finishRide">Finish ride<small>See how far you went</small></button>
     <button class="big alt" id="quit">Back to menu</button>
   </div>
 </div>
@@ -1114,7 +1123,7 @@ function startRun(mode) {
   if (mode !== 'tutorial' && !store.get('tutDone', false)) { pendingMode = mode; mode = 'tutorial'; }
   game = newGame(mode); tiltZero = null; paused = false;
   show('menu', false); show('result', false); show('pause', false); show('dailyIntro', false); show('practiceDone', false); show('hud', true); show('tip', false);
-  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial' && mode !== 'calm');
+  show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial' && mode !== 'calm'); show('calmPill', mode === 'calm');
   $('coins').textContent = '0'; $('delta').textContent = ''; $('streakTag').textContent = ''; updHull();
   if (mode === 'tutorial') tutShow(game);
   if (steerMode === 'tilt') setTimeout(function () { if (game && game.mode !== 'attract' && !tiltSeen) { steerMode = 'thumb'; toast('No tilt sensor here, so drag your thumb to steer.', 4); if (game.tut && game.tut.step === 0) tutShow(game); } }, 1500);
@@ -1124,12 +1133,14 @@ function endTutorial(g) {
   store.set('tutDone', true); g.over = true; show('tip', false);
   var next = pendingMode || 'endless', got = addWallet(g.coins); pendingMode = null;
   $('pdCoins').innerHTML = (g.coins ? 'Your ' + g.coins + ' practice coins are saved toward new boat colors.' : 'Nice steering!') + unlockLine(got);
+  if (got.length) setTimeout(celebrate, 0);
   $('pdStart').textContent = next === 'daily' ? 'Start Daily River' : next === 'calm' ? 'Start Calm river' : 'Start my run';
   $('pdStart').onclick = function () { show('practiceDone', false); startRun(next); if (next === 'endless') toast('Endless river: how far can you go?', 2.5); };
   show('hud', false); show('practiceDone', true);
 }
+function clearLesson(g) { if (g) { g.lessonT = 0; g.lessonSlow = 0; } show('tip', false); }
 function sink(g) {
-  g.over = true; g.sunk = true; chips(g, 16); burst(g, g.x, g.d, boatPal.deck, 6); burst(g, g.x, g.d, '#ffffff', 16); noise(0.6, 0.4, 300);
+  g.over = true; g.sunk = true; clearLesson(g); chips(g, 16); burst(g, g.x, g.d, boatPal.deck, 6); burst(g, g.x, g.d, '#ffffff', 16); noise(0.6, 0.4, 300);
   var m = Math.floor(g.d / 10);
   var got = addWallet(g.coins);
   setTimeout(function () {
@@ -1142,11 +1153,16 @@ function sink(g) {
   }, 900);
 }
 function finishDaily(g) {
-  g.over = true; var got = addWallet(g.coins); burst(g, g.x, g.d + 20, '#ffe08a', 16); burst(g, g.x, g.d + 20, '#ffffff', 12); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
+  g.over = true; clearLesson(g); var got = addWallet(g.coins); burst(g, g.x, g.d + 20, '#ffe08a', 16); burst(g, g.x, g.d + 20, '#ffffff', 12); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
   var key = 'daily.' + todayKey(), prev = store.get(key, null); if (prev && prev.v !== RIVER_V) prev = null; var t = Math.round(g.t * 10) / 10, isNew = !prev || t < prev.time;
   if (isNew) { store.set(key, { v: RIVER_V, time: t, coins: g.coins }); store.set('ghost.' + todayKey(), { v: RIVER_V, s: g.ghostRec }); clearOldGhosts(); }
   result('Finished!', 'Daily River #' + dailyNumber() + (isNew && prev ? ' · <span class="new">New best!</span>' : isNew ? '' : ' · Best ' + fmtTime(prev.time)) + unlockLine(got),
     [[fmtTime(t), 'time'], [g.coins, 'coins'], [3 - g.hull, 'bumps']], isNew ? 'Your run is saved as a white ghost boat. Race it to beat your time. A new river comes tomorrow.' : 'Your ghost still has the best time. Catch it!', 'Race my ghost');
+}
+function finishCalm(g) {
+  g.over = true; clearLesson(g); paused = false; show('pause', false);
+  var m = Math.floor(g.d / 10), got = addWallet(g.coins);
+  result('Ride finished', 'Calm river' + unlockLine(got), [[m + ' m', 'distance'], [g.coins, 'coins']], 'Your coins are saved toward new boat colors. Come back for a quiet ride any time.', 'Ride again');
 }
 function clearOldGhosts() { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(PFX + 'ghost.') === 0 && k !== PFX + 'ghost.' + todayKey()) localStorage.removeItem(k); }); } catch (e) {} }
 function addWallet(n) {
@@ -1155,17 +1171,31 @@ function addWallet(n) {
   if (got.length) { boatPal = got[got.length - 1]; store.set('boat', boatPal.id); }
   return got;
 }
-function unlockLine(got) { return got.length ? '<br><span class="unlock">New boat unlocked: ' + got[got.length - 1].name + '! It\u2019s on now.</span>' : ''; }
+function unlockLine(got) {
+  if (!got.length) return '';
+  var b = got[got.length - 1];
+  return '<span class="unlockBox"><canvas width="45" height="69" data-boat="' + b.id + '"></canvas><span class="unlock">New boat unlocked: ' + b.name + '!<br><small>It\u2019s on now.</small></span></span>';
+}
+function celebrate() { // pop-in badge (CSS), the new boat drawn in it, and a little rising chime
+  document.querySelectorAll('.unlockBox canvas').forEach(function (cv) {
+    var b = BOATS.filter(function (x) { return x.id === cv.dataset.boat; })[0] || boatPal, c2 = cv.getContext('2d');
+    c2.setTransform(1.5, 0, 0, 1.5, 0, 0); drawBoat(c2, 15, 23, 0, false, false, b);
+  });
+  [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { tone(f, 0.16, 'sine', 0.11, f * 1.01); }, 120 + i * 110); });
+  if (navigator.vibrate) try { navigator.vibrate([20, 40, 20]); } catch (e) {}
+}
 function result(title, line, stats, note, againLabel) {
   $('again').textContent = againLabel || 'Go again'; show('dprog', false);
   $('resTitle').textContent = title; $('resLine').innerHTML = line; $('resNote').textContent = note;
   $('resStats').innerHTML = stats.map(function (s) { return '<div><b>' + s[0] + '</b><span>' + s[1] + '</span></div>'; }).join('');
-  show('hud', false); show('result', true);
+  show('hud', false); show('tip', false); show('result', true);
+  if (/unlockBox/.test(line)) celebrate();
 }
 var lastMode = 'endless';
-function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('recenter', steerMode === 'tilt' && tiltSeen); show('pause', true); }
+function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('recenter', steerMode === 'tilt' && tiltSeen); show('finishRide', game.mode === 'calm'); show('quit', game.mode !== 'calm'); show('tip', false); show('pause', true); }
 function toMenu() {
   if (game && game.mode === 'calm' && !game.over) { game.over = true; addWallet(game.coins); }
+  show('quit', true); show('finishRide', false);
   show('pause', false); show('result', false); show('hud', false); show('tip', false); show('dprog', false); show('dailyIntro', false); show('practiceDone', false); paused = false;
   game = newGame('attract'); refreshMenu(); show('menu', true);
 }
@@ -1208,7 +1238,8 @@ $('howBtn').onclick = function () { store.set('tutDone', false); pendingMode = '
 $('soundBtn').onclick = function () { soundOn = !soundOn; store.set('sound', soundOn); refreshMenu(); };
 document.querySelectorAll('#steerRow button').forEach(function (b) { b.onclick = function () { steerMode = b.dataset.steer; store.set('steer', steerMode); if (steerMode === 'tilt') askTilt(); refreshMenu(); }; });
 $('pauseBtn').onclick = pauseGame;
-$('resume').onclick = function () { paused = false; show('pause', false); };
+$('resume').onclick = function () { paused = false; show('pause', false); if (game && (game.lessonT > 0 || game.tut)) show('tip', true); };
+$('finishRide').onclick = function () { if (game && game.mode === 'calm' && !game.over) finishCalm(game); };
 $('recenter').onclick = function () { tiltZero = tiltRaw; paused = false; show('pause', false); toast('Tilt recentered', 1.5); };
 $('quit').onclick = toMenu;
 $('again').onclick = function () { play(lastMode); };
