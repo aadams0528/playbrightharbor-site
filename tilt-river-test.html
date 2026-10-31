@@ -108,6 +108,9 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 .stat i b { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; }
 .shopInfo .big { margin-top: 8px; padding: 10px; font-size: 16px; }
 .shopInfo .big:disabled { opacity: .55; cursor: default; }
+.goals { margin-top: 6px; } .goal { display: flex; justify-content: space-between; gap: 8px; align-items: center; border: 2px solid var(--cardLine); background: var(--btn); border-radius: 12px; padding: 7px 10px; margin-top: 6px; font-size: 13px; font-weight: 700; text-align: left; }
+.goal small { color: var(--ink2); font-weight: 700; } .goal b { color: #c98f1e; white-space: nowrap; }
+.goalDone { display: block; margin-top: 8px; color: #c98f1e; font-weight: 800; } .price { font-size: 13px; margin-top: 6px; }
 .accs { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin-top: 8px; }
 .accs button { border: 2px solid var(--cardLine); background: var(--btn); border-radius: 12px; padding: 7px 6px; font: inherit; font-size: 13px; font-weight: 700; color: var(--btnInk); cursor: pointer; text-align: left; }
 .accs button small { display: block; font-size: 11px; color: var(--ink2); }
@@ -156,7 +159,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 <div id="menu" class="screen">
   <div class="panel">
     <div class="colA">
-    <h1 id="title">Tilt River<small>prototype v0.6 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.7 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
@@ -182,6 +185,8 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <div class="lbl">Boat</div>
     <button class="shopBtn" id="shopBtn"><canvas id="curBoatCv" width="54" height="90"></canvas><span class="sb"><b id="curBoatName">Rowboat</b><small id="bankLine"></small></span><span class="go">Boat shop &rsaquo;</span></button>
     <div class="foot" id="walletLine"></div>
+    <div class="lbl">River goals</div>
+    <div class="goals" id="goalBox"></div>
     <div id="tester" class="hide row"><button id="resetTut">Reset lesson</button><button id="resetAll">Reset all</button><button id="addCoins">+2000 coins</button></div>
     </div>
   </div>
@@ -197,9 +202,9 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     </div>
     <div id="custBox">
       <div class="lbl">Color</div><div class="boats" id="colorRow"></div>
-      <div class="lbl">Accessories <small>(for this boat)</small></div><div class="accs" id="accRow"></div>
+      <div class="lbl">Accessories <small>(earned from river goals)</small></div><div class="accs" id="accRow"></div>
     </div>
-    <p class="note">Faster boats earn more coins in Endless. Daily River uses the same standard boat for everyone, so times stay fair.</p>
+    <p class="note">Boats come in order. When you buy the next one, your current boat is traded in for half its price, and its color and accessories move over. Better boats earn more coins in Endless. Daily River uses the same standard boat for everyone, so times stay fair.</p>
     <button class="big alt" id="shopBack">Back</button>
   </div>
 </div>
@@ -283,29 +288,37 @@ var BOATS = [
 function boatById(id) { for (var i = 0; i < BOATS.length; i++) if (BOATS[i].id === id) return BOATS[i]; return BOATS[0]; }
 function dailyBest() { var d = store.get('daily.' + todayKey(), null); return d && d.v === RIVER_V ? d : null; }
 function earned() { return store.get('wallet', 0); }
-// ---------- boat types (bought with coins). Steering always rises at least as much as speed, so every river stays passable ----------
+// ---------- boat types (bought in order with coins; your current boat is traded in for half its price). Steering always rises at least as much as speed, so every river stays passable ----------
 var HULLS = [
   { id: 'row', name: 'Rowboat', price: 0, spd: 1.00, str: 1.00, hp: 3, cm: 1.0, blurb: 'Steady and simple. Everyone starts here.' },
-  { id: 'canoe', name: 'Canoe', price: 200, spd: 1.02, str: 1.08, hp: 3, cm: 1.2, blurb: 'Light and quick to turn.' },
-  { id: 'kayak', name: 'Kayak', price: 450, spd: 1.04, str: 1.15, hp: 3, cm: 1.4, blurb: 'Slim and nimble, darts between rocks.' },
-  { id: 'jon', name: 'Fishing boat', price: 800, spd: 1.06, str: 1.12, hp: 4, cm: 1.6, blurb: 'Sturdy little motorboat. Takes 4 bumps.' },
-  { id: 'pontoon', name: 'Pontoon', price: 1200, spd: 1.07, str: 1.10, hp: 5, cm: 1.8, blurb: 'The toughest boat: takes 5 bumps.' },
-  { id: 'sail', name: 'Sailboat', price: 1800, spd: 1.10, str: 1.17, hp: 3, cm: 2.1, blurb: 'Catches the breeze for extra speed.' },
-  { id: 'speed', name: 'Speedboat', price: 2600, spd: 1.14, str: 1.23, hp: 3, cm: 2.5, blurb: 'Fast, with sharp steering.' },
-  { id: 'jetski', name: 'Jet ski', price: 3600, spd: 1.16, str: 1.34, hp: 2, cm: 2.9, blurb: 'The sharpest turns, but only 2 bumps.' },
-  { id: 'cigar', name: 'Cigar boat', price: 5000, spd: 1.22, str: 1.33, hp: 3, cm: 3.5, blurb: 'The fastest boat on the river.' }
+  { id: 'canoe', name: 'Canoe', price: 300, spd: 1.02, str: 1.08, hp: 3, cm: 1.15, blurb: 'Light and quick to turn.' },
+  { id: 'kayak', name: 'Kayak', price: 700, spd: 1.04, str: 1.15, hp: 3, cm: 1.3, blurb: 'Slim and nimble, darts between rocks.' },
+  { id: 'jon', name: 'Fishing boat', price: 1500, spd: 1.06, str: 1.12, hp: 4, cm: 1.45, blurb: 'Sturdy little motorboat. Takes 4 bumps.' },
+  { id: 'pontoon', name: 'Pontoon', price: 3000, spd: 1.07, str: 1.10, hp: 5, cm: 1.6, blurb: 'The toughest boat: takes 5 bumps.' },
+  { id: 'sail', name: 'Sailboat', price: 6000, spd: 1.10, str: 1.17, hp: 3, cm: 1.8, blurb: 'Catches the breeze for extra speed.' },
+  { id: 'speed', name: 'Speedboat', price: 11000, spd: 1.14, str: 1.23, hp: 3, cm: 2.0, blurb: 'Fast, with sharp steering.' },
+  { id: 'jetski', name: 'Jet ski', price: 20000, spd: 1.16, str: 1.34, hp: 2, cm: 2.25, blurb: 'The sharpest turns, but only 2 bumps.' },
+  { id: 'cigar', name: 'Cigar boat', price: 35000, spd: 1.22, str: 1.33, hp: 3, cm: 2.5, blurb: 'The fastest boat on the river.' }
 ];
-var ACCS = [
-  { id: 'flag', name: 'Flag', price: 40 }, { id: 'duck', name: 'Duck buddy', price: 70 }, { id: 'lantern', name: 'Lantern', price: 110 },
-  { id: 'stripes', name: 'Racing stripes', price: 150 }, { id: 'rod', name: 'Fishing rod', price: 190 }, { id: 'canopy', name: 'Sun canopy', price: 240 },
-  { id: 'dog', name: 'Dog crew', price: 320 }
+var ACCS = [ // earned from river goals (every 2nd goal), then usable on any boat
+  { id: 'flag', name: 'Flag' }, { id: 'duck', name: 'Duck buddy' }, { id: 'lantern', name: 'Lantern' },
+  { id: 'stripes', name: 'Racing stripes' }, { id: 'rod', name: 'Fishing rod' }, { id: 'canopy', name: 'Sun canopy' },
+  { id: 'dog', name: 'Dog crew' }
 ];
+var TRADE_IN = 0.5, DAILY_BONUS = 100;
+function fmtN(n) { return Math.round(n).toLocaleString('en-US'); }
 function hullDef(id) { for (var i = 0; i < HULLS.length; i++) if (HULLS[i].id === id) return HULLS[i]; return HULLS[0]; }
 function bank() { return store.get('bank', 0); }
 if (store.get('bank', null) === null) store.set('bank', earned()); // coins earned before the shop existed are all spendable
 var fleet = store.get('fleet', null);
 if (!fleet) { fleet = { owned: ['row'], cur: 'row', cust: { row: { color: store.get('boat', 'oak'), acc: {}, on: {} } } }; store.set('fleet', fleet); }
+if (!fleet.acc) { fleet.acc = {}; Object.keys(fleet.cust).forEach(function (k) { Object.keys(fleet.cust[k].acc || {}).forEach(function (a) { fleet.acc[a] = true; }); }); store.set('fleet', fleet); } // accessories bought in v0.6 stay yours
 function saveFleet() { store.set('fleet', fleet); }
+function hullIdx(id) { for (var i = 0; i < HULLS.length; i++) if (HULLS[i].id === id) return i; return 0; }
+function topOwned() { var t = 0; fleet.owned.forEach(function (id) { t = Math.max(t, hullIdx(id)); }); return HULLS[t]; }
+function nextHull() { return HULLS[hullIdx(topOwned().id) + 1] || null; }
+function tradeVal() { return Math.round(topOwned().price * TRADE_IN); }
+function netCost(h) { return Math.max(0, h.price - tradeVal()); }
 function custOf(id) { if (!fleet.cust[id]) fleet.cust[id] = { color: 'oak', acc: {}, on: {} }; return fleet.cust[id]; }
 function owns(id) { return fleet.owned.indexOf(id) >= 0; }
 function curHull() { return hullDef(owns(fleet.cur) ? fleet.cur : 'row'); }
@@ -687,7 +700,7 @@ function update(g, dt) {
   if (g.fall > 0) { g.fall -= dt; if (g.fall <= 0) { g.fall = 0; burst(g, g.x, g.d, '#ffffff', 16); g.boost = Math.max(g.boost, 0.8); if (g.mode !== 'attract') noise(0.4, 0.3, 700); } }
   for (i = 0; i < g.ramps.length; i++) {
     var rp = g.ramps[i]; if (rp.used || Math.abs(rp.d - g.d) > 10) continue;
-    if (Math.abs(g.x - rp.x) < rp.w / 2 + 2) { rp.used = true; g.air = 0.95; floatText(g, 'Jump!', '#ffffff'); if (g === game) { tone(260, 0.5, 'triangle', 0.08, 700); buzz(20); } }
+    if (Math.abs(g.x - rp.x) < rp.w / 2 + 2) { rp.used = true; g.nRamps = (g.nRamps || 0) + 1; g.air = 0.95; floatText(g, 'Jump!', '#ffffff'); if (g === game) { tone(260, 0.5, 'triangle', 0.08, 700); buzz(20); } }
   }
   for (i = 0; i < g.whirls.length; i++) {
     var wh = g.whirls[i], wdy = wh.d - g.d; if (Math.abs(wdy) > wh.R) continue;
@@ -702,7 +715,7 @@ function update(g, dt) {
     var lx = logX(g, lg);
     if (Math.abs(g.x - lx) < lg.len / 2 + BOAT_R * 0.8 && g.invuln <= 0) { lg.hit = true; if (bump(g, g.x >= lx ? 1 : -1)) return; }
   }
-  for (i = 0; i < g.falls.length; i++) { var fl = g.falls[i]; if (!fl.used && g.d >= fl.d) { fl.used = true; g.fall = 0.7; if (g === game) { noise(0.7, 0.35, 500); buzz(30); } } }
+  for (i = 0; i < g.falls.length; i++) { var fl = g.falls[i]; if (!fl.used && g.d >= fl.d) { fl.used = true; g.nFalls = (g.nFalls || 0) + 1; g.fall = 0.7; if (g === game) { noise(0.7, 0.35, 500); buzz(30); } } }
   var rr = inRough(g);
   if (rr && g.air <= 0) { g.x += (Math.sin(g.t * 3.7 + rr.seed) * 75 + Math.sin(g.t * 8.3 + rr.seed * 2) * 45) * dt; if (Math.random() < 0.25) burst(g, g.x + (Math.random() - 0.5) * 30, g.d + 20, 'rgba(255,255,255,.8)', 1); }
   // first-time lessons for each feature
@@ -717,7 +730,7 @@ function update(g, dt) {
     if (cdy < -20) { if (!co.missed) { co.missed = true; if (co.line && g.lineN[co.line] >= 4 && g.streak) { g.streak = 0; if (g === game) $('streakTag').textContent = ''; } } continue; }
     if (cdy > 30) continue;
     if (Math.hypot(g.x - co.x, cdy) < 17) { co.got = true; g.coins++; co.gotT = g.t;
-      if (co.line && ++g.lineGot[co.line] === g.lineN[co.line] && g.lineN[co.line] >= 4 && g.mode !== 'attract' && g.mode !== 'tutorial') { g.coins += 2; g.streak = (g.streak || 0) + 1; floatText(g, 'Perfect line +2' + (g.streak > 1 ? ' \u00b7 streak ' + g.streak : ''), '#ffe08a'); burst(g, g.x, g.d + 6, '#ffe08a', 7); if (g === game) $('streakTag').textContent = g.streak > 1 ? '\u00d7' + g.streak + ' streak' : ''; if (g === game) setTimeout(function () { tone(1560, 0.18, 'sine', 0.1, 2100); }, 90); } if (g.mode !== 'attract') tone(1180 + (g.coins % 5) * 90, 0.12, 'sine', 0.12, 1600); if (g === game && g.mode !== 'attract') $('coins').textContent = g.coins; }
+      if (co.line && ++g.lineGot[co.line] === g.lineN[co.line] && g.lineN[co.line] >= 4 && g.mode !== 'attract' && g.mode !== 'tutorial') { g.coins += 2; g.nLines = (g.nLines || 0) + 1; g.streak = (g.streak || 0) + 1; floatText(g, 'Perfect line +2' + (g.streak > 1 ? ' \u00b7 streak ' + g.streak : ''), '#ffe08a'); burst(g, g.x, g.d + 6, '#ffe08a', 7); if (g === game) $('streakTag').textContent = g.streak > 1 ? '\u00d7' + g.streak + ' streak' : ''; if (g === game) setTimeout(function () { tone(1560, 0.18, 'sine', 0.1, 2100); }, 90); } if (g.mode !== 'attract') tone(1180 + (g.coins % 5) * 90, 0.12, 'sine', 0.12, 1600); if (g === game && g.mode !== 'attract') $('coins').textContent = g.coins; }
   }
   // boosts
   for (i = 0; i < g.boosts.length; i++) {
@@ -749,6 +762,7 @@ function bump(g, side) {
   if (g.mode === 'tutorial') { g.tut.hitOnce = true; }
   else if (g.mode === 'calm') { floatText(g, 'Bump!', '#ffffff'); }
   else if (g.mode !== 'attract') {
+    if (g.bumpD == null) g.bumpD = g.d;
     g.hull--;
     if (g === game) { updHull(); var hp = $('hull'); hp.classList.remove('hit'); void hp.offsetWidth; hp.classList.add('hit'); }
     if (g.hull > 0) floatText(g, g.hull === 1 ? 'Ouch! Last bump left' : 'Ouch! ' + g.hull + ' bumps left', '#ffd0c4');
@@ -1370,21 +1384,21 @@ function clearLesson(g) { if (g) { g.lessonT = 0; g.lessonSlow = 0; } show('tip'
 function sink(g) {
   g.over = true; g.sunk = true; clearLesson(g); chips(g, 16); burst(g, g.x, g.d, boatPal.deck, 6); burst(g, g.x, g.d, '#ffffff', 16); noise(0.6, 0.4, 300);
   var m = Math.floor(g.d / 10);
-  var got = addWallet(payout(g));
+  var got = runRewards(g);
   setTimeout(function () {
     if (g.mode === 'endless') {
       var best = store.get('bestEndless', 0), isNew = m > best; if (isNew) store.set('bestEndless', m);
-      result('Your boat sank', (isNew ? '<span class="new">New best!</span>' : 'Best: ' + best + ' m') + unlockLine(got) + affordLine(), [[m + ' m', 'distance'], coinStat(g)], 'The river gets faster and twistier the farther you go.');
+      result('Your boat sank', (isNew ? '<span class="new">New best!</span>' : 'Best: ' + best + ' m') + g.rewardHtml + unlockLine(got) + affordLine(), [[m + ' m', 'distance'], coinStat(g)], 'The river gets faster and twistier the farther you go.');
     } else {
-      result('Your boat sank', 'Daily River #' + dailyNumber() + unlockLine(got) + affordLine(), [[m + ' m', 'of 1500 m'], coinStat(g)], g.ghost ? 'Your ghost made it to the finish. Try to catch it!' : 'Reach the finish rope to set a time. Your best run then races you as a ghost.', g.ghost ? 'Race my ghost' : 'Go again');
+      result('Your boat sank', 'Daily River #' + dailyNumber() + g.rewardHtml + unlockLine(got) + affordLine(), [[m + ' m', 'of 1500 m'], coinStat(g)], g.ghost ? 'Your ghost made it to the finish. Try to catch it!' : 'Reach the finish rope to set a time. Your best run then races you as a ghost.', g.ghost ? 'Race my ghost' : 'Go again');
     }
   }, 900);
 }
 function finishDaily(g) {
-  g.over = true; clearLesson(g); var got = addWallet(payout(g)); burst(g, g.x, g.d + 20, '#ffe08a', 16); burst(g, g.x, g.d + 20, '#ffffff', 12); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
+  g.over = true; g.finished = true; clearLesson(g); var got = runRewards(g); burst(g, g.x, g.d + 20, '#ffe08a', 16); burst(g, g.x, g.d + 20, '#ffffff', 12); tone(660, 0.15, 'sine', 0.12, 990); setTimeout(function () { tone(990, 0.25, 'sine', 0.12, 1320); }, 150);
   var key = 'daily.' + todayKey(), prev = store.get(key, null); if (prev && prev.v !== RIVER_V) prev = null; var t = Math.round(g.t * 10) / 10, isNew = !prev || t < prev.time;
   if (isNew) { store.set(key, { v: RIVER_V, time: t, coins: g.coins }); store.set('ghost.' + todayKey(), { v: RIVER_V, s: g.ghostRec }); clearOldGhosts(); }
-  result('Finished!', 'Daily River #' + dailyNumber() + (isNew && prev ? ' · <span class="new">New best!</span>' : isNew ? '' : ' · Best ' + fmtTime(prev.time)) + unlockLine(got) + affordLine(),
+  result('Finished!', 'Daily River #' + dailyNumber() + (isNew && prev ? ' · <span class="new">New best!</span>' : isNew ? '' : ' · Best ' + fmtTime(prev.time)) + g.rewardHtml + unlockLine(got) + affordLine(),
     [[fmtTime(t), 'time'], [g.coins, 'coins'], [3 - g.hull, 'bumps']], isNew ? 'Your run is saved as a white ghost boat. Race it to beat your time. A new river comes tomorrow.' : 'Your ghost still has the best time. Catch it!', 'Race my ghost');
 }
 function finishCalm(g) {
@@ -1402,8 +1416,81 @@ function addWallet(n) {
   return got;
 }
 function affordLine() { // nudge toward the shop when the next boat is affordable
-  var nx = HULLS.filter(function (h) { return !owns(h.id); })[0];
-  return nx && bank() >= nx.price ? '<br><span class="new">You can buy the ' + nx.name + ' in the Boat shop!</span>' : '';
+  var nx = nextHull();
+  return nx && bank() >= netCost(nx) ? '<br><span class="new">You can buy the ' + nx.name + ' in the Boat shop!</span>' : '';
+}
+// ---------- river goals: 3 at a time, coins for each, an accessory every 2nd goal ----------
+var GOAL_KINDS = {
+  dist: { t: function (n) { return 'Reach ' + fmtN(n) + ' m in Endless'; }, n: function (t) { return 500 + 250 * t; } },
+  coins: { t: function (n) { return 'Collect ' + n + ' coins in one run'; }, n: function (t) { return 40 + 20 * t; } },
+  lines: { t: function (n) { return 'Get ' + n + ' perfect coin lines in one run'; }, n: function (t) { return 2 + t; } },
+  clean: { t: function (n) { return 'Go ' + fmtN(n) + ' m without a bump'; }, n: function (t) { return 300 + 150 * t; } },
+  ramps: { t: function (n) { return 'Jump ' + n + (n > 1 ? ' ramps' : ' ramp') + ' in one run'; }, n: function (t) { return 1 + Math.floor(t / 2); }, from: 1 },
+  falls: { t: function (n) { return 'Go over ' + n + (n > 1 ? ' waterfalls' : ' waterfall') + ' in one run'; }, n: function (t) { return 1 + Math.floor(t / 3); }, from: 2 },
+  daily: { t: function () { return 'Finish the Daily River'; }, n: function () { return 1; } },
+  runs: { t: function (n) { return 'Play ' + n + ' runs'; }, n: function (t) { return 3 + t; }, sum: true }
+};
+var GOAL_ORDER = ['dist', 'coins', 'lines', 'clean', 'ramps', 'falls', 'daily', 'runs'];
+function goalTier(done) { return Math.min(8, Math.floor(done / 3)); }
+function makeGoal(st, skip) {
+  var t = goalTier(st.done), pool = GOAL_ORDER.filter(function (k) { return (GOAL_KINDS[k].from || 0) <= t && skip.indexOf(k) < 0; });
+  var k = pool[Math.floor(Math.random() * pool.length)];
+  return { k: k, n: GOAL_KINDS[k].n(t), r: 80 + 40 * t, p: 0 };
+}
+function goalState() {
+  var st = store.get('goals', null);
+  if (!st || !st.list) {
+    st = { done: 0, list: [{ k: 'coins', n: 40, r: 80, p: 0 }, { k: 'dist', n: 500, r: 80, p: 0 }, { k: 'runs', n: 3, r: 80, p: 0 }] };
+    store.set('goals', st);
+  }
+  return st;
+}
+function nextAcc() { return ACCS.filter(function (a) { return !fleet.acc[a.id]; })[0] || null; }
+function goalMet(gl, g) {
+  var n = gl.n;
+  switch (gl.k) {
+    case 'dist': return g.mode === 'endless' && Math.floor(g.d / 10) >= n;
+    case 'coins': return g.coins >= n;
+    case 'lines': return (g.nLines || 0) >= n;
+    case 'clean': return Math.floor((g.bumpD == null ? g.d : g.bumpD) / 10) >= n;
+    case 'ramps': return (g.nRamps || 0) >= n;
+    case 'falls': return (g.nFalls || 0) >= n;
+    case 'daily': return g.mode === 'daily' && !!g.finished;
+    case 'runs': gl.p = (gl.p || 0) + 1; return gl.p >= n;
+  }
+  return false;
+}
+function checkGoals(g) {
+  var out = { coins: 0, lines: [] };
+  if (g.mode !== 'endless' && g.mode !== 'daily') return out;
+  var st = goalState();
+  st.list = st.list.map(function (gl) {
+    if (!goalMet(gl, g)) return gl;
+    st.done++; out.coins += gl.r;
+    out.lines.push('Goal done: ' + GOAL_KINDS[gl.k].t(gl.n) + ' \u00b7 +' + gl.r + ' coins');
+    if (st.done % 2 === 0) { var a = nextAcc(); if (a) { fleet.acc[a.id] = true; custOf(curHull().id).on[a.id] = true; saveFleet(); out.lines.push('New accessory: ' + a.name + '! It\u2019s on your boat now.'); } }
+    return null;
+  });
+  st.list = st.list.map(function (gl) { return gl || makeGoal(st, st.list.filter(Boolean).map(function (x) { return x.k; })); });
+  // makeGoal above sees only the goals kept so far; make sure no two match
+  for (var i = 1; i < st.list.length; i++) for (var j = 0; j < i; j++) if (st.list[i].k === st.list[j].k) st.list[i] = makeGoal(st, st.list.map(function (x) { return x.k; }));
+  store.set('goals', st);
+  return out;
+}
+function runRewards(g) { // boat coins + goal rewards + daily bonus, saved together
+  var extra = 0, lines = [];
+  if (g.mode === 'daily' && store.get('dailyBonus', '') !== todayKey()) { store.set('dailyBonus', todayKey()); extra += DAILY_BONUS; lines.push('Daily bonus: +' + DAILY_BONUS + ' coins'); }
+  var gr = checkGoals(g); extra += gr.coins; lines = lines.concat(gr.lines);
+  g.rewardHtml = lines.length ? '<span class="goalDone">' + lines.join('<br>') + '</span>' : '';
+  if (lines.length) setTimeout(function () { [784, 988, 1175].forEach(function (f, i) { setTimeout(function () { tone(f, 0.14, 'sine', 0.1, f * 1.01); }, i * 100); }); }, 950);
+  return addWallet(payout(g) + extra);
+}
+function renderGoals() {
+  var st = goalState(), a = nextAcc();
+  $('goalBox').innerHTML = st.list.map(function (gl) {
+    var prog = GOAL_KINDS[gl.k].sum ? ' <small>' + (gl.p || 0) + ' / ' + gl.n + '</small>' : '';
+    return '<div class="goal"><span>' + GOAL_KINDS[gl.k].t(gl.n) + prog + '</span><b>+' + gl.r + '</b></div>';
+  }).join('') + '<div class="foot">' + (a ? 'Finish ' + (st.done % 2 === 0 ? 2 : 1) + ' more goal' + (st.done % 2 === 0 ? 's' : '') + ' to earn the ' + a.name + ' accessory.' : 'You\u2019ve earned every accessory!') + ' Goals count in Endless and Daily River.</div>';
 }
 function unlockLine(got) {
   if (!got.length) return '';
@@ -1436,10 +1523,11 @@ function refreshMenu() {
   if (tiltAutoOff && store.get('steer', 'tilt') === 'tilt') { steerMode = 'tilt'; tiltAutoOff = false; } // try tilt again next run
   var be = store.get('bestEndless', 0); $('bestEndless').textContent = be ? 'Best: ' + be + ' m' : 'Go as far as you can';
   var dd = dailyBest(); $('bestDaily').textContent = '#' + dailyNumber() + ' · ' + (dd ? 'Your best today: ' + fmtTime(dd.time) : 'Same river for everyone today');
-  var ch = curHull(), nx = HULLS.filter(function (h) { return !owns(h.id); })[0];
-  $('curBoatName').textContent = ch.name; $('bankLine').textContent = bank() + ' coins to spend';
+  var ch = curHull(), nx = nextHull();
+  $('curBoatName').textContent = ch.name; $('bankLine').textContent = fmtN(bank()) + ' coins to spend';
   previewBoat($('curBoatCv'), lookOf(ch.id));
-  $('walletLine').innerHTML = nx ? 'Next boat: ' + nx.name + ' (' + nx.price + ' coins)<div class="bar"><i style="width:' + Math.min(100, Math.round(bank() / nx.price * 100)) + '%"></i></div>' : 'You own every boat!';
+  $('walletLine').innerHTML = nx ? 'Next boat: ' + nx.name + ' (' + fmtN(netCost(nx)) + ' coins after trade-in)<div class="bar"><i style="width:' + Math.min(100, Math.round(bank() / Math.max(1, netCost(nx)) * 100)) + '%"></i></div>' : 'You have the best boat!';
+  renderGoals();
   document.querySelectorAll('#steerRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.steer === steerMode)); });
   document.querySelectorAll('#orientRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.orient === orientPref)); });
   show('sensRow', steerMode === 'tilt'); syncSens(); syncZoom();
@@ -1466,24 +1554,34 @@ function closeShop() { clearInterval(shopTimer); show('shop', false); refreshMen
 function statBar(label, v) { return '<div class="stat"><span>' + label + '</span><i><b style="width:' + Math.round(clamp(v, 0.04, 1) * 100) + '%"></b></i></div>'; }
 function renderShop() {
   var h = hullDef(shopSel), own = owns(h.id), using = curHull().id === h.id, bk = bank();
-  $('shopBank').textContent = bk + ' coins';
+  $('shopBank').textContent = fmtN(bk) + ' coins';
   var fr = $('fleetRow'); fr.innerHTML = '';
   HULLS.forEach(function (hh) {
     var bt = document.createElement('button'), cv = document.createElement('canvas'), o = owns(hh.id);
     cv.width = 60; cv.height = 92; bt.appendChild(cv); bt.setAttribute('role', 'listitem');
-    var lab = document.createElement('div'); lab.innerHTML = hh.name + '<br>' + (curHull().id === hh.id ? '<span class="using">Using</span>' : o ? 'Owned' : hh.price + ' coins'); bt.appendChild(lab);
+    var lab = document.createElement('div'); lab.innerHTML = hh.name + '<br>' + (curHull().id === hh.id ? '<span class="using">Using</span>' : o ? 'Owned' : nextHull() === hh ? fmtN(hh.price) + ' coins' : hullIdx(hh.id) < hullIdx(topOwned().id) ? 'Traded in' : 'Locked'); bt.appendChild(lab);
     if (!o) bt.classList.add('locked'); bt.setAttribute('aria-pressed', String(hh.id === shopSel));
     bt.onclick = function () { shopSel = hh.id; renderShop(); };
     fr.appendChild(bt); previewBoat(cv, lookOf(hh.id));
   });
   $('shopName').textContent = h.name; $('shopBlurb').textContent = h.blurb;
-  $('shopStats').innerHTML = statBar('Speed', (h.spd - 0.9) / 0.35) + statBar('Steering', (h.str - 0.9) / 0.47) + statBar('Toughness', h.hp / 5) + statBar('Coin bonus', h.cm / 3.5) +
+  $('shopStats').innerHTML = statBar('Speed', (h.spd - 0.9) / 0.35) + statBar('Steering', (h.str - 0.9) / 0.47) + statBar('Toughness', h.hp / 5) + statBar('Coin bonus', h.cm / 2.5) +
     '<div class="stat"><span></span>\u00d7' + h.cm + ' coins \u00b7 ' + h.hp + ' bumps</div>';
   var act = $('shopAct');
   if (using) { act.textContent = 'Using this boat'; act.disabled = true; }
   else if (own) { act.textContent = 'Use this boat'; act.disabled = false; act.onclick = function () { fleet.cur = h.id; saveFleet(); boatPal = palOf(h.id); tone(880, 0.12, 'sine', 0.1, 1100); renderShop(); }; }
-  else { act.textContent = bk >= h.price ? 'Buy for ' + h.price + ' coins' : 'Need ' + (h.price - bk) + ' more coins'; act.disabled = bk < h.price;
-    act.onclick = function () { if (bank() < h.price) return; store.set('bank', bank() - h.price); fleet.owned.push(h.id); fleet.cur = h.id; custOf(h.id); saveFleet(); boatPal = palOf(h.id); celebrate(); toast('The ' + h.name + ' is yours!', 2.5); renderShop(); }; }
+  else if (nextHull() === h) {
+    var top = topOwned(), tv = tradeVal(), net = netCost(h);
+    $('shopStats').innerHTML += '<div class="price">Price ' + fmtN(h.price) + (tv ? ' \u2212 trade in your ' + top.name + ' ' + fmtN(tv) + ' = <b>' + fmtN(net) + ' coins</b>' : ' coins') + '</div>';
+    act.textContent = bk >= net ? (tv ? 'Trade in and buy for ' : 'Buy for ') + fmtN(net) + ' coins' : 'Need ' + fmtN(net - bk) + ' more coins'; act.disabled = bk < net;
+    act.onclick = function () {
+      var top = topOwned(), net = netCost(h); if (bank() < net) return;
+      var oc = custOf(top.id), nc = custOf(h.id); nc.color = oc.color; nc.on = JSON.parse(JSON.stringify(oc.on || {})); // color and accessories move to the new boat
+      store.set('bank', bank() - net); fleet.owned = fleet.owned.filter(function (id) { return id !== top.id; }); fleet.owned.push(h.id); fleet.cur = h.id; saveFleet(); boatPal = palOf(h.id);
+      celebrate(); toast('The ' + h.name + ' is yours!' + (top.price ? ' Your ' + top.name + ' was traded in.' : ''), 3); renderShop();
+    };
+  } else if (hullIdx(h.id) < hullIdx(topOwned().id)) { act.textContent = 'Traded in for a better boat'; act.disabled = true;
+  } else { var pv = HULLS[hullIdx(h.id) - 1]; act.textContent = 'Buy the ' + pv.name + ' first'; act.disabled = true; }
   show('custBox', own);
   var cr = $('colorRow'); cr.innerHTML = ''; var cu = custOf(h.id), wl = earned();
   BOATS.forEach(function (b) {
@@ -1495,14 +1593,10 @@ function renderShop() {
   });
   var ar = $('accRow'); ar.innerHTML = '';
   ACCS.forEach(function (a) {
-    var bt = document.createElement('button'), have = !!cu.acc[a.id], on = !!cu.on[a.id];
-    bt.innerHTML = a.name + '<small>' + (have ? (on ? 'On \u00b7 tap to take off' : 'Off \u00b7 tap to put on') : a.price + ' coins') + '</small>';
-    if (on) bt.classList.add('on'); if (!have && bk < a.price) bt.disabled = true;
-    bt.onclick = function () {
-      if (!have) { if (bank() < a.price) return; store.set('bank', bank() - a.price); cu.acc[a.id] = true; cu.on[a.id] = true; tone(990, 0.14, 'sine', 0.1, 1320); }
-      else cu.on[a.id] = !on;
-      saveFleet(); renderShop();
-    };
+    var bt = document.createElement('button'), have = !!fleet.acc[a.id], on = have && !!cu.on[a.id];
+    bt.innerHTML = a.name + '<small>' + (have ? (on ? 'On \u00b7 tap to take off' : 'Off \u00b7 tap to put on') : 'Earn from a river goal') + '</small>';
+    if (on) bt.classList.add('on'); if (!have) bt.disabled = true;
+    bt.onclick = function () { if (!have) return; cu.on[a.id] = !on; tone(990, 0.12, 'sine', 0.08, 1320); saveFleet(); renderShop(); };
     ar.appendChild(bt);
   });
 }
@@ -1556,7 +1650,7 @@ $('toMenu').onclick = toMenu;
 var taps = 0, tapT = 0;
 $('title').onclick = function () { var n = performance.now(); taps = n - tapT < 600 ? taps + 1 : 1; tapT = n; if (taps >= 5) show('tester', true); };
 $('resetTut').onclick = function () { store.set('tutDone', false); store.del('seen'); toast('Lesson will show again', 2); };
-$('resetAll').onclick = function () { resetAll(); fleet = { owned: ['row'], cur: 'row', cust: { row: { color: 'oak', acc: {}, on: {} } } }; saveFleet(); store.set('bank', 0); boatPal = BOATS[0]; refreshMenu(); toast('All progress reset', 2); };
+$('resetAll').onclick = function () { resetAll(); fleet = { owned: ['row'], cur: 'row', acc: {}, cust: { row: { color: 'oak', acc: {}, on: {} } } }; saveFleet(); store.set('bank', 0); boatPal = BOATS[0]; refreshMenu(); toast('All progress reset', 2); };
 if (qs.get('tester') === '1') show('tester', true);
 $('addCoins').onclick = function () { addWallet(2000); refreshMenu(); toast('+2000 coins (tester)', 2); };
 document.addEventListener('visibilitychange', function () { if (document.hidden) pauseGame(); });
