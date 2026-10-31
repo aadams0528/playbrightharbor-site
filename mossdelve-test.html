@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.6.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.7 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -637,7 +637,7 @@ function tone(f, d, type, vol, slide) {
   o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02);
 }
 const SFX = {
-  hit() { tone(180, 0.08, 'square', 0.05, 90); }, hurt() { tone(120, 0.12, 'sawtooth', 0.06, 70); },
+  swish() { tone(1100, 0.07, 'triangle', 0.02, 260); }, hit() { tone(180, 0.08, 'square', 0.05, 90); }, hurt() { tone(120, 0.12, 'sawtooth', 0.06, 70); },
   crit() { tone(420, 0.1, 'square', 0.06, 200); }, flare() { tone(300, 0.35, 'triangle', 0.14, 900); tone(600, 0.3, 'sine', 0.06, 1400); },
   pick() { tone(520, 0.08, 'triangle', 0.1); setTimeout(() => tone(780, 0.12, 'triangle', 0.1), 70); },
   chest() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'triangle', 0.09), i * 80)); },
@@ -882,15 +882,87 @@ const LOOKS = {
   ranger: { c: ['#2e4a22', '#5c8a3c', '#2a4220'], hood: '#3f6a2c', gear: 'bow' },
   mage: { c: ['#3a2450', '#6e46a0', '#34204a'], hood: '#553583', gear: 'staff' },
 };
+// ---- combat animation: weapon swings that match the gear, foe attacks, impacts ----
+const WEAPON_KIND = { bone_knife: 'knife', flint_axe: 'axe', ember_spear: 'spear', thorn_whip: 'whip' };
+const WEAPON_COL = { twig_sword: ['#b08a5a', '255,220,160'], rusty_blade: ['#b89878', '255,225,190'], bone_knife: ['#efe6d0', '255,250,235'], thorn_whip: ['#5d7a34', '190,240,140'],
+  moss_blade: ['#bfe0a0', '170,255,150'], flint_axe: ['#8a8f96', '255,240,220'], ember_spear: ['#ffb060', '255,150,60'], moonfang: ['#dce8ff', '170,200,255'] };
+function heroWeaponId() { const eq = (mode === 'run' && run && run.eq) || S.eq || {}; return eq.weapon || 'twig_sword'; }
+function heroWeaponKind(cls) { cls = cls || curCls(); if (cls === 'ranger') return 'bow'; if (cls === 'mage') return 'staff'; return WEAPON_KIND[heroWeaponId()] || 'sword'; }
+// poses: ang = weapon angle, hx/hy = hand offset, step = body forward (all in hero sizes)
+const POSES = {
+  sword: { idle: [-0.5, 0, 0, 0], wind: [-1.15, -0.08, -0.16, -0.02], strike: [2.0, 0.06, 0.0, 0.16] },
+  axe: { idle: [-0.35, 0, 0, 0], wind: [-0.6, -0.06, -0.24, -0.03], strike: [2.4, 0.04, 0.04, 0.18] },
+  knife: { idle: [-0.2, 0, 0, 0], wind: [0.35, -0.04, 0.1, -0.02], strike: [-0.05, 0.0, -0.3, 0.14] },
+  spear: { idle: [-0.15, 0, 0.05, 0], wind: [-0.1, 0, 0.17, -0.03], strike: [-0.04, -0.02, -0.4, 0.15] },
+  whip: { idle: [-0.4, 0, 0, 0], wind: [-1.3, -0.06, -0.14, 0], strike: [1.4, 0.04, -0.06, 0.1] },
+  bow: { idle: [-0.3, 0, 0, 0], wind: [-0.1, 0, 0.02, -0.02], strike: [-0.35, 0, -0.02, 0.04] },
+  staff: { idle: [-0.25, 0, 0, 0], wind: [-0.9, -0.02, -0.12, 0], strike: [0.3, 0.02, -0.06, 0.09] },
+};
+const SWING_DUR = 0.42, STRIKE_T = 0.085, WIND_T = 0.24;
+const ease = k => k * k * (3 - 2 * k), easeOut = k => 1 - (1 - k) * (1 - k) * (1 - k);
+function lerpPose(a, b, k) { return a.map((v, i) => v + (b[i] - v) * k); }
+// the hero's pose this frame: wind up just before a swing lands, snap through, then settle
+function heroPose() {
+  const kind = heroWeaponKind(), P = POSES[kind]; let pose = P.idle, draw = 0, k2 = 0;
+  const live = phase === 'fight' && fight && !fight.over && !A.walk;
+  const w = live && fight.st ? Math.max(0, Math.min(1, 1 - fight.hTimer / Math.min(WIND_T, fight.st.interval * 0.45))) : 0;
+  if (A.hs && A.hs.t < SWING_DUR) { const t = A.hs.t;
+    if (t < STRIKE_T) { k2 = easeOut(t / STRIKE_T); pose = lerpPose(lerpPose(P.idle, P.wind, ease(A.hs.w0)), P.strike, k2); }
+    else { const k = ease(Math.min(1, (t - STRIKE_T) / (SWING_DUR - STRIKE_T))); pose = lerpPose(P.strike, P.idle, k); k2 = 1 - k; }
+    // the knife stabs twice
+    if (kind === 'knife' && t > 0.15 && t < 0.3) { const kk = Math.sin((t - 0.15) / 0.15 * Math.PI); pose = lerpPose(pose, P.strike, kk); }
+  } else if (w > 0) { pose = lerpPose(P.idle, P.wind, ease(w)); draw = w; }
+  return { kind, ang: pose[0], hx: pose[1], hy: pose[2], step: pose[3], draw, strike: k2 };
+}
+function drawWeapon(kind, s, o, bob) {
+  const id = o.weapon || heroWeaponId(), col = (WEAPON_COL[id] || WEAPON_COL.twig_sword)[0];
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (kind === 'sword') { const L = id === 'moonfang' ? 0.6 : id === 'twig_sword' ? 0.5 : 0.55;
+    ctx.fillStyle = '#5a3a1e'; ctx.fillRect(-s * 0.02, 0, s * 0.04, s * 0.1); ctx.fillStyle = '#c9a84a'; ctx.beginPath(); ctx.moveTo(-s * 0.08, -s * 0.005); ctx.quadraticCurveTo(0, -s * 0.04, s * 0.08, -s * 0.005); ctx.lineTo(s * 0.07, s * 0.02); ctx.lineTo(-s * 0.07, s * 0.02); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-s * 0.028, -s * 0.01); ctx.lineTo(-s * 0.022, -s * L * 0.9); ctx.lineTo(0, -s * L); ctx.lineTo(s * 0.022, -s * L * 0.9); ctx.lineTo(s * 0.028, -s * 0.01); ctx.closePath();
+    const g = ctx.createLinearGradient(-s * 0.03, 0, s * 0.03, 0); g.addColorStop(0, col); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, col); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    return [0, -s * L]; }
+  if (kind === 'knife') { ctx.fillStyle = '#4a3020'; ctx.fillRect(-s * 0.018, 0, s * 0.036, s * 0.08);
+    ctx.beginPath(); ctx.moveTo(-s * 0.03, 0); ctx.quadraticCurveTo(-s * 0.035, -s * 0.14, 0, -s * 0.22); ctx.quadraticCurveTo(s * 0.02, -s * 0.12, s * 0.025, 0); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    return [0, -s * 0.22]; }
+  if (kind === 'axe') { ctx.strokeStyle = '#5a3a1e'; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(0, s * 0.1); ctx.lineTo(0, -s * 0.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.38); ctx.quadraticCurveTo(s * 0.2, -s * 0.46, s * 0.2, -s * 0.3); ctx.quadraticCurveTo(s * 0.18, -s * 0.22, 0, -s * 0.26); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.moveTo(s * 0.19, -s * 0.42); ctx.quadraticCurveTo(s * 0.21, -s * 0.34, s * 0.19, -s * 0.26); ctx.stroke();
+    return [s * 0.2, -s * 0.34]; }
+  if (kind === 'spear') { ctx.strokeStyle = '#6a4424'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.moveTo(0, s * 0.2); ctx.lineTo(0, -s * 0.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-s * 0.035, -s * 0.58); ctx.lineTo(0, -s * 0.74); ctx.lineTo(s * 0.035, -s * 0.58); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    if (id === 'ember_spear') { const eg = ctx.createRadialGradient(0, -s * 0.66, 0, 0, -s * 0.66, s * 0.12); eg.addColorStop(0, 'rgba(255,160,60,.7)'); eg.addColorStop(1, 'rgba(255,120,40,0)'); ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, -s * 0.66, s * 0.12, 0, 7); ctx.fill(); }
+    return [0, -s * 0.74]; }
+  if (kind === 'whip') { ctx.fillStyle = '#4a3020'; ctx.fillRect(-s * 0.02, -s * 0.02, s * 0.04, s * 0.12);
+    const lash = o.pose ? o.pose.strike : 0, len = s * (0.35 + lash * 0.55), wv = Math.sin(T * 9) * s * 0.03;
+    ctx.strokeStyle = col; ctx.lineWidth = s * 0.022; ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(s * 0.1 + wv, -len * 0.35, -s * 0.12 - wv, -len * 0.7, s * 0.04, -len); ctx.stroke();
+    ctx.fillStyle = '#9ac060'; for (let i = 1; i < 5; i++) { const k = i / 5; ctx.beginPath(); ctx.arc(Math.sin(k * 6 + T * 9) * s * 0.03, -len * k, s * 0.012, 0, 7); ctx.fill(); }
+    return [s * 0.04, -len]; }
+  if (kind === 'bow') { const dr = o.pose ? o.pose.draw : 0, R = s * 0.26, pull = dr * s * 0.12;
+    ctx.strokeStyle = '#6a4424'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.arc(0, 0, R, -1.2 - dr * 0.08, 1.2 + dr * 0.08); ctx.stroke();
+    const ax = Math.cos(-1.2) * R, ay = Math.sin(-1.2) * R, by = Math.sin(1.2) * R;
+    ctx.strokeStyle = 'rgba(240,230,210,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax - pull, 0); ctx.lineTo(ax, by); ctx.stroke();
+    if (dr > 0.05) { ctx.strokeStyle = '#d8c8a0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(ax - pull, 0); ctx.lineTo(R + s * 0.06, 0); ctx.stroke(); ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(R + s * 0.1, 0); ctx.lineTo(R + s * 0.05, -s * 0.02); ctx.lineTo(R + s * 0.05, s * 0.02); ctx.fill(); }
+    return [R, 0]; }
+  if (kind === 'staff') { const dr = o.pose ? Math.max(o.pose.draw, o.pose.strike) : 0;
+    ctx.strokeStyle = '#4a3020'; ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(0, s * 0.12); ctx.lineTo(0, -s * 0.45); ctx.stroke();
+    const og = ctx.createRadialGradient(0, -s * 0.5, 0, 0, -s * 0.5, s * (0.18 + dr * 0.12)); og.addColorStop(0, 'rgba(255,220,150,.95)'); og.addColorStop(0.4, 'rgba(255,120,40,.75)'); og.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = og; ctx.beginPath(); ctx.arc(0, -s * 0.5, s * (0.18 + dr * 0.12), 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffe6b0'; ctx.beginPath(); ctx.arc(0, -s * 0.5, s * (0.04 + dr * 0.02), 0, 7); ctx.fill();
+    return [0, -s * 0.5]; }
+  return [0, 0];
+}
 function curCls() { return (mode === 'run' && run && run.cls) || S.hero || 'warden'; }
 function drawHero(x, y, s, o) {
   o = o || {}; const t = o.t || 0; const r = rngS(42); const LK = LOOKS[o.cls || curCls()] || LOOKS.warden;
-  const bob = Math.sin(t * 3) * s * 0.012; const ly = o.lunge ? -o.lunge * s * 0.18 : 0;
-  ctx.save(); ctx.translate(x, y + ly);
+  const bob = Math.sin(t * 3) * s * 0.012; const pose = o.pose || null;
+  const ly = pose ? -pose.step * s : (o.lunge ? -o.lunge * s * 0.18 : 0);
+  ctx.save(); ctx.translate(x, y + ly + (o.hurt ? o.hurt * s * 0.05 : 0));
+  if (o.hurt && !RM) ctx.rotate(Math.sin(o.hurt * 9) * o.hurt * 0.05);
+  if (!o.down) { const br = 1 + Math.sin(t * 2.4) * 0.012; ctx.scale(1 / Math.sqrt(br), br); }
   if (o.down) { ctx.rotate(o.down * 0.6); ctx.globalAlpha = 1 - o.down * 0.3; }
   shadow(0, 0, s * 0.3);
   // cloak (back view)
-  const hem = []; const n = 6; for (let i = 0; i <= n; i++) hem.push([-s * 0.3 + i / n * s * 0.6, (i % 2 ? -s * 0.03 : 0) + (r() - 0.5) * s * 0.03]);
+  const hem = []; const n = 6, sway = RM ? 0 : s * 0.012; for (let i = 0; i <= n; i++) hem.push([-s * 0.3 + i / n * s * 0.6 + Math.sin(t * 2 + i) * sway, (i % 2 ? -s * 0.03 : 0) + (r() - 0.5) * s * 0.03]);
   ctx.beginPath(); ctx.moveTo(-s * 0.05, -s * 0.72 + bob);
   ctx.quadraticCurveTo(-s * 0.26, -s * 0.68 + bob, -s * 0.27, -s * 0.5 + bob); ctx.quadraticCurveTo(-s * 0.32, -s * 0.2, hem[0][0], hem[0][1]);
   for (const p of hem) ctx.lineTo(p[0], p[1]);
@@ -904,15 +976,17 @@ function drawHero(x, y, s, o) {
   ctx.beginPath(); ctx.moveTo(0, -s * 1.02 + bob); ctx.quadraticCurveTo(s * 0.2, -s * 0.92 + bob, s * 0.17, -s * 0.74 + bob); ctx.quadraticCurveTo(0, -s * 0.64 + bob, -s * 0.17, -s * 0.74 + bob); ctx.quadraticCurveTo(-s * 0.2, -s * 0.92 + bob, 0, -s * 1.02 + bob);
   ctx.fillStyle = LK.hood; ctx.fill(); ctx.stroke();
   if (LK.gear === 'shield') { blob(ctx, 0, -s * 0.42 + bob, s * 0.17, s * 0.2, 12, 0.03, r, '#8a96a4', 'rgba(0,0,0,.5)', 1.5); ctx.strokeStyle = '#c9a84a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -s * 0.58 + bob); ctx.lineTo(0, -s * 0.26 + bob); ctx.moveTo(-s * 0.13, -s * 0.44 + bob); ctx.lineTo(s * 0.13, -s * 0.44 + bob); ctx.stroke(); }
-  if (LK.gear === 'bow') { ctx.save(); ctx.translate(s * 0.25, -s * 0.5 + bob); ctx.rotate(-0.3 - (o.lunge || 0) * 0.4); ctx.strokeStyle = '#6a4424'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.arc(0, 0, s * 0.26, -1.2, 1.2); ctx.stroke(); ctx.strokeStyle = 'rgba(240,230,210,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.cos(-1.2) * s * 0.26, Math.sin(-1.2) * s * 0.26); ctx.lineTo(Math.cos(1.2) * s * 0.26, Math.sin(1.2) * s * 0.26); ctx.stroke(); ctx.restore(); }
-  if (LK.gear === 'staff') { ctx.save(); ctx.translate(s * 0.25, -s * 0.45 + bob); ctx.rotate(-0.25 - (o.lunge || 0) * 0.6); ctx.strokeStyle = '#4a3020'; ctx.lineWidth = s * 0.035; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, s * 0.12); ctx.lineTo(0, -s * 0.45); ctx.stroke();
-    const og = ctx.createRadialGradient(0, -s * 0.5, 0, 0, -s * 0.5, s * 0.18); og.addColorStop(0, 'rgba(255,200,120,.95)'); og.addColorStop(0.4, 'rgba(255,110,40,.7)'); og.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = og; ctx.beginPath(); ctx.arc(0, -s * 0.5, s * 0.18, 0, 7); ctx.fill(); ctx.restore(); }
-  if (LK.gear === 'sword' || LK.gear === 'shield') {
-  // sword (right)
-  ctx.save(); ctx.translate(s * 0.25, -s * 0.45 + bob); ctx.rotate(-0.5 - (o.lunge || 0) * 0.9);
-  ctx.fillStyle = '#5a3a1e'; ctx.fillRect(-s * 0.02, 0, s * 0.04, s * 0.1); ctx.fillStyle = '#8a6a3a'; ctx.fillRect(-s * 0.07, -s * 0.015, s * 0.14, s * 0.03);
-  ctx.beginPath(); ctx.moveTo(-s * 0.025, -s * 0.01); ctx.lineTo(-s * 0.02, -s * 0.42); ctx.lineTo(0, -s * 0.47); ctx.lineTo(s * 0.02, -s * 0.42); ctx.lineTo(s * 0.025, -s * 0.01); ctx.closePath();
-  ctx.fillStyle = '#cfd6d4'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  { // weapon in the right hand, driven by the swing pose
+    const kind = pose ? pose.kind : (LK.gear === 'bow' ? 'bow' : LK.gear === 'staff' ? 'staff' : heroWeaponKind(o.cls)), P = POSES[kind].idle;
+    const pz = pose || { ang: P[0], hx: P[1], hy: P[2], draw: 0, strike: 0 };
+    const hx0 = s * (0.25 + pz.hx), hy0 = -s * (kind === 'bow' ? 0.5 : 0.45) + s * pz.hy + bob;
+    ctx.save(); ctx.translate(hx0, hy0); ctx.rotate(pz.ang);
+    const tip = drawWeapon(kind, s, Object.assign({}, o, { pose: pz }), bob); ctx.restore();
+    // arm: a cloak-sleeve from the shoulder to the hand
+    ctx.strokeStyle = LK.c[1]; ctx.lineWidth = s * 0.07; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(s * 0.18, -s * 0.6 + bob); ctx.quadraticCurveTo(s * 0.28, -s * 0.55 + bob, hx0, hy0 + s * 0.02); ctx.stroke();
+    ctx.fillStyle = '#e0b48a'; ctx.beginPath(); ctx.arc(hx0, hy0 + s * 0.02, s * 0.032, 0, 7); ctx.fill();
+    if (o.out) { const c = Math.cos(pz.ang), sn = Math.sin(pz.ang), tx = tip[0] * c - tip[1] * sn, ty = tip[0] * sn + tip[1] * c, ix = tx * 0.5, iy = ty * 0.5;
+      o.out.tipX = x + hx0 + tx; o.out.tipY = y + ly + hy0 + ty; o.out.inX = x + hx0 + ix; o.out.inY = y + ly + hy0 + iy; o.out.handX = x + hx0; o.out.handY = y + ly + hy0; }
   }
   // lantern (left)
   const lx = -s * 0.36, lyy = -s * 0.4 + bob + Math.sin(t * 2.2) * s * 0.01;
@@ -1027,8 +1101,10 @@ const MON_DRAW = {
 };
 const MON_SIZE = { mimic: 2.2, blob: 1.9, bat: 1.8, crab: 1.9, toad: 2.9, creeper: 2.1, spore: 1.8, beetle: 2.0, rootmother: 2.8, glowcap: 2.0, moth: 1.9, hulk: 2.3, warden: 2.9 };
 function drawMonster(type, x, y, s, t, o) {
-  o = o || {}; ctx.save(); ctx.translate(x + (o.shake || 0), y + (o.lunge ? o.lunge * s * 0.2 : 0));
+  o = o || {}; const lg = o.lunge ? Math.sin(Math.min(1, o.lunge) * Math.PI * 0.5) : 0, wd = o.wind || 0, kn = RM ? 0 : (o.knock || 0);
+  ctx.save(); ctx.translate(x + (o.shake || 0), y + lg * s * 0.32 - wd * s * 0.07 - kn * s * 0.08);
   if (o.alpha != null) ctx.globalAlpha = o.alpha; if (o.scale) ctx.scale(o.scale, o.scale);
+  { const br = RM ? 0 : Math.sin(t * 2.2 + x) * 0.02; ctx.scale(1 + lg * 0.12 - wd * 0.05 + kn * 0.08 - br, 1 - lg * 0.1 + wd * 0.08 - kn * 0.08 + br); }
   MON_DRAW[type](s, t, rngS(type.length * 977 + type.charCodeAt(0)));
   ctx.restore();
   if (o.flash) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = o.flash * 0.6; ctx.translate(x, y); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(0, -s * 0.35, s * 0.45, s * 0.4, 0, 0, 7); ctx.fill(); ctx.restore(); }
@@ -1303,13 +1379,17 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.6.1';
+const VERSION = 'v0.7';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
 let T = 0, paused = false, coachOpen = false, overlayOpen = false, coachClose = null;
 const A = { rune: 0, hurtVig: 0, hitStop: 0, burst: 0, heroLunge: 0, heroHurt: 0, monLunge: 0, monFlash: 0, monAlpha: 1, monScale: 1, shake: 0, fade: 0, fadeDir: 0, flash: 0, walk: null, chestOpen: 0, heroDown: 0, light: 1 };
 let fx = [], floats = [], slashes = [];
+let trail = [], projs = [], sparks = [], marks = []; const heroOut = {};
+const ATK_STYLE = { blob: 'slam', bat: 'bite', crab: 'claw', toad: 'slam', creeper: 'lash', spore: 'puff', beetle: 'claw', rootmother: 'lash', glowcap: 'slam', moth: 'claw', hulk: 'slam', warden: 'claw', mimic: 'bite' };
+function impact(x, y, col, big, delay) { sparks.push({ x, y, col, big: !!big, t: -(delay || 0) }); }
+function shoot(kind, delay) { const ms = fight ? MON_SIZE[fight.m.type] * L.u : L.u * 2; projs.push({ kind, x0: heroOut.tipX || L.heroX, y0: heroOut.tipY || L.heroY - L.u * 1.5, x1: L.monX + (Math.random() - 0.5) * ms * 0.2, y1: L.monY - ms * 0.4, t: -(delay || 0), dur: kind === 'arrow' ? 0.11 : 0.16 }); }
 
 const $ = id => document.getElementById(id);
 function show(el, on) { el.classList.toggle('hidden', !on); }
@@ -1772,15 +1852,19 @@ function flareLesson() {
 function handleEvents(ev) {
   const u = L.u; const ms = MON_SIZE[fight.m.type] * u; let nFl = 0;
   for (const e of ev) {
-    if (e.t === 'swingH') A.heroLunge = 1;
-    else if (e.t === 'swingM') A.monLunge = 1;
-    else if (e.t === 'hitM') { A.monFlash = 1; if (!e.thorn) { A.shake = RM ? 0 : e.crit || e.flare ? 7 : 3; (e.crit ? SFX.crit : SFX.hit)(); if (!e.flare) slashes.push({ t: 0, crit: e.crit, a: (Math.random() - 0.5) * 0.9, flip: Math.random() < 0.5 }); if (e.crit && !RM) A.hitStop = 0.07; }
+    if (e.t === 'swingH') { const pz = A.pose || heroPose(); A.hs = { t: 0, w0: Math.max(0.6, pz.draw), kind: pz.kind }; A.heroLunge = 1; SFX.swish && SFX.swish(); if (pz.kind === 'bow') shoot('arrow'); if (pz.kind === 'staff') shoot('fire'); }
+    else if (e.t === 'swingM') { A.monLunge = 1; }
+    else if (e.t === 'hitM') { A.monFlash = 1; if (!e.thorn) { A.shake = RM ? 0 : e.crit || e.flare ? 7 : 3; (e.crit ? SFX.crit : SFX.hit)(); if (!e.flare) { const kd = (A.hs && A.hs.t < 0.05) ? A.hs.kind : heroWeaponKind(), dl = kd === 'bow' ? 0.11 : kd === 'staff' ? 0.16 : 0, wc = (WEAPON_COL[heroWeaponId()] || WEAPON_COL.twig_sword)[1];
+        slashes.push({ t: -dl, crit: e.crit, a: (Math.random() - 0.5) * 0.5, flip: Math.random() < 0.5, kind: kd, col: kd === 'staff' ? '255,150,60' : kd === 'bow' ? '255,240,210' : wc });
+        impact(L.monX + (Math.random() - 0.5) * ms * 0.25, L.monY - ms * (0.3 + Math.random() * 0.2), e.crit ? '255,210,90' : '255,245,225', e.crit, dl); }
+      A.monKnock = e.crit || e.flare ? 1 : 0.6; if (e.crit && !RM) A.hitStop = 0.07; }
       const vo = e.flare ? (nFl++) : 0; // a Ranger volley spreads its numbers out
       floatText(L.monX + (vo ? (vo % 2 ? 1 : -1) * ms * 0.55 : (Math.random() - 0.5) * ms * 0.4), L.monY - ms * 0.55 - vo * u * 0.35, (e.crit ? 'x2 ' : '') + e.dmg, e.flare ? '#ffe08a' : e.crit ? '#ffcf5a' : e.thorn ? '#c8b89a' : '#fff', e.crit || e.flare ? 1.5 : e.thorn ? 0.8 : 1);
       sparkle(L.monX, L.monY - ms * 0.35, e.flare ? '#ffd47a' : '#f2e2c0', e.flare ? 24 : 6); }
-    else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; floatText(L.heroX, L.heroY - u * 3.1, 'Big hit!', '#ff7a6a', 1.1); } } floatText(L.heroX + 20, L.heroY - u * 2.4, '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
+    else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { marks.push({ style: ATK_STYLE[fight.m.type] || 'claw', t: 0, heavy: !!e.heavy, a: (Math.random() - 0.5) * 0.4 }); SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; floatText(L.heroX, L.heroY - u * 3.1, 'Big hit!', '#ff7a6a', 1.1); } } floatText(L.heroX + 20, L.heroY - u * 2.4, '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
     else if (e.t === 'heal') { floatText(L.heroX - 26, L.heroY - u * 2.2, '+' + e.amt, '#8fcf6a', e.potion ? 1.3 : 0.8); if (e.pet) sparkle(L.heroX, L.heroY - u, '#aaffaa', 6); }
-    else if (e.t === 'flare') { if (e.cls === 'ranger') { for (let k = 0; k < 3; k++) slashes.push({ t: -k * 0.08, crit: true, a: (k - 1) * 0.5, flip: false }); } if (e.cls === 'mage') sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 30); A.flash = RM ? 0.4 : 1; A.burst = 1; A.rune = 1; if (!RM) A.hitStop = 0.1; SFX.flare(); buzz(25); floatText(L.monX, L.monY - ms * 1.05, 'Stunned!', '#ffe58a', 0.9); }
+    else if (e.t === 'flare') { if (e.cls === 'ranger') { for (let k = 0; k < 3; k++) { shoot('arrow', k * 0.08); slashes.push({ t: -0.11 - k * 0.08, crit: true, a: (k - 1) * 0.5, flip: false, kind: 'bow', col: '255,230,150' }); } }
+      if (e.cls === 'mage') { shoot('bigfire'); } A.hs = { t: 0, w0: 1, kind: heroWeaponKind() }; if (e.cls === 'mage') sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 30); A.flash = RM ? 0.4 : 1; A.burst = 1; A.rune = 1; if (!RM) A.hitStop = 0.1; SFX.flare(); buzz(25); floatText(L.monX, L.monY - ms * 1.05, 'Stunned!', '#ffe58a', 0.9); }
     else if (e.t === 'tell') { SFX.tell(); buzz(30); if (!S.seen.tell) setTimeout(() => lesson('tell', [{ text: '<b>Watch out!</b> The guardian is winding up a <b>big attack</b>. Tap <b>FLARE</b> while the red bar fills to interrupt it. If your lantern is not charged yet, brace yourself!', target: $('flare') }]), 60); }
     else if (e.t === 'petHit') { A.petBite = 1; A.monFlash = 0.6; floatText(L.monX - ms * 0.3, L.monY - ms * 0.5, '' + e.dmg, '#ffb36a', 0.8); }
     else if (e.t === 'interrupt') { floatText(L.monX, L.monY - ms * 1.25, 'Interrupted!', '#ffd27a', 1.2); sparkle(L.monX, L.monY - ms * 0.5, '#ffd27a', 30); A.shake = RM ? 0 : 9; buzz([15, 30, 15]); }
@@ -1882,7 +1966,7 @@ function onVictory() {
 }
 
 // ---------------- effects ----------------
-function floatText(x, y, txt, col, size) { floats.push({ x, y, txt, col, size: size || 1, t: 0 }); }
+function floatText(x, y, txt, col, size) { floats.push({ x, y, txt, col, size: size || 1, t: 0, vx: (Math.random() - 0.5) * 50 }); }
 function sparkle(x, y, col, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 7, v = 40 + Math.random() * 120; fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.5 + Math.random() * 0.4, t: 0, col, r: 1.5 + Math.random() * 2 }); } }
 // gold for every win (kept even if you fall) and a bestiary page for each new foe
 function winRewards(m, ms) {
@@ -1909,6 +1993,12 @@ function frame(now) {
 }
 function update(dt) {
   for (const k of ['heroLunge', 'monLunge']) A[k] = Math.max(0, A[k] - dt * 5);
+  A.monKnock = Math.max(0, (A.monKnock || 0) - dt * 5); if (A.hs) A.hs.t += dt;
+  A.pose = heroPose();
+  for (const p of trail) p.age += dt; trail = trail.filter(p => p.age < 0.14);
+  for (const p of projs) p.t += dt; projs = projs.filter(p => p.t < p.dur);
+  for (const p of sparks) p.t += dt; sparks = sparks.filter(p => p.t < (p.big ? 0.3 : 0.22));
+  for (const p of marks) p.t += dt; marks = marks.filter(p => p.t < 0.42);
   A.heroHurt = Math.max(0, A.heroHurt - dt * 4); A.monFlash = Math.max(0, A.monFlash - dt * 6); A.flash = Math.max(0, A.flash - dt * 2.2); A.burst = Math.max(0, A.burst - dt * 1.8); A.rune = Math.max(0, A.rune - dt * 1.1); A.hurtVig = Math.max(0, A.hurtVig - dt * 2.5); A.gambleSpin = Math.max(0, (A.gambleSpin || 0) - dt * 1.1); A.petBite = Math.max(0, (A.petBite || 0) - dt * 4); A.shake = Math.max(0, A.shake - dt * 30);
   if (A.fadeDir) { A.fade = Math.min(1, Math.max(0, A.fade + A.fadeDir * dt * 3.5)); if (A.fade === 0 && A.fadeDir < 0) A.fadeDir = 0; }
   if (mode !== 'run') return;
@@ -1925,7 +2015,7 @@ function update(dt) {
   else A.light = Math.min(1, A.light + dt);
   for (const p of fx) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.smoke ? -20 : p.ember ? -60 : p.leaf ? 60 : 200) * dt; if (p.smoke) { p.vx *= 0.96; p.r += dt * 14; } if (p.leaf) { p.vx *= 0.98; p.rot += dt * 4; } }
   fx = fx.filter(p => p.t < p.life);
-  for (const f of floats) { f.t += dt; f.y -= dt * 40; } floats = floats.filter(f => f.t < 1);
+  for (const f of floats) { f.t += dt; f.y -= dt * (40 + Math.max(0, 0.25 - f.t) * 260); f.x += (f.vx || 0) * dt; } floats = floats.filter(f => f.t < 1);
   for (const sl of slashes) sl.t += dt; slashes = slashes.filter(sl => sl.t < 0.32);
 }
 // torch flames and embers burn through the darkness
@@ -1944,12 +2034,68 @@ function drawTorches(th) {
 }
 // a sword arc across the foe; crits are bigger and gold
 function drawSlash(sl) {
-  const m = fight && fight.m; if (!m) return; const ms = MON_SIZE[m.type] * L.u, k = sl.t / 0.32;
-  ctx.save(); ctx.translate(L.monX, L.monY - ms * 0.4); ctx.rotate(sl.a + (sl.flip ? Math.PI : 0)); ctx.globalCompositeOperation = 'lighter';
-  const rr = ms * (sl.crit ? 0.62 : 0.48), a0 = -1.3 + k * 1.1, a1 = a0 + 1.6;
-  ctx.strokeStyle = sl.crit ? `rgba(255,210,90,${1 - k})` : `rgba(255,248,230,${0.9 * (1 - k)})`; ctx.lineCap = 'round';
-  for (let j = 0; j < 3; j++) { ctx.lineWidth = (sl.crit ? 7 : 4) * (1 - j * 0.3); ctx.beginPath(); ctx.arc(0, 0, rr - j * 3, a0 + j * 0.08, a1 - j * 0.15); ctx.stroke(); }
+  const m = fight && fight.m; if (!m) return; const ms = MON_SIZE[m.type] * L.u, k = sl.t / 0.32, kd = sl.kind || 'sword', c = sl.col || '255,248,230', al = 1 - k;
+  ctx.save(); ctx.translate(L.monX, L.monY - ms * 0.4); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  if (kd === 'knife') { // two quick stabs
+    for (const sx of [-1, 1]) { ctx.save(); ctx.rotate(sx * 0.5 + sl.a); const ln = ms * 0.35 * Math.min(1, k * 4); ctx.strokeStyle = `rgba(${c},${al})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, ms * 0.15); ctx.lineTo(0, ms * 0.15 - ln); ctx.stroke(); ctx.restore(); } }
+  else if (kd === 'spear' || kd === 'bow') { // a straight thrust streak
+    ctx.rotate(sl.a * 0.5); const ln = ms * (kd === 'bow' ? 0.4 : 0.7); const g = ctx.createLinearGradient(0, ln * 0.5, 0, -ln * 0.5); g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},${al})`);
+    ctx.strokeStyle = g; ctx.lineWidth = (sl.crit ? 7 : 5) * (1 - k * 0.5); ctx.beginPath(); ctx.moveTo(0, ln * 0.5); ctx.lineTo(0, -ln * 0.5 * (0.6 + k * 0.4)); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${al})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, ln * 0.3); ctx.lineTo(0, -ln * 0.45); ctx.stroke(); }
+  else if (kd === 'whip') { ctx.rotate(sl.a); ctx.strokeStyle = `rgba(${c},${al})`; ctx.lineWidth = 3.5; ctx.beginPath(); for (let i = 0; i <= 12; i++) { const q = i / 12, xx = (q - 0.5) * ms * 0.9, yy = Math.sin(q * 9 + k * 8) * ms * 0.08 * (1 - q * 0.5); i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); }
+  else if (kd === 'staff') { const rr = ms * (0.15 + k * 0.45); const g = ctx.createRadialGradient(0, 0, rr * 0.2, 0, 0, rr); g.addColorStop(0, `rgba(255,220,140,${al})`); g.addColorStop(0.6, `rgba(255,120,40,${al * 0.7})`); g.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 7); ctx.fill(); }
+  else { // sword and axe: a crescent arc (the axe chops down, heavier)
+    const axe = kd === 'axe'; ctx.rotate(axe ? 0.2 + sl.a * 0.4 : sl.a + (sl.flip ? Math.PI : 0)); const rr = ms * (sl.crit ? 0.62 : axe ? 0.55 : 0.48), a0 = -1.3 + k * 1.1, a1 = a0 + (axe ? 1.2 : 1.6);
+    ctx.beginPath(); ctx.arc(0, 0, rr, a0, a1); ctx.arc(0, 0, rr * (axe ? 0.72 : 0.8), a1 - 0.15, a0 + 0.1, true); ctx.closePath();
+    const g = ctx.createRadialGradient(0, 0, rr * 0.7, 0, 0, rr); g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},${al})`); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = `rgba(255,255,255,${al})`; ctx.lineWidth = sl.crit ? 3 : 2; ctx.beginPath(); ctx.arc(0, 0, rr, a0 + 0.1, a1 - 0.1); ctx.stroke(); }
   ctx.restore();
+}
+// the weapon tip leaves a fading swoosh during a swing
+function drawTrail() {
+  if (trail.length < 2) return; const c = (WEAPON_COL[heroWeaponId()] || WEAPON_COL.twig_sword)[1];
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 1; i < trail.length; i++) { const a = trail[i - 1], b = trail[i], al = (1 - b.age / 0.14) * 0.75;
+    ctx.fillStyle = `rgba(${c},${al})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(b.ix, b.iy); ctx.lineTo(a.ix, a.iy); ctx.closePath(); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); trail.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+  ctx.restore();
+}
+function drawProjs() {
+  for (const p of projs) { if (p.t < 0) continue; const k = p.t / p.dur, x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k - Math.sin(k * Math.PI) * L.u * 0.4, an = Math.atan2(p.y1 - p.y0, p.x1 - p.x0);
+    ctx.save(); ctx.translate(x, y);
+    if (p.kind === 'arrow') { ctx.rotate(an); ctx.strokeStyle = 'rgba(255,240,200,.35)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-L.u * 1.2, 0); ctx.lineTo(0, 0); ctx.stroke();
+      ctx.strokeStyle = '#d8c8a0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-L.u * 0.5, 0); ctx.lineTo(L.u * 0.1, 0); ctx.stroke(); ctx.fillStyle = '#eee'; ctx.beginPath(); ctx.moveTo(L.u * 0.22, 0); ctx.lineTo(L.u * 0.08, -4); ctx.lineTo(L.u * 0.08, 4); ctx.fill();
+      ctx.fillStyle = '#7aa04a'; ctx.beginPath(); ctx.moveTo(-L.u * 0.5, 0); ctx.lineTo(-L.u * 0.62, -5); ctx.lineTo(-L.u * 0.4, 0); ctx.lineTo(-L.u * 0.62, 5); ctx.fill(); }
+    else { const big = p.kind === 'bigfire', r = L.u * (big ? 0.6 : 0.3); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < 6; i++) { const q = i / 6; ctx.fillStyle = `rgba(255,${140 - i * 15},40,${0.5 * (1 - q)})`; ctx.beginPath(); ctx.arc(-Math.cos(an) * r * i * 0.9, -Math.sin(an) * r * i * 0.9, r * (1 - q * 0.6), 0, 7); ctx.fill(); }
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.6); g.addColorStop(0, 'rgba(255,240,190,1)'); g.addColorStop(0.35, 'rgba(255,150,50,.9)'); g.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.6, 0, 7); ctx.fill(); }
+    ctx.restore(); }
+}
+// stylized hit sparks: a white core with sharp rays and a ring
+function drawSparks() {
+  for (const p of sparks) { if (p.t < 0) continue; const D = p.big ? 0.3 : 0.22, k = p.t / D, R = L.u * (p.big ? 1.3 : 0.85) * (0.4 + easeOut(Math.min(1, k * 2)) * 0.6), al = 1 - k;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.globalCompositeOperation = 'lighter'; ctx.rotate(p.x * 0.1);
+    ctx.fillStyle = `rgba(${p.col},${al})`; const n = p.big ? 8 : 6;
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, rr = R * (i % 2 ? 0.6 : 1); ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.12) * R * 0.15, Math.sin(a - 0.12) * R * 0.15); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); ctx.lineTo(Math.cos(a + 0.12) * R * 0.15, Math.sin(a + 0.12) * R * 0.15); ctx.fill(); }
+    ctx.fillStyle = `rgba(255,255,255,${al})`; ctx.beginPath(); ctx.arc(0, 0, R * 0.2 * (1 - k * 0.5), 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgba(${p.col},${al * 0.8})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R * (0.6 + k * 0.6), 0, 7); ctx.stroke();
+    ctx.restore(); }
+}
+// what a foe's attack leaves on the hero: claw rakes, a bite, a ground slam, a lash, a spore puff
+function drawMarks(hx, hy, hs) {
+  for (const mk of marks) { const k = mk.t / 0.42, al = Math.max(0, 1 - k * 1.3), big = mk.heavy ? 1.5 : 1, col = mk.heavy ? '255,90,60' : '255,170,150';
+    ctx.save(); ctx.translate(hx, hy - hs * 0.5); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    if (mk.style === 'claw') { ctx.rotate(0.5 + mk.a); const ln = hs * 0.5 * big * Math.min(1, k * 5);
+      for (let i = -1; i <= 1; i++) { ctx.strokeStyle = `rgba(${col},${al})`; ctx.lineWidth = 4 * big; ctx.beginPath(); ctx.moveTo(i * hs * 0.1, -hs * 0.25 * big); ctx.lineTo(i * hs * 0.1, -hs * 0.25 * big + ln); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,255,255,${al})`; ctx.lineWidth = 1.5; ctx.stroke(); } }
+    else if (mk.style === 'bite') { const cl = Math.min(1, k * 4), gap = hs * 0.25 * big * (1 - cl);
+      for (const sy of [-1, 1]) { ctx.strokeStyle = `rgba(${col},${al})`; ctx.lineWidth = 3 * big; ctx.beginPath(); ctx.arc(0, sy * (gap + hs * 0.02), hs * 0.22 * big, sy > 0 ? Math.PI + 0.4 : 0.4, sy > 0 ? -0.4 : Math.PI - 0.4); ctx.stroke();
+        ctx.fillStyle = `rgba(255,255,255,${al})`; for (let i = 0; i < 5; i++) { const xx = (i - 2) * hs * 0.08 * big; ctx.beginPath(); ctx.moveTo(xx - 4, sy * gap); ctx.lineTo(xx + 4, sy * gap); ctx.lineTo(xx, sy * gap - sy * hs * 0.07 * big); ctx.fill(); } } }
+    else if (mk.style === 'slam') { ctx.translate(0, hs * 0.5); ctx.strokeStyle = `rgba(${mk.heavy ? '255,120,80' : '230,210,170'},${al})`; ctx.lineWidth = 4 * big; ctx.beginPath(); ctx.ellipse(0, 0, hs * (0.2 + k * 0.9) * big, hs * (0.06 + k * 0.25) * big, 0, 0, 7); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = `rgba(120,100,80,${al * 0.5})`; for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; ctx.beginPath(); ctx.arc(Math.cos(a) * hs * 0.5 * k * big, Math.sin(a) * hs * 0.15 * k - hs * 0.08 * k, hs * 0.07 * (1 - k * 0.5), 0, 7); ctx.fill(); } }
+    else if (mk.style === 'lash') { ctx.rotate(-0.6 + mk.a); ctx.strokeStyle = `rgba(${mk.heavy ? '255,110,70' : '170,220,110'},${al})`; ctx.lineWidth = 4 * big; ctx.beginPath(); for (let i = 0; i <= 10; i++) { const q = i / 10, xx = (q - 0.5) * hs * 0.9 * big, yy = Math.sin(q * 7 + k * 10) * hs * 0.06; i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); }
+    else { ctx.globalCompositeOperation = 'source-over'; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + mk.a; ctx.fillStyle = `rgba(150,200,90,${al * 0.6})`; ctx.beginPath(); ctx.arc(Math.cos(a) * hs * 0.35 * k * big, Math.sin(a) * hs * 0.3 * k * big, hs * 0.1 * (1 - k * 0.4), 0, 7); ctx.fill(); } }
+    ctx.restore(); }
 }
 // the Flare's rune circle opens under the foe
 function drawRune(x, y, r, k) {
@@ -1981,7 +2127,8 @@ function draw() {
     if (A.rune > 0) drawRune(L.monX, L.monY, ms * 0.75, A.rune);
     if (m.tell > 0) { const k = 1 - m.tell / TELL_TIME, pr = 0.5 + 0.5 * Math.sin(T * 18); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const tg = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * (0.8 + k * 0.3)); tg.addColorStop(0, `rgba(255,40,30,${0.25 + 0.25 * pr})`); tg.addColorStop(1, 'rgba(255,40,30,0)'); ctx.fillStyle = tg; ctx.fillRect(L.monX - ms * 1.2, L.monY - ms * 1.6, ms * 2.4, ms * 2.4); ctx.restore(); }
     if (m.elite && A.monAlpha > 0) { const ag = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * 0.9); ag.addColorStop(0, `rgba(255,80,60,${0.35 * A.monAlpha})`); ag.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = ag; ctx.fillRect(L.monX - ms, L.monY - ms * 1.3, ms * 2, ms * 1.8); }
-    drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha, scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, stun: m.stun, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
+    drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha, scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, knock: A.monKnock,
+      wind: phase === 'fight' && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 ? Math.max(0, 1 - m.timer / Math.min(0.32, m.int * 0.45)) : (m.tell > 0 ? 0.6 + 0.4 * Math.sin(T * 20) : 0), stun: m.stun, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
     if (phase === 'fight') { const by = L.monY - ms * (m.boss ? 1.12 : 0.95); bar(L.monX, by, Math.min(W * 0.5, ms * 0.9), m.hp / m.max, m.boss ? '#e0574a' : '#d77a4a');
       if (m.tell > 0) { bar(L.monX, by - u * 0.75, Math.min(W * 0.5, ms * 0.9), 1 - m.tell / TELL_TIME, '#ff4a3a'); ctx.font = `800 ${Math.max(12, Math.round(u * 0.36))}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ff9a8a'; ctx.fillText('BIG ATTACK!', L.monX, by - u * 0.85); }
       ctx.font = `700 ${Math.max(12, Math.round(u * 0.34))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#f4ead6'; ctx.fillText((m.elite ? 'Elite ' : '') + m.name + (m.trait ? ' · ' + TRAITS[m.trait].name : '') + (m.stun > 0 ? ' · Stunned' : ''), L.monX, by - 6); }
@@ -1997,7 +2144,9 @@ function draw() {
   let hx = L.heroX, hy = L.heroY, hs = u * 2.2;
   if (A.walk) { const k = Math.min(1, A.walk.t), e = k * k * (3 - 2 * k); hx = A.walk.x0 + (A.walk.x1 - A.walk.x0) * e; hy = A.walk.y0 + (A.walk.y1 - A.walk.y0) * e; hs *= 1 - 0.45 * e; }
   if (run.pet && !A.walk) drawPet(run.pet, hx + hs * 0.55, hy, hs * 0.42, T, { bite: A.petBite });
-  drawHero(hx, hy, hs, { t: T, lunge: A.heroLunge, hurt: A.heroHurt, down: A.heroDown, dim: phase === 'lost' });
+  drawHero(hx, hy, hs, { t: T, pose: A.walk ? null : A.pose, hurt: A.heroHurt, down: A.heroDown, dim: phase === 'lost', out: heroOut });
+  if (!RM && A.hs && A.hs.t < 0.2 && heroOut.tipX != null && ['sword', 'axe', 'whip', 'knife', 'spear'].includes(A.hs.kind)) trail.push({ x: heroOut.tipX, y: heroOut.tipY, ix: heroOut.inX, iy: heroOut.inY, age: 0 });
+  drawTrail(); drawMarks(hx, hy, hs);
   if (phase === 'fight' && fight) { bar(hx, hy + 8, u * 1.6, run.hp / fight.st.maxHp, '#8fcf6a');
     if (fight.ward > 0) { ctx.save(); ctx.strokeStyle = `rgba(140,220,120,${0.5 + 0.3 * Math.sin(T * 6)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(hx, hy - hs * 0.42, hs * 0.42, hs * 0.55, 0, 0, 7); ctx.stroke(); ctx.restore(); } }
   // ambient dust motes drifting in the lantern light
@@ -2014,6 +2163,7 @@ function draw() {
   ctx.globalAlpha = 1;
   // slash trails over the foe
   for (const sl of slashes) if (sl.t >= 0) drawSlash(sl);
+  drawProjs(); drawSparks();
   if (fight && fight.m.burn > 0 && phase === 'fight') { const ms2 = MON_SIZE[fight.m.type] * u; for (let i = 0; i < 6; i++) { const k = (T * 1.5 + i / 6) % 1; ctx.fillStyle = `rgba(255,${120 + i * 15},40,${1 - k})`; ctx.beginPath(); ctx.arc(L.monX + Math.sin(i * 2 + T * 3) * ms2 * 0.3, L.monY - ms2 * (0.1 + k * 0.7), 2 + (1 - k) * 2, 0, 7); ctx.fill(); } }
   // lantern light: darkness everywhere except around the hero (it flickers a little)
   const th = THEMES[run.depth]; const lx = hx - hs * 0.36, ly = hy - hs * 0.4;
@@ -2038,7 +2188,11 @@ function draw() {
     ctx.beginPath(); ctx.arc(lx, ly, u * 0.5 + k * Math.hypot(L.monX - lx, L.monY - ly) * 1.2, 0, 7); ctx.stroke();
     const gg = ctx.createRadialGradient(lx, ly, 0, lx, ly, u * 2.5); gg.addColorStop(0, `rgba(255,230,160,${A.burst * 0.8})`); gg.addColorStop(1, 'rgba(255,230,160,0)'); ctx.fillStyle = gg; ctx.fillRect(lx - u * 2.5, ly - u * 2.5, u * 5, u * 5); ctx.restore(); }
   // floating numbers
-  for (const f of floats) { ctx.globalAlpha = Math.min(1, 2 - f.t * 2); ctx.font = `800 ${Math.round(u * 0.5 * f.size)}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(f.txt, f.x, f.y); ctx.fillStyle = f.col; ctx.fillText(f.txt, f.x, f.y); }
+  // damage numbers pop in big, then settle and drift up
+  for (const f of floats) { const pop = RM ? 1 : f.t < 0.1 ? 1.7 - f.t / 0.1 * 0.7 : 1; ctx.globalAlpha = Math.min(1, 2 - f.t * 2);
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(pop, pop); ctx.font = `800 ${Math.round(u * 0.52 * f.size)}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(20,10,5,.85)'; ctx.strokeText(f.txt, 0, 0);
+    const fg = ctx.createLinearGradient(0, -u * 0.45 * f.size, 0, 0); fg.addColorStop(0, '#ffffff'); fg.addColorStop(0.55, f.col); fg.addColorStop(1, f.col); ctx.fillStyle = fg; ctx.fillText(f.txt, 0, 0); ctx.restore(); }
   ctx.globalAlpha = 1;
   ctx.restore();
   if (A.fade > 0) { ctx.fillStyle = `rgba(0,0,0,${A.fade})`; ctx.fillRect(0, 0, W, H); }
