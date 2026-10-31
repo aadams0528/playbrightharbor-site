@@ -65,6 +65,16 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 .row { display: flex; gap: 8px; margin-top: 12px; }
 .row button { flex: 1; border: 2px solid var(--cardLine); background: var(--btn); color: var(--btnInk); border-radius: 14px; padding: 9px 6px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
 .row button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accentInk); }
+.sens { display: block; margin-top: 10px; text-align: left; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.sens b { float: right; color: var(--accent); }
+.sens input { display: block; width: 100%; margin-top: 6px; accent-color: var(--accent); height: 28px; }
+.screen { overflow-y: auto; }
+@media (orientation: landscape) and (max-height: 560px) {
+  #menu .panel { width: min(100%, 760px); display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: start; padding: 14px 18px 12px; }
+  #menu .panel h1 { font-size: 28px; }
+  .screen { align-items: flex-start; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
+  .screen .panel { margin: auto; }
+}
 .lbl { font-size: 12px; font-weight: 800; color: var(--ink2); text-transform: uppercase; letter-spacing: .5px; margin-top: 14px; text-align: left; }
 .stats { display: flex; gap: 8px; margin: 12px 0 4px; }
 .stats div { flex: 1; background: rgba(47,143,125,.1); border-radius: 14px; padding: 8px 4px; }
@@ -117,15 +127,24 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 
 <div id="menu" class="screen">
   <div class="panel">
-    <h1 id="title">Tilt River<small>prototype v0.3.1 · working title</small></h1>
+    <div class="colA">
+    <h1 id="title">Tilt River<small>prototype v0.4 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
     <button class="big alt" id="playCalm">Calm river<small>Slower, no sinking. Just enjoy the ride.</small></button>
+    </div><div class="colB">
     <div class="lbl">Steering</div>
     <div class="row" id="steerRow">
       <button data-steer="tilt" aria-pressed="false">Tilt phone</button>
       <button data-steer="thumb" aria-pressed="false">Thumb drag</button>
+    </div>
+    <label class="sens" id="sensRow">Tilt sensitivity <b class="sensVal"></b><input type="range" min="1" max="5" step="1" class="sensIn" aria-label="Tilt sensitivity"></label>
+    <div class="lbl">Screen</div>
+    <div class="row" id="orientRow">
+      <button data-orient="auto" aria-pressed="false">Auto</button>
+      <button data-orient="portrait" aria-pressed="false">Portrait</button>
+      <button data-orient="landscape" aria-pressed="false">Landscape</button>
     </div>
     <div class="row">
       <button id="howBtn">How to play</button>
@@ -135,6 +154,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <div class="boats" id="boatRow"></div>
     <div class="foot" id="walletLine"></div>
     <div id="tester" class="hide row"><button id="resetTut">Reset lesson</button><button id="resetAll">Reset all</button></div>
+    </div>
   </div>
 </div>
 
@@ -162,6 +182,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
     <h2>Paused</h2>
     <button class="big" id="resume">Keep going</button>
     <button class="big alt" id="recenter">Recenter tilt<small>Hold the phone how you like, then tap</small></button>
+    <label class="sens" id="pauseSens">Tilt sensitivity <b class="sensVal"></b><input type="range" min="1" max="5" step="1" class="sensIn" aria-label="Tilt sensitivity"></label>
     <button class="big alt hide" id="finishRide">Finish ride<small>See how far you went</small></button>
     <button class="big alt" id="quit">Back to menu</button>
   </div>
@@ -235,7 +256,8 @@ var W, H, DPR, SC, OX, VH, BOAT_SY;
 function resize() {
   W = innerWidth; H = innerHeight; DPR = Math.min(2, devicePixelRatio || 1);
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
-  var gw = Math.min(W, H * 0.66); SC = gw / VW; OX = (W - gw) / 2; VH = H / SC; BOAT_SY = VH * 0.74;
+  var land = W > H; // landscape: a wider river view, the boat a little lower so you still see ahead
+  var gw = Math.min(W, H * (land ? 0.8 : 0.66)); SC = gw / VW; OX = (W - gw) / 2; VH = H / SC; BOAT_SY = VH * (land ? 0.8 : 0.74);
 }
 addEventListener('resize', resize); resize();
 
@@ -446,24 +468,31 @@ function spawn(g) {
 var steerMode = store.get('steer', null);
 var coarse = matchMedia && matchMedia('(pointer: coarse)').matches;
 if (!steerMode) steerMode = (coarse && 'DeviceOrientationEvent' in window) ? 'tilt' : 'thumb';
-var tiltRaw = 0, tiltZero = null, tiltSeen = false, tiltListening = false, permAsked = false;
+var tiltRaw = 0, tiltZero = null, tiltSeen = false, tiltListening = false, permAsked = false, tiltAutoOff = false;
 var keyL = false, keyR = false, drag = null;
 function onOri(e) {
   var ang = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
   var v = ang === 90 ? e.beta : (ang === -90 || ang === 270) ? -e.beta : e.gamma;
   if (v == null) return;
   tiltSeen = true; tiltRaw = v;
+  if (tiltAutoOff && store.get('steer', 'tilt') === 'tilt') { // the sensor woke up after we fell back to thumb: switch back
+    tiltAutoOff = false; steerMode = 'tilt'; tiltZero = null; toast('Tilt is working now. Tilt to steer.', 2.5);
+    if (game && game.tut && game.tut.step === 0) tutShow(game);
+  }
 }
 function listenTilt() { if (!tiltListening) { addEventListener('deviceorientation', onOri); tiltListening = true; } }
 function needsPermission() { return typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'; }
-if (!needsPermission() && 'DeviceOrientationEvent' in window) listenTilt();
+// Listen from the start: if the sensor needs permission, events simply begin once it is granted.
+if ('DeviceOrientationEvent' in window) listenTilt();
 function askTilt() {
-  if (!needsPermission()) { listenTilt(); return Promise.resolve(true); }
-  if (permAsked && tiltListening) return Promise.resolve(true);
+  listenTilt();
+  if (!needsPermission() || tiltSeen) return Promise.resolve(true);
   permAsked = true;
-  return DeviceOrientationEvent.requestPermission().then(function (s) { if (s === 'granted') { listenTilt(); return true; } return false; }).catch(function () { return false; });
+  // Only a clear "denied" turns tilt off. Anything else keeps tilt on, and the late-sensor check covers it.
+  return DeviceOrientationEvent.requestPermission().then(function (s) { return s !== 'denied'; }).catch(function () { return true; });
 }
-var SENS = 20; // degrees of tilt for full steering
+var SENS_DEG = [32, 26, 20, 15, 11], SENS_NAME = ['Very low', 'Low', 'Medium', 'High', 'Very high'];
+var sensLvl = clamp(store.get('tiltSens', 3), 1, 5), SENS = SENS_DEG[sensLvl - 1]; // degrees of tilt for full steering
 function tiltSteer() {
   if (!tiltSeen || steerMode !== 'tilt') return 0;
   if (tiltZero == null) tiltZero = tiltRaw;
@@ -894,6 +923,17 @@ function draw(g) {
     if (de.type === 'reeds') x = ra2.x + de.side * (ra2.h + 2 + de.gap * 0.1);
     drawDecor(c, de, x, y, P);
   }
+  if (ext > 60) { // wide screens (landscape): extra woods beyond the world edges
+    var MT = ['pine', 'leafy', 'pine', 'bush', 'boulder', 'flowers'];
+    for (i = i0 - (i0 % 4) - 4; i <= i1 + 4; i += 4) {
+      for (var ms = -1; ms <= 1; ms += 2) for (var mk = 0; mk < 2; mk++) {
+        var mr = h1(i * 7 + mk, 71 + ms), ty = MT[Math.floor(h1(i + mk, 73 + ms) * MT.length)];
+        var mx = ms < 0 ? -12 - mr * (ext - 20) : VW + 12 + mr * (ext - 20), ra3 = riv.at(i * STEP);
+        if (ms < 0 ? mx > ra3.x - ra3.h - 40 : mx < ra3.x + ra3.h + 40) continue;
+        drawDecor(c, { type: ty, s: { pine: 15, leafy: 14, bush: 9, boulder: 10, flowers: 12 }[ty] + h1(i, 75 + mk) * 10, seed: i * 13 + mk * 5 + ms }, mx, sy(g, i * STEP + h1(i, 77 + mk) * 40), P);
+      }
+    }
+  }
   riv.marks.forEach(function (m) { if (m.kind !== 'bridge' && m.d > dBot - 80 && m.d < dTop + 80) drawMark(c, g, m); });
   // ghost
   if (g.ghost && g.mode === 'daily') {
@@ -1126,7 +1166,7 @@ function startRun(mode) {
   show('timePill', mode === 'daily'); show('coinPill', mode !== 'daily'); show('dprog', mode === 'daily'); show('hull', mode !== 'tutorial' && mode !== 'calm'); show('calmPill', mode === 'calm');
   $('coins').textContent = '0'; $('delta').textContent = ''; $('streakTag').textContent = ''; updHull();
   if (mode === 'tutorial') tutShow(game);
-  if (steerMode === 'tilt') setTimeout(function () { if (game && game.mode !== 'attract' && !tiltSeen) { steerMode = 'thumb'; toast('No tilt sensor here, so drag your thumb to steer.', 4); if (game.tut && game.tut.step === 0) tutShow(game); } }, 1500);
+  if (steerMode === 'tilt') setTimeout(function () { if (game && game.mode !== 'attract' && !tiltSeen && steerMode === 'tilt') { steerMode = 'thumb'; tiltAutoOff = true; toast('Waiting for tilt, so drag your thumb for now.', 4); if (game.tut && game.tut.step === 0) tutShow(game); } }, 2500);
 }
 var pendingMode = null;
 function endTutorial(g) {
@@ -1192,7 +1232,7 @@ function result(title, line, stats, note, againLabel) {
   if (/unlockBox/.test(line)) celebrate();
 }
 var lastMode = 'endless';
-function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('recenter', steerMode === 'tilt' && tiltSeen); show('finishRide', game.mode === 'calm'); show('quit', game.mode !== 'calm'); show('tip', false); show('pause', true); }
+function pauseGame() { if (!game || game.mode === 'attract' || game.over) return; paused = true; show('recenter', steerMode === 'tilt' && tiltSeen); show('pauseSens', steerMode === 'tilt'); syncSens(); show('finishRide', game.mode === 'calm'); show('quit', game.mode !== 'calm'); show('tip', false); show('pause', true); }
 function toMenu() {
   if (game && game.mode === 'calm' && !game.over) { game.over = true; addWallet(game.coins); }
   show('quit', true); show('finishRide', false);
@@ -1200,6 +1240,7 @@ function toMenu() {
   game = newGame('attract'); refreshMenu(); show('menu', true);
 }
 function refreshMenu() {
+  if (tiltAutoOff && store.get('steer', 'tilt') === 'tilt') { steerMode = 'tilt'; tiltAutoOff = false; } // try tilt again next run
   var be = store.get('bestEndless', 0); $('bestEndless').textContent = be ? 'Best: ' + be + ' m' : 'Go as far as you can';
   var dd = dailyBest(); $('bestDaily').textContent = '#' + dailyNumber() + ' · ' + (dd ? 'Your best today: ' + fmtTime(dd.time) : 'Same river for everyone today');
   var wl = earned(), next = BOATS.filter(function (b) { return b.need > wl; })[0];
@@ -1214,12 +1255,15 @@ function refreshMenu() {
     row.appendChild(bt);
   });
   document.querySelectorAll('#steerRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.steer === steerMode)); });
+  document.querySelectorAll('#orientRow button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.orient === orientPref)); });
+  show('sensRow', steerMode === 'tilt'); syncSens();
   $('menuIntro').textContent = (steerMode === 'tilt' ? 'Tilt your phone' : coarse ? 'Drag your thumb' : 'Use \u2190 \u2192 or drag with the mouse') + ' to steer down the river. Grab coins, miss the rocks, ride the white rapids.';
   $('soundBtn').textContent = soundOn ? 'Sound on' : 'Sound off'; $('soundBtn').setAttribute('aria-pressed', String(soundOn));
 }
 function play(mode) {
   lastMode = mode; ac();
-  if (steerMode === 'tilt') askTilt().then(function (ok) { if (!ok) { steerMode = 'thumb'; toast('Tilt is off, so drag your thumb to steer. You can allow motion in Settings.', 4); } startRun(mode); });
+  applyOrient(false);
+  if (steerMode === 'tilt') askTilt().then(function (ok) { if (!ok) { steerMode = 'thumb'; tiltAutoOff = true; toast('Tilt is off, so drag your thumb to steer. You can allow motion in Settings.', 4); } startRun(mode); });
   else startRun(mode);
 }
 $('playEndless').onclick = function () { play('endless'); };
@@ -1236,7 +1280,25 @@ $('diStart').onclick = function () { show('dailyIntro', false); play('daily'); }
 $('diBack').onclick = function () { show('dailyIntro', false); show('menu', true); };
 $('howBtn').onclick = function () { store.set('tutDone', false); pendingMode = 'endless'; play('tutorial'); };
 $('soundBtn').onclick = function () { soundOn = !soundOn; store.set('sound', soundOn); refreshMenu(); };
-document.querySelectorAll('#steerRow button').forEach(function (b) { b.onclick = function () { steerMode = b.dataset.steer; store.set('steer', steerMode); if (steerMode === 'tilt') askTilt(); refreshMenu(); }; });
+document.querySelectorAll('#steerRow button').forEach(function (b) { b.onclick = function () { steerMode = b.dataset.steer; tiltAutoOff = false; store.set('steer', steerMode); if (steerMode === 'tilt') askTilt(); refreshMenu(); }; });
+function syncSens() { document.querySelectorAll('.sensIn').forEach(function (r) { r.value = sensLvl; }); document.querySelectorAll('.sensVal').forEach(function (b) { b.textContent = SENS_NAME[sensLvl - 1]; }); }
+document.querySelectorAll('.sensIn').forEach(function (r) { r.oninput = function () { sensLvl = +r.value; SENS = SENS_DEG[sensLvl - 1]; store.set('tiltSens', sensLvl); syncSens(); }; });
+// screen orientation: the phone apps lock it natively; in a browser, lock works on Android (needs fullscreen), iPhone follows the phone
+var orientPref = store.get('orient', 'auto'), wentFull = false;
+function applyOrient(fromTap) {
+  var so = screen.orientation, want = orientPref;
+  if (want === 'auto') {
+    if (so && so.unlock) try { so.unlock(); } catch (e) {}
+    if (wentFull && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    wentFull = false; return;
+  }
+  var mismatch = function () { return want === 'landscape' ? innerWidth < innerHeight : innerWidth > innerHeight; };
+  var hint = function () { if (fromTap && mismatch()) toast(want === 'landscape' ? 'Turn your phone sideways. On iPhone, turn off Rotation Lock first.' : 'Turn your phone upright.', 4); };
+  if (!so || !so.lock) { hint(); return; }
+  var full = document.fullscreenElement || !document.documentElement.requestFullscreen ? Promise.resolve() : document.documentElement.requestFullscreen().then(function () { wentFull = true; });
+  full.catch(function () {}).then(function () { return so.lock(want); }).catch(hint);
+}
+document.querySelectorAll('#orientRow button').forEach(function (b) { b.onclick = function () { orientPref = b.dataset.orient; store.set('orient', orientPref); applyOrient(true); refreshMenu(); }; });
 $('pauseBtn').onclick = pauseGame;
 $('resume').onclick = function () { paused = false; show('pause', false); if (game && (game.lessonT > 0 || game.tut)) show('tip', true); };
 $('finishRide').onclick = function () { if (game && game.mode === 'calm' && !game.over) finishCalm(game); };
