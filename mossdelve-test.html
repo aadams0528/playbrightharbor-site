@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.4 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.5 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,6 +75,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .slot .lb { font-size: 11px; color: var(--ink2); text-transform: uppercase; letter-spacing: .6px; }
 .slot.new { box-shadow: 0 0 0 2px var(--amber); }
 .row2 { display: flex; gap: 8px; }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.row3 .btn { padding: 10px 4px; font-size: 13.5px; position: relative; }
+.row3 .btn.dot::after { content: ""; position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
+.stars { color: var(--amber2); letter-spacing: 1px; font-size: 12px; }
+.gold { color: #ffd45a; font-weight: 800; }
+.beast { border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); padding: 6px 4px 8px; text-align: center; font-size: 11px; }
+.beast img { display: block; margin: 0 auto; }
+.beast b { display: block; font-size: 12px; color: var(--ink); }
+.beast.lock b { color: var(--ink2); }
+.beast.boss { border-color: rgba(224,87,74,.6); }
 .btn { flex: 1; border-radius: 14px; padding: 13px 10px; font-weight: 800; font-size: 16px; background: var(--panel2); border: 1px solid var(--line); }
 .btn.main { font-family: var(--display); letter-spacing: 1px; background: linear-gradient(#f6c463, #d99327); color: #2c1c06; border: 0; font-size: 20px; padding: 16px; box-shadow: 0 3px 0 #8a5a14; }
 .btn.small { flex: 0 0 auto; font-size: 14px; padding: 10px 12px; }
@@ -174,10 +184,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       <button id="quest"></button>
       <div class="slots" id="slots"></div>
       <div class="tierRow hidden" id="tierRow"><button id="tierDown" aria-label="Easier">◀</button><b id="tierLbl"></b><button id="tierUp" aria-label="Harder">▶</button></div>
-      <div class="row2">
-        <button class="btn small" id="collBtn">Collection</button>
-        <button class="btn main" id="delveBtn">Delve</button>
-      </div>
+      <div class="row3"><button class="btn small" id="collBtn">🎒 Collection</button><button class="btn small" id="forgeBtn">⚒️ Forge</button><button class="btn small" id="bestBtn">📖 Bestiary</button></div>
+      <button class="btn main" id="delveBtn">Delve</button>
       <button class="btn hidden" id="abandonBtn" style="font-size:13px;padding:8px">Start a new delve instead</button>
     </div>
   </div>
@@ -187,6 +195,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       <div class="hudrow">
         <div class="hpbar"><i id="hpFill"></i><span id="hpTxt"></span></div>
         <div class="chip" id="atkChip">⚔ 4</div>
+        <div class="chip gold" id="goldChip">🪙 0</div>
       </div>
       <div class="hudrow">
         <div id="place"></div>
@@ -315,11 +324,25 @@ const DEPTHS = [
   { name: 'Glowcap Deep', pool: ['glowcap', 'moth', 'hulk'], guard: 'warden' },
 ];
 
+// Gold drops from every foe and is kept even if you fall. Spend it at the camp forge.
+const GOLD = { base: [3, 6, 10], boss: [25, 45, 80], mimic: [12, 20, 30] };
+function goldDrop(run, m, rng) {
+  const d = run.depth; let g = m.type === 'mimic' ? GOLD.mimic[d] : m.boss ? GOLD.boss[d] : GOLD.base[d];
+  if (m.elite) g *= 1.5; return Math.max(1, Math.round(g * (1 + 0.2 * ((run.tier || 1) - 1)) * (0.85 + rng() * 0.3)));
+}
+// Forge: up to 3 stars per gear piece; each star adds about 15% to its stats (at least +1 per star on whole-number stats).
+const FORGE_COST = { c: [30, 60, 100], f: [50, 100, 160], r: [80, 150, 240] };
+function forgeCost(id, stars) { return (stars || 0) >= 3 ? null : FORGE_COST[GEAR_BY_ID[id].rar][stars || 0]; }
+function gearStats(id, stars) {
+  const base = GEAR_BY_ID[id].s, n = stars || 0, o = {};
+  for (const k in base) { const v = base[k]; o[k] = n === 0 || v < 0 ? v : Number.isInteger(v) ? v + Math.max(n, Math.round(v * 0.15 * n)) : +(v * (1 + 0.15 * n)).toFixed(3); }
+  return o;
+}
 function addStats(t, s) { if (s) for (const k in s) t[k] = (t[k] || 0) + s[k]; return t; }
 
 function calcStats(run) {
   const st = Object.assign({}, BASE);
-  for (const slot of ['weapon', 'armor', 'charm']) { const id = run.eq[slot]; if (id) addStats(st, GEAR_BY_ID[id].s); }
+  for (const slot of ['weapon', 'armor', 'charm']) { const id = run.eq[slot]; if (id) addStats(st, gearStats(id, (run.stars || {})[id])); }
   for (const u of run.ups) addStats(st, UP_BY_ID[u].s);
   st.maxHp += run.bonusHp || 0;
   st.interval = Math.max(0.3, BASE_INTERVAL / Math.max(0.4, 1 + st.spd));
@@ -494,7 +517,7 @@ function pickGear(depth, owned, rng, minRar, quest) {
 }
 
 function newRun(save) {
-  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), found: [], chests: 0, freeChests: 0, events: 0, potion: 'heal', bonusHp: 0, fights: 0, lastStandUsed: false };
+  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), stars: Object.assign({}, save.stars || {}), found: [], chests: 0, freeChests: 0, events: 0, potion: 'heal', bonusHp: 0, fights: 0, lastStandUsed: false };
 }
 // Collection quest: one missing piece to look for, with a clue about where it turns up.
 function pickQuest(owned, rng) {
@@ -532,7 +555,7 @@ const store = {
 };
 const params = new URLSearchParams(location.search);
 if (params.has('fresh')) store.del(SAVE_KEY);
-function defaultSave() { return { v: 1, runs: 0, wins: 0, best: 0, owned: ['twig_sword', 'patched_cloak'], newIds: [], eq: Object.assign({}, STARTER), seen: {}, mute: false, tierMax: 1, tierPick: 1, run: null }; }
+function defaultSave() { return { v: 1, gold: 0, stars: {}, bestiary: {}, runs: 0, wins: 0, best: 0, owned: ['twig_sword', 'patched_cloak'], newIds: [], eq: Object.assign({}, STARTER), seen: {}, mute: false, tierMax: 1, tierPick: 1, run: null }; }
 let S = Object.assign(defaultSave(), store.get(SAVE_KEY) || {});
 if (TEST_BUILD && params.has('unlock')) { S.owned = GEAR.map(g => g.id); S.tierMax = Math.max(S.tierMax, 5); }
 function save() { store.set(SAVE_KEY, S); }
@@ -562,12 +585,14 @@ const SFX = {
   win() { [392, 523, 659].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'triangle', 0.09), i * 90)); },
   lose() { tone(220, 0.6, 'sine', 0.1, 70); },
   tell() { tone(140, 0.5, 'sawtooth', 0.07, 260); setTimeout(() => tone(150, 0.4, 'sawtooth', 0.06, 300), 250); },
+  forge() { [330, 330, 660].forEach((f, i) => setTimeout(() => tone(f, 0.09, 'square', 0.06, f * 0.7), i * 110)); },
+  coin() { tone(1200, 0.06, 'square', 0.04); setTimeout(() => tone(1600, 0.08, 'square', 0.04), 60); },
   potion() { tone(600, 0.1, 'sine', 0.08, 900); setTimeout(() => tone(900, 0.15, 'sine', 0.07, 1200), 90); },
 };
 function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
 
 // ---------------- canvas + layout ----------------
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const cv = document.getElementById('cv'); let ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1, L = {};
 function layout() {
   DPR = Math.min(2.5, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
@@ -1158,7 +1183,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.4';
+const VERSION = 'v0.5';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1176,7 +1201,8 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
 function renderCamp() {
   mode = 'camp'; show($('camp'), true); show($('game'), false);
   $('mute').textContent = S.mute ? '🔇' : '🔊';
-  $('campStats').textContent = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · Gear: ${S.owned.length}/${GEAR.length}` : 'Swipe through rooms. Fights are automatic.') + ` · ${VERSION}`;
+  $('campStats').innerHTML = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · <span class="gold">🪙 ${S.gold || 0}</span>` : 'Swipe through rooms. Fights are automatic.') + ` · ${VERSION}`;
+  $('forgeBtn').classList.toggle('dot', canForgeAny()); $('bestBtn').classList.toggle('dot', !!S.bestNew);
   const sl = $('slots'); sl.innerHTML = '';
   for (const slot of ['weapon', 'armor', 'charm']) {
     const id = S.eq[slot]; const g = id && GEAR_BY_ID[id]; const hasNew = S.newIds.some(n => GEAR_BY_ID[n].slot === slot);
@@ -1195,13 +1221,23 @@ function renderCamp() {
 }
 // the "tap a slot" card only shows on a bare camp screen; opening any panel cancels it, and it tries again next time camp shows
 let campCoachT = 0, campCoachOn = false;
+let campCoachKey = '';
+function nextCampLesson() {
+  const L2 = [
+    { key: 'camp', on: S.runs >= 1 && S.owned.length > 2, el: 'slots', text: 'Gear you find stays yours forever. Tap a slot to wear something better. The next delve gets easier.' },
+    { key: 'forge', on: (S.gold || 0) >= 30, el: 'forgeBtn', text: 'You have enough gold for the <b>Forge</b>! Each star makes a piece of gear stronger, for good.' },
+    { key: 'bestiary', on: Object.keys(S.bestiary || {}).length >= 3, el: 'bestBtn', text: 'Your <b>Bestiary</b> fills in as you beat new foes. Each new page pays 5 gold, and tells you their tricks.' },
+  ];
+  return L2.find(x => x.on && !S.seen[x.key]);
+}
 function armCampCoach() {
   clearTimeout(campCoachT);
-  if (S.runs < 1 || S.seen.camp || S.owned.length <= 2) return;
+  if (!nextCampLesson()) return;
   campCoachT = setTimeout(() => {
-    if (mode !== 'camp' || overlayOpen || coachOpen || S.seen.camp || !$('overlay').classList.contains('hidden')) return;
-    S.seen.camp = 1; save(); campCoachOn = true;
-    coach({ text: 'Gear you find stays yours forever. Tap a slot to wear something better. The next delve gets easier.', target: $('slots'), btn: 'Got it' }).then(() => { campCoachOn = false; });
+    const ls = nextCampLesson();
+    if (!ls || mode !== 'camp' || overlayOpen || coachOpen || !$('overlay').classList.contains('hidden')) return;
+    S.seen[ls.key] = 1; save(); campCoachOn = true; campCoachKey = ls.key;
+    coach({ text: ls.text, target: $(ls.el), btn: 'Got it' }).then(() => { campCoachOn = false; armCampCoach(); });
   }, S.questJust ? 2800 : 700);
 }
 // quest finished during the delve: a small celebration on the camp card, then the next item appears as a silhouette
@@ -1231,15 +1267,61 @@ $('delveBtn').onclick = () => { ac(); if (S.run) resumeRun(); else startRun(); }
 $('abandonBtn').onclick = () => openSheet(`<h2>Start over?</h2><p>Your current delve ends. All your gear stays.</p><div class="row2"><button class="btn" data-a="no">Keep it</button><button class="btn main" data-a="yes">Start over</button></div>`,
   { no: closeSheet, yes: () => { S.run = null; S.runs++; save(); closeSheet(); renderCamp(); } });
 $('collBtn').onclick = openCollection;
+$('forgeBtn').onclick = () => openForge();
+$('bestBtn').onclick = () => openBestiary();
+function canForgeAny() { return Object.values(S.eq).some(id => id && forgeCost(id, S.stars[id]) != null && forgeCost(id, S.stars[id]) <= (S.gold || 0)); }
+// the forge: spend gold to add stars to gear; stars stay forever and apply from the next delve (or right away at camp)
+function openForge() {
+  let h = `<h2>The Forge</h2><p>Spend gold to make gear stronger. Each star adds about 15%, up to 3 stars. You have <span class="gold">🪙 ${S.gold || 0}</span>.</p>`;
+  const ids = S.owned.slice().sort((a, b) => (Object.values(S.eq).includes(b) ? 1 : 0) - (Object.values(S.eq).includes(a) ? 1 : 0));
+  for (const id of ids) {
+    const n = S.stars[id] || 0, c = forgeCost(id, n), worn = Object.values(S.eq).includes(id);
+    const next = c != null ? statLines(gearStats(id, n + 1)).join(' · ') : '';
+    h += `<button class="card rar-${GEAR_BY_ID[id].rar}" data-a="f:${id}" ${c == null || c > (S.gold || 0) ? 'style="opacity:.6"' : ''}>${gearCardHTML(id, `${worn ? '<span class="tag r" style="display:block;margin-top:2px">Wearing</span>' : ''}${c == null ? '<span class="stars">Fully forged</span>' : `<span style="display:block;font-size:12.5px">Next ★: ${next}</span><span class="gold" style="display:block;font-size:13px">Forge for 🪙 ${c}</span>`}`)}</button>`;
+  }
+  h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
+  openSheet(h, { close: () => { closeSheet(); renderCamp(); }, '*': a => { if (!a.startsWith('f:')) return; const id = a.slice(2), n = S.stars[id] || 0, c = forgeCost(id, n);
+    if (c == null) return; if (c > (S.gold || 0)) { toast(`Need 🪙 ${c - (S.gold || 0)} more`, 1200); return; }
+    S.gold -= c; S.stars[id] = n + 1; save(); SFX.forge(); buzz([10, 30, 10]); toast(`${GEAR_BY_ID[id].name} ${'★'.repeat(n + 1)}`, 1400); openForge(); } });
+}
+const LORE = {
+  blob: 'A clump of moss that learned to wobble. Mostly harmless. Mostly.', bat: 'Hangs in the dark and dives at anything with a light.',
+  crab: 'Wears a pebble for a shell and a grudge for a heart.', toad: 'Old Mossback has guarded the first stair for a hundred years.',
+  creeper: 'A root that walks. Cut it and it grows back.', spore: 'Puffs out stinging spores when struck. Hold your breath.',
+  beetle: 'Digs through stone. Its shell blocks most blades.', rootmother: 'The great root that holds the Hollows together, and holds a grudge.',
+  glowcap: 'A mushroom grown huge and angry in the deep glow.', moth: 'Silent wings, quick strikes. Drawn to your lantern.',
+  hulk: 'A walking pile of stone. Slow, but it hits like a rockslide.', warden: 'The Deep Warden keeps the heart of the dungeon. None have passed. Yet.',
+  mimic: 'Looks like treasure. Bites like a bear. Still has treasure inside.',
+};
+const BEAST_ORDER = ['blob', 'bat', 'crab', 'toad', 'mimic', 'creeper', 'spore', 'beetle', 'rootmother', 'glowcap', 'moth', 'hulk', 'warden'];
+const beastImgs = {};
+function beastImg(type, known) {
+  const key = type + (known ? '' : '_s'); if (beastImgs[key]) return beastImgs[key];
+  const px = 64, sc = 2, oc = document.createElement('canvas'); oc.width = px * sc; oc.height = px * sc; const c = oc.getContext('2d'); c.scale(sc, sc);
+  const keep = ctx; ctx = c; try { const ms = Math.min(1.9, MON_SIZE[type]) * 20; drawMonster(type, px / 2, px * 0.86, ms * (MON_SIZE[type] > 2.4 ? 0.95 : 1.15), 0.5, {}); } catch (e) {} ctx = keep;
+  if (!known) { c.globalCompositeOperation = 'source-in'; c.fillStyle = '#0b0a08'; c.fillRect(0, 0, px, px); }
+  return (beastImgs[key] = oc.toDataURL());
+}
+function openBestiary() {
+  S.bestNew = false; save(); $('bestBtn').classList.remove('dot');
+  const B = S.bestiary || {}; const known = BEAST_ORDER.filter(t => B[t]).length;
+  let h = `<h2>Bestiary ${known}/${BEAST_ORDER.length}</h2><p>Every foe you beat gets a page. The first win against a new foe pays <span class="gold">🪙 5</span>.</p><div class="grid" style="grid-template-columns:repeat(3,1fr)">`;
+  for (const t of BEAST_ORDER) { const k = B[t] || 0, m = MONSTERS[t];
+    h += `<button class="beast ${k ? '' : 'lock'} ${m.boss ? 'boss' : ''}" data-a="b:${t}"><img src="${beastImg(t, !!k)}" width="64" height="64" alt=""><b>${k ? m.name : '???'}</b>${k ? `${m.trait ? TRAITS[m.trait].name + ' · ' : ''}beaten ${k}` : (m.boss ? 'Guardian' : 'Not met yet')}</button>`; }
+  h += `</div><div class="foot"><button class="btn" data-a="close">Close</button></div>`;
+  openSheet(h, { close: closeSheet, '*': a => { if (!a.startsWith('b:')) return; const t = a.slice(2), k = (S.bestiary || {})[t]; if (!k) { toast('Beat it once to learn more', 1200); return; }
+    const m = MONSTERS[t]; openSheet(`<h2>${m.name}</h2><div style="text-align:center"><img src="${beastImg(t, true)}" width="128" height="128" alt=""></div><p><i>${LORE[t]}</i></p><div class="cmp">${m.boss ? 'Guardian · ' : ''}${m.trait ? TRAITS[m.trait].name + ': ' + TRAITS[m.trait].tip : 'No special tricks.'}<br>Beaten ${k} time${k > 1 ? 's' : ''}</div><div class="foot"><button class="btn" data-a="back">Back</button></div>`, { back: openBestiary }); } });
+}
 // hidden tester reset: tap the title 5 times
 let titleTaps = 0, titleT = 0;
 $('title').style.pointerEvents = 'auto';
 $('title').onclick = () => { const now = Date.now(); titleTaps = now - titleT < 600 ? titleTaps + 1 : 1; titleT = now; if (titleTaps >= 5 && TEST_BUILD) { titleTaps = 0; openSheet(`<h2>Tester tools</h2><div class="row2"><button class="btn" data-a="all">Unlock all gear</button><button class="btn" data-a="reset">Reset everything</button></div><button class="btn" data-a="close">Close</button>`,
-  { all: () => { S.owned = GEAR.map(g => g.id); S.tierMax = 5; save(); closeSheet(); renderCamp(); }, reset: () => { store.del(SAVE_KEY); S = defaultSave(); closeSheet(); renderCamp(); }, close: closeSheet }); } };
+  { all: () => { S.owned = GEAR.map(g => g.id); S.tierMax = 5; S.gold = (S.gold || 0) + 1000; save(); closeSheet(); renderCamp(); }, reset: () => { store.del(SAVE_KEY); S = defaultSave(); closeSheet(); renderCamp(); }, close: closeSheet }); } };
 
+function starTxt(id) { const n = (S.stars || {})[id] || 0; return n ? `<span class="stars">${'★'.repeat(n)}</span>` : ''; }
 function gearCardHTML(id, extra) {
   const g = GEAR_BY_ID[id];
-  return `<div class="ic">${gearImg(id, 52)}</div><div class="tx"><b style="color:var(--${g.rar})">${g.name}</b><span>${statLines(g.s).join(' · ')}</span>${extra || ''}</div>`;
+  return `<div class="ic">${gearImg(id, 52)}</div><div class="tx"><b style="color:var(--${g.rar})">${g.name} ${starTxt(id)}</b><span>${statLines(gearStats(id, S.stars[id])).join(' · ')}</span>${extra || ''}</div>`;
 }
 function openBag(slot) {
   const ids = S.owned.filter(id => GEAR_BY_ID[id].slot === slot);
@@ -1265,7 +1347,7 @@ function openCollection() {
 
 // ---------------- overlay sheet ----------------
 function openSheet(html, actions) {
-  if (mode === 'camp') { clearTimeout(campCoachT); if (campCoachOn && coachClose) { delete S.seen.camp; save(); coachClose(); } }
+  if (mode === 'camp') { clearTimeout(campCoachT); if (campCoachOn && coachClose) { delete S.seen[campCoachKey]; save(); campCoachOn = false; coachClose(); } }
   const ov = $('overlay'); ov.innerHTML = `<div class="sheet">${html}</div>`; show(ov, true); overlayOpen = true;
   ov.querySelectorAll('[data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); const a = b.dataset.a; (actions[a] || (actions['*'] ? () => actions['*'](a) : () => {}))(); });
 }
@@ -1319,7 +1401,7 @@ function snapshot() { S.run = { run, doors, seed: roomSeed }; save(); }
 function updateHud() {
   if (!run) return; const st = heroStats();
   $('hpFill').style.width = Math.max(0, run.hp / st.maxHp * 100) + '%'; $('hpTxt').textContent = `${Math.max(0, Math.ceil(run.hp))} / ${st.maxHp}`;
-  $('atkChip').textContent = '⚔ ' + st.atk;
+  $('atkChip').textContent = '⚔ ' + st.atk; $('goldChip').textContent = '🪙 ' + (S.gold || 0);
   $('place').textContent = `Depth ${run.depth + 1} · ${DEPTHS[run.depth].name}` + (run.tier > 1 ? ` · Lv ${run.tier}` : '');
   const d = $('dots'); let h = ''; for (let i = 1; i <= ROOMS_PER_DEPTH + 1; i++) h += `<b class="${i <= run.room ? 'on' : ''} ${i === ROOMS_PER_DEPTH + 1 ? 'boss' : ''}"></b>`; d.innerHTML = h;
   $('bagBtn').textContent = `Upgrades ${run.ups.length}`;
@@ -1504,7 +1586,7 @@ function handleEvents(ev) {
     else if (e.t === 'fireFlask') { A.flash = RM ? 0.3 : 0.8; sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 36); deathBurst(L.monX, L.monY - ms * 0.4, ms * 0.6, false); SFX.flare(); }
     else if (e.t === 'ward') { toast('Ironbark! Half damage for 6 s', 1500); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 20); SFX.heal(); }
     else if (e.t === 'laststand') { toast('Last Light saves you!', 1600); A.flash = 0.6; }
-    else if (e.t === 'win') { SFX.win(); phase = 'won'; leaves(L.monX, L.monY - ms * 0.4, 18); deathBurst(L.monX, L.monY - ms * 0.4, ms, fight.m.boss); setTimeout(() => afterWin(), 900); }
+    else if (e.t === 'win') { SFX.win(); phase = 'won'; winRewards(fight.m, ms); leaves(L.monX, L.monY - ms * 0.4, 18); deathBurst(L.monX, L.monY - ms * 0.4, ms, fight.m.boss); setTimeout(() => afterWin(), 900); }
     else if (e.t === 'lose') { SFX.lose(); phase = 'lost'; setTimeout(() => onDeath(), 1300); }
   }
   updateHud();
@@ -1556,7 +1638,7 @@ function gearFound(id, then) {
   const cur = run.eq[g.slot];
   if (g.rar !== 'c' || questDone) { SFX.chest(); buzz([10, 40, 20]); }
   let h = (questDone ? `<h2>Quest complete!</h2>` : '') + `<div class="tag ${g.rar}" style="text-align:center">${RAR[g.rar]} ${SLOT_NAME[g.slot].toLowerCase()} · new!</div><div class="gearBig ${g.rar !== 'c' || questDone ? 'reveal ' + g.rar : ''}"><div class="ic">${gearImg(id, 120)}</div><b style="color:var(--${g.rar})">${g.name}</b><ul>${statLines(g.s).map(s => `<li>${s}</li>`).join('')}</ul></div>`;
-  h += cur ? `<div class="cmp">Now wearing: <b>${GEAR_BY_ID[cur].name}</b><ul><li>${statLines(GEAR_BY_ID[cur].s).join(' · ')}</li></ul></div>` : `<div class="cmp">Your ${SLOT_NAME[g.slot].toLowerCase()} slot is empty.</div>`;
+  h += cur ? `<div class="cmp">Now wearing: <b>${GEAR_BY_ID[cur].name}</b> ${starTxt(cur)}<ul><li>${statLines(gearStats(cur, S.stars[cur])).join(' · ')}</li></ul></div>` : `<div class="cmp">Your ${SLOT_NAME[g.slot].toLowerCase()} slot is empty.</div>`;
   h += `${questDone && S.quest ? `<p style="font-size:13px;color:var(--amber2)">New quest: find the ${GEAR_BY_ID[S.quest].name}.</p>` : ''}<p style="font-size:13px">It is saved to your collection either way. What you wear stays on for your next delve.</p><div class="row2"><button class="btn" data-a="keep">Keep in bag</button><button class="btn main" data-a="wear">Wear it</button></div>`;
   openSheet(h, {
     keep: () => { closeSheet(); then(); },
@@ -1601,6 +1683,14 @@ function onVictory() {
 // ---------------- effects ----------------
 function floatText(x, y, txt, col, size) { floats.push({ x, y, txt, col, size: size || 1, t: 0 }); }
 function sparkle(x, y, col, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 7, v = 40 + Math.random() * 120; fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.5 + Math.random() * 0.4, t: 0, col, r: 1.5 + Math.random() * 2 }); } }
+// gold for every win (kept even if you fall) and a bestiary page for each new foe
+function winRewards(m, ms) {
+  const g = goldDrop(run, m, Math.random); S.bestiary = S.bestiary || {}; const first = !S.bestiary[m.type];
+  S.bestiary[m.type] = (S.bestiary[m.type] || 0) + 1; S.gold = (S.gold || 0) + g + (first ? 5 : 0); if (first) S.bestNew = true; save();
+  setTimeout(() => { SFX.coin(); floatText(L.monX + L.u * 0.6, L.monY - ms * 0.75, '+' + g + ' 🪙', '#ffd45a', 1.1); updateHud(); }, 250);
+  if (first) setTimeout(() => toast('New bestiary page: ' + m.name + ' (+5 🪙)', 1600), 600);
+  if (!S.seen.gold) { S.seen.gold = 1; save(); setTimeout(() => toast('Gold! You keep it even if you fall. Spend it at camp.', 2200), 1300); }
+}
 // a beaten foe breaks into embers and a puff of smoke
 function deathBurst(x, y, ms, big) {
   const n = RM ? 10 : big ? 60 : 30;
