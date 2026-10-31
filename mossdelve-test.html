@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.2.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.3 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -398,7 +398,18 @@ function springEffect(run) {
   const amt = Math.min(st.maxHp - run.hp, Math.round(st.maxHp * 0.5)); run.hp += amt; return { heal: amt };
 }
 
-// Doors for the room the hero is standing in. A door is { kind: 'fight'|'chest'|'spring'|'shrine'|'guard', mon?, elite? }
+// Event rooms: a small story choice, at most one per depth (not in the first delve's first depth).
+// explorer: share health with a wounded explorer; they give you gear or a rare upgrade. Or walk past.
+// gamble: pay health at an old shrine; 50% a rare upgrade, 20% a blessing (+8 max health, full heal), 30% nothing. Or leave.
+const EVENT_COST = { explorer: [6, 10, 14], gamble: [5, 8, 11] };
+const EVENTS = ['explorer', 'gamble'];
+function eventCost(run, ev) { return EVENT_COST[ev][run.depth]; }
+function payEvent(run, ev) { const c = Math.min(eventCost(run, ev), Math.max(0, Math.ceil(run.hp) - 1)); run.hp -= c; return c; }
+function explorerGift(run, owned, rng) { const g = rng() < 0.5 ? pickGear(run.depth + (run.tier || 1) - 1, owned, rng, 'f') : null; return g ? { gear: g } : { up: true }; }
+function gambleRoll(rng) { const x = rng(); return x < 0.5 ? 'rare' : x < 0.7 ? 'bless' : 'none'; }
+function blessing(run) { run.bonusHp = (run.bonusHp || 0) + 8; run.hp = calcStats(run).maxHp; }
+
+// Doors for the room the hero is standing in. A door is { kind: 'fight'|'chest'|'spring'|'shrine'|'event'|'guard', mon?, elite?, ev? }
 function genDoors(run, rng) {
   const d = DEPTHS[run.depth];
   if (run.room >= ROOMS_PER_DEPTH) return [{ kind: 'guard', mon: d.guard }];
@@ -416,8 +427,9 @@ function genDoors(run, rng) {
   for (let i = 0; i < n; i++) {
     const opts = [{ k: 'fight', w: 50 }, { k: 'spring', w: run.hp < st.maxHp * 0.7 ? 22 : 8 }, { k: 'shrine', w: early ? 0 : 12 }];
     if (chestsLeft) opts.push({ k: 'chest', w: 18 });
+    if (!early && !(run.no === 1 && run.depth === 0) && !(run.events || 0)) opts.push({ k: 'event', w: 14 });
     const k = pickWeighted(opts.map(o => ({ k: o.k, w: (o.k !== 'fight' && out.some(x => x.kind === o.k)) || (o.k === 'fight' && out.filter(x => x.kind === 'fight').length >= d.pool.length) ? 0 : o.w })), rng).k;
-    out.push(k === 'fight' ? fightDoor() : { kind: k });
+    out.push(k === 'fight' ? fightDoor() : k === 'event' ? { kind: 'event', ev: EVENTS[Math.floor(rng() * EVENTS.length)] } : { kind: k });
   }
   if (!out.some(x => x.kind === 'fight')) out[Math.floor(rng() * out.length)] = fightDoor();
   return out;
@@ -434,7 +446,7 @@ function pickGear(depth, owned, rng, minRar, quest) {
 }
 
 function newRun(save) {
-  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), found: [], chests: 0, freeChests: 0, bonusHp: 0, fights: 0, lastStandUsed: false };
+  return { no: save.runs + 1, tier: save.tierPick || 1, depth: 0, room: 0, hp: 0, ups: [], eq: Object.assign({}, save.eq), found: [], chests: 0, freeChests: 0, events: 0, bonusHp: 0, fights: 0, lastStandUsed: false };
 }
 // Collection quest: one missing piece to look for, with a clue about where it turns up.
 function pickQuest(owned, rng) {
@@ -892,15 +904,44 @@ function drawShrine(x, y, s, t, lit) {
   ctx.beginPath(); ctx.moveTo(x, y - s * 0.8); ctx.lineTo(x, y - s * 0.3); ctx.moveTo(x - s * 0.1, y - s * 0.68); ctx.lineTo(x, y - s * 0.58); ctx.lineTo(x + s * 0.1, y - s * 0.68); ctx.moveTo(x - s * 0.08, y - s * 0.42); ctx.lineTo(x + s * 0.08, y - s * 0.42); ctx.stroke();
   moss(ctx, x, y - s * 0.02, s * 0.5, r, THEMES[0]);
 }
+// a wounded explorer sits against a pack, arm in a sling
+function drawExplorer(x, y, s, t, helped) {
+  const r = rngS(77); shadow(x, y, s * 0.4);
+  blob(ctx, x + s * 0.28, y - s * 0.16, s * 0.2, s * 0.17, 9, 0.12, r, '#6b4a2a', 'rgba(0,0,0,.5)', 1.3); // pack
+  ctx.strokeStyle = '#3a2614'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + s * 0.16, y - s * 0.26); ctx.lineTo(x + s * 0.4, y - s * 0.26); ctx.stroke();
+  smooth(ctx, [[x - s * 0.3, y], [x - s * 0.26, y - s * 0.32], [x - s * 0.14, y - s * 0.52], [x + s * 0.08, y - s * 0.5], [x + s * 0.16, y - s * 0.3], [x + s * 0.16, y]]);
+  ctx.fillStyle = '#4c5e74'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5; ctx.stroke(); // cloak
+  blob(ctx, x - s * 0.04, y - s * 0.62, s * 0.14, s * 0.15, 9, 0.08, r, '#3d4d61', 'rgba(0,0,0,.5)', 1.3); // hood
+  blob(ctx, x - s * 0.02, y - s * 0.6, s * 0.08, s * 0.09, 8, 0.06, r, '#e0b48c'); // face
+  ctx.fillStyle = '#2a1a10'; const bl = Math.sin(t * 1.3) > 0.95 ? 0.2 : 1;
+  ctx.fillRect(x - s * 0.05, y - s * 0.62, s * 0.018, s * 0.02 * bl); ctx.fillRect(x + s * 0.01, y - s * 0.62, s * 0.018, s * 0.02 * bl);
+  ctx.strokeStyle = '#f0e8d8'; ctx.lineWidth = s * 0.045; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x - s * 0.12, y - s * 0.44); ctx.lineTo(x + s * 0.06, y - s * 0.3); ctx.stroke(); // sling
+  ctx.strokeStyle = '#c94a3a'; ctx.lineWidth = s * 0.03; ctx.beginPath(); ctx.moveTo(x - s * 0.13, y - s * 0.68); ctx.lineTo(x + s * 0.09, y - s * 0.7); ctx.stroke(); // bandage
+  if (helped) { ctx.fillStyle = '#8fcf6a'; ctx.font = `${Math.round(s * 0.2)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('♥', x - s * 0.02, y - s * 0.85 - Math.sin(t * 3) * s * 0.03); }
+}
+// an old gamble shrine: a stone bowl with a floating, turning die of light
+function drawGamble(x, y, s, t, state) {
+  const r = rngS(91); shadow(x, y, s * 0.35);
+  smooth(ctx, [[x - s * 0.14, y], [x - s * 0.1, y - s * 0.35], [x - s * 0.28, y - s * 0.42], [x + s * 0.28, y - s * 0.42], [x + s * 0.1, y - s * 0.35], [x + s * 0.14, y]]);
+  ctx.fillStyle = '#5e5a66'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+  const dark = state === 'none', col = dark ? '120,110,140' : state === 'bless' ? '150,240,170' : '200,150,255';
+  const cy = y - s * 0.68 + Math.sin(t * 2) * s * 0.04, a = t * 1.2, d = s * 0.15;
+  const g = ctx.createRadialGradient(x, cy, 0, x, cy, s * 0.7); g.addColorStop(0, `rgba(${col},${dark ? 0.1 : 0.5})`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.fillRect(x - s * 0.7, cy - s * 0.7, s * 1.4, s * 1.4);
+  ctx.save(); ctx.translate(x, cy); ctx.rotate(a); ctx.fillStyle = `rgba(${col},${dark ? 0.35 : 0.9})`; ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(0, -d); ctx.lineTo(d, 0); ctx.lineTo(0, d); ctx.lineTo(-d, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = '#2a1840'; ctx.font = `800 ${Math.round(s * 0.16)}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillText(dark ? '·' : '?', x, cy + s * 0.055);
+  moss(ctx, x, y - s * 0.02, s * 0.4, r, THEMES[0]);
+}
 function drawDoorIcon(d, x, y, s, t, i) {
   const bob = Math.sin(t * 2.4 + i) * s * 0.05;
   ctx.save();
-  const col = d.kind === 'guard' || d.elite ? 'rgba(255,90,70,.4)' : d.kind === 'fight' ? 'rgba(255,170,120,.18)' : d.kind === 'chest' ? 'rgba(255,215,120,.35)' : d.kind === 'spring' ? 'rgba(120,220,255,.3)' : 'rgba(255,224,150,.35)';
+  const col = d.kind === 'guard' || d.elite ? 'rgba(255,90,70,.4)' : d.kind === 'event' ? 'rgba(190,150,255,.32)' : d.kind === 'fight' ? 'rgba(255,170,120,.18)' : d.kind === 'chest' ? 'rgba(255,215,120,.35)' : d.kind === 'spring' ? 'rgba(120,220,255,.3)' : 'rgba(255,224,150,.35)';
   const g = ctx.createRadialGradient(x, y - s * 0.4, 0, x, y - s * 0.4, s * 1.1); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x - s * 1.2, y - s * 1.6, s * 2.4, s * 2.4);
   if (d.kind === 'fight' || d.kind === 'guard') { const k = d.kind === 'guard' ? 0.75 : 0.62; drawMonster(d.mon, x, y + bob, s * k * (MON_SIZE[d.mon] / 1.9) * (d.kind === 'guard' ? 0.62 : 1), t, {}); }
   else if (d.kind === 'chest') drawChest(x, y + bob, s * 0.62, 0, t);
   else if (d.kind === 'spring') drawSpring(x, y + bob, s * 0.6, t);
   else if (d.kind === 'shrine') drawShrine(x, y + bob, s * 0.55, t);
+  else if (d.kind === 'event') { if (d.ev === 'explorer') drawExplorer(x, y + bob, s * 0.7, t); else drawGamble(x, y + bob, s * 0.6, t); }
   ctx.restore();
 }
 function doorHint(d) {
@@ -908,12 +949,13 @@ function doorHint(d) {
   if (d.kind === 'guard') return MONSTERS[d.mon].name;
   if (d.kind === 'chest') { const c = doorCost(run, 'chest'); return c ? 'gear · ' + costTxt(c) : 'gear'; }
   if (d.kind === 'shrine') return 'rare upgrade · ' + costTxt(doorCost(run, 'shrine'));
+  if (d.kind === 'event') return (d.ev === 'explorer' ? 'gift · −' : 'luck · −') + eventCost(run, d.ev) + ' ♥?';
   if (d.kind === 'spring') return run.hp >= heroStats().maxHp * 0.9 ? '+4 max ♥' : 'heal ♥';
   return '';
 }
 // with heal-per-room, the cost is paid now and partly won back when the room is done: show the net
 function costTxt(c) { const st = heroStats(); if (!st.regen) return `−${c} ♥`; const back = Math.min(st.regen, st.maxHp - (run.hp - c)); const net = back - c; return net >= 0 ? `net +${net} ♥` : `net −${-net} ♥`; }
-function doorLabel(d) { return d.kind === 'fight' ? MONSTERS[d.mon].name : d.kind === 'guard' ? 'Guardian' : d.kind === 'chest' ? 'Chest' : d.kind === 'spring' ? 'Spring' : 'Shrine'; }
+function doorLabel(d) { return d.kind === 'fight' ? MONSTERS[d.mon].name : d.kind === 'guard' ? 'Guardian' : d.kind === 'event' ? (d.ev === 'explorer' ? 'Wounded Explorer' : 'Gamble Shrine') : d.kind === 'chest' ? 'Chest' : d.kind === 'spring' ? 'Spring' : 'Shrine'; }
 
 // camp scene
 let campBg = null, campKey = '';
@@ -1040,7 +1082,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.2.1';
+const VERSION = 'v0.3';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1246,6 +1288,7 @@ async function chooseLessons() {
   add('shrineDoor', doors.some(d => d.kind === 'shrine'), 'A <b>shrine</b> offers a choice of rare upgrades, with no fight.');
   add('costDoor', costly, 'Chests and shrines <b>cost health</b>, shown under the door. Fights give upgrades, springs give health back.');
   add('netDoor', costly && st.regen > 0, `You heal ${st.regen} after every room, so those doors show your <b>net</b> health change.`);
+  add('eventDoor', doors.some(d => d.kind === 'event'), 'A purple glow means a <b>story room</b>. Inside you choose what to do, and you can always walk away. Only one per depth!');
   add('springDoor', doors.some(d => d.kind === 'spring'), 'A <b>spring</b> heals half your health. If you are already healthy, it adds 4 max health instead.');
   if (parts.length) { save(); await coach({ text: parts.join('<br><br>'), target: doorsRect(), btn: 'Got it' }); }
 }
@@ -1290,7 +1333,39 @@ function enterRoom(d) {
   if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; setPhase('fight'); fightLessons(); }
   else if (d.kind === 'chest') { setPhase('chest'); payRoom('chest'); lesson('chest', [{ text: 'A <b>chest</b>! Chests hold <b>gear</b>. Gear is yours forever, even after this delve ends. Tap it to open.' }]); }
   else if (d.kind === 'spring') { setPhase('spring'); setTimeout(() => { const ef = springEffect(run); SFX.heal(); floatText(L.heroX, L.heroY - L.u * 2.4, ef.grow ? '+' + ef.grow + ' max ♥' : '+' + ef.heal, '#8fcf6a', 1.3); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 18); updateHud(); setTimeout(() => roomDone(), 700); }, 500); }
+  else if (d.kind === 'event') { run.events = (run.events || 0) + 1; setPhase('event'); setTimeout(() => runEvent(d.ev), 650); }
   else if (d.kind === 'shrine') { setPhase('shrine'); payRoom('shrine'); setTimeout(() => showUpgrades(true, 'The shrine glows', 'Pick a rare gift'), 600); }
+}
+// story rooms: one choice, a clear price, and a way out
+function runEvent(ev) {
+  const c = eventCost(run, ev); content.state = null;
+  const pay = () => { const p = payEvent(run, ev); if (p) { floatText(L.heroX + 20, L.heroY - L.u * 2.4, '-' + p, '#ff7a6a', 1.1); A.heroHurt = 0.6; updateHud(); } };
+  const leave = () => { closeSheet(); toast(ev === 'explorer' ? 'You wish them luck and move on' : 'You leave the shrine alone', 1300); roomDone(); };
+  if (ev === 'explorer') {
+    openSheet(`<h2>Wounded Explorer</h2><p>"I took a bad fall. Could you spare a little of your strength? I will make it worth your while."</p>
+      <button class="card" data-a="help"><div class="ic">💚</div><div class="tx"><b>Share health (−${c} ♥)</b><span>They give you a piece of gear or a rare upgrade</span></div></button>
+      <button class="card" data-a="leave"><div class="ic">👣</div><div class="tx"><b>Walk past</b><span>Keep your health</span></div></button>`, {
+      leave,
+      help: () => { closeSheet(); pay(); content.state = 'helped'; SFX.heal(); sparkle(L.monX, L.monY - L.u, '#9fe6a0', 18);
+        const g = explorerGift(run, S.owned, Math.random);
+        setTimeout(() => { if (g.gear) { toast('"Take this. I found it below."', 1500); setTimeout(() => gearFound(g.gear, () => roomDone()), 700); }
+          else showUpgrades(true, 'The explorer shares a secret', 'Pick a rare gift'); }, 600); },
+    });
+  } else {
+    openSheet(`<h2>Gamble Shrine</h2><p>An old shrine hums. Words are carved into the bowl: <i>"Give, and the dark may give back."</i></p>
+      <div class="cmp" style="text-align:center">Half the time: a <b>rare upgrade</b><br>Sometimes: a <b>blessing</b> (+8 max ♥ and a full heal)<br>Otherwise: <b>nothing</b></div>
+      <button class="card" data-a="pay"><div class="ic">🎲</div><div class="tx"><b>Offer health (−${c} ♥)</b><span>Try your luck</span></div></button>
+      <button class="card" data-a="leave"><div class="ic">👣</div><div class="tx"><b>Leave it</b><span>Keep your health</span></div></button>`, {
+      leave,
+      pay: () => { closeSheet(); pay(); const o = gambleRoll(Math.random); A.gambleSpin = 1; SFX.step();
+        setTimeout(() => {
+          content.state = o;
+          if (o === 'rare') { SFX.chest(); sparkle(L.monX, L.monY - L.u * 1.2, '#d6b8ff', 26); showUpgrades(true, 'The shrine answers!', 'Pick a rare gift'); }
+          else if (o === 'bless') { blessing(run); SFX.heal(); sparkle(L.monX, L.monY - L.u * 1.2, '#9fe6a0', 26); floatText(L.heroX, L.heroY - L.u * 2.4, '+8 max ♥', '#8fcf6a', 1.3); updateHud(); toast('A blessing! Full health, and stronger', 1600); setTimeout(() => roomDone(), 900); }
+          else { SFX.lose(); toast('The shrine stays dark. Nothing this time', 1600); setTimeout(() => roomDone(), 900); }
+        }, 900); },
+    });
+  }
 }
 function payRoom(kind) { const c = payCost(run, kind); if (c) { floatText(L.heroX + 20, L.heroY - L.u * 2.4, '-' + c, '#ff7a6a', 1.1); A.heroHurt = 0.6; updateHud(); } }
 async function fightLessons() {
@@ -1353,7 +1428,7 @@ function showUpgrades(shrine, title, sub) {
 }
 function roomDone() {
   const st = heroStats(); if (st.regen && run.hp < st.maxHp && content.kind !== 'spring') { const a = Math.min(st.regen, st.maxHp - run.hp); run.hp += a; floatText(L.heroX - 20, L.heroY - L.u * 2.3, '+' + a, '#8fcf6a', 0.8); }
-  fight = null; content = { kind: 'cleared', was: content.kind }; setPhase('choose');
+  fight = null; content = { kind: 'cleared', was: content.kind, ev: content.ev, state: content.state }; setPhase('choose');
 }
 function openChest() {
   if (phase !== 'chest') return; phase = 'chestOpen'; SFX.chest(); buzz(15); run.chests++;
@@ -1390,7 +1465,7 @@ function descend() {
   if (run.depth >= DEPTHS.length - 1) { onVictory(); return; }
   phase = 'descend'; A.fadeDir = 1;
   setTimeout(() => {
-    run.depth++; run.room = 0; run.chests = 0; roomSeed += 101; content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = [];
+    run.depth++; run.room = 0; run.chests = 0; run.events = 0; roomSeed += 101; content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = [];
     A.fadeDir = -1; banner('Depth ' + (run.depth + 1), DEPTHS[run.depth].name, 1800); setPhase('choose');
   }, 600);
 }
@@ -1433,7 +1508,7 @@ function frame(now) {
 }
 function update(dt) {
   for (const k of ['heroLunge', 'monLunge']) A[k] = Math.max(0, A[k] - dt * 5);
-  A.heroHurt = Math.max(0, A.heroHurt - dt * 4); A.monFlash = Math.max(0, A.monFlash - dt * 6); A.flash = Math.max(0, A.flash - dt * 2.2); A.burst = Math.max(0, A.burst - dt * 1.8); A.rune = Math.max(0, A.rune - dt * 1.1); A.hurtVig = Math.max(0, A.hurtVig - dt * 2.5); A.shake = Math.max(0, A.shake - dt * 30);
+  A.heroHurt = Math.max(0, A.heroHurt - dt * 4); A.monFlash = Math.max(0, A.monFlash - dt * 6); A.flash = Math.max(0, A.flash - dt * 2.2); A.burst = Math.max(0, A.burst - dt * 1.8); A.rune = Math.max(0, A.rune - dt * 1.1); A.hurtVig = Math.max(0, A.hurtVig - dt * 2.5); A.gambleSpin = Math.max(0, (A.gambleSpin || 0) - dt * 1.1); A.shake = Math.max(0, A.shake - dt * 30);
   if (A.fadeDir) { A.fade = Math.min(1, Math.max(0, A.fade + A.fadeDir * dt * 3.5)); if (A.fade === 0 && A.fadeDir < 0) A.fadeDir = 0; }
   if (mode !== 'run') return;
   if (A.walk) { const w = A.walk; w.t += dt / 0.6; if (w.t >= 1 && !w.fading) { w.fading = true; A.fadeDir = 1; setTimeout(() => { const d = w.door; A.walk = null; enterRoom(d); A.fadeDir = -1; }, 300); } }
@@ -1510,6 +1585,8 @@ function draw() {
   } else if (ck === 'chest') drawChest(L.monX, L.monY, u * 1.5, A.chestOpen, T);
   else if (ck === 'spring') drawSpring(L.monX, L.monY, u * 1.6, T);
   else if (ck === 'shrine') drawShrine(L.monX, L.monY, u * 1.6, T, phase === 'shrine');
+  else if (ck === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else drawGamble(L.monX, L.monY, u * 1.8, T * (1 + (A.gambleSpin || 0) * 6), content.state); }
+  else if (content && content.kind === 'cleared' && content.was === 'event') { if (content.ev === 'explorer') drawExplorer(L.monX, L.monY, u * 2, T, content.state === 'helped'); else drawGamble(L.monX, L.monY, u * 1.8, T, content.state); }
   else if (content && content.kind === 'cleared' && content.was === 'chest') drawChest(L.monX, L.monY, u * 1.5, 1, T);
   else if (content && content.kind === 'cleared' && content.was === 'spring') drawSpring(L.monX, L.monY, u * 1.6, T);
   else if (content && content.kind === 'cleared' && content.was === 'shrine') drawShrine(L.monX, L.monY, u * 1.6, T, false);
@@ -1544,8 +1621,8 @@ function draw() {
   if (phase === 'choose' || phase === 'walk') {
     doors.forEach((d, i) => { const x = xs[i] * W, y = L.wallB - L.doorH * 0.28; drawDoorIcon(d, x, y, Math.min(L.doorW * 0.75, u * 1.7), T, i);
       ctx.font = `800 ${Math.max(11, Math.round(u * 0.31))}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillStyle = d.kind === 'guard' ? '#ff9a8a' : '#efe3c8'; ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 4;
-      ctx.fillText((d.elite ? 'Elite ' : '') + doorLabel(d), x, L.wallB - L.doorH - u * 0.62);
-      ctx.shadowBlur = 0; ctx.font = `600 ${Math.max(10, Math.round(u * 0.26))}px ui-rounded, system-ui, sans-serif`; ctx.fillStyle = d.elite ? '#ffb07a' : d.kind === 'spring' ? '#9fe6a0' : (d.kind === 'chest' || d.kind === 'shrine') ? '#ffd98a' : '#cbbf9f';
+      { const lab = (d.elite ? 'Elite ' : '') + doorLabel(d), lw = ctx.measureText(lab).width, mw = W / doors.length - 6; if (lw > mw) ctx.font = `800 ${Math.max(9, Math.floor(Math.max(11, Math.round(u * 0.31)) * mw / lw))}px Cinzel, Georgia, serif`; ctx.fillText(lab, x, L.wallB - L.doorH - u * 0.62); }
+      ctx.shadowBlur = 0; ctx.font = `600 ${Math.max(10, Math.round(u * 0.26))}px ui-rounded, system-ui, sans-serif`; ctx.fillStyle = d.elite ? '#ffb07a' : d.kind === 'spring' ? '#9fe6a0' : d.kind === 'event' ? '#d6b8ff' : (d.kind === 'chest' || d.kind === 'shrine') ? '#ffd98a' : '#cbbf9f';
       // a long hint splits onto two lines so neighbouring doors never overlap
       const hint = doorHint(d), maxW = W / doors.length - 8, hy = L.wallB - L.doorH - u * 0.25;
       if (ctx.measureText(hint).width <= maxW) ctx.fillText(hint, x, hy);
