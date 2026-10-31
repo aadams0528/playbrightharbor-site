@@ -128,7 +128,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 <div id="menu" class="screen">
   <div class="panel">
     <div class="colA">
-    <h1 id="title">Tilt River<small>prototype v0.4 · working title</small></h1>
+    <h1 id="title">Tilt River<small>prototype v0.4.1 · working title</small></h1>
     <p id="menuIntro">Tilt your phone to steer down the river. Grab coins, miss the rocks, ride the white rapids.</p>
     <button class="big" id="playEndless">Endless river<small id="bestEndless">Go as far as you can</small></button>
     <button class="big" id="playDaily">Daily River<small id="bestDaily">Same river for everyone today</small></button>
@@ -347,6 +347,7 @@ function addCoinLine(g, d, offset, n, drift) {
 // ---------- advanced river features (unlock by distance; each gets a lesson the first time) ----------
 var HZ = { rough: 4000, ramp: 7000, whirl: 10000, log: 13000, fall: 16000 };
 var HZ_ORDER = ['rough', 'ramp', 'whirl', 'log', 'fall'];
+var ROUGH_RAMP_D = 25000; // from 2.5 km, some rough stretches hide a ramp (an advanced combo)
 var LESSONS = {
   rough: ['Rough rapids ahead!', 'Choppy water shoves your boat around. Keep steering to hold your line.'],
   ramp: ['Jump the rocks!', 'A line of rocks blocks the river. Steer onto the wooden ramp to fly over.'],
@@ -363,6 +364,8 @@ function budgetAt(g, d, df) { return MAX_LAT * 0.45 * ((d - g.safeD) / (lerp(200
 function pickOffset(g, R, budget, lim) { var lo = Math.max(-lim, g.safeO - budget), hi = Math.min(lim, g.safeO + budget); if (lo > hi) return clamp(g.safeO, -lim, lim); return lo + R() * (hi - lo); }
 function pickHazard(g, d, df, R) {
   if (g.mode !== 'endless' && g.mode !== 'daily') return null;
+  var lastRough = g.rough[g.rough.length - 1];
+  if (lastRough && d < lastRough.d1 + 150) return null; // new features (and their first lesson) always arrive in calm water
   for (var i = 0; i < HZ_ORDER.length; i++) { var k = HZ_ORDER[i]; if (d >= HZ[k] && !g.hzFirst[k]) { g.hzFirst[k] = true; return k; } }
   if (d - g.lastHaz < lerp(2200, 1200, df)) return null;
   var open = HZ_ORDER.filter(function (k) { return d >= HZ[k]; });
@@ -382,11 +385,18 @@ function placeHazard(g, k, d, a, df, R) {
   var budget = budgetAt(g, d, df), lesson = first && !(store.get('seen', {})[k]) ? k : null;
   if (k === 'rough') {
     var len = 350 + R() * 250; g.rough.push({ d0: d, d1: d + len, seed: R() * 99, lesson: lesson }); g.lastHaz = d + len;
+    if (!first && d >= ROUGH_RAMP_D && g.hzFirst._ramp && R() < 0.4) { // advanced: a ramp in the middle of the rapids, a bit wider to allow for the shove
+      var dm = d + len * 0.5, am = g.river.at(dm), om = pickOffset(g, R, budgetAt(g, dm, df), am.h - 40);
+      g.ramps.push({ d: dm, x: am.x + om, w: 60, lesson: null });
+      rockLine(g, dm + 50, 0, 0, 'jump');
+      g.safeO = om; g.safeD = dm + 260; g.lastHaz = Math.max(d + len, dm + 300);
+      return dm + 420;
+    }
     return first ? d + len + 80 : d + 60; // the first stretch has no rocks in it
   }
   if (k === 'ramp') {
     var o = pickOffset(g, R, budget, a.h - 30);
-    g.ramps.push({ d: d, x: a.x + o, w: 46, lesson: lesson });
+    g.ramps.push({ d: d, x: a.x + o, w: first ? 56 : 46, lesson: lesson }); // the first ramp is a little wider
     rockLine(g, d + 50, 0, 0, 'jump');
     g.safeO = o; g.safeD = d + 260; g.lastHaz = d + 300;
     return d + 420;
@@ -401,6 +411,7 @@ function placeHazard(g, k, d, a, df, R) {
   }
   if (k === 'log') {
     if (g.rocks.some(function (r) { return Math.abs(r.d - d) < 100; })) return d + 60; // logs need open water around them
+    if (g.ramps.some(function (rp) { return d > rp.d && d - rp.d < 450; })) return d + 60; // and not right where a jump lands
     g.logs.push({ d: d, len: 48, v: 40 + R() * 30 + df * 20, ph: R() * 2, lesson: lesson });
     g.safeO = 0; g.safeD = d + 40; g.lastHaz = d; // the boat could be on either side of the log
     return d + 300;
