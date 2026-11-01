@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.10 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.10.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -564,7 +564,8 @@ function fightStep(run, f, dt, rng) {
   // guardians wind up a big blow every few seconds (TELL_TIME to react); a Flare during the wind-up interrupts it
   if ((m.boss || m.caster) && m.stun <= 0 && m.hp > 0) {
     if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY;
-      const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2))) : hurt(Math.max(1, Math.round(m.atk * 2.5) - st.def)); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster }); ev.push({ t: 'swingM', spell: m.caster }); } }
+      const rc = heroReact(run, f, m.caster ? 'spell' : 'heavy', rng), rm = rc ? REACT[rc] : 1;
+      const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2 * rm))) : hurt(Math.max(1, Math.round((m.atk * 2.5 - st.def) * rm))); ev.push({ t: 'swingM', spell: m.caster }); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster, react: rc }); } }
     else { m.tellCd -= dt; if (m.tellCd <= 0) { m.tell = TELL_TIME; ev.push({ t: 'tell', spell: m.caster }); } }
   }
   if (m.stun > 0) m.stun -= dt; else if (!(m.tell > 0)) {
@@ -572,7 +573,9 @@ function fightStep(run, f, dt, rng) {
     if (m.timer <= 0 && m.hp > 0) {
       m.timer += m.int;
       m.atkN = (m.atkN || 0) + 1; const bomb = m.trait === 'bomber' && m.atkN % 3 === 0;
-      const dmg = hurt(Math.max(1, Math.round(m.atk * (bomb ? 2 : 1)) - st.def)); ev.push({ t: 'hitH', dmg, bomb }); ev.push({ t: 'swingM', bomb });
+      const rc = heroReact(run, f, 'hit', rng); ev.push({ t: 'swingM', bomb });
+      if (rc === 'dodge') { ev.push({ t: 'dodge' }); checkEnd(run, f, ev); return ev; }
+      const raw = Math.round(m.atk * (bomb ? 2 : 1)) - st.def, dmg = hurt(Math.max(1, Math.round(raw * (rc ? REACT[rc] : 1)))); ev.push({ t: 'hitH', dmg, bomb, react: rc, soaked: Math.min(st.def, Math.round(m.atk * (bomb ? 2 : 1)) - 1) });
       if (st.thorns) { m.hp -= st.thorns; ev.push({ t: 'hitM', dmg: st.thorns, thorn: true }); }
       if (st.syn && st.syn.thorns >= SYN_NEED) { f.taken = (f.taken || 0) + 1; if (f.taken % 3 === 0) { const b = Math.round(st.atk * 1.5); m.hp -= b; ev.push({ t: 'bramble', dmg: b }); } }
     }
@@ -580,6 +583,15 @@ function fightStep(run, f, dt, rng) {
   checkEnd(run, f, ev);
   return ev;
 }
+// The hero defends too: a Knight raises the shield, a Ranger sidesteps, others parry with the weapon,
+// and the lantern can throw up a ward against spells. Each reaction cuts (or dodges) the damage.
+const REACT = { block: 0.5, parry: 0.5, ward: 0.5, dodge: 0 };
+function heroReact(run, f, kind, rng) { const cls = run.cls || 'warden';
+  if (kind === 'spell') return rng() < (cls === 'mage' ? 0.28 : 0.18) ? 'ward' : null;
+  if (kind === 'heavy') return cls === 'knight' && rng() < 0.15 ? 'block' : null;
+  if (cls === 'ranger') return rng() < 0.11 ? 'dodge' : null;
+  if (cls === 'knight') return rng() < 0.12 ? 'block' : null;
+  return rng() < 0.1 ? 'parry' : null; }
 const TELL_TIME = 1.8, TELL_EVERY = 6, CAST_EVERY = 5.5;
 // potions: heal works any time; fire and ward need a fight
 function usePotion(run, f, rng) {
@@ -815,6 +827,10 @@ const SFX = {
   tell() { tone(140, 0.5, 'sawtooth', 0.07, 260); setTimeout(() => tone(150, 0.4, 'sawtooth', 0.06, 300), 250); },
   forge() { [330, 330, 660].forEach((f, i) => setTimeout(() => tone(f, 0.09, 'square', 0.06, f * 0.7), i * 110)); },
   coin() { tone(1200, 0.06, 'square', 0.04); setTimeout(() => tone(1600, 0.08, 'square', 0.04), 60); },
+  clang() { tone(1500, 0.09, 'square', 0.05, 900); tone(2400, 0.18, 'triangle', 0.04, 1800); },
+  parry() { tone(1900, 0.05, 'square', 0.05, 2600); setTimeout(() => tone(2600, 0.12, 'triangle', 0.04, 2000), 40); },
+  wardFx() { tone(700, 0.3, 'sine', 0.07, 1400); tone(1050, 0.25, 'sine', 0.04, 2100); },
+  dodge() { tone(500, 0.12, 'triangle', 0.03, 180); },
   potion() { tone(600, 0.1, 'sine', 0.08, 900); setTimeout(() => tone(900, 0.15, 'sine', 0.07, 1200), 90); },
 };
 function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
@@ -1556,7 +1572,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.10';
+const VERSION = 'v0.10.1';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2187,8 +2203,8 @@ function handleEvents(ev) {
   for (const e of ev) {
     if (e.t === 'swingH') { const pz = A.pose || heroPose(); A.hs = { t: 0, w0: Math.max(0.6, pz.draw), kind: pz.kind }; A.heroLunge = 1; SFX.swish && SFX.swish(); if (pz.kind === 'bow') shoot('arrow'); if (pz.kind === 'staff') shoot('fire'); }
     else if (e.t === 'swingM') { A.monLunge = 1; const ty = fight.m.type; if (ty === 'archer') monShoot('arrow'); else if (e.spell) monShoot(ty === 'shaman' ? 'bigfire' : 'hex'); else if (ty === 'imp') monShoot('bomb'); if (e.bomb) floatText(L.heroX, L.heroY - L.u * 2.6, 'Spore bomb!', '#c8e07a', 1.1); }
-    else if (e.t === 'block') { floatText(L.monX, L.monY - ms * 1.0, 'Blocked!', '#d8d4c8', 1); SFX.hit && SFX.hit(); sparkle(L.monX - ms * 0.15, L.monY - ms * 0.45, '#fff2c0', 10); A.monKnock = 0.3; }
-    else if (e.t === 'miss') { floatText(L.monX, L.monY - ms * 1.0, 'Miss', '#a8d8ff', 1); }
+    else if (e.t === 'block') { A.monGuard = { t: 0 }; floatText(L.monX, L.monY - ms * 1.0, 'Blocked!', '#d8d4c8', 1); SFX.clang(); sparkle(L.monX - ms * 0.15, L.monY - ms * 0.45, '#fff2c0', 10); A.monKnock = 0.3; }
+    else if (e.t === 'miss') { A.monFade = 1; SFX.dodge(); floatText(L.monX, L.monY - ms * 1.0, 'Passed through!', '#a8d8ff', 1); }
     else if (e.t === 'hitM') { A.monFlash = 1; if (!e.thorn) { A.shake = RM ? 0 : e.crit || e.flare ? 7 : 3; (e.crit ? SFX.crit : SFX.hit)(); if (!e.flare) { const kd = (A.hs && A.hs.t < 0.05) ? A.hs.kind : heroWeaponKind(), dl = kd === 'bow' ? 0.11 : kd === 'staff' ? 0.16 : 0, wc = (WEAPON_COL[heroWeaponId()] || WEAPON_COL.twig_sword)[1];
         slashes.push({ t: -dl, crit: e.crit, a: (Math.random() - 0.5) * 0.5, flip: Math.random() < 0.5, kind: kd, col: kd === 'staff' ? '255,150,60' : kd === 'bow' ? '255,240,210' : wc });
         impact(L.monX + (Math.random() - 0.5) * ms * 0.25, L.monY - ms * (0.3 + Math.random() * 0.2), e.crit ? '255,210,90' : '255,245,225', e.crit, dl); }
@@ -2197,6 +2213,12 @@ function handleEvents(ev) {
       if (e.echo) { floatText(L.monX, L.monY - ms * 1.05, 'Follow-up!', '#ffd45a', 1.2); sparkle(L.monX, L.monY - ms * 0.4, '#ffd45a', 26); A.shake = RM ? 0 : 8; }
       floatText(L.monX + (vo ? (vo % 2 ? 1 : -1) * ms * 0.55 : (Math.random() - 0.5) * ms * 0.4), L.monY - ms * 0.55 - vo * u * 0.35, (e.crit ? 'x2 ' : '') + e.dmg, e.flare ? '#ffe08a' : e.crit ? '#ffcf5a' : e.thorn ? '#c8b89a' : '#fff', e.crit || e.flare ? 1.5 : e.thorn ? 0.8 : 1);
       sparkle(L.monX, L.monY - ms * 0.35, e.flare ? '#ffd47a' : '#f2e2c0', e.flare ? 24 : 6); }
+    else if (e.t === 'dodge') { A.react = { k: 'dodge', t: 0, side: Math.random() < 0.5 ? -1 : 1 }; SFX.dodge(); floatText(L.heroX, L.heroY - u * 2.7, 'Dodge!', '#bfe8a0', 1.15); }
+    else if (e.t === 'hitH' && e.react) { const RT = { block: ['Blocked!', '#ffe08a', 'clang'], parry: ['Parry!', '#f4f4ff', 'parry'], ward: ['Warded!', '#9ad8ff', 'wardFx'] }[e.react];
+      A.react = { k: e.react, t: 0 }; A.heroHurt = 0.35; SFX[RT[2]](); buzz(8); A.shake = RM ? 0 : (e.heavy ? 6 : 2);
+      const cx = L.heroX + (L.monX - L.heroX) * 0.18, cy = L.heroY - u * 1.4 + (L.monY - L.heroY) * 0.12; sparkle(cx, cy, e.react === 'ward' ? '#9ad8ff' : '#fff2c0', e.react === 'ward' ? 18 : 14);
+      floatText(L.heroX, L.heroY - u * 2.9, RT[0], RT[1], 1.2); floatText(L.heroX + 20, L.heroY - u * 2.3, '-' + e.dmg, '#ffb09a', 0.85);
+      if (!S.seen.react) { S.seen.react = 1; save(); setTimeout(() => toast('Your hero defends on their own: blocks, parries and dodges cut the damage. Each hero has a style.', 2600), 500); } }
     else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { marks.push({ style: ATK_STYLE[fight.m.type] || 'claw', t: 0, heavy: !!e.heavy, a: (Math.random() - 0.5) * 0.4 }); SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; floatText(L.heroX, L.heroY - u * 3.1, 'Big hit!', '#ff7a6a', 1.1); } } floatText(L.heroX + 20, L.heroY - u * 2.4, '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
     else if (e.t === 'heal') { floatText(L.heroX - 26, L.heroY - u * 2.2, '+' + e.amt, '#8fcf6a', e.potion ? 1.3 : 0.8); if (e.pet) sparkle(L.heroX, L.heroY - u, '#aaffaa', 6); }
     else if (e.t === 'flare') { if (run.gs) run.gs.flare++; if (e.cls === 'ranger') { for (let k = 0; k < 3; k++) { shoot('arrow', k * 0.08); slashes.push({ t: -0.11 - k * 0.08, crit: true, a: (k - 1) * 0.5, flip: false, kind: 'bow', col: '255,230,150' }); } }
@@ -2618,6 +2640,27 @@ function drawVault(x, y, s, t, open) { ctx.save(); const g = ctx.createRadialGra
   ctx.save(); ctx.strokeStyle = '#ffd45a'; ctx.lineWidth = 3; ctx.strokeRect(x - s * 0.44, y - s * 0.42, s * 0.88, s * 0.42); ctx.restore(); }
 
 // ---------------- effects ----------------
+// the hero's defenses: a shield flash, crossed blades, or a rune ward bubble, facing the foe
+function drawReact(hx, hy, hs, k, q) {
+  const cx = hx, cy = hy - hs * 0.5, ms = fight ? MON_SIZE[fight.m.type] * L.u : hs; let dx = L.monX - cx, dy = (L.monY - ms * 0.4) - cy; const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+  const an = Math.atan2(dy, dx), a = 1 - q, pop = Math.min(1, q * 5); ctx.save(); ctx.lineCap = 'round';
+  if (k === 'block') { const px = cx + dx * hs * 0.22, py = cy + hs * 0.08 + dy * hs * 0.12, sz = hs * 0.3 * (0.75 + 0.25 * pop); ctx.translate(px, py); ctx.globalAlpha = a;
+    const sh = () => { ctx.beginPath(); ctx.moveTo(-sz * 0.8, -sz); ctx.lineTo(sz * 0.8, -sz); ctx.lineTo(sz * 0.75, sz * 0.2); ctx.lineTo(0, sz * 1.1); ctx.lineTo(-sz * 0.75, sz * 0.2); ctx.closePath(); };
+    ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(0, 0, 0, 0, 0, sz * 2); g.addColorStop(0, 'rgba(255,220,130,.55)'); g.addColorStop(1, 'rgba(255,220,130,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, sz * 2, 0, 7); ctx.fill();
+    sh(); ctx.fillStyle = 'rgba(255,225,150,.25)'; ctx.fill(); ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 3; ctx.stroke();
+    for (let i = 0; i < 8; i++) { const aa = an + (i - 3.5) * 0.28, r0 = sz * (1.1 + q * 1.4); ctx.strokeStyle = `rgba(255,240,190,${a})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(Math.cos(aa) * r0, Math.sin(aa) * r0); ctx.lineTo(Math.cos(aa) * (r0 + sz * 0.35), Math.sin(aa) * (r0 + sz * 0.35)); ctx.stroke(); } }
+  else if (k === 'parry') { const px = cx + dx * hs * 0.48, py = cy + dy * hs * 0.48; ctx.translate(px, py); ctx.rotate(an); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+    const len = hs * 0.42 * pop; for (const sgn of [-1, 1]) { ctx.save(); ctx.rotate(sgn * 0.75); const g = ctx.createLinearGradient(0, -len, 0, len); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,240,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.strokeStyle = g; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -len); ctx.lineTo(0, len); ctx.stroke(); ctx.restore(); }
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, hs * 0.3); fg.addColorStop(0, `rgba(255,250,220,${0.9 * a})`); fg.addColorStop(1, 'rgba(255,250,220,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(0, 0, hs * 0.3, 0, 7); ctx.fill(); }
+  else if (k === 'ward') { ctx.translate(cx, cy); const R = hs * (0.62 + 0.06 * Math.sin(q * 12)); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R); g.addColorStop(0, 'rgba(120,200,255,0)'); g.addColorStop(1, `rgba(140,210,255,${0.45 * a})`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgba(190,235,255,${0.8 * a})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+    ctx.fillStyle = `rgba(220,245,255,${a})`; ctx.font = `${Math.round(hs * 0.13)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const runes = 'ᚠᚢᚦᚨᚱᚲᚷᚹ';
+    for (let i = 0; i < 8; i++) { const aa = i / 8 * Math.PI * 2 + q * 2; ctx.fillText(runes[i], Math.cos(aa) * R * 0.86, Math.sin(aa) * R * 0.86); }
+    // the spell splashes on the near side
+    const sx = dx * R, sy = dy * R, sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, hs * 0.35); sg.addColorStop(0, `rgba(255,255,255,${0.9 * a})`); sg.addColorStop(1, 'rgba(140,210,255,0)'); ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, hs * 0.35, 0, 7); ctx.fill(); ctx.textBaseline = 'alphabetic'; }
+  ctx.restore();
+}
 function floatText(x, y, txt, col, size) { floats.push({ x, y, txt, col, size: size || 1, t: 0, vx: (Math.random() - 0.5) * 50 }); }
 function sparkle(x, y, col, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 7, v = 40 + Math.random() * 120; fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.5 + Math.random() * 0.4, t: 0, col, r: 1.5 + Math.random() * 2 }); } }
 // gold for every win (kept even if you fall) and a bestiary page for each new foe
@@ -2651,7 +2694,7 @@ function update(dt) {
   for (const p of projs) p.t += dt; projs = projs.filter(p => p.t < p.dur);
   for (const p of sparks) p.t += dt; sparks = sparks.filter(p => p.t < (p.big ? 0.3 : 0.22));
   for (const p of marks) p.t += dt; marks = marks.filter(p => p.t < 0.42);
-  A.heroHurt = Math.max(0, A.heroHurt - dt * 4); A.monFlash = Math.max(0, A.monFlash - dt * 6); A.flash = Math.max(0, A.flash - dt * 2.2); A.burst = Math.max(0, A.burst - dt * 1.8); A.rune = Math.max(0, A.rune - dt * 1.1); A.hurtVig = Math.max(0, A.hurtVig - dt * 2.5); A.gambleSpin = Math.max(0, (A.gambleSpin || 0) - dt * 1.1); A.petBite = Math.max(0, (A.petBite || 0) - dt * 4); A.petHop = Math.max(0, (A.petHop || 0) - dt * 1.4); A.shake = Math.max(0, A.shake - dt * 30);
+  A.heroHurt = Math.max(0, A.heroHurt - dt * 4); A.monFlash = Math.max(0, A.monFlash - dt * 6); A.flash = Math.max(0, A.flash - dt * 2.2); A.burst = Math.max(0, A.burst - dt * 1.8); A.rune = Math.max(0, A.rune - dt * 1.1); A.hurtVig = Math.max(0, A.hurtVig - dt * 2.5); A.gambleSpin = Math.max(0, (A.gambleSpin || 0) - dt * 1.1); A.petBite = Math.max(0, (A.petBite || 0) - dt * 4); A.petHop = Math.max(0, (A.petHop || 0) - dt * 1.4); if (A.react) { A.react.t += dt; if (A.react.t > 0.6) A.react = null; } if (A.monGuard) { A.monGuard.t += dt; if (A.monGuard.t > 0.5) A.monGuard = null; } A.monFade = Math.max(0, (A.monFade || 0) - dt * 2.5); A.shake = Math.max(0, A.shake - dt * 30);
   if (A.fadeDir) { A.fade = Math.min(1, Math.max(0, A.fade + A.fadeDir * dt * 3.5)); if (A.fade === 0 && A.fadeDir < 0) A.fadeDir = 0; }
   if (mode !== 'run') return;
   if (A.walk) { const w = A.walk; w.t += dt / 0.6; if (w.t >= 1 && !w.fading) { w.fading = true; A.fadeDir = 1; setTimeout(() => { const d = w.door; A.walk = null; enterRoom(d); A.fadeDir = -1; }, 300); } }
@@ -2781,8 +2824,10 @@ function draw() {
     if (A.rune > 0) drawRune(L.monX, L.monY, ms * 0.75, A.rune);
     if (m.tell > 0) { const k = 1 - m.tell / TELL_TIME, pr = 0.5 + 0.5 * Math.sin(T * 18); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const tg = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * (0.8 + k * 0.3)); const tc = m.caster ? (m.type === 'shaman' ? '255,140,40' : '120,255,90') : '255,40,30'; tg.addColorStop(0, `rgba(${tc},${0.25 + 0.25 * pr})`); tg.addColorStop(1, `rgba(${tc},0)`); ctx.fillStyle = tg; ctx.fillRect(L.monX - ms * 1.2, L.monY - ms * 1.6, ms * 2.4, ms * 2.4); ctx.restore(); }
     if (m.elite && A.monAlpha > 0) { const ag = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * 0.9); ag.addColorStop(0, `rgba(255,80,60,${0.35 * A.monAlpha})`); ag.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = ag; ctx.fillRect(L.monX - ms, L.monY - ms * 1.3, ms * 2, ms * 1.8); }
-    drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha, scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, knock: A.monKnock,
+    drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha * (1 - 0.7 * (A.monFade || 0)), scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, knock: A.monKnock,
       wind: phase === 'fight' && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 ? Math.max(0, 1 - m.timer / Math.min(0.32, m.int * 0.45)) : (m.tell > 0 ? 0.6 + 0.4 * Math.sin(T * 20) : 0), stun: m.stun, tell: m.tell > 0 ? 1 - m.tell / TELL_TIME : 0, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
+    if (A.monGuard) { const q = A.monGuard.t / 0.5, gx = L.monX + (L.heroX - L.monX) * 0.12, gy = L.monY - ms * 0.42 + (L.heroY - L.monY) * 0.06; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - q; ctx.strokeStyle = '#fff0c0'; ctx.lineWidth = 3;
+      for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.arc(gx, gy, ms * (0.12 + q * 0.35 + i * 0.08), 0, 7); ctx.stroke(); } const fg = ctx.createRadialGradient(gx, gy, 0, gx, gy, ms * 0.25); fg.addColorStop(0, 'rgba(255,250,220,.9)'); fg.addColorStop(1, 'rgba(255,250,220,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(gx, gy, ms * 0.25, 0, 7); ctx.fill(); ctx.restore(); }
     if (phase === 'fight') { const by = L.monY - ms * (m.boss ? 1.12 : 0.95); bar(L.monX, by, Math.min(W * 0.5, ms * 0.9), m.hp / m.max, m.boss ? '#e0574a' : '#d77a4a');
       if (m.tell > 0) { bar(L.monX, by - u * 0.75, Math.min(W * 0.5, ms * 0.9), 1 - m.tell / TELL_TIME, '#ff4a3a'); ctx.font = `800 ${Math.max(12, Math.round(u * 0.36))}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.fillStyle = m.caster ? '#c8ff9a' : '#ff9a8a'; ctx.fillText(m.caster ? (m.type === 'shaman' ? 'FIREBALL!' : 'HEX!') + ' Flare to break it' : 'BIG ATTACK!', L.monX, by - u * 0.85); }
       ctx.font = `700 ${Math.max(12, Math.round(u * 0.34))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#f4ead6'; ctx.fillText((m.elite ? 'Elite ' : '') + m.name + (m.trait ? ' · ' + TRAITS[m.trait].name : '') + (m.stun > 0 ? ' · Stunned' : ''), L.monX, by - 6); }
@@ -2800,7 +2845,10 @@ function draw() {
   let hx = L.heroX, hy = L.heroY, hs = u * 2.2;
   if (A.walk) { const k = Math.min(1, A.walk.t), e = k * k * (3 - 2 * k); hx = A.walk.x0 + (A.walk.x1 - A.walk.x0) * e; hy = A.walk.y0 + (A.walk.y1 - A.walk.y0) * e; hs *= 1 - 0.45 * e; }
   if (run.pet && !A.walk) drawPet(run.pet, hx + hs * 0.55, hy - Math.abs(Math.sin((A.petHop || 0) * Math.PI * 3)) * hs * 0.25 * (A.petHop || 0), hs * 0.42, T, { bite: A.petBite });
+  const rk = A.react && A.react.t < 0.5 ? A.react : null, rq = rk ? rk.t / 0.5 : 1;
+  if (rk && rk.k === 'dodge') { const off = Math.sin(Math.min(1, rq * 1.6) * Math.PI) * hs * 0.38 * rk.side; if (!RM) { ctx.save(); ctx.globalAlpha = 0.25 * (1 - rq); drawHero(hx, hy, hs, { t: T, pose: A.pose }); ctx.restore(); } hx += off; }
   drawHero(hx, hy, hs, { t: T, pose: A.walk ? null : A.pose, hurt: A.heroHurt, down: A.heroDown, dim: phase === 'lost', out: heroOut });
+  if (rk && rk.k !== 'dodge') drawReact(hx, hy, hs, rk.k, rq);
   if (!RM && A.hs && A.hs.t < 0.2 && heroOut.tipX != null && ['sword', 'axe', 'whip', 'knife', 'spear'].includes(A.hs.kind)) trail.push({ x: heroOut.tipX, y: heroOut.tipY, ix: heroOut.inX, iy: heroOut.inY, age: 0 });
   drawTrail(); drawMarks(hx, hy, hs);
   if (phase === 'fight' && fight) { bar(hx, hy + 8, u * 1.6, run.hp / fight.st.maxHp, '#8fcf6a');
