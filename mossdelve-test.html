@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.13.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.14 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -122,6 +122,13 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .sil { filter: brightness(0) drop-shadow(0 0 4px rgba(242,181,74,.75)); opacity: .9; }
 #quest .qi.fadein { animation: pop .5s ease-out; }
 #flare small { display: block; font-size: 12px; font-weight: 700; opacity: .85; }
+#guard { pointer-events: auto; width: 72px; height: 72px; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; background: conic-gradient(#9ad8ff calc(var(--p, 1) * 1turn), rgba(255,255,255,.12) 0); transition: transform .08s; }
+#guard::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #2c3a48, #11161c); }
+#guard span { position: relative; text-align: center; line-height: 1; color: var(--ink2); font-family: var(--display); font-weight: 800; }
+#guard i { font-style: normal; font-size: 24px; display: block; filter: grayscale(.6); } #guard small { font-size: 11px; letter-spacing: 1px; }
+#guard.ready::before { background: radial-gradient(circle at 50% 40%, #cfeaff, #4f8fc0 60%, #1d3a55); } #guard.ready i { filter: none; } #guard.ready span { color: #10202e; }
+#guard.up { transform: scale(.92); box-shadow: 0 0 0 4px rgba(154,216,255,.8), 0 0 24px rgba(154,216,255,.7); }
+#guard.lift { z-index: 60; }
 #flare.hold { animation: none; } #flare.hold small { text-transform: uppercase; letter-spacing: .05em; color: #ffe6a8; }
 @media (prefers-reduced-motion: reduce) { #flare.ready { animation: none; box-shadow: 0 0 0 4px rgba(242,181,74,.6); } .gearBig.reveal .ic, .gearBig.reveal .ic::before, .sheet, #quest.done, #quest .conf, #quest .qi.fadein { animation: none; } #quest .conf { display: none; } }
 .sheet h2 { margin: 0; font-family: var(--display); font-size: 22px; letter-spacing: 1px; text-align: center; color: var(--amber2); text-shadow: 0 2px 0 #2a1a06; }
@@ -270,7 +277,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
     </div>
     <div id="bottom">
       <div id="hint"></div>
-      <div class="btnrow"><button id="potion" class="hidden" aria-label="Use potion"></button><button id="flare" class="hidden" aria-label="Flare"><span>FLARE<small id="flareDmg"></small></span></button></div>
+      <div class="btnrow"><button id="potion" class="hidden" aria-label="Use potion"></button><button id="flare" class="hidden" aria-label="Flare"><span>FLARE<small id="flareDmg"></small></span></button><button id="guard" class="hidden" aria-label="Guard: tap as the foe swings"><span><i>🛡</i><small>GUARD</small></span></button></div>
     </div>
   </div>
 
@@ -595,6 +602,7 @@ function fightStep(run, f, dt, rng) {
   const ev = []; if (f.over) return ev;
   const st = f.st, m = f.m; f.t += dt;
   f.flare = Math.min(1, f.flare + st.flareRate * dt);
+  if (f.gCd > 0) f.gCd = Math.max(0, f.gCd - dt); if (f.gT > 0) f.gT = Math.max(0, f.gT - dt);
   if (m.regen && m.hp < m.max) { m.hp = Math.min(m.max, m.hp + m.regen * dt); }
   f.hTimer -= dt;
   if (f.hTimer <= 0) { f.hTimer += st.interval; heroHit(run, f, 1, rng, ev, false); ev.push({ t: 'swingH' }); }
@@ -608,8 +616,8 @@ function fightStep(run, f, dt, rng) {
   // guardians wind up a big blow every few seconds (TELL_TIME to react); a Flare during the wind-up interrupts it
   if ((m.boss || m.caster) && m.stun <= 0 && m.hp > 0) {
     if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY;
-      const rc = heroReact(run, f, m.caster ? 'spell' : 'heavy', rng), rm = rc ? REACT[rc] : 1;
-      const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2 * rm))) : hurt(Math.max(1, Math.round((m.atk * 2.5 - st.def) * rm))); ev.push({ t: 'swingM', spell: m.caster }); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster, react: rc }); } }
+      const rc = heroReact(run, f, m.caster ? 'spell' : 'heavy', rng), gd = guardTake(f, false), rm = Math.min(rc ? REACT[rc] : 1, gd ? GUARD_BIG : 1);
+      const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2 * rm))) : hurt(Math.max(1, Math.round((m.atk * 2.5 - st.def) * rm))); ev.push({ t: 'swingM', spell: m.caster }); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster, react: rc, guard: gd }); } }
     else { m.tellCd -= dt; if (m.tellCd <= 0) { m.tell = TELL_TIME; ev.push({ t: 'tell', spell: m.caster }); } }
   }
   if (m.stun > 0) m.stun -= dt; else if (!(m.tell > 0)) {
@@ -617,9 +625,11 @@ function fightStep(run, f, dt, rng) {
     if (m.timer <= 0 && m.hp > 0) {
       m.timer += m.int;
       m.atkN = (m.atkN || 0) + 1; const bomb = m.trait === 'bomber' && m.atkN % 3 === 0;
-      const rc = heroReact(run, f, 'hit', rng); ev.push({ t: 'swingM', bomb });
+      const gd = guardTake(f, true); ev.push({ t: 'swingM', bomb });
+      if (gd === 'parry') { ev.push({ t: 'gParry' }); m.stun = Math.max(m.stun, 0.6); heroHit(run, f, GUARD_COUNTER, rng, ev, false); checkEnd(run, f, ev); return ev; }
+      const rc = gd ? null : heroReact(run, f, 'hit', rng);
       if (rc === 'dodge') { ev.push({ t: 'dodge' }); checkEnd(run, f, ev); return ev; }
-      const raw = Math.round(m.atk * (bomb ? 2 : 1)) - st.def, dmg = hurt(Math.max(1, Math.round(raw * (rc ? REACT[rc] : 1)))); ev.push({ t: 'hitH', dmg, bomb, react: rc, soaked: Math.min(st.def, Math.round(m.atk * (bomb ? 2 : 1)) - 1) });
+      const raw = Math.round(m.atk * (bomb ? 2 : 1)) - st.def, dmg = hurt(Math.max(1, Math.round(raw * (gd ? GUARD_BLOCK : rc ? REACT[rc] : 1)))); ev.push({ t: 'hitH', dmg, bomb, react: rc, guard: gd, soaked: Math.min(st.def, Math.round(m.atk * (bomb ? 2 : 1)) - 1) });
       if (st.thorns) { m.hp -= st.thorns; ev.push({ t: 'hitM', dmg: st.thorns, thorn: true }); }
       if (st.syn && st.syn.thorns >= SYN_NEED) { f.taken = (f.taken || 0) + 1; if (f.taken % 3 === 0) { const b = Math.round(st.atk * 1.5); m.hp -= b; ev.push({ t: 'bramble', dmg: b }); } }
     }
@@ -637,6 +647,12 @@ function heroReact(run, f, kind, rng) { const cls = run.cls || 'warden';
   if (cls === 'knight') return rng() < 0.12 ? 'block' : null;
   return rng() < 0.1 ? 'parry' : null; }
 const TELL_TIME = 1.8, TELL_EVERY = 6, CAST_EVERY = 5.5;
+// GUARD, the second tap move: tap just as a foe swings (it leans back first) to PARRY (no damage, and you strike back),
+// a little early to BLOCK (about a third of the damage). Big attacks and spells can only be softened, never parried.
+const GUARD_WIN = 0.6, PARRY_WIN = 0.35, GUARD_CD = 3.5, GUARD_BLOCK = 0.35, GUARD_BIG = 0.5, GUARD_COUNTER = 1;
+function useGuard(run, f) { if (f.over || f.gCd > 0) return false; f.gT = GUARD_WIN; f.gCd = GUARD_CD; return true; }
+// called when a hit lands: returns 'parry', 'block' or null and spends the guard
+function guardTake(f, canParry) { if (!(f.gT > 0)) return null; const age = GUARD_WIN - f.gT; f.gT = 0; return canParry && age <= PARRY_WIN ? 'parry' : 'block'; }
 // potions: heal works any time; fire and ward need a fight
 function usePotion(run, f, rng) {
   const p = run.potion, ev = []; if (!p) return ev;
@@ -1698,7 +1714,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.13.2';
+const VERSION = 'v0.14';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2282,7 +2298,7 @@ function a11ySet(items) { const el = $('a11y'); el.innerHTML = ''; items.forEach
 function setPhase(p) {
   phase = p; updateHud();
   a11ySet(p === 'choose' ? doors.map((d, i) => [`Door ${i + 1} of ${doors.length}: ${(d.elite && d.rev ? 'Elite ' : '') + doorLabel(d)}, ${doorHint(d)}`, () => { if (phase === 'choose') goDoor(i); }]) : p === 'chest' ? [['Open the chest', () => openChest()]] : []);
-  const hint = $('hint'); show($('flare'), p === 'fight'); updatePotion();
+  const hint = $('hint'); show($('flare'), p === 'fight'); show($('guard'), p === 'fight' && guardOn()); updatePotion();
   if (p === 'choose') {
     hint.textContent = doors.length === 1 ? (doors[0].kind === 'stairs' ? 'Swipe up (or tap) to take the stairs' : doors[0].kind === 'vault' ? 'Swipe up (or tap) to open the vault' : 'Swipe up (or tap) to face the guardian') : 'Swipe toward a door';
     snapshot(); chooseLessons(); sniffBeat(); trustBeat();
@@ -2343,6 +2359,7 @@ document.addEventListener('keydown', e => {
   if (mode !== 'run' || coachOpen || overlayOpen) return;
   if (phase === 'choose') { const n = doors.length; if (e.key === 'ArrowLeft') goDoor(0); else if (e.key === 'ArrowRight') goDoor(n - 1); else if (e.key === 'ArrowUp' && n !== 2) goDoor(Math.floor(n / 2)); }
   if (phase === 'fight' && (e.key === ' ' || e.key === 'f')) doFlare();
+  if (phase === 'fight' && (e.key === 'g' || e.key === 'ArrowDown')) doGuard();
 });
 
 function goDoor(i) {
@@ -2368,7 +2385,7 @@ function enterRoom(d) {
   enterRoom2(d);
 }
 function enterRoom2(d) {
-  if (d.kind === 'stairs') { run.room++; content = d; fx = []; floats = []; phase = 'done'; $('hint').textContent = ''; show($('flare'), false); updateHud(); setTimeout(() => levelComplete(), 500); return; }
+  if (d.kind === 'stairs') { run.room++; content = d; fx = []; floats = []; phase = 'done'; $('hint').textContent = ''; show($('flare'), false); show($('guard'), false); updateHud(); setTimeout(() => levelComplete(), 500); return; }
   if (d.kind === 'vault') { run.room++; content = d; fx = []; floats = []; A.chestOpen = 0; setPhase('chest'); $('hint').textContent = 'Tap the vault'; return; }
   run.room++; roomSeed++; content = d; fx = []; floats = [];
   // count the room before rolling the next doors (max 2 chests and 1 story room per depth)
@@ -2469,7 +2486,26 @@ async function fightLessons() {
   if (parts.length) { S.seen.eliteDoor = S.seen.eliteDoor || (m.elite ? 1 : 0); save(); const ok = await coach({ valid: inFight, text: parts.join('<br><br>'), btn: 'Got it' }); if (!ok) { keys.forEach(k => delete S.seen[k]); save(); } }
 }
 
-let flareLessonOn = false;
+let flareLessonOn = false, guardLessonOn = false;
+// GUARD: the second tap move, from level 1-2 on (Endless too)
+function guardOn() { return !!run && run.level !== '1-1'; }
+function doGuard() {
+  if (phase !== 'fight' || !fight || !guardOn() || (paused && !guardLessonOn)) return;
+  if (!useGuard(run, fight)) { const b = $('guard'); b.animate && b.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 180); return; }
+  SFX.dodge && SFX.dodge(); buzz(6); A.guardUp = 1;
+}
+function guardFeedback(k) {
+  if (!S.seen.guardDone && S.seen.guard) { S.seen.guardDone = 1; save();
+    setTimeout(() => toast(k === 'parry' ? 'Parry! No damage, and you struck back. Tap GUARD as a foe leans back. A bit early is a Block (less damage).' : 'Block! Less damage. Tap GUARD right as the foe leans back for a Parry: no damage, and you strike back.', 3600), 400); }
+}
+function guardLesson() {
+  if (S.seen.guard) return; S.seen.guard = 1; save(); guardLessonOn = true; $('guard').classList.add('lift');
+  const steps = 'New move: <b>GUARD</b> 🛡<br>1. Watch the foe. It <b>leans back</b> right before it swings (like now!).<br>2. <b>Tap GUARD</b> just then.<br>Perfect timing is a <b>Parry</b>: no damage, and you strike back.';
+  coach({ text: steps, target: $('guard'), finger: 'tap', fingerAt: (() => { const b = $('guard').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), valid: () => inFight(), until: done => { guardDone = () => { guardDone = null; done(); }; const iv = setInterval(() => { if (!guardDone) { clearInterval(iv); return; } if (!inFight()) { clearInterval(iv); guardLessonOn = false; $('guard').classList.remove('lift'); guardDone(); } }, 200); } })
+    .then(ok => { guardLessonOn = false; $('guard').classList.remove('lift'); if (!ok) { S.seen.guard = 0; save(); } });
+}
+let guardDone = null;
+$('guard').addEventListener('click', e => { e.stopPropagation(); doGuard(); if (guardLessonOn && guardDone) { guardLessonOn = false; $('guard').classList.remove('lift'); guardDone(); } });
 function doFlare() {
   if (phase !== 'fight' || !fight || fight.flare < 1 || (paused && !flareLessonOn)) return;
   // on a "stop the big attack" level the first early tap only reminds you to wait, so the full lantern isn't wasted
@@ -2528,12 +2564,14 @@ function handleEvents(ev) {
       laneText('dmg', (e.crit ? 'x2 ' : '') + e.dmg, e.flare ? '#ffe08a' : e.crit ? '#ffcf5a' : e.thorn ? '#c8b89a' : '#fff', e.crit || e.flare ? 1.5 : e.thorn ? 0.8 : 1);
       sparkle(L.monX, L.monY - ms * 0.35, e.flare ? '#ffd47a' : '#f2e2c0', e.flare ? 24 : 6); }
     else if (e.t === 'dodge') { A.react = { k: 'dodge', t: 0, side: Math.random() < 0.5 ? -1 : 1 }; SFX.dodge(); laneText('hero', 'Dodge!', '#bfe8a0', 0.8, 0.6); }
-    else if (e.t === 'hitH' && e.react) { const RT = { block: ['Blocked!', '#ffe08a', 'clang'], parry: ['Parry!', '#f4f4ff', 'parry'], ward: ['Warded!', '#9ad8ff', 'wardFx'] }[e.react];
-      A.react = { k: e.react, t: 0 }; A.heroHurt = 0.35; SFX[RT[2]](); buzz(8); A.shake = RM ? 0 : (e.heavy ? 6 : 2);
+    else if (e.t === 'hitH' && (e.react || e.guard)) { const rk = e.guard ? 'block' : e.react, RT = { block: [e.guard ? (e.heavy ? 'Guarded!' : 'Block!') : 'Blocked!', '#ffe08a', 'clang'], parry: ['Parry!', '#f4f4ff', 'parry'], ward: ['Warded!', '#9ad8ff', 'wardFx'] }[rk];
+      if (e.guard) { e.react = rk; guardFeedback(e.heavy ? 'big' : 'block'); }
+      A.react = { k: rk, t: 0 }; A.heroHurt = 0.35; SFX[RT[2]](); buzz(8); A.shake = RM ? 0 : (e.heavy ? 6 : 2);
       const cx = L.heroX + (L.monX - L.heroX) * 0.18, cy = L.heroY - u * 1.4 + (L.monY - L.heroY) * 0.12; sparkle(cx, cy, e.react === 'ward' ? '#9ad8ff' : '#fff2c0', e.react === 'ward' ? 18 : 14);
       laneText('hero', RT[0] + ' -' + e.dmg, RT[1], 0.8, 0.7);
       if (!S.seen.react) { S.seen.react = 1; save(); setTimeout(() => toast('Your hero defends on their own: blocks, parries and dodges cut the damage. Each hero has a style.', 2600), 500); } }
     else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { marks.push({ style: ATK_STYLE[fight.m.type] || 'claw', t: 0, heavy: !!e.heavy, a: (Math.random() - 0.5) * 0.4 }); SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; laneText('hero', 'Big hit!', '#ff7a6a', 0.95); } } laneText('hero', '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
+    else if (e.t === 'gParry') { A.react = { k: 'parry', t: 0 }; SFX.parry ? SFX.parry() : SFX.clang(); buzz([10, 20, 10]); A.monKnock = 1; A.flash = RM ? 0.15 : 0.35; sparkle(L.heroX + (L.monX - L.heroX) * 0.3, L.heroY - u * 1.5 + (L.monY - L.heroY) * 0.25, '#ffffff', 22); laneText('hero', 'Parry!', '#f4f4ff', 1); if (run.gs) run.gs.parries = (run.gs.parries || 0) + 1; guardFeedback('parry'); }
     else if (e.t === 'heal') { laneText('heal', '+' + e.amt, '#8fcf6a', e.potion ? 1 : 0.8); if (e.pet) sparkle(L.heroX, L.heroY - u, '#aaffaa', 6); }
     else if (e.t === 'flare') { if (run.gs) run.gs.flare++; if (e.cls === 'ranger') { for (let k = 0; k < 3; k++) { shoot('arrow', k * 0.08); slashes.push({ t: -0.11 - k * 0.08, crit: true, a: (k - 1) * 0.5, flip: false, kind: 'bow', col: '255,230,150' }); } }
       if (e.cls === 'mage') { shoot('bigfire'); } A.hs = { t: 0, w0: 1, kind: heroWeaponKind() }; if (e.cls === 'mage') sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 30); A.flash = RM ? 0.4 : 1; A.burst = 1; A.rune = 1; if (!RM) A.hitStop = 0.1; SFX.flare(); buzz(25);  }
@@ -2965,7 +3003,7 @@ function levelComplete() {
   S.levels = S.levels || {}; S.levelGoals = S.levelGoals || {}; const pg = S.levelGoals[lv.id] || [false, false]; S.levelGoals[lv.id] = pg.map((v, i) => v || goals[i]);
   const best = 1 + S.levelGoals[lv.id].filter(Boolean).length; S.levels[lv.id] = Math.max(prev, best);
   const nowStars = 1 + goals.filter(Boolean).length, gold = (prev ? 0 : 20) + Math.max(0, S.levels[lv.id] - prev) * 10; S.gold = (S.gold || 0) + gold; S.run = null; save(); heroUnlockCheck(S.best || 0);
-  phase = 'done'; hush(); show($('voice'), false); show($('flare'), false); show($('potion'), false); $('hint').textContent = ''; SFX.chest(); buzz([20, 40, 20]); sparkle(L.heroX, L.heroY - L.u * 2, '#ffd47a', 40); A.flash = RM ? 0.3 : 0.8;
+  phase = 'done'; hush(); show($('voice'), false); show($('flare'), false); show($('guard'), false); show($('potion'), false); $('hint').textContent = ''; SFX.chest(); buzz([20, 40, 20]); sparkle(L.heroX, L.heroY - L.u * 2, '#ffd47a', 40); A.flash = RM ? 0.3 : 0.8;
   const idx = LEVELS.indexOf(lv), nextLv = LEVELS[idx + 1], chDone = !nextLv || nextLv.ch !== lv.ch, firstChDone = chDone && !prev;
   let h = `<div class="lvlHead">Level ${lv.id} complete!</div><h2>${lv.name}</h2><div class="starRow" role="img" aria-label="${nowStars} of 3 stars">${[0, 1, 2].map(k => `<i aria-hidden="true" class="${k < nowStars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.35}s">★</i>`).join('')}</div>`;
   h += `<ul class="goalList"><li>✔ <b>${endText(lv)}</b></li>` + lv.bonus.map((g, k) => `<li>${goals[k] ? '✔' : '✘'} ${goalText(g)}</li>`).join('') + `</ul>`;
@@ -2983,7 +3021,7 @@ function levelComplete() {
     if (kOpts.length) setTimeout(() => lesson('keepsake', [{ text: 'New: <b>keepsakes</b>! Most upgrades end with the level, but you can carry <b>one</b> into your next level. Tap one to take it into your next level, or "No thanks". The suggested one is already picked if you just tap Next level.' }], () => !!$('keepHead') && !$('overlay').classList.contains('hidden')), 2600); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
 }
 function levelFailed() {
-  const lv = LV(run); S.run = null; save(); hush(); show($('voice'), false); show($('flare'), false); show($('potion'), false);
+  const lv = LV(run); S.run = null; save(); hush(); show($('voice'), false); show($('flare'), false); show($('guard'), false); show($('potion'), false);
   let h = `<div class="lvlHead">Level ${lv.id}</div><h2>Your lantern went out</h2><p>The dark took this one, but you keep every piece of gear and gold you found. Try a different door this time.</p>`;
   if (run.found.length) h += run.found.map(id => `<div class="card rar-${GEAR_BY_ID[id].rar}">${gearCardHTML(id)}</div>`).join('');
   h += `<div class="row2"><button class="btn" data-a="map">Map</button><button class="btn main" data-a="again">Try again</button></div>`;
@@ -3089,6 +3127,8 @@ function update(dt) {
     else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt, Math.random); if (ev.length) handleEvents(ev); }
     const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); const hold = fight.hold && fight.flare >= 1 && !(fight.m.tell > 0) && !(run.gs && run.gs.interrupts); fb.classList.toggle('hold', hold); $('flareDmg').textContent = hold ? 'save it' : fight.m.tell > 0 && fight.hold && fight.flare >= 1 ? 'NOW!' : Math.round(fight.st.atk * fight.st.flareMult);
     if (fight.flare >= 1 && !S.seen.flare && !paused) flareLesson();
+    if (guardOn()) { const gb = $('guard'); gb.style.setProperty('--p', (1 - (fight.gCd || 0) / GUARD_CD).toFixed(3)); gb.classList.toggle('ready', !(fight.gCd > 0)); gb.classList.toggle('up', fight.gT > 0);
+      const m = fight.m; if (!S.seen.guard && S.seen.flare && !paused && !coachOpen && m.hp > 0 && m.stun <= 0 && !(m.tell > 0) && m.timer < 0.3 && m.timer > 0.12 && !fight.over) guardLesson(); }
   }
   if (phase === 'won' && fight) { A.monAlpha = Math.max(0, A.monAlpha - dt * 1.5); A.monScale = 1 + (1 - A.monAlpha) * 0.15; }
   if (phase === 'lost') { A.heroDown = Math.min(1, A.heroDown + dt * 1.5); A.light = Math.max(0.25, A.light - dt * 0.6); }
@@ -3214,6 +3254,8 @@ function draw() {
     if (A.monGuard) { const q = A.monGuard.t / 0.5, gx = L.monX + (L.heroX - L.monX) * 0.12, gy = L.monY - ms * 0.42 + (L.heroY - L.monY) * 0.06; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - q; ctx.strokeStyle = '#fff0c0'; ctx.lineWidth = 3;
       for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.arc(gx, gy, ms * (0.12 + q * 0.35 + i * 0.08), 0, 7); ctx.stroke(); } const fg = ctx.createRadialGradient(gx, gy, 0, gx, gy, ms * 0.25); fg.addColorStop(0, 'rgba(255,250,220,.9)'); fg.addColorStop(1, 'rgba(255,250,220,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(gx, gy, ms * 0.25, 0, 7); ctx.fill(); ctx.restore(); }
     if (phase === 'fight') { const by = L.monY - ms * (m.boss ? 1.12 : 0.95); bar(L.monX, by, Math.min(W * 0.5, ms * 0.9), m.hp / m.max, m.boss ? '#e0574a' : '#d77a4a');
+      // swing cue for GUARD: a quick white "!" flashes over the foe as it leans back to swing
+      if (guardOn() && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 && m.timer < 0.32) { const q = 1 - m.timer / 0.32, fs = Math.max(16, Math.round(u * 0.6)); ctx.save(); ctx.font = `900 ${fs}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(10,10,20,.9)'; ctx.globalAlpha = 0.5 + 0.5 * q; const ex = L.monX + ms * 0.42, ey = by + fs * 0.2; ctx.strokeText('!', ex, ey); ctx.fillStyle = '#eaf6ff'; ctx.fillText('!', ex, ey); ctx.restore(); }
       tellUI = m.tell > 0 ? { x: L.monX, y: by, w: Math.min(W * 0.62, ms * 1.05), q: 1 - m.tell / TELL_TIME, caster: m.caster, type: m.type, ready: fight.flare >= 1 } : null;
       ctx.font = `700 ${Math.max(12, Math.round(u * 0.34))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#f4ead6'; ctx.fillText((m.elite ? 'Elite ' : '') + m.name + (m.trait ? ' · ' + TRAITS[m.trait].name : ''), L.monX, by - 6);
       if (m.stun > 0) { const fs = Math.max(11, Math.round(u * 0.3)), sy = by - 6 - fs * 1.55; ctx.font = `800 ${fs}px ui-rounded, system-ui, sans-serif`; const tw = ctx.measureText('STUNNED').width + fs * 1.1;
@@ -3236,6 +3278,10 @@ function draw() {
   if (rk && rk.k === 'dodge') { const off = Math.sin(Math.min(1, rq * 1.6) * Math.PI) * hs * 0.38 * rk.side; if (!RM) { ctx.save(); ctx.globalAlpha = 0.25 * (1 - rq); drawHero(hx, hy, hs, { t: T, pose: A.pose }); ctx.restore(); } hx += off; }
   drawHero(hx, hy, hs, { t: T, pose: A.walk ? null : A.pose, hurt: A.heroHurt, down: A.heroDown, dim: phase === 'lost', out: heroOut });
   if (rk && rk.k !== 'dodge') drawReact(hx, hy, hs, rk.k, rq);
+  // GUARD raised: a pale blue shield of light in front of the hero while the guard window is open
+  if (phase === 'fight' && fight && fight.gT > 0) { const q = fight.gT / GUARD_WIN, gx = hx + (L.monX - hx) * 0.14, gy = hy - hs * 0.62 + (L.monY - hy) * 0.1; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, hs * 0.55); gg.addColorStop(0, `rgba(170,220,255,${0.35 * q})`); gg.addColorStop(1, 'rgba(170,220,255,0)'); ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(gx, gy, hs * 0.55, 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgba(200,235,255,${0.9 * q})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(gx, gy + hs * 0.25, hs * 0.48, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke(); ctx.restore(); }
   if (!RM && A.hs && A.hs.t < 0.2 && heroOut.tipX != null && ['sword', 'axe', 'whip', 'knife', 'spear'].includes(A.hs.kind)) trail.push({ x: heroOut.tipX, y: heroOut.tipY, ix: heroOut.inX, iy: heroOut.inY, age: 0 });
   drawTrail(); drawMarks(hx, hy, hs);
   if (phase === 'fight' && fight) { bar(hx, hy + 8, u * 1.6, run.hp / fight.st.maxHp, '#8fcf6a');
