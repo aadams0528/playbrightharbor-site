@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.8.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.8.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -206,11 +206,17 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .starRow i.on { color: #ffd45a; text-shadow: 0 0 14px rgba(255,200,80,.8), 0 2px 0 #8a5a14; }
 @keyframes starIn { from { transform: scale(0) rotate(-40deg); opacity: 0; } to { transform: none; opacity: 1; } }
 .btn.lockd { opacity: .55; }
+#trailBox { height: 26px; }
+#goalRow { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 14px; font-size: 12.5px; font-weight: 700; color: #e8dcc0; text-shadow: 0 1px 2px #000, 0 0 6px #000; }
+#goalRow .ok { color: #ffd45a; }
+.goalList li small { display: block; color: var(--ink2); font-size: 12px; font-weight: 400; margin-top: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
 <body>
 <div id="app">
-  <canvas id="cv"></canvas>
+  <canvas id="cv" aria-hidden="true"></canvas>
+  <div id="a11y" class="sr"></div>
 
   <div id="camp">
     <div id="campTop">
@@ -243,6 +249,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         <div class="dots" id="dots"></div>
         <button id="bagBtn">Upgrades</button>
       </div>
+      <div id="lvlBand" class="hidden"><div id="trailBox" aria-hidden="true"></div><div id="goalRow" aria-live="polite"></div></div>
     </div>
     <div id="bottom">
       <div id="hint"></div>
@@ -398,6 +405,9 @@ const CHAPTERS = [
 const GOAL_TXT = { foes: g => `Defeat ${g.n} foes`, flare: g => g.n > 1 ? `Land ${g.n} Flares` : 'Land a Flare', chests: g => g.n > 1 ? `Open ${g.n} chests` : 'Open a chest', hp: g => `Finish with ${Math.round(g.p * 100)}% health`,
   nopotion: () => 'Finish without drinking a potion', mimics: () => 'Defeat a Mimic', pets: () => 'Answer the cry for help', elites: () => 'Defeat an Elite foe', interrupts: () => 'Stop a big attack with your Flare' };
 function goalText(g) { return GOAL_TXT[g.t](g); }
+// what counts toward a goal, shown on the level card
+const GOAL_HELP = { foes: 'Mimics and Elites count', chests: 'Mimic chests and the vault count too', mimics: 'Mimics hide among the chests', flare: 'Tap FLARE when it glows', interrupts: 'Flare while the guardian winds up its BIG ATTACK', nopotion: 'Your Healing Draught stays in the belt', hp: 'Springs and Pocket Herbs help', elites: 'Elite foes glow red', pets: 'Free the caged creature (or help the explorer)' };
+function goalProgress(g, run) { if (g.t === 'hp' || g.t === 'nopotion' || !(g.n > 1)) return ''; const c = (run.gs || {})[g.t] || 0; return ` ${Math.min(c, g.n)}/${g.n}`; }
 function goalMet(g, run, st) {
   const c = run.gs || {};
   if (g.t === 'hp') return run.hp >= st.maxHp * g.p; if (g.t === 'nopotion') return !c.potions;
@@ -764,7 +774,7 @@ let W = 0, H = 0, DPR = 1, L = {};
 function layout() {
   DPR = Math.min(2.5, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
-  const top = 86, bot = H - 140;
+  const band = run && run.level && mode === 'run' ? $('hud').getBoundingClientRect().bottom + 8 : 0; const top = Math.max(86, band), bot = H - 140;
   const u = Math.min(W / 9, (bot - top) / 11);
   const wallB = top + (bot - top) * 0.44;
   L = { top, bot, u, wallB, doorW: Math.min(W * 0.24, u * 2.4), doorH: Math.min((wallB - top) * 0.8, u * 3.3),
@@ -1490,7 +1500,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.8';
+const VERSION = 'v0.8.2';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1510,7 +1520,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
 
 // ---------------- camp UI ----------------
 function renderCamp() {
-  mode = 'camp'; show($('camp'), true); show($('game'), false); show($('mapUI'), false); show($('voice'), false); hush();
+  mode = 'camp'; show($('camp'), true); show($('game'), false); show($('mapUI'), false); show($('voice'), false); hush(); a11ySet([]);
   $('mute').textContent = S.mute ? '🔇' : '🔊';
   $('campStats').innerHTML = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · <span class="gold">🪙 ${S.gold || 0}</span>` : 'Swipe through rooms. Fights are automatic.') + ` · ${VERSION}`;
   $('forgeBtn').classList.toggle('dot', canForgeAny()); $('bestBtn').classList.toggle('dot', !!S.bestNew);
@@ -1729,7 +1739,7 @@ function heroStats() { return calcStats(run); }
 function startRun() {
   run = newRun(S); run.hp = calcStats(run).maxHp; roomSeed = 1000 + S.runs * 37;
   content = { kind: 'start' }; doors = genDoors(run, Math.random);
-  mode = 'run'; show($('camp'), false); show($('game'), true); fx = []; floats = [];
+  mode = 'run'; show($('camp'), false); show($('game'), true); fx = []; floats = []; updateHud(); layout();
   A.fade = 1; A.fadeDir = -1; A.heroDown = 0; A.light = 1;
   banner('Depth 1', DEPTHS[0].name, 1700);
   ensureQuest(); if (S.quest && S.runs > 0) setTimeout(() => toast('Quest: find the ' + GEAR_BY_ID[S.quest].name, 2200), 1900);
@@ -1738,7 +1748,7 @@ function startRun() {
 function resumeRun() {
   const R = S.run; run = R.run; doors = R.doors; roomSeed = R.seed; content = { kind: 'start' };
   mode = 'run'; show($('camp'), false); show($('game'), true); fx = []; floats = []; A.fade = 1; A.fadeDir = -1; A.heroDown = 0; A.light = 1;
-  setPhase('choose');
+  updateHud(); layout(); setPhase('choose');
 }
 function snapshot() { S.run = { run, doors, seed: roomSeed }; save(); }
 
@@ -1746,21 +1756,25 @@ function updateHud() {
   if (!run) return; const st = heroStats();
   $('hpFill').style.width = Math.max(0, run.hp / st.maxHp * 100) + '%'; $('hpTxt').textContent = `${Math.max(0, Math.ceil(run.hp))} / ${st.maxHp}`;
   $('atkChip').textContent = '⚔ ' + st.atk; $('goldChip').textContent = '🪙 ' + (S.gold || 0);
-  const lvh = LV(run); $('place').textContent = lvh ? `Level ${lvh.id} · ${lvh.name}` : `Depth ${run.depth + 1} · ${DEPTHS[run.depth].name}` + (run.tier > 1 ? ` · Lv ${run.tier}` : '');
+  const lvh = LV(run); show($('lvlBand'), !!lvh); if (lvh) { const gr = lvh.bonus.map(g => { const ok = goalMet(g, run, st); return `<span class="${ok ? 'ok' : ''}">${ok ? '★' : '☆'} ${goalText(g)}${goalProgress(g, run)}</span>`; }).join(''); if ($('goalRow').innerHTML !== gr) $('goalRow').innerHTML = gr; }
+  $('place').textContent = lvh ? `Level ${lvh.id} · ${lvh.name}` : `Depth ${run.depth + 1} · ${DEPTHS[run.depth].name}` + (run.tier > 1 ? ` · Lv ${run.tier}` : '');
   const d = $('dots'); let h = ''; if (!lvh) for (let i = 1; i <= ROOMS_PER_DEPTH + 1; i++) h += `<b class="${i <= run.room ? 'on' : ''} ${i === ROOMS_PER_DEPTH + 1 ? 'boss' : ''}"></b>`; d.innerHTML = h;
   $('bagBtn').textContent = `Upgrades ${run.ups.length}`;
 }
 $('bagBtn').onclick = () => {
   if (coachOpen || !run) return; const st = heroStats(); const counts = {}; run.ups.forEach(u => counts[u] = (counts[u] || 0) + 1);
-  let h = `<h2>This delve</h2><div class="statlist"><div>Attack <b>${st.atk}</b></div><div>Health <b>${st.maxHp}</b></div><div>Armor <b>${st.def}</b></div><div>Swings/sec <b>${(1 / st.interval).toFixed(1)}</b></div><div>Double hit <b>${Math.round(st.crit * 100)}%</b></div><div>Flare <b>x${st.flareMult.toFixed(1)}</b></div></div>`;
+  let h = `<h2>${run.level ? 'This level' : 'This delve'}</h2><div class="statlist"><div>Attack <b>${st.atk}</b></div><div>Health <b>${st.maxHp}</b></div><div>Armor <b>${st.def}</b></div><div>Swings/sec <b>${(1 / st.interval).toFixed(1)}</b></div><div>Double hit <b>${Math.round(st.crit * 100)}%</b></div><div>Flare <b>x${st.flareMult.toFixed(1)}</b></div></div>`;
   h += Object.keys(counts).length ? Object.keys(counts).map(id => `<div class="card"><div class="ic">${UP_BY_ID[id].icon}</div><div class="tx"><b>${UP_BY_ID[id].name}${counts[id] > 1 ? ' ×' + counts[id] : ''}</b><span>${UP_BY_ID[id].desc}</span>${UP_BY_ID[id].curse ? `<span class="curse">Curse: ${UP_BY_ID[id].curse}</span>` : ''}</div></div>`).join('') : '<p>No upgrades yet. Win fights to pick some.</p>';
   h += `<div class="cmp" style="text-align:left"><b>Door clues</b><br>${Object.keys(CLUES).map(k => `<b>${CLUES[k].name}</b>: ${CLUE_HELP[k]}`).join('<br>')}</div>`;
   h += `<p style="font-size:13px">Equipped: ${['weapon', 'armor', 'charm'].map(s => run.eq[s] ? GEAR_BY_ID[run.eq[s]].name : null).filter(Boolean).join(', ')}</p><div class="foot"><button class="btn" data-a="close">Back</button></div>`;
   paused = true; openSheet(h, { close: () => { closeSheet(); paused = false; } });
 };
 
+// screen-reader buttons for what is drawn on the canvas (doors, the chest, the chapter map)
+function a11ySet(items) { const el = $('a11y'); el.innerHTML = ''; items.forEach(([t, fn]) => { const b = document.createElement('button'); b.textContent = t; b.onclick = fn; el.appendChild(b); }); }
 function setPhase(p) {
   phase = p; updateHud();
+  a11ySet(p === 'choose' ? doors.map((d, i) => [`Door ${i + 1} of ${doors.length}: ${(d.elite && d.rev ? 'Elite ' : '') + doorLabel(d)}, ${doorHint(d)}`, () => { if (phase === 'choose') goDoor(i); }]) : p === 'chest' ? [['Open the chest', () => openChest()]] : []);
   const hint = $('hint'); show($('flare'), p === 'fight'); updatePotion();
   if (p === 'choose') {
     hint.textContent = doors.length === 1 ? (doors[0].kind === 'stairs' ? 'Swipe up (or tap) to take the stairs' : doors[0].kind === 'vault' ? 'Swipe up (or tap) to open the vault' : 'Swipe up (or tap) to face the guardian') : 'Swipe toward a door';
@@ -1855,7 +1869,7 @@ function enterRoom2(d) {
   // the doors out of this room are decided now, shown once the room is cleared
   doors = genDoors(run, Math.random);
   A.monAlpha = 0; A.monScale = 1; A.chestOpen = 0; A.heroDown = 0;
-  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; setPhase('fight'); fightLessons(); }
+  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = Math.max(fight.flare, 0.8); if (run.level && fight.m.boss) fight.m.tellCd = 6.5; setPhase('fight'); fightLessons(); }
   else if (d.kind === 'chest') payGate('chest', () => { setPhase('chest'); payRoom('chest'); lesson('chest', [{ text: 'A <b>chest</b>! Chests hold <b>gear</b>. Gear is yours forever, even after this delve ends. Tap it to open.' }]); });
   else if (d.kind === 'spring') { setPhase('spring'); setTimeout(() => { const ef = springEffect(run); SFX.heal(); floatText(L.heroX, L.heroY - L.u * 2.4, ef.grow ? '+' + ef.grow + ' max ♥' : '+' + ef.heal, '#8fcf6a', 1.3); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 18); updateHud(); setTimeout(() => roomDone(), 700); }, 500); }
   else if (d.kind === 'event') { setPhase('event'); setTimeout(() => runEvent(d.ev), 650); }
@@ -1868,7 +1882,7 @@ function runEvent(ev) {
   const leave = () => { closeSheet(); toast(ev === 'explorer' ? 'You wish them luck and move on' : 'You leave the shrine alone', 1300); roomDone(); };
   if (ev === 'cage') {
     const pt = cagePet(run, Math.random); if (!pt) { leave(); return; } const P = PETS[pt];
-    openSheet(`<h2>Caged Creature</h2><p>A ${P.name.toLowerCase()} is trapped in a rusty cage. The lock is stiff. Freeing it will hurt your hands.</p><div class="cmp"><b>${P.name}</b>: ${P.desc}<br>Free it and it joins you <b>for good</b>.</div>
+    openSheet(`<h2>Caged Creature</h2><p>${/^[aeiou]/i.test(P.name) ? 'An' : 'A'} ${P.name.toLowerCase()} is trapped in a rusty cage. The lock is stiff. Freeing it will hurt your hands.</p><div class="cmp"><b>${P.name}</b>: ${P.desc}<br>Free it and it joins you <b>for good</b>.</div>
       <button class="card" data-a="free"><div class="ic">🔓</div><div class="tx"><b>Free it (−${c} ♥)</b><span>A new companion, forever</span></div></button>
       <button class="card" data-a="leave"><div class="ic">👣</div><div class="tx"><b>Walk past</b><span>Keep your health</span></div></button>`, {
       leave, free: () => { closeSheet(); pay(); content.state = 'freed'; if (run.gs) run.gs.pets++; SFX.chest(); sparkle(L.monX, L.monY - L.u, '#ffd27a', 24);
@@ -2002,6 +2016,7 @@ async function afterWin() {
   if (content.mimic) { const id = pickGear(run.depth + run.tier - 1, S.owned, Math.random, null, S.quest); if (id) gearFound(id, () => roomDone()); else roomDone(); return; }
   if (!run.potion && content.kind !== 'guard') { const p = potionDrop(run, Math.random, 0.15); if (p) { run.potion = p; toast('Found a ' + POTIONS[p].name + '!', 1600); updatePotion(); } }
   const wasGuard = content.kind === 'guard';
+  if (run.level && (wasGuard || run.room >= LV(run).len)) { toast(wasGuard ? 'Guardian defeated!' : 'Victory! The way out is open', 1400); updateHud(); if (wasGuard) await guardReward(); else setTimeout(() => roomDone(), 500); return; }
   const elite = fight && fight.m.elite;
   await showUpgrades(elite, wasGuard ? 'Guardian defeated!' : elite ? 'Elite defeated!' : 'Victory!', elite ? 'Pick a rare upgrade' : 'Pick one upgrade');
   if (wasGuard) await guardReward();
@@ -2013,7 +2028,7 @@ function showUpgrades(shrine, title, sub) {
     ids.forEach((id, i) => { const u = UP_BY_ID[id]; h += `<button class="card rar-${u.rar}" data-a="u${i}"><div class="ic">${u.icon}</div><div class="tx"><b>${u.name}</b><span>${u.desc}</span></div></button>`; });
     const acts = {}; ids.forEach((id, i) => acts['u' + i] = () => { applyUpgrade(run, id); SFX.pick(); closeSheet(); updateHud(); res(); if (content.kind !== 'guard') roomDone(); });
     openSheet(h, acts);
-    if (!S.seen.upgrade) setTimeout(() => lesson('upgrade', [{ text: 'Pick <b>one</b>. Upgrades last for the whole delve, so they stack up as you go deeper.', target: $('overlay').querySelector('.sheet') }]), 250);
+    if (!S.seen.upgrade) setTimeout(() => lesson('upgrade', [{ text: run && run.level ? 'Pick <b>one</b>. Upgrades stack up until this level ends. Your gear and companions always stay.' : 'Pick <b>one</b>. Upgrades last for the whole delve, so they stack up as you go deeper.', target: $('overlay').querySelector('.sheet') }]), 250);
   });
 }
 function roomDone() {
@@ -2024,7 +2039,7 @@ function openChest() {
   if (phase !== 'chest') return; phase = 'chestOpen'; SFX.chest(); buzz(15);
   const t0 = performance.now(); const anim = () => { A.chestOpen = Math.min(1, (performance.now() - t0) / 400); if (A.chestOpen < 1) requestAnimationFrame(anim); }; anim();
   sparkle(L.monX, L.monY - L.u * 0.5, '#ffd47a', 22);
-  if (content.kind === 'vault') { setTimeout(() => { const id = pickGear(run.depth + run.tier, S.owned, Math.random, 'f', S.quest); if (id) gearFound(id, () => levelComplete()); else levelComplete(); }, 550); return; }
+  if (content.kind === 'vault') { if (run.gs) run.gs.chests++; updateHud(); setTimeout(() => { const id = pickGear(run.depth + run.tier, S.owned, Math.random, 'f', S.quest); if (id) gearFound(id, () => levelComplete()); else levelComplete(); }, 550); return; }
   if (run.gs) run.gs.chests++;
   setTimeout(() => {
     if (isMimic(run, Math.random)) { mimicAttack(); return; }
@@ -2205,7 +2220,7 @@ function chapterCloseScenes(ch) { const C = CHAPTERS.find(c => c.n === ch); retu
 // ---- in-level narrator bubble ----
 let voiceT = 0;
 function voiceLine(text, ms) {
-  const v = $('voice'); $('voiceText').textContent = ''; $('voiceImg').src = keeperImg(); show(v, true); v.classList.remove('vin'); void v.offsetWidth; v.classList.add('vin');
+  const v = $('voice'); v.style.top = Math.round(L.wallB + 10) + 'px'; $('voiceText').textContent = ''; $('voiceImg').src = keeperImg(); show(v, true); v.classList.remove('vin'); void v.offsetWidth; v.classList.add('vin');
   const full = heirTxt(text); let n = 0; clearInterval(voiceT); voiceT = setInterval(() => { n += 2; $('voiceText').textContent = full.slice(0, n); if (n >= full.length) { clearInterval(voiceT); voiceT = setTimeout(() => show(v, false), ms || 3500); } }, 40);
   speak(full);
 }
@@ -2214,7 +2229,7 @@ $('voice').onclick = () => { clearInterval(voiceT); clearTimeout(voiceT); show($
 const MAP_PTS = [[0.28, 0.9], [0.7, 0.78], [0.32, 0.65], [0.72, 0.52], [0.34, 0.39], [0.6, 0.25], [0.5, 0.08]];
 let mapBg = null, mapKey = '', mapNodes = [];
 function openMap() {
-  hush(); mode = 'map'; run = null; show($('camp'), false); show($('game'), false); show($('mapUI'), true);
+  hush(); mode = 'map'; run = null; a11ySet(LEVELS.map(l => [`Level ${l.id}, ${l.name}: ${levelOpen(S, l.id) ? ((S.levels || {})[l.id] || 0) + ' of 3 stars' : 'locked'}`, () => { if (levelOpen(S, l.id)) openLevelCard(l.id); }])); show($('camp'), false); show($('game'), false); show($('mapUI'), true);
   const ch = 1, C = CHAPTERS[0], got = chapterStars(S, ch);
   $('mapCh').textContent = 'The Lost Heir · Ch ' + ch; $('mapName').textContent = C.name; $('mapStars').textContent = `★ ${got}/18`;
   const done = LEVELS.filter(l => (S.levels || {})[l.id]).length;
@@ -2276,7 +2291,7 @@ function mapTap(x, y) { for (const n of mapNodes) if (Math.hypot(x - n.x, y - n.
 function openLevelCard(id) {
   const lv = LEVEL_BY_ID[id], st = (S.levels || {})[id] || 0, gg = (S.levelGoals || {})[id] || [false, false];
   let h = `<div class="lvlHead">Level ${id}</div><h2>${lv.name}</h2><div class="voiceQuote"><img src="${keeperImg()}" width="40" height="40" alt=""><i>“${heirTxt(lv.intro)}”</i></div>`;
-  h += `<ul class="goalList"><li>${st ? '★' : '☆'} <b>${endText(lv)}</b> <span>to clear</span></li>` + lv.bonus.map((g, k) => `<li>${gg[k] ? '★' : '☆'} ${goalText(g)}</li>`).join('') + `</ul>`;
+  h += `<ul class="goalList"><li>${st ? '★' : '☆'} <b>${endText(lv)}</b> <span>to clear</span></li>` + lv.bonus.map((g, k) => `<li>${gg[k] ? '★' : '☆'} ${goalText(g)}${GOAL_HELP[g.t] ? `<small>${GOAL_HELP[g.t]}</small>` : ''}</li>`).join('') + `</ul><p style="font-size:13px">Upgrades last for this level. Gear, gold and companions stay with you.</p>`;
   h += `<div class="row2"><button class="btn" data-a="close">Back</button><button class="btn main" data-a="play">${st ? 'Play again' : 'Play'}</button></div>`;
   openSheet(h, { close: closeSheet, play: () => { closeSheet(); hush(); startLevel(id); } });
   speak(heirTxt(lv.intro));
@@ -2285,7 +2300,7 @@ function startLevel(id) {
   run = newLevelRun(S, id); run.hp = calcStats(run).maxHp; run.trail = []; roomSeed = 5000 + LEVELS.findIndex(l => l.id === id) * 53;
   content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = []; trail = []; projs = []; sparks = []; marks = [];
   mode = 'run'; show($('camp'), false); show($('mapUI'), false); show($('game'), true); A.fade = 1; A.fadeDir = -1; A.heroDown = 0; A.light = 1;
-  banner('Level ' + id, LEVEL_BY_ID[id].name, 1800); setPhase('choose');
+  updateHud(); layout(); banner('Level ' + id, LEVEL_BY_ID[id].name, 1800); setPhase('choose');
   setTimeout(() => { if (run && run.level === id) voiceLine(LEVEL_BY_ID[id].intro, 4200); }, 1900);
 }
 function levelComplete() {
@@ -2301,7 +2316,7 @@ function levelComplete() {
   if (gold) h += `<p style="text-align:center;color:var(--amber2)">+${gold} 🪙</p>`;
   h += `<div class="row2"><button class="btn" data-a="map">Map</button>${nextLv && nextLv.ch === lv.ch ? `<button class="btn main" data-a="next">Next level</button>` : `<button class="btn main" data-a="map2">Continue</button>`}</div>`;
   const toMap = () => { closeSheet(); run = null; if (firstChDone) playStory(chapterCloseScenes(lv.ch), openMap); else openMap(); };
-  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: () => { closeSheet(); hush(); startLevel(nextLv.id); } }); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
+  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: () => { closeSheet(); hush(); run = null; openMap(); openLevelCard(nextLv.id); } }); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
 }
 function levelFailed() {
   const lv = LV(run); S.run = null; save(); hush(); show($('voice'), false); show($('flare'), false); show($('potion'), false);
@@ -2313,7 +2328,7 @@ function levelFailed() {
 // ---- the room-by-room map that grows as you explore a level, and the goal tracker ----
 const TRAIL_ICON = { fight: '⚔', elite: '☠', chest: '🗝', spring: '💧', shrine: '✦', event: '❖', guard: '☠', stairs: '⇩', vault: '♛' };
 function drawLevelMap(t) {
-  const lv = LV(run); if (!lv) return; const u = L.u, hud = $('hud').getBoundingClientRect(), y = hud.bottom + u * 0.55, n = lv.len + 1, gap = Math.min(u * 1.05, (W - 40) / n), x0 = W / 2 - gap * (n - 1) / 2, tr = run.trail || [];
+  const lv = LV(run); if (!lv) return; const u = Math.min(L.u, 40), tb = $('trailBox').getBoundingClientRect(), y = tb.top + tb.height / 2, n = lv.len + 1, gap = Math.min(u * 1.05, (W - 40) / n), x0 = W / 2 - gap * (n - 1) / 2, tr = run.trail || [];
   ctx.save(); ctx.fillStyle = 'rgba(10,8,6,.55)'; const bw = gap * (n - 1) + u * 1.2; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, y - u * 0.5, bw, u * 1.0 + (lv.bonus.length ? u * 0.0 : 0), u * 0.4) : ctx.rect(W / 2 - bw / 2, y - u * 0.5, bw, u); ctx.fill();
   for (let i = 0; i < n - 1; i++) { const x = x0 + i * gap; ctx.strokeStyle = i < tr.length ? 'rgba(255,200,110,.8)' : 'rgba(200,190,170,.25)'; ctx.lineWidth = 2; ctx.setLineDash(i < tr.length ? [] : [3, 4]); ctx.beginPath(); ctx.moveTo(x + u * 0.22, y); ctx.lineTo(x + gap - u * 0.22, y); ctx.stroke(); ctx.setLineDash([]); }
   for (let i = 0; i < n; i++) { const x = x0 + i * gap, step = tr[i - 1], here = i === tr.length, goal = i === n - 1;
@@ -2321,10 +2336,6 @@ function drawLevelMap(t) {
     const r = u * (goal ? 0.3 : 0.22); ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
     ctx.fillStyle = i === 0 ? '#c9a84a' : step ? '#4a3a22' : goal ? 'rgba(60,40,20,.8)' : 'rgba(40,36,30,.7)'; ctx.fill(); ctx.strokeStyle = here ? `rgba(255,220,140,${0.6 + 0.4 * Math.sin(t * 5)})` : step || i === 0 ? 'rgba(255,200,110,.7)' : 'rgba(200,190,170,.3)'; ctx.lineWidth = here ? 2.5 : 1.5; ctx.stroke();
     const ic = i === 0 ? '◉' : step ? TRAIL_ICON[step.k] : goal ? TRAIL_ICON[lv.end] : ''; if (ic) { ctx.font = `${Math.round(r * 1.15)}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = goal && !step ? '#ffd98a' : '#f4ead6'; ctx.fillText(ic, x, y + 1); ctx.textBaseline = 'alphabetic'; } }
-  // bonus goals: a small line each, ticked live
-  const st = heroStats(); ctx.font = `600 ${Math.max(11, Math.round(u * 0.27))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center';
-  const parts = lv.bonus.map(g => (goalMet(g, run, st) ? '★ ' : '☆ ') + goalText(g)), one = parts.join('   '), lines = ctx.measureText(one).width > W - 24 ? parts : [one]; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.fillStyle = '#e8dcc0';
-  lines.forEach((ln, k) => { const yy = y + u * 0.95 + k * u * 0.42; ctx.strokeText(ln, W / 2, yy); ctx.fillText(ln, W / 2, yy); });
   ctx.restore();
 }
 // stairs and the vault: the goal rooms at the end of a level
