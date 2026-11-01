@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.9 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.9.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -273,7 +273,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   </div>
   <div id="story" class="hidden">
     <div class="scroll"><canvas id="storyArt"></canvas><h3 id="storyTitle"></h3><p id="storyText"></p><div id="storyChoice"></div>
-      <div class="srow"><button class="btn small" id="narrBtn">🔊 Narrator on</button><button class="btn main" id="storyNext">Continue</button></div></div>
+      <div class="srow"><button class="btn small" id="narrBtn">🔊 Narrator on</button><button class="btn small hidden" id="voiceBtn" aria-label="Change narrator voice">🗣️ Voice</button><button class="btn main" id="storyNext">Continue</button></div></div>
   </div>
   <div id="voice" class="hidden"><img id="voiceImg" width="46" height="46" alt=""><div><small>The Lanternkeeper</small><p id="voiceText"></p></div></div>
   <div id="toast"></div>
@@ -765,7 +765,7 @@ const store = {
 };
 const params = new URLSearchParams(location.search);
 if (params.has('fresh')) store.del(SAVE_KEY);
-function defaultSave() { return { v: 1, hero: 'warden', pets: [], pet: null, gold: 0, stars: {}, bestiary: {}, runs: 0, wins: 0, best: 0, owned: ['twig_sword', 'patched_cloak'], newIds: [], eq: Object.assign({}, STARTER), seen: {}, mute: false, tierMax: 1, tierPick: 1, run: null, levels: {}, levelGoals: {}, heir: null, narrate: true, chSeen: {}, keepsake: null }; }
+function defaultSave() { return { v: 1, hero: 'warden', pets: [], pet: null, gold: 0, stars: {}, bestiary: {}, runs: 0, wins: 0, best: 0, owned: ['twig_sword', 'patched_cloak'], newIds: [], eq: Object.assign({}, STARTER), seen: {}, mute: false, tierMax: 1, tierPick: 1, run: null, levels: {}, levelGoals: {}, heir: null, narrate: true, chSeen: {}, keepsake: null, voice: null }; }
 let S = Object.assign(defaultSave(), store.get(SAVE_KEY) || {});
 if (TEST_BUILD && params.has('unlock')) { S.owned = GEAR.map(g => g.id); S.tierMax = Math.max(S.tierMax, 5); S.best = Math.max(S.best, 3); S.wins = Math.max(S.wins, 1); S.pets = Object.keys(PETS); S.levels = S.levels || {}; LEVELS.forEach(l => { S.levels[l.id] = Math.max(1, S.levels[l.id] || 0); }); }
 function save() { store.set(SAVE_KEY, S); }
@@ -1538,7 +1538,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.9';
+const VERSION = 'v0.9.1';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1878,7 +1878,7 @@ document.addEventListener('keydown', e => {
 
 function goDoor(i) {
   const d = doors[i]; const xs = doorSlots(doors.length); SFX.step(); buzz(8);
-  if (!$('voice').classList.contains('hidden')) { clearInterval(voiceT); clearTimeout(voiceT); show($('voice'), false); }
+  if (!$('voice').classList.contains('hidden')) { clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop(); show($('voice'), false); }
   if (run.level) { run.path = (run.path || '') + i; (run.trail = run.trail || []).push({ k: d.elite ? 'elite' : d.kind, n: doors.length, i }); }
   phase = 'walk'; $('hint').textContent = '';
   A.walk = { t: 0, x0: L.heroX, y0: L.heroY, x1: xs[i] * W, y1: L.wallB - L.u * 0.1, door: d };
@@ -2165,12 +2165,51 @@ const END_TXT = { stairs: 'Reach the stairs down', vault: 'Find the old vault', 
 function endText(lv) { const e = END_TXT[lv.end]; return typeof e === 'function' ? e(lv) : e; }
 // ---- narrator: written lines typed out, and read aloud when the device has a voice ----
 let narrVoice = null;
-function pickVoice() { try { const vs = speechSynthesis.getVoices(); if (!vs.length) return null; const pref = ['Daniel', 'Google UK English Male', 'Arthur', 'Oliver', 'George', 'Rishi', 'Fred'];
-  for (const p of pref) { const v = vs.find(x => x.name.includes(p)); if (v) return v; } return vs.find(x => /en-GB/i.test(x.lang)) || vs.find(x => /^en/i.test(x.lang)) || null; } catch (e) { return null; } }
+// Voices differ a lot by device. Rank them so the warmest one is used: Edge "Natural" voices, Apple "Enhanced/Premium",
+// Google's online voices, then good built-ins. Novelty voices (Fred, Albert, Zarvox...) are never used.
+const VOICE_BAD = /fred|albert|zarvox|trinoids|whisper|bad news|good news|bells|boing|bubbles|cellos|jester|organ|superstar|wobble|junior|ralph|kathy|bahh|deranged|hysterical|pipe organ|espeak/i;
+function voiceScore(v) { let sc = 0; const n = v.name;
+  if (/natural|neural/i.test(n)) sc += 100; if (/premium/i.test(n)) sc += 90; if (/enhanced/i.test(n)) sc += 80; if (/online/i.test(n)) sc += 40;
+  if (/^Google UK English Male/i.test(n)) sc += 60; else if (/^Google UK English/i.test(n)) sc += 55; else if (/^Google US English/i.test(n)) sc += 50;
+  if (/Daniel|Arthur|Serena|Martha|Oliver|Ryan|Sonia|Libby|Thomas|Guy|Aria|Jenny|Samantha|Karen|Moira|Tessa/i.test(n)) sc += 30;
+  if (/en-GB/i.test(v.lang)) sc += 12; else if (/en-(AU|IE)/i.test(v.lang)) sc += 8; else if (/^en/i.test(v.lang)) sc += 5;
+  return sc; }
+function voiceList() { try { return speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang) && !VOICE_BAD.test(v.name)).sort((a, b) => voiceScore(b) - voiceScore(a)); } catch (e) { return []; } }
+function pickVoice() { const vs = voiceList(); if (!vs.length) return null; return (S.voice && vs.find(v => v.name === S.voice)) || vs[0]; }
 try { speechSynthesis.onvoiceschanged = () => { narrVoice = pickVoice(); }; } catch (e) {}
-function speak(text) {
-  if (S.narrate === false || S.mute) return; try { if (!window.speechSynthesis) return; speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/<[^>]+>/g, ''));
-    narrVoice = narrVoice || pickVoice(); if (narrVoice) u.voice = narrVoice; u.rate = 0.9; u.pitch = 0.82; u.volume = 1; speechSynthesis.speak(u); } catch (e) {}
+// Speak sentence by sentence (natural pauses, and Chrome cuts off long lines), and report how far the voice has got
+// so the written text appears in step with it instead of racing ahead.
+let speakGen = 0;
+function speakable(t) { return t.replace(/<[^>]+>/g, '').replace(/\s*\.\.\.\s*/g, '… ').replace(/\s+—\s+/g, ', ').replace(/\(([^)]*)\)/g, ', $1,').replace(/\s+/g, ' ').trim(); }
+function speak(text, onProg) {
+  const plain = text.replace(/<[^>]+>/g, '');
+  if (S.narrate === false || S.mute || !window.speechSynthesis) { if (onProg) onProg(-1); return false; }
+  try { speechSynthesis.cancel(); narrVoice = narrVoice || pickVoice(); const gen = ++speakGen;
+    const parts = plain.match(/[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g) || [plain]; let base = 0, started = false;
+    parts.forEach((part, k) => { const off = base; base += part.length;
+      const u = new SpeechSynthesisUtterance(speakable(part)); if (narrVoice) { u.voice = narrVoice; u.lang = narrVoice.lang; }
+      u.rate = /natural|neural|premium|enhanced|online|google/i.test((narrVoice || {}).name || '') ? 0.98 : 0.92; u.pitch = 1; u.volume = 1;
+      u.onstart = () => { if (gen !== speakGen) return; started = true; if (onProg) onProg(off, off + part.length, part.length); };
+      u.onboundary = e => { if (gen === speakGen && onProg && e.name !== 'sentence') onProg(off + Math.min(part.length, (e.charIndex || 0) + (e.charLength || 6)), off + part.length, 0, true); };
+      u.onend = () => { if (gen === speakGen && onProg) onProg(off + part.length, off + part.length); };
+      speechSynthesis.speak(u); });
+    // no voice actually started (blocked until a tap, or none installed): let the text type on its own
+    setTimeout(() => { if (gen === speakGen && !started && onProg) onProg(-1); }, 900);
+    return true; } catch (e) { if (onProg) onProg(-1); return false; }
+}
+// Types text into el in step with the narrator. Without a voice it types at a steady reading pace.
+function typeWithVoice(full, put, done) {
+  let shown = 0, target = 0, segEnd = 0, segT = 0, segLen = 0, free = false, fin = false; const t0 = performance.now();
+  const plain = full.replace(/<[^>]+>/g, ''), cut = n => { if (full === plain) return full.slice(0, n); let out = '', c = 0, i = 0; while (i < full.length && c < n) { if (full[i] === '<') { const j = full.indexOf('>', i); out += full.slice(i, j + 1); i = j + 1; } else { out += full[i++]; c++; } } return out; };
+  let lastEv = performance.now();
+  const spoke = speak(full, (to, end, len, isB) => { lastEv = performance.now(); if (to < 0) { free = true; return; } target = Math.max(target, to); if (end !== undefined) { if (len) { segEnd = end; segT = performance.now(); segLen = len; } } });
+  if (!spoke) free = true;
+  const iv = setInterval(() => { if (fin) return;
+    if (free) shown += 2; else { // between word reports, creep forward at speaking pace but never past the sentence being read
+      const est = segLen ? segEnd - segLen + Math.floor((performance.now() - segT) / 1000 * 14) : 0; shown = Math.max(shown, Math.min(Math.max(target, est), segEnd || target)); if (performance.now() - lastEv > 3000) free = true; /* the voice stalled: don't hold the text hostage */ }
+    if (shown >= plain.length) { shown = plain.length; finish(); return; } put(cut(shown) + '<span class="cur">▍</span>'); }, 40);
+  function finish() { if (fin) return; fin = true; clearInterval(iv); put(full); if (done) done(); }
+  return { finish, stop: () => { fin = true; clearInterval(iv); } };
 }
 function hush() { try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {} }
 function narrLabel() { return S.narrate === false ? '🔇 Narrator off' : '🔊 Narrator on'; }
@@ -2250,18 +2289,19 @@ function playStory(scenes, done) {
   const art = $('storyArt'), ac2 = art.getContext('2d');
   const sizeArt = () => { const r = art.getBoundingClientRect(); art.width = Math.round(r.width * DPR); art.height = Math.round(r.height * DPR); };
   const loop = () => { if (!storyAnim) return; const sc = scenes[i]; if (sc && ART[sc.art]) { const keep = ctx; ctx = ac2; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); try { ART[sc.art](art.width / DPR, art.height / DPR, T); } catch (e) {} ctx = keep; } storyAnim = requestAnimationFrame(loop); };
-  const finishType = () => { clearInterval(typing); typing = null; $('storyText').innerHTML = full; };
+  const finishType = () => { const tp = typing; typing = null; if (tp) tp.finish(); $('storyText').innerHTML = full; };
   const next = () => {
     if (typing) { finishType(); return; }
     i++; if (i >= scenes.length) { cancelAnimationFrame(storyAnim); storyAnim = 0; hush(); show(el, false); overlayOpen = false; if (done) done(); return; }
     const sc = scenes[i]; full = heirTxt(sc.text); $('storyTitle').textContent = sc.title ? heirTxt(sc.title) : ''; $('storyText').innerHTML = '';
     const ch = $('storyChoice'); ch.innerHTML = ''; show($('storyNext'), !sc.choice);
-    let n = 0; typing = setInterval(() => { n += 2; $('storyText').innerHTML = full.slice(0, n) + (n < full.length ? '<span class="cur">▍</span>' : ''); if (n >= full.length) finishType(); }, 45);
-    speak(full);
+    typing = typeWithVoice(full, h => { $('storyText').innerHTML = h; }, () => { typing = null; });
     if (sc.choice) for (const [k, lab] of sc.choice) { const b = document.createElement('button'); b.className = 'card'; b.innerHTML = `<b>${lab}</b>`; b.onclick = () => { S.heir = k; save(); SFX.pick(); show($('storyNext'), true); next(); }; ch.appendChild(b); }
   };
   $('storyNext').onclick = next; $('narrBtn').textContent = narrLabel();
-  $('narrBtn').onclick = () => { S.narrate = S.narrate === false; save(); $('narrBtn').textContent = narrLabel(); if (S.narrate === false) hush(); else speak(full); };
+  $('narrBtn').onclick = () => { S.narrate = S.narrate === false; save(); $('narrBtn').textContent = narrLabel(); show($('voiceBtn'), S.narrate !== false && voiceList().length > 1); if (S.narrate === false) hush(); else speak(full); };
+  show($('voiceBtn'), S.narrate !== false && voiceList().length > 1);
+  $('voiceBtn').onclick = () => { const vs = voiceList(); if (!vs.length) return; const cur = vs.findIndex(v => v.name === (narrVoice || {}).name); narrVoice = vs[(cur + 1) % vs.length]; S.voice = narrVoice.name; save(); toast('Narrator: ' + narrVoice.name.replace(/Microsoft |Google |\(.*\)| - .*$/g, '').trim(), 1400); speak(full); };
   requestAnimationFrame(() => { sizeArt(); cancelAnimationFrame(storyAnim); storyAnim = requestAnimationFrame(loop); next(); });
 }
 function chapterOpenScenes(ch) {
@@ -2274,12 +2314,15 @@ function chapterOpenScenes(ch) {
 function chapterCloseScenes(ch) { const C = CHAPTERS.find(c => c.n === ch); return [{ art: 'toad', title: 'Chapter 1 complete', text: C.close[0] }, { art: 'roots', title: 'A voice below', text: C.close[1] }, { art: 'keeper', title: 'Next: Chapter 2 · Roots Below', text: C.close[2] + ' (Chapter 2 is coming in the next update.)' }]; }
 // ---- in-level narrator bubble ----
 let voiceT = 0;
-function voiceLine(text, ms) {
+let voiceTyp = null;
+function voiceLine(text, ms, silent) {
   const v = $('voice'); v.style.top = Math.round(L.wallB + 10) + 'px'; $('voiceText').textContent = ''; $('voiceImg').src = keeperImg(); show(v, true); v.classList.remove('vin'); void v.offsetWidth; v.classList.add('vin');
-  const full = heirTxt(text); let n = 0; clearInterval(voiceT); voiceT = setInterval(() => { n += 2; $('voiceText').textContent = full.slice(0, n); if (n >= full.length) { clearInterval(voiceT); voiceT = setTimeout(() => show(v, false), ms || 3500); } }, 40);
-  speak(full);
+  const full = heirTxt(text); clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop();
+  const put = h => { $('voiceText').innerHTML = h; }, end = () => { voiceT = setTimeout(() => show(v, false), ms || 3500); };
+  if (silent) { let n = 0; voiceT = setInterval(() => { n += 2; put(full.slice(0, n)); if (n >= full.length) { clearInterval(voiceT); end(); } }, 40); }
+  else voiceTyp = typeWithVoice(full, put, end);
 }
-$('voice').onclick = () => { clearInterval(voiceT); clearTimeout(voiceT); show($('voice'), false); hush(); };
+$('voice').onclick = () => { clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop(); show($('voice'), false); hush(); };
 // ---- the chapter map ----
 const MAP_PTS = [[0.28, 0.9], [0.7, 0.78], [0.32, 0.65], [0.72, 0.52], [0.34, 0.39], [0.6, 0.25], [0.5, 0.08]];
 let mapBg = null, mapKey = '', mapNodes = [];
@@ -2348,15 +2391,15 @@ function openLevelCard(id) {
   let h = `<div class="lvlHead">Level ${id}</div><h2>${lv.name}</h2><div class="voiceQuote"><img src="${keeperImg()}" width="40" height="40" alt=""><i>“${heirTxt(lv.intro)}”</i></div>`;
   h += `<ul class="goalList"><li>${st ? '★' : '☆'} <b>${endText(lv)}</b> <span>to clear</span></li>` + lv.bonus.map((g, k) => `<li>${gg[k] ? '★' : '☆'} ${goalText(g)}${GOAL_HELP[g.t] ? `<small>${GOAL_HELP[g.t]}</small>` : ''}</li>`).join('') + `</ul>${S.keepsake && UP_BY_ID[S.keepsake] ? `<p class="keepLine">🎁 Keepsake: <b>${UP_BY_ID[S.keepsake].icon} ${UP_BY_ID[S.keepsake].name}</b> (${UP_BY_ID[S.keepsake].desc.toLowerCase()})</p>` : ''}<p style="font-size:13px">Upgrades last for this level, except your keepsake. Gear, gold and companions stay with you.</p>`;
   h += `<div class="row2"><button class="btn" data-a="close">Back</button><button class="btn main" data-a="play">${st ? 'Play again' : 'Play'}</button></div>`;
-  openSheet(h, { close: closeSheet, play: () => { closeSheet(); hush(); startLevel(id); } });
+  openSheet(h, { close: closeSheet, play: () => { closeSheet(); hush(); startLevel(id, true); } });
   speak(heirTxt(lv.intro));
 }
-function startLevel(id) {
+function startLevel(id, fromCard) {
   run = newLevelRun(S, id); if (S.keepsake && UP_BY_ID[S.keepsake]) applyUpgrade(run, S.keepsake); run.hp = calcStats(run).maxHp; run.trail = []; roomSeed = 5000 + LEVELS.findIndex(l => l.id === id) * 53;
   content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = []; trail = []; projs = []; sparks = []; marks = [];
   mode = 'run'; show($('camp'), false); show($('mapUI'), false); show($('game'), true); A.fade = 1; A.fadeDir = -1; A.heroDown = 0; A.light = 1;
   updateHud(); layout(); banner('Level ' + id, LEVEL_BY_ID[id].name, 1800); setPhase('choose');
-  setTimeout(() => { if (run && run.level === id) voiceLine(LEVEL_BY_ID[id].intro, 4200); }, 1900);
+  if (!fromCard) setTimeout(() => { if (run && run.level === id) voiceLine(LEVEL_BY_ID[id].intro, 4200, true); }, 1900);
 }
 // keepsakes: one upgrade carried into the next level (no relics, no one-off heals); rarest first
 function keepOptions(r) { const rank = { r: 0, f: 1, c: 2 }, seen = []; for (const id of r.ups) { const u = UP_BY_ID[id]; if (!u || u.rar === 'relic' || !u.s || seen.includes(id)) continue; seen.push(id); } return seen.sort((a, b) => rank[UP_BY_ID[a].rar] - rank[UP_BY_ID[b].rar]).slice(0, 4); }
