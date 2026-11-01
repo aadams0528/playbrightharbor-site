@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.13.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.13.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -122,6 +122,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .sil { filter: brightness(0) drop-shadow(0 0 4px rgba(242,181,74,.75)); opacity: .9; }
 #quest .qi.fadein { animation: pop .5s ease-out; }
 #flare small { display: block; font-size: 12px; font-weight: 700; opacity: .85; }
+#flare.hold { animation: none; } #flare.hold small { text-transform: uppercase; letter-spacing: .05em; color: #ffe6a8; }
 @media (prefers-reduced-motion: reduce) { #flare.ready { animation: none; box-shadow: 0 0 0 4px rgba(242,181,74,.6); } .gearBig.reveal .ic, .gearBig.reveal .ic::before, .sheet, #quest.done, #quest .conf, #quest .qi.fadein { animation: none; } #quest .conf { display: none; } }
 .sheet h2 { margin: 0; font-family: var(--display); font-size: 22px; letter-spacing: 1px; text-align: center; color: var(--amber2); text-shadow: 0 2px 0 #2a1a06; }
 .sheet h2::before, .sheet h2::after { content: "◆"; font-size: 10px; color: rgba(242,181,74,.6); vertical-align: middle; margin: 0 10px; }
@@ -1697,7 +1698,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.13.1';
+const VERSION = 'v0.13.2';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2319,6 +2320,9 @@ async function chooseLessons() {
 // input: swipe or tap to pick a door; tap chest
 let pd = null;
 cv.addEventListener('pointerdown', e => { pd = { x: e.clientX, y: e.clientY, t: performance.now() }; ac(); });
+// which door a tap lands on: the doorway, its label above, and (with one door, e.g. the stairs) anywhere above the hero
+function doorAt(x, y) { const xs = doorSlots(doors.length); if (xs.length === 1) return y < L.bot ? 0 : -1;
+  for (let i = 0; i < xs.length; i++) if (Math.abs(x - xs[i] * W) < Math.max(L.doorW * 0.65, W / xs.length * 0.45) && y > L.wallB - L.doorH - L.u * 1.6 && y < L.wallB + L.u * 1.2) return i; return -1; }
 cv.addEventListener('pointerup', e => {
   if (pd && mode === 'map' && !overlayOpen && !coachOpen) { const st0 = pd; pd = null; if (Math.hypot(e.clientX - st0.x, e.clientY - st0.y) < 30) mapTap(st0.x, st0.y); return; }
   if (!pd || mode !== 'run' || coachOpen || overlayOpen) { pd = null; return; }
@@ -2332,10 +2336,7 @@ cv.addEventListener('pointerup', e => {
     else if (dy < 0) idx = xs.length === 2 ? -2 : Math.floor(xs.length / 2);
     if (idx === -2) { toast('Swipe left or right'); return; }
     if (xs.length === 1) idx = 0;
-  } else {
-    for (let i = 0; i < xs.length; i++) if (Math.abs(start.x - xs[i] * W) < L.doorW * 0.65 && start.y > L.wallB - L.doorH - L.u * 1.6 && start.y < L.wallB + L.u * 0.6) idx = i;
-    if (xs.length === 1 && start.y < L.bot) idx = 0;
-  }
+  } else idx = doorAt(start.x, start.y);
   if (idx >= 0) goDoor(idx);
 });
 document.addEventListener('keydown', e => {
@@ -2376,7 +2377,10 @@ function enterRoom2(d) {
   // the doors out of this room are decided now, shown once the room is cleared
   doors = genDoors(run, Math.random);
   A.monAlpha = 0; A.monScale = 1; A.chestOpen = 0; A.heroDown = 0;
-  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = Math.max(fight.flare, 0.8); if (run.level && fight.m.boss) fight.m.tellCd = 6.5; setPhase('fight'); fightLessons(); }
+  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = Math.max(fight.flare, 0.8); if (run.level && fight.m.boss) fight.m.tellCd = 3.5;
+    // levels with a "stop the big attack" star: the lantern starts full against the guardian or a caster, and the button says to save it
+    fight.hold = !!(run.level && LV(run).bonus.some(g => g.t === 'interrupts') && !(run.gs && run.gs.interrupts) && (fight.m.boss || fight.m.caster)); if (fight.hold) fight.flare = 1;
+    setPhase('fight'); fightLessons(); if (fight.hold) setTimeout(() => lesson('holdFlare', [{ text: 'Your lantern is <b>full</b>. <b>Save your Flare</b> until this foe winds up (a bar fills over its head), then tap FLARE to stop it and earn the star.' }], () => phase === 'fight' && fight && fight.hold), 700); }
   else if (d.kind === 'chest') payGate('chest', () => { setPhase('chest'); payRoom('chest'); lesson('chest', [{ text: 'A <b>chest</b>! Chests hold <b>gear</b>. Gear is yours forever, even after this delve ends. Tap it to open.' }]); });
   else if (d.kind === 'spring') { setPhase('spring'); setTimeout(() => { const ef = springEffect(run); SFX.heal(); floatText(L.heroX, L.heroY - L.u * 2.4, ef.grow ? '+' + ef.grow + ' max ♥' : '+' + ef.heal, '#8fcf6a', 1.3); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 18); updateHud(); setTimeout(() => roomDone(), 700); }, 500); }
   else if (d.kind === 'event') { setPhase('event'); setTimeout(() => runEvent(d.ev), 650); }
@@ -2468,6 +2472,8 @@ async function fightLessons() {
 let flareLessonOn = false;
 function doFlare() {
   if (phase !== 'fight' || !fight || fight.flare < 1 || (paused && !flareLessonOn)) return;
+  // on a "stop the big attack" level the first early tap only reminds you to wait, so the full lantern isn't wasted
+  if (fight.hold && !(fight.m.tell > 0) && !(run.gs && run.gs.interrupts) && !fight.holdWarned) { fight.holdWarned = 1; toast('Wait for the wind-up, then Flare! (Tap again to Flare now)', 2200); buzz(15); return; }
   const ev = useFlare(run, fight, Math.random); handleEvents(ev);
 }
 $('flare').addEventListener('click', e => { e.stopPropagation(); doFlare(); if (flareLessonOn) { flareLessonOn = false; $('flare').classList.remove('lift'); if (flareLessonOn === false && coachDone) coachDone(); } });
@@ -2501,7 +2507,7 @@ function synTagPlain(id) { const k = SYN_TAG[id]; return k ? `<span class="syn" 
 function synCheck() {
   if (!run) return; const c = synCounts(run); run.synOn = run.synOn || [];
   const chip = $('synChip'), parts = Object.keys(c).filter(k => c[k] > 0).map(k => `<i class="${c[k] >= SYN_NEED ? 'on' : ''}" title="${SYNERGIES[k].name}">${SYNERGIES[k].icon}${Math.min(c[k], SYN_NEED)}</i>`);
-  chip.innerHTML = parts.join(''); show(chip, parts.length > 0); chip.setAttribute('aria-label', 'Combos: ' + Object.keys(c).filter(k => c[k] > 0).map(k => `${SYNERGIES[k].name} ${Math.min(c[k], SYN_NEED)} of ${SYN_NEED}`).join(', '));
+  const ph = parts.join(''); if (chip.innerHTML !== ph) chip.innerHTML = ph; show(chip, parts.length > 0); chip.setAttribute('aria-label', 'Combos: ' + Object.keys(c).filter(k => c[k] > 0).map(k => `${SYNERGIES[k].name} ${Math.min(c[k], SYN_NEED)} of ${SYN_NEED}`).join(', '));
   for (const k of Object.keys(c)) if (c[k] >= SYN_NEED && !run.synOn.includes(k)) { run.synOn.push(k); const Y = SYNERGIES[k];
     setTimeout(() => { banner(Y.icon + ' ' + Y.name + ' combo', Y.power + '!', 2000); SFX.chest(); A.flash = RM ? 0.3 : 0.7; sparkle(L.heroX, L.heroY - L.u * 1.5, Y.col, 30);
       lesson('syn_' + k, [{ text: `<b>${Y.power}</b> unlocked! You have 3 ${Y.name} pieces. ${Y.desc} Combos last as long as you keep the pieces.` }]); }, 300); }
@@ -2553,8 +2559,9 @@ async function afterWin() {
   if (content.mimic) { const id = pickGear(run.depth + run.tier - 1, S.owned, Math.random, null, S.quest); if (id) gearFound(id, () => roomDone()); else roomDone(); return; }
   if (!run.potion && content.kind !== 'guard') { const p = potionDrop(run, Math.random, 0.15); if (p) { run.potion = p; toast('Found a ' + POTIONS[p].name + '!', 1600); updatePotion(); } }
   const wasGuard = content.kind === 'guard';
-  if (run.level && (wasGuard || run.room >= LV(run).len)) { toast(wasGuard ? 'Guardian defeated!' : 'Victory! The way out is open', 1400); updateHud(); if (wasGuard) await guardReward(); else setTimeout(() => roomDone(), 500); return; }
   const elite = fight && fight.m.elite;
+  if (run.level && !wasGuard && elite && run.room >= LV(run).len) { await showUpgrades(true, 'Elite defeated!', 'Pick a rare upgrade'); return; }
+  if (run.level && (wasGuard || run.room >= LV(run).len)) { toast(wasGuard ? 'Guardian defeated!' : 'Victory! The way out is open', 1400); updateHud(); if (wasGuard) await guardReward(); else setTimeout(() => roomDone(), 500); return; }
   await showUpgrades(elite, wasGuard ? 'Guardian defeated!' : elite ? 'Elite defeated!' : 'Victory!', elite ? 'Pick a rare upgrade' : 'Pick one upgrade');
   if (wasGuard) await guardReward();
 }
@@ -2856,7 +2863,7 @@ function voiceLine(text, ms, silent) {
   if (silent) { let n = 0; voiceT = setInterval(() => { n += 2; put(full.slice(0, n)); if (n >= full.length) { clearInterval(voiceT); end(); } }, 40); }
   else voiceTyp = typeWithVoice(full, put, end);
 }
-$('voice').onclick = () => { clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop(); show($('voice'), false); hush(); };
+$('voice').onclick = e => { clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop(); show($('voice'), false); hush(); if (mode === 'run' && phase === 'choose' && !coachOpen && !overlayOpen) { const i = doorAt(e.clientX, e.clientY); if (i >= 0) goDoor(i); } };
 // ---- the chapter map ----
 const MAP_PTS = [[0.28, 0.9], [0.7, 0.78], [0.32, 0.65], [0.72, 0.52], [0.34, 0.39], [0.6, 0.25], [0.5, 0.08]];
 let mapBg = null, mapKey = '', mapNodes = [];
@@ -3080,7 +3087,7 @@ function update(dt) {
     A.monAlpha = Math.min(1, A.monAlpha + dt * 3);
     if (A.hitStop > 0) A.hitStop -= dt;
     else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt, Math.random); if (ev.length) handleEvents(ev); }
-    const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); $('flareDmg').textContent = Math.round(fight.st.atk * fight.st.flareMult);
+    const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); const hold = fight.hold && fight.flare >= 1 && !(fight.m.tell > 0) && !(run.gs && run.gs.interrupts); fb.classList.toggle('hold', hold); $('flareDmg').textContent = hold ? 'save it' : fight.m.tell > 0 && fight.hold && fight.flare >= 1 ? 'NOW!' : Math.round(fight.st.atk * fight.st.flareMult);
     if (fight.flare >= 1 && !S.seen.flare && !paused) flareLesson();
   }
   if (phase === 'won' && fight) { A.monAlpha = Math.max(0, A.monAlpha - dt * 1.5); A.monScale = 1 + (1 - A.monAlpha) * 0.15; }
@@ -3256,6 +3263,8 @@ function draw() {
   ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
   if (A.flash) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,220,140,${A.flash * 0.35})`; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
   drawTorches(th);
+  // low health: a slow heartbeat pulse at the screen edge, so danger is felt before the health bar empties
+  if (run && phase === 'fight' && fight && run.hp > 0 && run.hp < fight.st.maxHp * 0.3) { const hb = Math.max(0, Math.sin(T * 5.2)) ** 6, k = (1 - run.hp / (fight.st.maxHp * 0.3)) * 0.5 + 0.5; const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(140,0,0,0)'); vg.addColorStop(1, `rgba(170,15,15,${(RM ? 0.18 : 0.12 + 0.22 * hb) * k})`); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
   if (A.hurtVig > 0) { const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(140,0,0,0)'); vg.addColorStop(1, `rgba(150,10,10,${A.hurtVig * 0.45})`); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
   // door pictures when the room is clear
   if (phase === 'choose' || phase === 'walk') {
