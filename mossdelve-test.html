@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.13 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.13.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -1697,7 +1697,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.13';
+const VERSION = 'v0.13.1';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2965,12 +2965,15 @@ function levelComplete() {
   h += `<div class="voiceQuote"><img src="${keeperImg()}" width="40" height="40" alt=""><i>“${heirTxt(lv.outro)}”</i></div>`;
   if (gold) h += `<p style="text-align:center;color:var(--amber2)">+${gold} 🪙</p>`;
   const kOpts = keepOptions(run); S.keepsake = kOpts.length ? kOpts[0] : null; save();
-  if (kOpts.length) h += `<div class="keepBox"><div class="keepHead" id="keepHead">🎁 Choose a keepsake for your next level</div><div class="keepRow" role="radiogroup" aria-labelledby="keepHead">${kOpts.map((id, i) => `<button class="keep${i ? '' : ' sel'}" role="radio" aria-checked="${i ? 'false' : 'true'}" data-a="k_${id}">${i ? '' : '<em class="sugg">Suggested</em>'}${UP_BY_ID[id].icon} ${UP_BY_ID[id].name}<small>${UP_BY_ID[id].desc}</small>${keepSynHTML(id, nextLv ? nextLv.id : lv.id)}</button>`).join('')}<button class="keep" role="radio" aria-checked="false" data-a="k_none">No thanks</button></div><p class="keepSel" id="keepSel" aria-live="polite">Selected keepsake: <b>${UP_BY_ID[kOpts[0]].name}</b> (suggested)</p></div>`;
+  if (kOpts.length) h += `<div class="keepBox"><div class="keepHead" id="keepHead">🎁 Tap a keepsake to take it into your next level</div><div class="keepRow" role="radiogroup" aria-labelledby="keepHead">${kOpts.map((id, i) => `<button class="keep${i ? '' : ' sel'}" role="radio" aria-checked="${i ? 'false' : 'true'}" data-a="k_${id}">${i ? '' : '<em class="sugg">Suggested</em>'}${UP_BY_ID[id].icon} ${UP_BY_ID[id].name}<small>${UP_BY_ID[id].desc}</small>${keepSynHTML(id, nextLv ? nextLv.id : lv.id)}</button>`).join('')}<button class="keep" role="radio" aria-checked="false" data-a="k_none">No thanks</button></div><p class="keepSel" id="keepSel" aria-live="polite">Selected keepsake: <b>${UP_BY_ID[kOpts[0]].name}</b> (suggested)</p></div>`;
   h += `<div class="row2"><button class="btn" data-a="map">Map</button>${nextLv && nextLv.ch === lv.ch ? `<button class="btn main" data-a="next">Next level</button>` : `<button class="btn main" data-a="map2">Continue</button>`}</div>`;
   const toMap = () => { closeSheet(); run = null; if (firstChDone) playStory(chapterCloseScenes(lv.ch), () => { if (chLevels(lv.ch + 1).length && chapterOpen(S, lv.ch + 1)) mapCh = lv.ch + 1; openMap(); }); else { mapCh = lv.ch; openMap(); } };
-  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: () => { closeSheet(); hush(); run = null; mapCh = nextLv.ch; openMap(); openLevelCard(nextLv.id); }, '*': a => { if (!a.startsWith('k_')) return; const id = a.slice(2); S.keepsake = id === 'none' ? null : id; save(); $('overlay').querySelectorAll('.keep').forEach(b => { const on = b.dataset.a === a; b.classList.toggle('sel', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
-      const ks = $('keepSel'); if (ks) ks.innerHTML = S.keepsake ? `Selected keepsake: <b>${UP_BY_ID[S.keepsake].name}</b>${S.keepsake === kOpts[0] ? ' (suggested)' : ''}` : 'No keepsake: your next level starts fresh.'; SFX.coin && SFX.coin(); } });
-    if (kOpts.length) setTimeout(() => lesson('keepsake', [{ text: 'New: <b>keepsakes</b>! Most upgrades end with the level, but you can carry <b>one</b> into your next level. A suggested upgrade is selected; choose what fits your next build, or "No thanks".' }]), 2600); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
+  const goNext = () => { closeSheet(); hush(); run = null; mapCh = nextLv.ch; openMap(); openLevelCard(nextLv.id); };
+  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: goNext, '*': a => { if (!a.startsWith('k_')) return; const id = a.slice(2); S.keepsake = id === 'none' ? null : id; save(); $('overlay').querySelectorAll('.keep').forEach(b => { const on = b.dataset.a === a; b.classList.toggle('sel', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+      const ks = $('keepSel'); if (ks) ks.innerHTML = S.keepsake ? `Selected keepsake: <b>${UP_BY_ID[S.keepsake].name}</b>${S.keepsake === kOpts[0] ? ' (suggested)' : ''}` : 'No keepsake: your next level starts fresh.'; SFX.coin && SFX.coin();
+      // tapping a keepsake takes it and moves on (Next level, or the map at the end of a chapter)
+      $('overlay').querySelectorAll('.keep').forEach(b => b.disabled = true); setTimeout(() => (nextLv && nextLv.ch === lv.ch ? goNext : toMap)(), 450); } });
+    if (kOpts.length) setTimeout(() => lesson('keepsake', [{ text: 'New: <b>keepsakes</b>! Most upgrades end with the level, but you can carry <b>one</b> into your next level. Tap one to take it into your next level, or "No thanks". The suggested one is already picked if you just tap Next level.' }], () => !!$('keepHead') && !$('overlay').classList.contains('hidden')), 2600); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
 }
 function levelFailed() {
   const lv = LV(run); S.run = null; save(); hush(); show($('voice'), false); show($('flare'), false); show($('potion'), false);
