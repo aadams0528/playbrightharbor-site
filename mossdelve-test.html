@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.10.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.10.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -219,6 +219,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .keep { flex: 1 1 130px; max-width: 200px; min-height: 44px; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(20,16,12,.7); color: #f4ead6; font: inherit; font-size: 14px; cursor: pointer; text-align: center; }
 .keep small { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
 .keepLine { font-size: 14px; color: var(--amber2); }
+.keep .sugg { display: block; font-style: normal; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--amber2); margin-bottom: 2px; }
+.keep .syn { font-size: 11px; }
+.keepSel { text-align: center; font-size: 13px; margin: 8px 0 0; color: #e8dcc0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
@@ -1572,7 +1575,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.10.1';
+const VERSION = 'v0.10.2';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -1721,7 +1724,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
 function renderCamp() {
   mode = 'camp'; show($('camp'), true); show($('game'), false); show($('mapUI'), false); show($('voice'), false); hush(); a11ySet([]);
   $('mute').textContent = S.mute ? '🔇' : '🔊';
-  $('campStats').innerHTML = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · <span class="gold">🪙 ${S.gold || 0}</span>` : 'Swipe through rooms. Fights are automatic.') + ((S.pets || []).length < Object.keys(PETS).length && (S.runs || Object.keys(S.levels || {}).length) ? `<br><span class="nextFriend">🐾 Next friend: free a caged creature (${(S.pets || []).length}/${Object.keys(PETS).length} found). Listen for growls.</span>` : '') + ` · ${VERSION}`;
+  $('campStats').innerHTML = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · <span class="gold">🪙 ${S.gold || 0}</span>` : 'Swipe through rooms. Fights are automatic.') + ((S.pets || []).length < Object.keys(PETS).length && (S.runs || Object.keys(S.levels || {}).length) ? `<br><span class="nextFriend">🐾 Next friend: free a caged creature (${(S.pets || []).length}/${Object.keys(PETS).length} found). Listen for voices or growls.</span>` : '') + ` · ${VERSION}`;
   $('forgeBtn').classList.toggle('dot', canForgeAny()); $('bestBtn').classList.toggle('dot', !!S.bestNew);
   const C = CLASSES[S.hero || 'warden']; const newCls = Object.keys(CLASSES).some(k => classUnlocked(k, S) && !(S.clsSeen || []).includes(k) && k !== 'warden');
   $('heroRow').innerHTML = `<span class="hic">${C.icon}</span><span><b>${C.name}</b><br>${C.desc.split('.')[0]}.</span><span class="chg">${newCls ? '✦ ' : ''}Change</span>`;
@@ -1810,11 +1813,11 @@ function openHeroes() {
 const PET_HINT = { fox: 'Something small and warm whimpers behind a door. Listen for “A Voice” from the second depth on.', owl: 'Soft wingbeats behind a door. Listen for “A Voice” or “Rustling” from the second depth on.', sprite: 'A tiny glow calls for help. Listen for “A Voice” from the second depth on.' };
 function openPets() {
   const own = S.pets || [];
-  let h = `<h2>Companions</h2><p>Free caged creatures in story rooms. One can come with you on each delve.</p>`;
+  let h = `<h2 id="petHead">Companions</h2><p>Free caged creatures in story rooms. One can come with you on each delve.</p><div role="radiogroup" aria-labelledby="petHead">`;
   for (const k of Object.keys(PETS)) { const P = PETS[k], ok = own.includes(k);
-    h += `<button class="card ${ok ? '' : 'lockd'}" data-a="p:${k}" style="${S.pet === k ? 'box-shadow:0 0 0 2px var(--amber)' : ''}"><div class="ic"><img src="${petImg(k)}" width="52" height="52" alt="" style="display:block;margin:0 auto${ok ? '' : ';filter:brightness(0)'}"></div><div class="tx"><b>${ok ? P.name : '???'}</b><span>${ok ? P.desc : PET_HINT[k]}</span></div></button>`; }
-  if (own.length) h += `<button class="card" data-a="none"><div class="ic">○</div><div class="tx"><b>Go alone</b><span>No companion this time</span></div></button>`;
-  h += `<div class="foot"><button class="btn" data-a="close">Done</button></div>`;
+    h += `<button class="card ${ok ? '' : 'lockd'}" role="radio" aria-checked="${S.pet === k ? 'true' : 'false'}"${ok ? '' : ' aria-disabled="true"'} data-a="p:${k}" style="${S.pet === k ? 'box-shadow:0 0 0 2px var(--amber)' : ''}"><div class="ic"><img src="${petImg(k)}" width="52" height="52" alt="" style="display:block;margin:0 auto${ok ? '' : ';filter:brightness(0)'}"></div><div class="tx"><b>${ok ? P.name : '???'}</b><span>${ok ? P.desc : PET_HINT[k]}</span></div></button>`; }
+  if (own.length) h += `<button class="card" role="radio" aria-checked="${S.pet ? 'false' : 'true'}" data-a="none" style="${S.pet ? '' : 'box-shadow:0 0 0 2px var(--amber)'}"><div class="ic">○</div><div class="tx"><b>Go alone</b><span>No companion this time</span></div></button>`;
+  h += `</div><p class="keepSel" aria-live="polite">Selected companion: <b>${S.pet ? PETS[S.pet].name : 'none'}</b></p><div class="foot"><button class="btn" data-a="close">Done</button></div>`;
   openSheet(h, { close: () => { closeSheet(); renderCamp(); }, none: () => { S.pet = null; save(); openPets(); }, '*': a => { if (!a.startsWith('p:')) return; const k = a.slice(2); if (!own.includes(k)) { toast('Not found yet', 1100); return; } S.pet = k; save(); SFX.pick(); openPets(); } });
 }
 const portraitCache = {};
@@ -2601,10 +2604,11 @@ function levelComplete() {
   h += `<div class="voiceQuote"><img src="${keeperImg()}" width="40" height="40" alt=""><i>“${heirTxt(lv.outro)}”</i></div>`;
   if (gold) h += `<p style="text-align:center;color:var(--amber2)">+${gold} 🪙</p>`;
   const kOpts = keepOptions(run); S.keepsake = kOpts.length ? kOpts[0] : null; save();
-  if (kOpts.length) h += `<div class="keepBox"><div class="keepHead">🎁 Choose a keepsake for your next level</div><div class="keepRow">${kOpts.map((id, i) => `<button class="keep${i ? '' : ' sel'}" data-a="k_${id}" aria-label="Keep ${UP_BY_ID[id].name}">${UP_BY_ID[id].icon} ${UP_BY_ID[id].name}<small>${UP_BY_ID[id].desc}</small></button>`).join('')}<button class="keep" data-a="k_none">No thanks</button></div></div>`;
+  if (kOpts.length) h += `<div class="keepBox"><div class="keepHead" id="keepHead">🎁 Choose a keepsake for your next level</div><div class="keepRow" role="radiogroup" aria-labelledby="keepHead">${kOpts.map((id, i) => `<button class="keep${i ? '' : ' sel'}" role="radio" aria-checked="${i ? 'false' : 'true'}" data-a="k_${id}">${i ? '' : '<em class="sugg">Suggested</em>'}${UP_BY_ID[id].icon} ${UP_BY_ID[id].name}<small>${UP_BY_ID[id].desc}</small>${synTagHTML(id)}</button>`).join('')}<button class="keep" role="radio" aria-checked="false" data-a="k_none">No thanks</button></div><p class="keepSel" id="keepSel" aria-live="polite">Selected keepsake: <b>${UP_BY_ID[kOpts[0]].name}</b> (suggested)</p></div>`;
   h += `<div class="row2"><button class="btn" data-a="map">Map</button>${nextLv && nextLv.ch === lv.ch ? `<button class="btn main" data-a="next">Next level</button>` : `<button class="btn main" data-a="map2">Continue</button>`}</div>`;
   const toMap = () => { closeSheet(); run = null; if (firstChDone) playStory(chapterCloseScenes(lv.ch), openMap); else openMap(); };
-  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: () => { closeSheet(); hush(); run = null; openMap(); openLevelCard(nextLv.id); }, '*': a => { if (!a.startsWith('k_')) return; const id = a.slice(2); S.keepsake = id === 'none' ? null : id; save(); $('overlay').querySelectorAll('.keep').forEach(b => b.classList.toggle('sel', b.dataset.a === a)); SFX.coin && SFX.coin(); } });
+  setTimeout(() => { openSheet(h, { map: toMap, map2: toMap, next: () => { closeSheet(); hush(); run = null; openMap(); openLevelCard(nextLv.id); }, '*': a => { if (!a.startsWith('k_')) return; const id = a.slice(2); S.keepsake = id === 'none' ? null : id; save(); $('overlay').querySelectorAll('.keep').forEach(b => { const on = b.dataset.a === a; b.classList.toggle('sel', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+      const ks = $('keepSel'); if (ks) ks.innerHTML = S.keepsake ? `Selected keepsake: <b>${UP_BY_ID[S.keepsake].name}</b>${S.keepsake === kOpts[0] ? ' (suggested)' : ''}` : 'No keepsake: your next level starts fresh.'; SFX.coin && SFX.coin(); } });
     if (kOpts.length) setTimeout(() => lesson('keepsake', [{ text: 'New: <b>keepsakes</b>! Most upgrades end with the level, but you can carry <b>one</b> into your next level. The best one is picked for you, so tap another to swap, or "No thanks".' }]), 2600); [0, 1, 2].forEach(k => { if (k < nowStars) setTimeout(() => { SFX.coin(); buzz(10); }, 250 + k * 350 + 300); }); setTimeout(() => speak(heirTxt(lv.outro)), 1400); }, 700);
 }
 function levelFailed() {
