@@ -252,6 +252,13 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .tutpad{height:230px}
 .pulse{animation:pulse 1.2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(244,196,48,.55)}}
+.nextline{font-size:13px;color:#c6d0e6;text-align:center;margin:10px 0 0}
+.sharecard .mood2{font-size:13px;font-weight:800;opacity:.75;margin-top:2px}
+.sharecard .ch{font-weight:800}
+.sharecard .row{white-space:nowrap}
+@media (max-width:380px){.sharecard .row{font-size:24px!important;letter-spacing:0}}
+.tgl{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:700;color:var(--ink2);margin:0 0 12px}
+.tgl input{width:18px;height:18px}
 </style>
 </head>
 <body>
@@ -400,25 +407,51 @@ h1,h2,h3{font-family:var(--disp);margin:0}
             dom.some((s2, i) => { const left = [...s2].filter(d => !removals.some(r => r[0] === i && r[1] === d)); return left.length === 1 && s2.size > 1; });
           if (!strong) return false;
         }
+        // what we already knew about these clues' numbers (the "because")
+        const mentionedD = new Set(); idxs.forEach(i => p.clues[i].g.forEach(d => mentionedD.add(d)));
+        const focus = newIn.slice();
+        for (let d = 0; d <= 9; d++) { if (ins.has(d) || !mentionedD.has(d)) continue; const sp = []; for (let i = 0; i < n; i++) if (dom[i].has(d)) sp.push(i); if (sp.length && sp.every(i => removals.some(r => r[0] === i && r[1] === d))) focus.push(d); }
+        const ctx = lockContext(idxs, focus);
         // apply
         for (const [i, d] of removals) dom[i].delete(d);
         newIn.forEach(d => ins.add(d));
         level = Math.max(level, lvl);
-        steps.push({ kind: 'clue', clues: idxs.slice(), text: describe(idxs, removals, newIn) });
+        steps.push({ kind: 'clue', clues: idxs.slice(), text: describe(idxs, removals, newIn, ctx) });
         return true;
       };
-      const describe = (idxs, removals, newIn) => {
+      const lockContext = (idxs, focus) => {
+        const ds = []; idxs.forEach(i => p.clues[i].g.forEach(d => { if (ds.indexOf(d) < 0) ds.push(d); }));
+        const out = ds.filter(d => dom.every(s2 => !s2.has(d))).sort((x, y) => x - y);
+        const fixed = [], inn = [];
+        ds.forEach(d => { const sp = []; for (let i = 0; i < n; i++) if (dom[i].has(d)) sp.push(i); if (ins.has(d)) { if (sp.length === 1) fixed.push(spotName(sp[0]) + ' is ' + d); else inn.push(d); } });
+        const parts = [];
+        if (out.length) parts.push(listWords(out.map(String)) + (out.length > 1 ? ' are' : ' is') + ' out');
+        if (inn.length) parts.push(listWords(inn.map(String)) + (inn.length > 1 ? ' are' : ' is') + ' in the code');
+        fixed.forEach(f => parts.push(f));
+        const mset = new Set(ds);
+        if ((focus || []).some(d => !mset.has(d))) {
+          const left = []; for (let d = 0; d <= 9; d++) if (dom.some(s2 => s2.has(d))) left.push(d);
+          parts.push('the only numbers still possible are ' + listWords(left.map(String)));
+        }
+        (focus || []).forEach(d => {
+          if (ins.has(d) || !mset.has(d)) return; const sp = []; for (let i = 0; i < n; i++) if (dom[i].has(d)) sp.push(i);
+          if (sp.length && sp.length < n) parts.push(d + ' could only go in ' + (sp.length === 1 ? spotName(sp[0]) : 'spot ' + listWords(sp.map(i => String(i + 1))).replace(/ and ([^ ]+)$/, ' or $1')));
+        });
+        return parts;
+      };
+      const SHORT = (c) => c.a + c.b === 0 ? 'nothing right' : [c.a ? NUM[c.a].toLowerCase() + ' right spot' + (c.a > 1 ? 's' : '') : '', c.b ? NUM[c.b].toLowerCase() + ' wrong spot' + (c.b > 1 ? 's' : '') : ''].filter(Boolean).join(', ');
+      const describe = (idxs, removals, newIn, ctx) => {
         const mentioned = new Set(); idxs.forEach(i => p.clues[i].g.forEach(d => mentioned.add(d)));
         const byDigit = {};
         for (const [i, d] of removals) (byDigit[d] = byDigit[d] || []).push(i);
         const out = [], partial = [];
         const goneNow = (d) => dom.every(s => !s.has(d));
         for (const d of Object.keys(byDigit).map(Number).sort((x, y) => x - y)) {
-          if (goneNow(d)) { if (mentioned.has(d) || ins.has(d)) out.push(d); }
+          if (goneNow(d)) out.push(d);
           else partial.push([d, byDigit[d]]);
         }
         const parts = [];
-        const head = idxs.length === 1 ? 'Clue ' + (idxs[0] + 1) : 'Clues ' + (idxs[0] + 1) + ' and ' + (idxs[1] + 1) + ' together';
+        const head = idxs.length === 1 ? 'Clue ' + (idxs[0] + 1) + ' (' + p.clues[idxs[0]].g.join(' ') + ': ' + SHORT(p.clues[idxs[0]]) + ')' : 'Clues ' + (idxs[0] + 1) + ' and ' + (idxs[1] + 1) + ' together';
         const cl = p.clues[idxs[0]];
         if (idxs.length === 1 && cl.a + cl.b === 0) {
           return 'Clue ' + (idxs[0] + 1) + ' says nothing is correct, so ' + listWords(cl.g.map(String)) + ' are not in the code.';
@@ -432,13 +465,16 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         if (loose.length) parts.push(listWords(loose.map(String)) + (loose.length > 1 ? ' must both be' : ' must be') + ' in the code');
         for (const d of pinned) { let sp = 0; for (let i = 0; i < n; i++) if (dom[i].has(d)) sp = i; parts.push(d + ' is in the code, and it must go in ' + spotName(sp)); }
         if (out.length) parts.push(listWords(out.map(String)) + (out.length > 1 ? ' are' : ' is') + ' not in the code');
+        const big = parts.length > 0;
         for (const [d, spots] of partial) {
+          if (big) break; // one clear conclusion per step; small spot details are applied quietly
           // only describe if digit is relevant
           if (!mentioned.has(d) && !ins.has(d)) continue;
           if (pinned.has(d)) continue;
           let why = '';
           if (idxs.length === 1 && cl.a === 0 && spots.length === 1 && cl.g[spots[0]] === d) why = ' (the clue has it there, but says wrong place)';
           parts.push(d + ' can\'t go in ' + (spots.length === 1 ? spotName(spots[0]) : 'spots ' + listWords(spots.map(s => String(s + 1)))) + why);
+          break; // one spot detail per step
         }
         if (!parts.length && idxs.length === 1 && cl.b === 0 && cl.a > 0 && !newIn.length && !out.length) {
           return 'Clue ' + (idxs[0] + 1) + ' says "right place", so any of ' + listWords(cl.g.map(String)) + ' that are in the code stay in the same spot as in the clue.';
@@ -447,7 +483,9 @@ h1,h2,h3{font-family:var(--disp);margin:0}
           for (let i = 0; i < n; i++) if (removals.some(r => r[0] === i) && dom[i].size <= 3) parts.push(spotName(i) + ' must be ' + listWords([...dom[i]].sort((x, y) => x - y).map(String)).replace(/ and ([^ ]+)$/, ' or $1'));
         }
         if (!parts.length) parts.push('a few more numbers are ruled out');
-        return head + ': ' + parts.join('; ') + '.';
+        const body = parts.join(', and ');
+        if (ctx && ctx.length) return head + ': we already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '. So ' + body + '.';
+        return head + ': ' + body + '.';
       };
       let done = false;
       for (const i of order) { if (tryClues([i], 1)) { done = true; break; } }
@@ -588,6 +626,30 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     const steps = []; let level = 0;
     const announced = new Set();
     const live = () => PERMS.filter(pm => pm.every((r, i) => dom[i].has(r)));
+    // the fact that decides whether card i's words are true, if card i were role r
+    const cardSince = (i, r) => {
+      const st = stmts[i];
+      const ps = live().filter(pm => pm[i] === r);
+      if (st.t === 'self') return '';
+      if (st.t === 'other' || st.t === 'either') {
+        const vals = [...new Set(ps.map(pm => pm[st.c]))];
+        const known = dom[st.c].size === 1;
+        if (vals.length === 1) {
+          if (known) return 'we know card ' + (st.c + 1) + ' is the ' + RN[vals[0]];
+          const t = [0, 1, 2].find(k => k !== i && k !== st.c);
+          const why = dom[t].size === 1 ? 'card ' + (t + 1) + ' is the ' + RN[[...dom[t]][0]] : (() => { const miss = ['K', 'Q', 'J'].filter(x => !dom[t].has(x) && x !== r); return miss.length ? 'card ' + (t + 1) + ' can\u2019t be the ' + RN[miss[0]] : ''; })();
+          return 'card ' + (st.c + 1) + ' would have to be the ' + RN[vals[0]] + (why ? ' (because ' + why + ')' : '');
+        }
+        if (st.t === 'other' && st.r === r) return 'card ' + (st.c + 1) + ' couldn\u2019t also be the ' + RN[r];
+        if (st.t === 'other' && vals.indexOf(st.r) < 0) return 'card ' + (st.c + 1) + ' couldn\u2019t be the ' + RN[st.r];
+        return '';
+      }
+      if (st.t === 'lie') {
+        const tv = [...new Set(ps.map(pm => evalStmt(stmts[st.c], st.c, pm, stmts)))];
+        if (tv.length === 1) return 'card ' + (st.c + 1) + '\u2019s words would be ' + (tv[0] ? 'true' : 'false');
+      }
+      return '';
+    };
     const solved = () => dom.every(s => s.size === 1);
     let guard = 0;
     while (!solved() && guard++ < 30) {
@@ -619,6 +681,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
           if (ps.length && ps.every(pm => cardBreaks(i, pm, stmts))) elim.push(r);
         }
         if (elim.length) {
+          const sinces = {}; elim.forEach(r => sinces[r] = cardSince(i, r));
           elim.forEach(r => dom[i].delete(r));
           level = Math.max(level, 1);
           const said = 'Card ' + (i + 1) + ' says ' + q(stmts[i], i) + ' ';
@@ -627,8 +690,8 @@ h1,h2,h3{font-family:var(--disp);margin:0}
             text = said + 'The King can\'t say that (it would be a lie), and the Jack can\'t either (it would be true). So card ' + (i + 1) + ' is the Queen.';
           } else {
             const r = elim[0];
-            const known = announced.size > 0 || steps.length > 0;
-            text = said + (r === 'K' ? 'That would be false' : 'That would be true') + (known ? ' with what we know' : '') + ', and ' + RULE[r] + '. So card ' + (i + 1) + ' isn\'t the ' + RN[r] + '.';
+            const since = sinces[r];
+            text = said + 'If card ' + (i + 1) + ' were the ' + RN[r] + ', ' + (since ? since + '. Then ' : '') + 'those words would be ' + (r === 'K' ? 'false' : 'true') + '. But ' + RULE[r] + '. So card ' + (i + 1) + ' isn\'t the ' + RN[r] + '.';
             if (dom[i].size === 1) text += ' It must be the ' + RN[[...dom[i]][0]] + '.';
           }
           steps.push({ kind: 'own', cards: [i], text });
@@ -645,7 +708,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
             const j = [0, 1, 2].find(k => cardBreaks(k, pm, stmts));
             const others = [0, 1, 2].filter(k => k !== i).map(k => 'card ' + (k + 1) + ' is the ' + RN[pm[k]]);
             const tv = cardBreaks(j, pm, stmts);
-            return (ps.length > 1 ? 'With ' + listWords(others) + ', ' : 'Then ' + listWords(others) + ', and ') +
+            return (ps.length > 1 ? 'If ' + listWords(others) + ', ' : 'Then ' + listWords(others) + ', and ') +
               'card ' + (j + 1) + '’s words ' + qm(stmts[j], j) + ' would be ' + tv + ', but ' + RULE[pm[j]] + '.';
           });
           dom[i].delete(r); level = 2;
@@ -747,7 +810,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
   const RACERS = [['fox', '🦊', 'Fox'], ['owl', '🦉', 'Owl'], ['bear', '🐻', 'Bear'], ['cat', '🐱', 'Cat'], ['frog', '🐸', 'Frog'], ['pig', '🐷', 'Pig'], ['rabbit', '🐰', 'Rabbit'], ['tiger', '🐯', 'Tiger'], ['panda', '🐼', 'Panda'], ['koala', '🐨', 'Koala']];
   const PETS = [['dog', '🐶', 'dog'], ['cat', '🐱', 'cat'], ['fish', '🐟', 'fish'], ['bird', '🐦', 'bird'], ['hamster', '🐹', 'hamster'], ['turtle', '🐢', 'turtle']];
   const COLORS = [['red', '#e0574a', 'red'], ['blue', '#4a7fe0', 'blue'], ['green', '#46a85a', 'green'], ['yellow', '#f2c230', 'yellow'], ['purple', '#9a63d6', 'purple'], ['white', '#f4f1ea', 'white']];
-  const FRUIT = [['melon', '🍉', 'Melon'], ['pineapple', '🍍', 'Pineapple'], ['apple', '🍎', 'Apple'], ['pear', '🍐', 'Pear'], ['lemon', '🍋', 'Lemon'], ['grapes', '🍇', 'Grapes'], ['peach', '🍑', 'Peach'], ['banana', '🍌', 'Banana']];
+  const FRUIT = [['melon', '🍉', 'Melon'], ['pineapple', '🍍', 'Pineapple'], ['apple', '🍎', 'Apple'], ['pear', '🍐', 'Pear'], ['lemon', '🍋', 'Lemon'], ['orange', '🍊', 'Orange'], ['peach', '🍑', 'Peach'], ['banana', '🍌', 'Banana']];
 
   const KIND = {
     lineup: {
@@ -773,6 +836,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
   const isPetH = (pz, id) => pz.kind === 'houses' && pz.items[id].cat === 'pet';
   function phIs(pz, id, p) { return isPetH(pz, id) ? 'lives in house ' + (p + 1) : 'is ' + KIND[pz.kind].posName(p, pz.N); }
   function phMust(pz, id, p) { return isPetH(pz, id) ? 'must live in house ' + (p + 1) : 'must be ' + KIND[pz.kind].posName(p, pz.N); }
+  function phOnly(pz, id, ps) { return isPetH(pz, id) ? 'can only live in ' + KIND.houses.posList(ps) : pz.kind === 'houses' ? 'can only be house ' + orList(ps.map(p => String(p + 1))) : 'can only be ' + KIND[pz.kind].posList(ps, pz.N); }
   function phCant(pz, id, ps) { return isPetH(pz, id) ? 'can\u2019t live in ' + KIND.houses.posList(ps) : 'can\u2019t be ' + KIND[pz.kind].posList(ps, pz.N); }
 
   function clueText(pz, c) {
@@ -871,13 +935,13 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       if (tops.length !== 1) return explainGridGeneric(pz);
       const x = tops[0]; const p = placed.length;
       if (p === 0) {
-        steps.push({ kind: 'clue', clues: pz.clues.map((c, i) => c.a === x ? i : -1).filter(i => i >= 0), text: L(x) + ' never loses on any scale, so it is the heaviest.' });
+        steps.push({ kind: 'clue', clues: pz.clues.map((c, i) => c.a === x ? i : -1).filter(i => i >= 0), text: L(x) + ' is never the lighter one on any scale, so it is the heaviest.' });
       } else if (p === N - 1) {
         steps.push({ kind: 'fix', clues: pz.clues.map((c, i) => c.b === x ? i : -1).filter(i => i >= 0), text: 'That leaves ' + L(x) + ' as the lightest.' });
       } else {
         const ks = pz.clues.map((c, i) => (c.b === x ? i : -1)).filter(i => i >= 0);
         const by = ks.map(i => L(pz.clues[i].a));
-        steps.push({ kind: 'clue', clues: ks, text: 'Of the fruit left, nothing beats ' + L(x) + '. It only loses to ' + listWords(by) + ' (scale ' + listWords(ks.map(i => String(i + 1))) + '), already placed. So it is ' + KIND.balance.posName(p, N) + '.' });
+        steps.push({ kind: 'clue', clues: ks, text: 'Scale ' + listWords(ks.map(i => String(i + 1))) + ': only ' + listWords(by) + (by.length > 1 ? ' are' : ' is') + ' heavier than ' + L(x) + ', and ' + (by.length > 1 ? 'they are' : 'it is') + ' already placed. No fruit left is heavier, so ' + L(x) + ' is ' + KIND.balance.posName(p, N) + '.' });
       }
       placed.push(x);
     }
@@ -901,7 +965,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         if (dom[id].size === 1 && !announced.has(id)) {
           announced.add(id); const p = [...dom[id]][0];
           for (const o of ids) if (o !== id) dom[o].delete(p);
-          if (!said.has(id)) steps.push({ kind: 'fix', clues: [], text: 'So ' + L(id) + ' ' + phIs(pz, id, p) + '.' });
+          if (!said.has(id)) steps.push({ kind: 'fix', clues: [], text: 'Only ' + (pz.kind === 'lineup' ? ORD[p] + ' place' : K.posName(p, N)) + ' is left for ' + L(id) + '.' });
           said.add(id); prog = true;
         }
       }
@@ -912,52 +976,62 @@ h1,h2,h3{font-family:var(--disp);margin:0}
           const can = ids.filter(id => dom[id].has(p));
           if (can.length === 1 && dom[can[0]].size > 1) {
             dom[can[0]] = new Set([p]); said.add(can[0]);
-            steps.push({ kind: 'hidden', clues: [], text: 'Only ' + L(can[0]) + ' fits ' + K.posName(p, N) + ' now, so it ' + phIs(pz, can[0], p).replace(/^is /, 'is ') + '.' });
+            steps.push({ kind: 'hidden', clues: [], text: 'No other ' + ({ racer: 'racer', fruit: 'fruit', color: 'color', pet: 'pet' })[pz.items[can[0]].cat] + ' can be ' + K.posName(p, N) + ' now, so ' + L(can[0]) + ' ' + phIs(pz, can[0], p) + '.' });
             prog = true;
           }
         }
         if (prog) break;
       }
       if (prog) continue;
-      const tryClues = (idxs, lvl, strongOnly) => {
+      const tryClues = (idxs, lvl, strongOnly, mentOnly) => {
         const S = gridEnum(pz, dom, idxs.map(i => pz.clues[i]));
         if (!S.length) return false;
         const rem = {};
         let any = false, strong = false;
+        const ment0 = new Set(); idxs.forEach(i => { const c = pz.clues[i]; [c.a, c.b, c.c].forEach(x => x && ment0.add(x)); });
         for (const id of Object.keys(dom)) {
+          if (mentOnly && !ment0.has(id)) continue;
           const sup = new Set(S.map(a => a[id]));
           const r = [...dom[id]].filter(p => !sup.has(p));
           if (r.length) { rem[id] = r; any = true; if (dom[id].size - r.length === 1) strong = true; }
         }
         if (!any) return false;
         if (strongOnly && !strong) return false;
-        const parts = [];
-        // order: items mentioned in clues first
         const mentioned = new Set(); idxs.forEach(i => { const c = pz.clues[i]; [c.a, c.b, c.c].forEach(x => x && mentioned.add(x)); });
-        const ids = Object.keys(rem).sort((x, y) => (mentioned.has(y) ? 1 : 0) - (mentioned.has(x) ? 1 : 0));
-        for (const id of ids) rem[id].forEach(p => dom[id].delete(p));
-        const catOf = (id) => pz.cats.findIndex(c => c.indexOf(id) >= 0);
-        const fixedNow = {}; // cat -> Set of positions pinned in this step
-        for (const id of ids) if (dom[id].size === 1) { const c = catOf(id); (fixedNow[c] = fixedNow[c] || new Set()).add([...dom[id]][0]); }
-        for (const id of ids) {
-          if (dom[id].size === 1) { parts.push(L(id) + ' ' + phMust(pz, id, [...dom[id]][0])); said.add(id); }
-          else {
-            const fx = fixedNow[catOf(id)];
-            if (fx && rem[id].every(p => fx.has(p))) continue; // obvious: that spot was just taken
-            parts.push(L(id) + ' ' + phCant(pz, id, rem[id].sort()));
-          }
+        // what we already knew about the clue's items (the "because")
+        const ctx = [];
+        const selfClue = idxs.length === 1 && ['is', 'not', 'end', 'notend'].indexOf(pz.clues[idxs[0]].t) >= 0;
+        if (!selfClue) for (const id of mentioned) {
+          const d = [...dom[id]].sort();
+          if (d.length === 1) ctx.push(L(id) + ' ' + phIs(pz, id, d[0]));
+          else if (d.length < N) ctx.push(L(id) + ' ' + phOnly(pz, id, d));
         }
-        if (!parts.length) parts.push('a few more spots are ruled out');
+        // ONE conclusion per step: prefer an item that gets pinned, mentioned items first
+        const cand = Object.keys(rem).sort((x, y) => {
+          const px = dom[x].size - rem[x].length === 1 ? 1 : 0, py = dom[y].size - rem[y].length === 1 ? 1 : 0;
+          if (px !== py) return py - px;
+          const mx = mentioned.has(x) ? 1 : 0, my = mentioned.has(y) ? 1 : 0;
+          if (mx !== my) return my - mx;
+          return rem[y].length - rem[x].length;
+        });
+        const id = cand[0];
+        rem[id].forEach(p => dom[id].delete(p));
+        let concl;
+        if (dom[id].size === 1) { concl = L(id) + ' ' + phMust(pz, id, [...dom[id]][0]); said.add(id); }
+        else concl = L(id) + ' ' + phCant(pz, id, rem[id].sort());
+        if (!mentioned.has(id)) concl = 'trying ' + L(id) + ' in ' + K.posList(rem[id].sort(), N) + ' leaves no way to place ' + listWords([...mentioned].map(L)) + ' that fits, so ' + concl;
         level = Math.max(level, lvl);
-        const head = idxs.length === 1 ? clueWord + ' ' + (idxs[0] + 1) : clueWord + 's ' + (idxs[0] + 1) + ' and ' + (idxs[1] + 1) + ' together';
-        steps.push({ kind: 'clue', clues: idxs.slice(), text: head + ': ' + parts.join('; ') + '.' });
+        const q = (i) => '\u201c' + clueText(pz, pz.clues[i]) + '\u201d';
+        const head = idxs.length === 1 ? clueWord + ' ' + (idxs[0] + 1) + ' says ' + q(idxs[0]) : clueWord + 's ' + (idxs[0] + 1) + ' and ' + (idxs[1] + 1) + ' together: ' + q(idxs[0]) + ' and ' + q(idxs[1]);
+        const why = ctx.length ? ' We already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '.' : '';
+        steps.push({ kind: 'clue', clues: idxs.slice(), text: head + why + ' So ' + concl + '.' });
         return true;
       };
       let done = false;
-      for (let i = 0; i < pz.clues.length && !done; i++) if (tryClues([i], 1)) done = true;
+      for (const mo of [true, false]) for (let i = 0; i < pz.clues.length && !done; i++) if (tryClues([i], 1, false, mo)) done = true;
       if (done) continue;
-      for (const so of [true, false]) {
-        for (let x = 0; x < pz.clues.length && !done; x++) for (let y = x + 1; y < pz.clues.length && !done; y++) if (tryClues([x, y], 2, so)) done = true;
+      for (const [so, mo] of [[true, true], [false, true], [true, false], [false, false]]) {
+        for (let x = 0; x < pz.clues.length && !done; x++) for (let y = x + 1; y < pz.clues.length && !done; y++) if (tryClues([x, y], 2, so, mo)) done = true;
         if (done) break;
       }
       if (done) continue;
@@ -967,7 +1041,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     }
     if (solved()) {
       const left = []; for (const ids of pz.cats) for (const id of ids) if (!said.has(id) && !announced.has(id)) left.push(L(id) + ' ' + phIs(pz, id, [...dom[id]][0]));
-      if (left.length) steps.push({ kind: 'fix', clues: [], text: 'That leaves ' + listWords(left) + '.' });
+      if (left.length) steps.push({ kind: 'fix', clues: [], text: 'That leaves one spot each: ' + listWords(left) + '.' });
       steps.push({ kind: 'done', clues: [], text: answerText(pz, Object.fromEntries(Object.keys(dom).map(id => [id, [...dom[id]][0]]))) });
     }
     return { steps, level, solved: solved() };
@@ -1063,7 +1137,12 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     if (ids.some(id => as[id] === undefined || as[id] === null)) return { ok: false, msg: pz.kind === 'houses' ? 'Give every house a color and a pet first.' : 'Fill in every spot first.' };
     const word = pz.kind === 'balance' ? 'Scale' : 'Clue';
     for (let i = 0; i < pz.clues.length; i++) {
-      if (!evalClue(pz.clues[i], as, pz.N)) return { ok: false, clue: i, msg: word + ' ' + (i + 1) + ' says: “' + clueText(pz, pz.clues[i]).replace(/\.$/, '') + '.” Your answer doesn’t fit that.' };
+      const c = pz.clues[i];
+      if (!evalClue(c, as, pz.N)) {
+        const L = (id) => KIND[pz.kind].lab(pz.items[id]);
+        const yours = [c.a, c.b, c.c].filter(Boolean).map(id => L(id) + ' ' + phIs(pz, id, as[id]));
+        return { ok: false, clue: i, msg: word + ' ' + (i + 1) + ' says: “' + clueText(pz, c).replace(/\.$/, '') + '.” In your answer, ' + listWords(yours) + '.' };
+      }
     }
     return { ok: true };
   }
@@ -1181,7 +1260,14 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     });
   }
 
-  Object.assign(TL, { KIND, clueText, evalClue, gridSolutions, explainGrid, genGrid, checkGrid, answerText,
+  // Puzzle id: a fingerprint of the puzzle's content. Saved results carry it, so a content update
+  // that changes a day's puzzles never shows old results on new puzzles.
+  function pid(pz) {
+    const core = JSON.stringify([pz.type, pz.n || pz.N, pz.clues || null, pz.code || null, pz.stmts || null, pz.signs || null, pz.rule || null, pz.sol === undefined ? null : pz.sol]);
+    let h = 2166136261; for (let i = 0; i < core.length; i++) { h ^= core.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return pz.type + '-' + (h >>> 0).toString(36);
+  }
+  Object.assign(TL, { pid, KIND, clueText, evalClue, gridSolutions, explainGrid, genGrid, checkGrid, answerText,
     CHESTS, CRULE, signText, signTrue, chestSolutions, explainChests, genChests, checkChests, chestWhy,
     ROSTER, genAny, dailyTypes, daily: daily2 });
 })(typeof window !== 'undefined' ? window : this);
@@ -1200,6 +1286,7 @@ const store = {
 };
 const $app = document.getElementById('app');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const pad2 = n => (n < 10 ? '0' : '') + n;
 const fmtT = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + pad2(s % 60); };
 function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
@@ -1220,6 +1307,32 @@ function getDay(ds) { return dayCache[ds] || (dayCache[ds] = TL.daily(ds)); }
 
 // results: { [date]: { s:[{ms,miss,hints}|null x3], on: dateFinished } }
 function results() { return store.get('results', {}); }
+// Each saved result carries its puzzle's id (TL.pid). When a content update changes a day's puzzles,
+// the old results move to an archive (they still count for the streak) and the new puzzles are playable.
+const CONTENT_VER = 3;
+function archived() { return store.get('archive', {}); }
+function migrateResults() {
+  const all = results(); const keys = Object.keys(all);
+  const full = store.get('cver', 0) !== CONTENT_VER;
+  const arch = archived(); let moved = 0;
+  for (const ds of keys) {
+    const e = all[ds];
+    if (!e || !Array.isArray(e.s)) { delete all[ds]; continue; }
+    if (!full && !e.s.some(r => r && !r.id)) continue;
+    let day = null; try { day = getDay(ds); } catch (err) { day = []; }
+    e.s.forEach((r, i) => {
+      if (r && (!r.id || !day[i] || r.id !== TL.pid(day[i]))) {
+        const a = arch[ds] = arch[ds] || { s: [null, null, null], on: null };
+        a.s[i] = r; if (e.on) a.on = e.on; e.s[i] = null; moved++;
+      }
+    });
+    if (!e.s.every(Boolean)) delete e.on;
+    if (!e.s.some(Boolean)) delete all[ds];
+  }
+  if (moved || full) { store.set('results', all); store.set('archive', arch); }
+  store.set('cver', CONTENT_VER);
+  return moved;
+}
 function saveResult(ds, slot, r) {
   const all = results(); const e = all[ds] || { s: [null, null, null] };
   e.s[slot] = r; if (e.s.every(Boolean) && !e.on) e.on = realToday;
@@ -1228,8 +1341,10 @@ function saveResult(ds, slot, r) {
 function dayDone(e) { return e && e.s.every(Boolean); }
 function streak() {
   const all = results(); let n = 0; let d = realToday;
-  if (!(dayDone(all[d]) && all[d].on === d)) d = addDays(d, -1);
-  while (dayDone(all[d]) && all[d].on === d) { n++; d = addDays(d, -1); }
+  const arch = archived();
+  const counted = (d) => (dayDone(all[d]) && all[d].on === d) || (arch[d] && arch[d].on === d);
+  if (!counted(d)) d = addDays(d, -1);
+  while (counted(d)) { n++; d = addDays(d, -1); }
   return n;
 }
 
@@ -1261,16 +1376,30 @@ function renderHome() {
     '<div class="trio">' + day.map((p, i) => '<div class="tile' + (e && e.s[i] ? ' done' : '') + '"><div class="ico">' + typeIcon(p.type, 44) + '</div><div class="nm">' + TYPENAME[p.type] + '</div><div class="dots">' + [1, 2, 3, 4].slice(0, p.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[p.tier] ? 'on' : '') + '"></i>').join('') + '</div></div>').join('') + '</div>' +
     (next === -1 ? '<button class="btn wide" id="go">See results</button>' : '<button class="btn wide" id="go">' + (next > 0 ? 'Continue (' + (next + 1) + ' of 3)' : 'Play') + '</button>') +
     '</div>' +
-    '<div class="sect">This week · gentle Monday, tough Sunday</div>' +
+    (ds === realToday ? '<div class="nextline" id="cd">' + nextLine() + '</div>' : '') +
+    '<div class="sect">This week · ' + wk.filter(d => dayDone(all[d])).length + '/7 done</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div class="foot">Truthlock prototype v0.2 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
+    '<div class="foot">Truthlock prototype v0.3 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
   document.getElementById('logo').onclick = () => { if (++titleTaps >= 5) { titleTaps = 0; testerMenu(); } };
+  if (homeInt) clearInterval(homeInt);
+  homeInt = setInterval(() => { const c = document.getElementById('cd'); if (!c) { clearInterval(homeInt); homeInt = null; return; } c.textContent = nextLine(); }, 30000);
 }
+function untilMidnight() {
+  const now = new Date(); const m = new Date(now); m.setHours(24, 0, 0, 0);
+  const mins = Math.max(1, Math.ceil((m - now) / 60000)); const h = Math.floor(mins / 60);
+  return (h ? h + 'h ' : '') + (mins % 60) + 'm';
+}
+function teaser() {
+  const tm = addDays(realToday, 1); const d = getDay(tm);
+  return 'Tomorrow: ' + TL.DAYMOOD[TL.weekday(tm)] + ' day ' + d.map(p => TYPEEMOJI[p.type]).join(' ');
+}
+function nextLine() { return '⏳ New puzzles in ' + untilMidnight() + ' · ' + teaser(); }
+let homeInt = null;
 function testerMenu() {
   openSheet('<h2>Tester tools</h2><div class="sub">Hidden menu (5 taps on the logo)</div><div class="col">' +
     '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="t1">Reset all progress</button>' +
@@ -1287,7 +1416,7 @@ function startPuzzle(ds, slot) {
   const pz = getDay(ds)[slot];
   const tut = store.get('tut', {});
   if (!tut[pz.type]) { startTutorial(pz.type, () => startPuzzle(ds, slot)); return; }
-  P = { ds, slot, pz, t0: Date.now(), miss: 0, hints: 0, msg: null, bad: null, hl: null, solved: false, tutorial: false,
+  P = { ds, slot, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false,
     entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null,
     ex: TYPES[pz.type].explain(pz) };
   renderPuzzle();
@@ -1297,7 +1426,7 @@ function renderPuzzle() {
   S.screen = 'puzzle';
   const pz = P.pz;
   const res = results()[P.ds];
-  const head = '<div class="pz-top"><button class="back" id="bk">‹</button><div class="ttl"><h2>' + TYPENAME[pz.type] + '</h2><div>' + (P.tutorial ? 'How to play' : 'Puzzle ' + (P.slot + 1) + ' of 3 · ' + TIERNAME[pz.tier]) + '</div></div><div class="timer" id="tm">' + (P.tutorial ? '' : fmtT(Date.now() - P.t0)) + '</div></div>' +
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + TYPENAME[pz.type] + '</h2><div>' + (P.tutorial ? 'How to play' : 'Puzzle ' + (P.slot + 1) + ' of 3 · ' + TIERNAME[pz.tier]) + '</div></div><div class="timer" id="tm">' + (P.tutorial ? '' : fmtT(Date.now() - P.t0)) + '</div></div>' +
     (P.tutorial ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + (res && res.s[i] ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
@@ -1315,13 +1444,13 @@ function noteCls(d) { const v = P.notes[d]; return v === 1 ? ' x' : v === 2 ? ' 
 function lockBoard() {
   const pz = P.pz;
   let h = '<div class="lockwrap"><div class="padlock' + (pz.n === 4 ? ' n4' : '') + (P.solved ? ' open' : '') + '" id="pl"><div class="shackle"></div><div class="lbody"><div class="led"></div>' +
-    P.entry.map((d, i) => '<button class="slot' + (i === P.sel && !P.solved ? ' sel' : '') + '" data-i="' + i + '">' + (d === null ? '' : d) + '</button>').join('') + '</div></div></div>';
+    P.entry.map((d, i) => '<button class="slot' + (i === P.sel && !P.solved ? ' sel' : '') + '" data-i="' + i + '" aria-label="Code spot ' + (i + 1) + ': ' + (d === null ? 'empty' : d) + '">' + (d === null ? '' : d) + '</button>').join('') + '</div></div></div>';
   h += '<div class="rules-mini"><span><i class="pip g"></i>right spot</span><span><i class="pip y"></i>wrong spot</span><span><i class="pip x"></i>not in code</span></div>';
   h += '<div class="clues' + (pz.n === 4 ? ' n4' : '') + '">' + pz.clues.map((c, i) => {
     const pips = '<span class="pips">' + '<i class="pip g"></i>'.repeat(c.a) + '<i class="pip y"></i>'.repeat(c.b) + (c.a + c.b === 0 ? '<i class="pip x"></i>' : '') + '</span>';
     return '<div class="clue' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cl' + i + '"><div class="no">' + (i + 1) + '</div><div class="digs">' + c.g.map(d => '<div class="dg' + noteCls(d) + '">' + d + '</div>').join('') + '</div><div class="fb"><div>' + pips + '</div>' + esc(TL.fbWords(c.a, c.b)) + '</div></div>';
   }).join('') + '</div>';
-  h += '<div class="keys" id="keys">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => '<button class="key' + noteCls(d) + '" data-d="' + d + '">' + d + '</button>').join('') + '</div>';
+  h += '<div class="keys" id="keys">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => '<button class="key' + noteCls(d) + '" data-d="' + d + '" aria-label="' + d + (P.notes[d] === 1 ? ', crossed out' : P.notes[d] === 2 ? ', marked in the code' : '') + '">' + d + '</button>').join('') + '</div>';
   h += '<div class="tools"><button class="tool' + (P.noteMode ? ' on' : '') + '" id="nm">✎ Notes ' + (P.noteMode ? 'on' : 'off') + '</button><button class="tool" id="del">⌫ Erase</button><button class="tool" id="clr">Clear</button></div>';
   h += '<div class="notehint">' + (P.noteMode ? 'Notes: tap a number once to cross it out, twice to mark it "in", three times to clear.' : 'Tap a spot on the lock, then tap a number.') + '</div>';
   return h;
@@ -1347,9 +1476,9 @@ function cardsBoard() {
   let h = '<div class="rulebox"><div class="rule"><div class="mini">K<span>♠</span></div>The King always tells the truth.</div><div class="rule"><div class="mini r">Q<span>♥</span></div>The Queen can lie or tell the truth.</div><div class="rule"><div class="mini">J<span>♣</span></div>The Jack always lies.</div></div>';
   h += '<div class="cardrow">' + [0, 1, 2].map(i => {
     const r = P.entry[i]; const f = r ? ROLEFACE[r] : null;
-    return '<div class="cwrap' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cw' + i + '"><button class="card' + (r ? ' named' : '') + '" data-i="' + i + '"><div class="in"><div class="backf"><div class="cnum">' + (i + 1) + '</div></div><div class="face' + (f && f.red ? ' r' : '') + '"><div class="corner">' + (i + 1) + '</div>' + (f ? '<div class="big">' + f.l + '</div><div class="suit">' + f.s + '</div><div class="rn">' + TL.RN[r] + '</div>' : '') + '</div></div></button>' +
+    return '<div class="cwrap' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cw' + i + '"><button class="card' + (r ? ' named' : '') + '" data-i="' + i + '" aria-label="Card ' + (i + 1) + ': ' + (r ? TL.RN[r] : 'not named yet') + '"><div class="in"><div class="backf"><div class="cnum">' + (i + 1) + '</div></div><div class="face' + (f && f.red ? ' r' : '') + '"><div class="corner">' + (i + 1) + '</div>' + (f ? '<div class="big">' + f.l + '</div><div class="suit">' + f.s + '</div><div class="rn">' + TL.RN[r] + '</div>' : '') + '</div></div></button>' +
       '<div class="bubble">' + esc(TL.stmtText(pz.stmts[i], i)) + '</div>' +
-      '<div class="picker">' + ['K', 'Q', 'J'].map(x => '<button class="pk' + (x === 'Q' ? ' r' : '') + (r === x ? ' on' : '') + '" data-i="' + i + '" data-r="' + x + '">' + x + '</button>').join('') + '</div></div>';
+      '<div class="picker">' + ['K', 'Q', 'J'].map(x => '<button class="pk' + (x === 'Q' ? ' r' : '') + (r === x ? ' on' : '') + '" data-i="' + i + '" data-r="' + x + '" aria-pressed="' + (r === x) + '" aria-label="Card ' + (i + 1) + ' is the ' + TL.RN[x] + '">' + x + '</button>').join('') + '</div></div>';
   }).join('') + '</div>';
   h += '<div class="ask">Who is the King, the Queen and the Jack?</div>';
   return h;
@@ -1373,6 +1502,7 @@ function check() {
   P.bad = r.clue !== undefined ? r.clue : r.card !== undefined ? r.card : null;
   P.hl = null;
   P.msg = { k: 'bad', t: '✗ Not quite. ' + esc(r.msg) };
+  if (P.told.indexOf(r.msg) < 0) P.told.push(r.msg);
   renderPuzzle();
   const pl = document.getElementById('pl'); if (pl) { pl.classList.add('bad'); }
   const el = document.getElementById(TYPES[pz.type].hid(P.bad)); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1381,10 +1511,12 @@ function check() {
 function hint() {
   if (P.solved) return;
   const steps = P.ex.steps.filter(s => s.kind !== 'done');
-  if (P.hints >= steps.length) { P.msg = { k: 'hint', t: '💡 You have every step now. Fill in the answer!' }; renderPuzzle(); return; }
-  const s = steps[P.hints]; P.hints++;
+  // skip any step the last wrong-answer message already explained (no paying twice for the same reasoning)
+  let k = P.hintPos; while (k < steps.length && P.told.indexOf(steps[k].text) >= 0) k++;
+  if (k >= steps.length) { P.msg = { k: 'hint', t: '💡 You have every step now. Fill in the answer!' }; renderPuzzle(); return; }
+  const s = steps[k]; P.hintPos = k + 1; P.hints++;
   P.hl = s.clues && s.clues.length ? s.clues : s.cards || null;
-  P.msg = { k: 'hint', t: '💡 Hint ' + P.hints + ' of ' + steps.length + ': ' + esc(s.text) };
+  P.msg = { k: 'hint', t: '💡 Step ' + (k + 1) + ' of ' + steps.length + ': ' + esc(s.text) };
   renderPuzzle();
 }
 function solved() {
@@ -1392,7 +1524,7 @@ function solved() {
   const ms = Date.now() - P.t0;
   stopTimer();
   if (P.tutorial) { renderPuzzle(); tutSolved(); return; }
-  saveResult(P.ds, P.slot, { ms, miss: P.miss, hints: P.hints });
+  saveResult(P.ds, P.slot, { id: TL.pid(P.pz), ms, miss: P.miss, hints: P.hints });
   renderPuzzle();
   setTimeout(() => showSolved(ms), 650);
 }
@@ -1408,26 +1540,34 @@ function showSolved(ms) {
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   document.getElementById('nx').onclick = () => { closeSheet(); if (allDone) showDaySummary(P.ds); else { const e = results()[P.ds]; startPuzzle(P.ds, e.s.findIndex(x => !x)); } };
 }
+const PLAY_URL = 'https://playbrightharbor.com/truthlock-test.html';
+const markOf = r => r.miss ? '🟨' : r.hints ? '💡' : '✅';
 function shareText(ds) {
   const e = results()[ds]; const day = getDay(ds);
-  const marks = e.s.map((r, i) => TYPEEMOJI[day[i].type] + (r.miss === 0 && r.hints === 0 ? '✅' : '🟨')).join(' ');
+  const marks = e.s.map((r, i) => TYPEEMOJI[day[i].type] + markOf(r)).join(' ');
   const tot = e.s.reduce((a, r) => a + r.ms, 0);
-  const st = streak();
-  return { title: 'Truthlock · ' + nice(ds), marks, time: fmtT(tot), st, text: 'Truthlock · ' + nice(ds) + '\n' + marks + '\n⏱ ' + fmtT(tot) + (st ? '  🔥 ' + st : '') + '\nplaybrightharbor.com' };
+  const st = streak(); const showTime = store.get('shareTime', true);
+  const mood = TL.DAYMOOD[TL.weekday(ds)] + ' day';
+  const stats = [showTime ? '⏱ ' + fmtT(tot) : '', st ? '🔥 ' + st : ''].filter(Boolean).join('  ');
+  const challenge = showTime ? 'Can you beat ' + fmtT(tot) + '?' : 'Can you solve all three?';
+  const text = ['Truthlock · ' + nice(ds) + ' · ' + mood, marks, stats, challenge, PLAY_URL].filter(Boolean).join('\n');
+  return { title: 'Truthlock · ' + nice(ds), marks, time: fmtT(tot), st, showTime, mood, challenge, text };
 }
 function showDaySummary(ds) {
   stopTimer();
   const sh = shareText(ds); const e = results()[ds];
   openSheet('<h2>Daily Three done!</h2><div class="sub">' + nice(ds) + ' · ' + TL.DAYMOOD[TL.weekday(ds)] + ' day</div>' +
-    '<div class="sharecard" id="card"><div class="t">Truth<span>lock</span> · ' + esc(nice(ds)) + '</div><div class="row">' + sh.marks + '</div><div class="s">⏱ ' + sh.time + (sh.st ? ' · 🔥 ' + sh.st + ' day' + (sh.st > 1 ? 's' : '') + ' in a row' : '') + '</div></div>' +
-    '<div class="sub" style="margin-top:-6px;font-size:13px">✅ = solved clean · 🟨 = used a hint or had a miss</div>' +
+    '<div class="sharecard" id="card"><div class="t">Truth<span>lock</span> · ' + esc(nice(ds)) + '</div><div class="mood2">' + esc(sh.mood) + '</div><div class="row">' + sh.marks + '</div><div class="s">' + [sh.showTime ? '⏱ ' + sh.time : '', sh.st ? '🔥 ' + sh.st + ' day' + (sh.st > 1 ? 's' : '') + ' in a row' : ''].filter(Boolean).join(' · ') + '</div><div class="s ch">' + esc(sh.challenge) + '</div></div>' +
+    '<div class="sub" style="margin-top:-6px;font-size:13px">✅ solved clean · 💡 used a hint · 🟨 had a miss</div>' +
+    '<label class="tgl"><input type="checkbox" id="stime"' + (sh.showTime ? ' checked' : '') + '> Show my time when I share</label>' +
     '<div class="col"><button class="btn" id="share">Share result</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>' +
-    '<div class="sub" style="margin-top:12px;font-size:13px">New puzzles tomorrow. ' + (ds === realToday && TL.weekday(ds) < 6 ? 'Tomorrow is a little trickier.' : '') + '</div>');
+    '<div class="sub" style="margin-top:12px;font-size:13px">' + (ds === realToday ? 'New puzzles in ' + untilMidnight() + '. ' + teaser() : '') + '</div>');
   document.getElementById('share').onclick = async () => {
     try { if (navigator.share) { await navigator.share({ text: sh.text }); return; } } catch (err) { if (err && err.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(sh.text); toast('Copied! Paste it anywhere.'); } catch (err) { toast('Could not copy'); }
   };
   document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
+  document.getElementById('stime').onchange = (ev) => { store.set('shareTime', ev.target.checked); showDaySummary(ds); };
 }
 // ----- sheet -----
 function openSheet(html) { closeSheet(); const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov'; ov.innerHTML = '<div class="sheet">' + html + '</div>'; document.body.appendChild(ov); }
@@ -1456,7 +1596,7 @@ function slotsBoard() {
   } else {
     h += '<div class="trayhd" style="margin-top:0">The race results</div>';
   }
-  h += '<div class="slots" style="margin-top:8px">' + P.entry.map((id, p) => '<button class="gslot' + (p === P.sel && !P.solved ? ' sel' : '') + '" data-p="' + p + '"><div class="box' + (id ? ' full' : '') + '">' + (id ? pz.items[id].e : '') + '</div><div class="lab">' + labels[p] + '</div></button>').join('') + '</div>';
+  h += '<div class="slots" style="margin-top:8px">' + P.entry.map((id, p) => '<button class="gslot' + (p === P.sel && !P.solved ? ' sel' : '') + '" data-p="' + p + '" aria-label="' + (pz.kind === 'balance' ? cap1(K.posName(p, N)) : K.posName(p, N) + ' place') + ': ' + (id ? pz.items[id].name : 'empty') + '"><div class="box' + (id ? ' full' : '') + '">' + (id ? pz.items[id].e : '') + '</div><div class="lab">' + labels[p] + '</div></button>').join('') + '</div>';
   h += '<div class="tray">' + pz.cats[0].map(id => '<button class="chip' + (P.entry.indexOf(id) >= 0 ? ' used' : '') + '" data-id="' + id + '"><span class="em">' + pz.items[id].e + '</span>' + esc(pz.items[id].name) + '</button>').join('') + '</div>';
   if (pz.kind !== 'balance') h += '<div class="trayhd">Clues</div><div class="tclues">' + clueRowsHtml(pz, c => esc(TL.clueText(pz, c))) + '</div>';
   h += '<div class="tools" style="grid-template-columns:1fr 1fr"><button class="tool" id="del">⌫ Erase</button><button class="tool" id="clr">Clear</button></div>';
@@ -1468,6 +1608,7 @@ function slotsWire() {
   $app.querySelectorAll('.chip').forEach(b => b.onclick = () => {
     if (P.solved) return; const id = b.dataset.id;
     const prev = P.entry.indexOf(id); if (prev >= 0) P.entry[prev] = null;
+    if (prev >= 0 && prev !== P.sel && !P.tutorial) { const K = TL.KIND[P.pz.kind]; toast('Moved ' + P.pz.items[id].e + ' ' + P.pz.items[id].name + ' from ' + (P.pz.kind === 'balance' ? K.posName(prev, P.pz.N) : K.posName(prev, P.pz.N) + ' place')); }
     P.entry[P.sel] = id; P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null;
     const nx = P.entry.findIndex(x => !x); if (nx >= 0) P.sel = nx; else if (P.sel < P.entry.length - 1) P.sel++;
     renderPuzzle();
@@ -1484,7 +1625,7 @@ function houseSvg(fill, sel) {
 function housesBoard() {
   const pz = P.pz, N = pz.N;
   const col = P.entry.col, pet = P.entry.pet;
-  let h = '<div class="street">' + [...Array(N).keys()].map(p => '<button class="house' + (p === P.sel && !P.solved ? ' sel' : '') + '" data-p="' + p + '">' + houseSvg(col[p] ? pz.items[col[p]].e : null) + '<div class="hp">' + (pet[p] ? pz.items[pet[p]].e : '') + '</div><div class="hn">House ' + (p + 1) + '</div></button>').join('') + '</div>';
+  let h = '<div class="street">' + [...Array(N).keys()].map(p => '<button class="house' + (p === P.sel && !P.solved ? ' sel' : '') + '" data-p="' + p + '" aria-label="House ' + (p + 1) + ', ' + (col[p] ? pz.items[col[p]].name : 'no color yet') + ', ' + (pet[p] ? pz.items[pet[p]].name : 'no pet yet') + '">' + houseSvg(col[p] ? pz.items[col[p]].e : null) + '<div class="hp">' + (pet[p] ? pz.items[pet[p]].e : '') + '</div><div class="hn">House ' + (p + 1) + '</div></button>').join('') + '</div>';
   h += '<div class="trayhd">Paint house ' + (P.sel + 1) + '</div><div class="tray" style="margin-top:6px">' + pz.cats[0].map(id => '<button class="chip' + (col.indexOf(id) >= 0 ? ' used' : '') + '" data-c="' + id + '"><span class="sw" style="background:' + pz.items[id].e + '"></span>' + esc(pz.items[id].name) + '</button>').join('') + '</div>';
   h += '<div class="trayhd">Who lives in house ' + (P.sel + 1) + '?</div><div class="tray" style="margin-top:6px">' + pz.cats[1].map(id => '<button class="chip' + (pet.indexOf(id) >= 0 ? ' used' : '') + '" data-pet="' + id + '"><span class="em">' + pz.items[id].e + '</span>' + esc(pz.items[id].name) + '</button>').join('') + '</div>';
   h += '<div class="trayhd">Clues</div><div class="tclues">' + clueRowsHtml(pz, c => colorize(pz, TL.clueText(pz, c))) + '</div>';
@@ -1495,7 +1636,8 @@ function housesBoard() {
 function housesWire() {
   const E = P.entry;
   $app.querySelectorAll('.house').forEach(b => b.onclick = () => { P.sel = +b.dataset.p; renderPuzzle(); });
-  const put = (arr, id) => { if (P.solved) return; const prev = arr.indexOf(id); if (prev >= 0) arr[prev] = null; arr[P.sel] = id; P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null; };
+  const put = (arr, id) => { if (P.solved) return; const prev = arr.indexOf(id); if (prev >= 0) arr[prev] = null;
+    if (prev >= 0 && prev !== P.sel) { const it = P.pz.items[id]; toast('Moved ' + (it.cat === 'pet' ? 'the ' + it.e + ' ' + it.name : it.name) + ' from house ' + (prev + 1)); } arr[P.sel] = id; P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null; };
   $app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { put(E.col, b.dataset.c); if (E.pet[P.sel]) { const nx = [...Array(P.pz.N).keys()].find(p => !E.col[p] || !E.pet[p]); if (nx !== undefined) P.sel = nx; } renderPuzzle(); });
   $app.querySelectorAll('[data-pet]').forEach(b => b.onclick = () => { put(E.pet, b.dataset.pet); if (E.col[P.sel]) { const nx = [...Array(P.pz.N).keys()].find(p => !E.col[p] || !E.pet[p]); if (nx !== undefined) P.sel = nx; } renderPuzzle(); });
   document.getElementById('del').onclick = () => { E.col[P.sel] = null; E.pet[P.sel] = null; P.bad = null; renderPuzzle(); };
@@ -1508,7 +1650,7 @@ function chestsBoard() {
   let h = '<div class="cbanner">One chest holds the treasure. 💎<br><b>' + esc(TL.CRULE[pz.rule]) + '</b></div>';
   h += '<div class="chestrow" style="grid-template-columns:repeat(' + pz.n + ',1fr)">' + pz.signs.map((st, i) => {
     const c = TL.CHESTS[i][1];
-    return '<div class="chest' + (P.entry === i ? ' sel' : '') + (P.solved && pz.sol === i ? ' open' : '') + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="ch' + i + '"><button class="cb" data-i="' + i + '"><div class="gem">💎</div><div class="lid" style="background:' + c + '"></div><div class="box2" style="background:' + c + '"></div><div class="lock2"></div></button><div class="cn">' + TL.CHESTS[i][0] + '</div><div class="bubble">' + esc(TL.signText(st, i)) + '</div><div class="signno">sign ' + (i + 1) + '</div></div>';
+    return '<div class="chest' + (P.entry === i ? ' sel' : '') + (P.solved && pz.sol === i ? ' open' : '') + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="ch' + i + '"><button class="cb" data-i="' + i + '" aria-label="' + TL.CHESTS[i][0] + ' chest' + (P.entry === i ? ', picked' : '') + '"><div class="gem">💎</div><div class="lid" style="background:' + c + '"></div><div class="box2" style="background:' + c + '"></div><div class="lock2"></div></button><div class="cn">' + TL.CHESTS[i][0] + '</div><div class="bubble">' + esc(TL.signText(st, i)) + '</div><div class="signno">sign ' + (i + 1) + '</div></div>';
   }).join('') + '</div>';
   h += '<div class="ask">Which chest has the treasure?</div>';
   return h;
@@ -1584,7 +1726,7 @@ const TUT = {
       sol: { 'fruit:melon': 0, 'fruit:apple': 1, 'fruit:lemon': 2 } },
     steps: [
       { t: 'Each scale tips down on the heavier side. Put the fruit in order, from heaviest to lightest.', hl: [0, 1] },
-      { t: 'Scale 2: Melon is heavier than Apple, and Melon never loses. So Melon is the heaviest. Tap the Heaviest spot, then tap Melon.', hl: [1], wait: () => P.entry[0] === 'fruit:melon' },
+      { t: 'Scale 2: Melon is heavier than Apple, and Melon is never the lighter one. So Melon is the heaviest. Tap the Heaviest spot, then tap Melon.', hl: [1], wait: () => P.entry[0] === 'fruit:melon' },
       { t: 'Scale 1: Apple is heavier than Lemon. So Apple goes in the middle and Lemon is the lightest. Fill them in, then tap Check.', hl: [0], on: 'chk' }
     ]
   },
@@ -1650,8 +1792,8 @@ function endTutorial(markSeen) {
 }
 
 // expose for tests
-window.__TL = { store, getDay, startPuzzle, renderHome, get P() { return P; }, check, keyPress, setRole, startTutorial, results, streak, shareText };
-renderHome();
+window.__TL = { store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults };
+{ const moved = migrateResults(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300); }
 })();
 </script>
 </body>
