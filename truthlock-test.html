@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Truthlock prototype v0.4 (working title; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
+<!-- Truthlock prototype v0.5 (working title; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Truthlock (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -295,6 +295,10 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .wire{display:flex;align-items:center;gap:8px;justify-content:center}
 .lp{width:44px;height:44px;border-radius:12px;background:#fff;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
 .lp.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset}
+.rule.small{font-size:12.5px;font-weight:700;color:var(--ink2);line-height:1.3}
+.swrule{text-align:center;font-weight:800;font-size:13.5px;color:var(--ink2);margin-bottom:6px}
+.lamp{font-family:var(--disp);font-weight:700;line-height:1}
+.lamp.lit{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -443,6 +447,18 @@ h1,h2,h3{font-family:var(--disp);margin:0}
             dom.some((s2, i) => { const left = [...s2].filter(d => !removals.some(r => r[0] === i && r[1] === d)); return left.length === 1 && s2.size > 1; });
           if (!strong) return false;
         }
+        // ONE conclusion per step: keep the strongest single fact, the rest is found again later
+        {
+          const sim = dom.map(x => new Set(x)); removals.forEach(([i, d]) => sim[i].delete(d));
+          const spotsOf = (d) => sim.map((x, i) => x.has(d) ? i : -1).filter(i => i >= 0);
+          const pinnedIn = newIn.filter(d => spotsOf(d).length === 1);
+          const outD = []; for (let d = 0; d <= 9; d++) if (!ins.has(d) && dom.some(x => x.has(d)) && spotsOf(d).length === 0) outD.push(d);
+          let keepR = null, keepIn = null;
+          if (pinnedIn.length) { const d = pinnedIn[0], sp = spotsOf(d)[0]; keepIn = [d]; keepR = removals.filter(([i, dd]) => dd === d || i === sp); }
+          else if (newIn.length) { keepIn = [newIn[0]]; keepR = removals.filter(([i, dd]) => dd === newIn[0]); }
+          else if (outD.length) { keepIn = []; keepR = removals.filter(([i, dd]) => dd === outD[0]); }
+          if (keepR) { removals.splice(0, removals.length, ...keepR); newIn.splice(0, newIn.length, ...keepIn); }
+        }
         // what we already knew about these clues' numbers (the "because")
         const mentionedD = new Set(); idxs.forEach(i => p.clues[i].g.forEach(d => mentionedD.add(d)));
         const focus = newIn.slice();
@@ -476,7 +492,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         return parts;
       };
       const SHORT = (c) => c.a + c.b === 0 ? 'nothing right' : [c.a ? NUM[c.a].toLowerCase() + ' right spot' + (c.a > 1 ? 's' : '') : '', c.b ? NUM[c.b].toLowerCase() + ' wrong spot' + (c.b > 1 ? 's' : '') : ''].filter(Boolean).join(', ');
-      const describe = (idxs, removals, newIn, ctx) => {
+      const describe = (idxs, removals, newIn, ctx0) => { let ctx = ctx0;
         const mentioned = new Set(); idxs.forEach(i => p.clues[i].g.forEach(d => mentioned.add(d)));
         const byDigit = {};
         for (const [i, d] of removals) (byDigit[d] = byDigit[d] || []).push(i);
@@ -500,7 +516,9 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         const loose = newIn.filter(d => !pinned.has(d));
         if (loose.length) parts.push(listWords(loose.map(String)) + (loose.length > 1 ? ' must both be' : ' must be') + ' in the code');
         for (const d of pinned) { let sp = 0; for (let i = 0; i < n; i++) if (dom[i].has(d)) sp = i; parts.push(d + ' is in the code, and it must go in ' + spotName(sp)); }
-        if (out.length) parts.push(listWords(out.map(String)) + (out.length > 1 ? ' are' : ' is') + ' not in the code');
+        let tailNote = '';
+        if (out.length && parts.length) tailNote = '. That leaves no spot for ' + listWords(out.map(String)) + ', so ' + (out.length > 1 ? 'they are' : 'it is') + ' not in the code';
+        else if (out.length) parts.push(listWords(out.map(String)) + (out.length > 1 ? ' are' : ' is') + ' not in the code');
         const big = parts.length > 0;
         for (const [d, spots] of partial) {
           if (big) break; // one clear conclusion per step; small spot details are applied quietly
@@ -519,7 +537,11 @@ h1,h2,h3{font-family:var(--disp);margin:0}
           for (let i = 0; i < n; i++) if (removals.some(r => r[0] === i) && dom[i].size <= 3) parts.push(spotName(i) + ' must be ' + listWords([...dom[i]].sort((x, y) => x - y).map(String)).replace(/ and ([^ ]+)$/, ' or $1'));
         }
         if (!parts.length) parts.push('a few more numbers are ruled out');
-        const body = parts.join(', and ');
+        const body = parts.join(', and ') + tailNote;
+        if (idxs.length === 1 && newIn.length && cl.a + cl.b > 0) {
+          const still = cl.g.filter(d => ins.has(d) || newIn.indexOf(d) >= 0 || dom.some(x => x.has(d)));
+          if (still.length === cl.a + cl.b) ctx = (ctx || []).concat(['clue ' + (idxs[0] + 1) + ' needs ' + NUM[cl.a + cl.b].toLowerCase() + ' of its numbers in the code, and only ' + listWords(still.map(String)) + (still.length > 1 ? ' are' : ' is') + ' still possible']);
+        }
         if (ctx && ctx.length) return head + ': we already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '. So ' + body + '.';
         return head + ': ' + body + '.';
       };
@@ -1051,6 +1073,13 @@ h1,h2,h3{font-family:var(--disp);margin:0}
           return rem[y].length - rem[x].length;
         });
         const id = cand[0];
+        // bridge: who else could still take the spot this step settles
+        if (dom[id].size - rem[id].length === 1) {
+          const p = [...dom[id]].find(q => rem[id].indexOf(q) < 0);
+          const cat = pz.cats.find(c => c.indexOf(id) >= 0);
+          const rivals = cat.filter(o => dom[o].has(p));
+          if (rivals.length >= 2 && rivals.length < N && rivals.every(o => mentioned.has(o))) ctx.push('only ' + orList(rivals.map(L)) + (isPetH(pz, id) ? ' can still live in ' + K.posName(p, N) : ' can still be ' + K.posName(p, N)));
+        }
         rem[id].forEach(p => dom[id].delete(p));
         let concl;
         if (dom[id].size === 1) { concl = L(id) + ' ' + phMust(pz, id, [...dom[id]][0]); said.add(id); }
@@ -1281,6 +1310,12 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     // Sunday's last slot leans on the deepest types
     if (wd === 6 && pool.slice(0, 3).indexOf('lock') < 0) pool = ['lock'].concat(pool.filter(t => t !== 'lock'));
     let picks = pool.slice(0, 3);
+    // two talking-truth types on one day feels samey: never Truth Cards with Knights Island
+    if (picks.indexOf('cards') >= 0 && picks.indexOf('knights') >= 0) {
+      const drop = wd === 6 && picks.indexOf('lock') < 0 ? 'cards' : picks[picks.indexOf('cards') > picks.indexOf('knights') ? picks.indexOf('cards') : picks.indexOf('knights')];
+      const swap = pool.find(t => picks.indexOf(t) < 0 && t !== 'cards' && t !== 'knights');
+      picks = picks.map(t => t === drop ? swap : t);
+    }
     // easiest-feeling type first
     const ease = { balance: 0, chests: 1, switches: 1.5, lineup: 2, cards: 3, knights: 3.5, houses: 4, lock: 5 };
     return picks.sort((a, b) => ease[a] - ease[b]);
@@ -1325,6 +1360,8 @@ h1,h2,h3{font-family:var(--disp);margin:0}
   const KW = { K: 'knight', N: 'knave' };
   const KWS = { K: 'knights', N: 'knaves' };
   const CNTW = ['none', 'one', 'two', 'three', 'four'];
+  // "or" is inclusive. A puzzle must not change answer if someone reads it as "one or the other, not both".
+  function knXorSolutions(pz) { return knAll(pz.n).filter(as => as.every((k, i) => { const st = pz.stmts[i]; const v = st.t === 'or' ? ((as[st.a] === st.ka) !== (as[st.b] === st.kb)) : knEval(st, as); return (k === 'K') === v; })); }
   const other = (k) => k === 'K' ? 'N' : 'K';
 
   function knEval(st, as) {
@@ -1349,7 +1386,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       }
       case 'or': {
         let a = st.a, ka = st.ka, b = st.b, kb = st.kb; if (b === i) { [a, ka, b, kb] = [b, kb, a, ka]; }
-        return N(a) + ' ' + be(a) + ' a ' + KW[ka] + ', or ' + N(b) + ' ' + be(b) + ' a ' + KW[kb] + '.';
+        return N(a) + ' ' + be(a) + ' a ' + KW[ka] + ', or ' + N(b) + ' ' + be(b) + ' a ' + KW[kb] + ', or both.';
       }
       case 'both': {
         let a = st.a, b = st.b; if (a === i) { a = st.b; b = st.a; }
@@ -1357,7 +1394,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       }
       case 'cnt': {
         const w = st.op === 'eq' ? 'Exactly ' : 'At least ';
-        return w + CNTW[st.c] + ' of us ' + (st.c === 1 ? 'is a ' + KW[st.k] : 'are ' + KWS[st.k]) + '.';
+        return w + CNTW[st.c] + ' of the ' + CNTW[pz.n] + ' of us ' + (st.c === 1 ? 'is a ' + KW[st.k] : 'are ' + KWS[st.k]) + '.';
       }
     }
     return '?';
@@ -1410,18 +1447,41 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     };
     // suppose x is k, follow single-statement consequences until something breaks
     const suppose = (x, k) => {
-      const d = dom.map(s => new Set(s)); d[x] = new Set([k]);
-      const chain = [];
+      const d = dom.map(s2 => new Set(s2)); d[x] = new Set([k]);
+      const facts = []; // { j, kind, i, words, deps }
       for (let g = 0; g < 12; g++) {
         let prog = false;
         for (let i = 0; i < n; i++) {
           const S = knEnum(pz, d, [i]);
-          if (!S.length) return { chain, broke: i, d };
-          for (let j = 0; j < n; j++) if (d[j].size === 2) { const v = new Set(S.map(a => a[j])); if (v.size === 1) { d[j] = new Set(v); chain.push(nm(j) + ' would be a ' + KW[[...v][0]] + ' (' + nm(i) + '’s words)'); prog = true; } }
+          if (!S.length) {
+            // keep only the facts this contradiction actually uses
+            const need = new Set(knMentions(pz.stmts[i], n).concat([i]));
+            const keep = [];
+            for (let f = facts.length - 1; f >= 0; f--) if (need.has(facts[f].j)) { keep.unshift(facts[f]); facts[f].deps.forEach(p => need.add(p)); }
+            return { chain: keep, broke: i, d };
+          }
+          for (let j = 0; j < n; j++) if (d[j].size === 2) {
+            const v = new Set(S.map(a2 => a2[j])); if (v.size !== 1) continue;
+            const kind = [...v][0];
+            const deps = knMentions(pz.stmts[i], n).concat([i]).filter(p => p !== j && d[p].size === 1 && p !== x);
+            const vals = new Set(S.map(a2 => knEval(pz.stmts[i], a2)));
+            const words = vals.size === 1 ? ([...vals][0] ? 'true' : 'false') : null;
+            d[j] = new Set(v); facts.push({ j, kind, i, words, deps }); prog = true;
+          }
         }
         if (!prog) break;
       }
       return null;
+    };
+    const meaning = (i, v) => { const st = pz.stmts[i]; if (st.t !== 'cnt') return ''; const what = KWS[st.k];
+      if (st.op === 'ge') return v ? ' (at least ' + CNTW[st.c] + ' ' + (st.c === 1 ? KW[st.k] : what) + ')' : ' (fewer than ' + CNTW[st.c] + ' ' + what + ')';
+      return v ? ' (exactly ' + CNTW[st.c] + ' ' + (st.c === 1 ? KW[st.k] : what) + ')' : ' (not exactly ' + CNTW[st.c] + ' ' + (st.c === 1 ? KW[st.k] : what) + ')'; };
+    const chainText = (chain) => {
+      const groups = [];
+      chain.forEach(f => { const g = groups[groups.length - 1]; if (g && g.i === f.i && g.words === f.words && g.kind === f.kind) g.js.push(f.j); else groups.push({ i: f.i, words: f.words, kind: f.kind, js: [f.j] }); });
+      return groups.map(g => { const who = listWords(g.js.map(nm)), many = g.js.length > 1;
+        const tail = who + ' would ' + (many ? (g.js.length === 2 ? 'both' : 'all') + ' be ' + KWS[g.kind] : 'be a ' + KW[g.kind]) + '.';
+        return g.words ? 'Then ' + nm(g.i) + '\u2019s words would be ' + g.words + meaning(g.i, g.words === 'true') + ', so ' + tail : 'Then, because of ' + nm(g.i) + '\u2019s words, ' + tail; }).join(' ');
     };
     let guard = 0;
     while (!solved() && guard++ < 30) {
@@ -1432,7 +1492,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         const r = suppose(x, k); if (!r) continue;
         const j = r.broke; const jk = r.d[j].size === 1 ? [...r.d[j]][0] : null;
         const why = jk ? nm(j) + ' would be a ' + KW[jk] + ' saying something ' + (jk === 'K' ? 'false' : 'true') : nm(j) + '’s words ' + q(j) + ' wouldn’t fit a knight or a knave';
-        steps.push({ kind: 'case', cards: [x, j], text: ('Suppose ' + nm(x) + ' were a ' + KW[k] + '. ' + (r.chain.length ? 'Then ' + listWords(r.chain) + '. ' : '') + 'But then ' + why + (jk ? ': ' + q(j) : '') + '. So ' + nm(x) + ' is a ' + KW[other(k)] + '.').replace('\u201d.', '\u201d') });
+        steps.push({ kind: 'case', cards: [x, j], text: ('Suppose ' + nm(x) + ' were a ' + KW[k] + '. ' + (r.chain.length ? chainText(r.chain) + ' ' : '') + 'But then ' + why + (jk ? ': ' + q(j) : '') + '. So ' + nm(x) + ' is a ' + KW[other(k)] + '.').replace('\u201d.', '\u201d') });
         dom[x] = new Set([other(k)]); said.add(x); level = Math.max(level, 2); done = true; break;
       }
       if (done) continue;
@@ -1476,6 +1536,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       if (sols.length !== 1) continue;
       const sol = sols[0];
       if (sol.every(k => k === sol[0]) && tier !== 'X') continue;
+      if (stmts.some(s => s.t === 'or')) { const xs = knXorSolutions(pz); if (xs.length !== 1 || xs[0].join() !== sol.join()) continue; }
       const ex = explainKnights(pz);
       if (!ex.solved || ex.level < want[0] || ex.level > want[1]) continue;
       pz.sol = sol; pz.tier = tier; pz.level = ex.level;
@@ -1510,7 +1571,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     const dom = [...Array(n)].map(() => new Set([...Array(n).keys()]));
     const steps = []; let level = 0;
     const solved = () => dom.every(d => d.size === 1);
-    const announced = new Set();
+    const announced = new Set(), stated = new Set();
     const lampList = (js) => orList(js.slice().sort().map(LN));
     let guard = 0;
     while (!solved() && guard++ < 60) {
@@ -1518,6 +1579,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       // a switch with one lamp left: no other switch can work that lamp
       for (let s = 0; s < n; s++) if (dom[s].size === 1 && !announced.has(s)) {
         announced.add(s); const j = [...dom[s]][0];
+        if (!stated.has(s)) { stated.add(s); const takers = [...Array(n).keys()].filter(o => o !== s && stated.has(o)); steps.push({ kind: 'fix', clues: [], text: 'Each lamp has just one switch' + (takers.length ? ', and the ' + listWords(takers.map(o => LN([...dom[o]][0]))) + ' lamp' + (takers.length > 1 ? 's are' : ' is') + ' taken' : '') + '. Only the ' + LN(j) + ' lamp is left for switch ' + SW[s] + '.' }); }
         let hit = false; for (let o = 0; o < n; o++) if (o !== s && dom[o].has(j)) { dom[o].delete(j); hit = true; }
         prog = true; if (hit) break;
       }
@@ -1526,7 +1588,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       for (let j = 0; j < n && !prog; j++) {
         const can = [...Array(n).keys()].filter(s => dom[s].has(j));
         if (can.length === 1 && dom[can[0]].size > 1) {
-          dom[can[0]] = new Set([j]);
+          dom[can[0]] = new Set([j]); stated.add(can[0]);
           steps.push({ kind: 'hidden', clues: [], text: 'No other switch can work the ' + LN(j) + ' lamp now, so switch ' + SW[can[0]] + ' works it.' });
           prog = true;
         }
@@ -1549,7 +1611,17 @@ h1,h2,h3{font-family:var(--disp);margin:0}
         const hidden = T.see.some(v => v === '?');
         const kind = T.up[s] ? (hidden ? 'lit or hidden' : 'lit') : (hidden ? 'dark or hidden' : 'dark');
         let text = 'Test ' + (t + 1) + ': switch ' + SW[s] + ' is ' + (T.up[s] ? 'on' : 'off') + ', so its lamp is one that is ' + kind + ' there (' + lampList(al) + ').';
-        if (before.length < n) text += ' We already know switch ' + SW[s] + ' works the ' + lampList(before) + ' lamp.';
+        if (before.length < n) {
+          const gone = al.filter(j => before.indexOf(j) < 0);
+          const taken = gone.filter(j => [...Array(n).keys()].some(o => o !== s && stated.has(o) && dom[o].size === 1 && dom[o].has(j)));
+          const ruled = gone.filter(j => taken.indexOf(j) < 0);
+          const why = [];
+          const owner = (j) => SW[[...Array(n).keys()].find(o => o !== s && dom[o].size === 1 && dom[o].has(j))];
+          if (taken.length) why.push(listWords(taken.map(j => 'switch ' + owner(j) + ' has the ' + LN(j) + ' lamp')) + ' (each lamp has one switch)');
+          if (ruled.length) why.push('switch ' + SW[s] + ' can\u2019t work the ' + listWords(ruled.map(LN)) + ' lamp');
+          if (why.length) text += ' We already know ' + listWords(why) + '.';
+        }
+        if (left.length === 1) stated.add(s);
         text += left.length === 1 ? ' So switch ' + SW[s] + ' works the ' + LN(left[0]) + ' lamp.' : ' So switch ' + SW[s] + ' works the ' + lampList(left) + ' lamp.';
         steps.push({ kind: 'clue', clues: [t], text });
         level = Math.max(level, 1);
@@ -1571,7 +1643,10 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       if (S.length === 1) { S[0].forEach((j, s) => dom[s] = new Set([j])); level = 3; steps.push({ kind: 'full', clues: [], text: 'Trying the wirings that are left against every test, only one works.' }); }
       else break;
     }
-    if (solved()) steps.push({ kind: 'done', clues: [], text: swAnswer(pz, dom.map(d => [...d][0])) });
+    if (solved()) {
+      for (let s = 0; s < n; s++) if (!stated.has(s)) { stated.add(s); steps.push({ kind: 'fix', clues: [], text: 'Each lamp has just one switch, and the other lamps are taken. Only the ' + LN([...dom[s]][0]) + ' lamp is left for switch ' + SW[s] + '.' }); }
+      steps.push({ kind: 'done', clues: [], text: swAnswer(pz, dom.map(d => [...d][0])) });
+    }
     return { steps, level, solved: solved() };
   }
   function swAnswer(pz, sol) { return cap(listWords(sol.map((j, s) => 'switch ' + SW[s] + ' works the ' + LN(j) + ' lamp'))) + '.'; }
@@ -1611,7 +1686,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
       const T = pz.tests[t];
       for (let s = 0; s < pz.n; s++) {
         const j = entry[s]; const v = T.see[j];
-        if (v !== '?' && (v === 'L') !== T.up[s]) return { ok: false, clue: t, msg: 'Test ' + (t + 1) + ': in your answer switch ' + SW[s] + ' works the ' + LN(j) + ' lamp. Switch ' + SW[s] + ' is ' + (T.up[s] ? 'on' : 'off') + ' there, but the ' + LN(j) + ' lamp is ' + (v === 'L' ? 'lit' : 'dark') + '.' };
+        if (v !== '?' && (v === 'L') !== T.up[s]) return { ok: false, clue: t, msg: 'Test ' + (t + 1) + ': in your answer switch ' + SW[s] + ' works the ' + LN(j) + ' lamp. But switch ' + SW[s] + ' is ' + (T.up[s] ? 'on' : 'off') + ' in that test and the ' + LN(j) + ' lamp is ' + (v === 'L' ? 'lit' : 'dark') + ', so switch ' + SW[s] + ' can\u2019t work the ' + LN(j) + ' lamp.' };
       }
     }
     return { ok: true };
@@ -1651,6 +1726,7 @@ function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + 
 const params = new URLSearchParams(location.search);
 if (params.get('fresh') === '1') store.clear();
 const realToday = params.get('date') || ymd(new Date());
+const trueToday = ymd(new Date()); // streaks always count against the real date, even on ?date= test days
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function nice(ds) { const d = new Date(ds + 'T12:00:00'); return TL.DAYNAME[TL.weekday(ds)] + ' ' + MONTHS[d.getMonth()] + ' ' + d.getDate(); }
 function addDays(ds, k) { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + k); return ymd(d); }
@@ -1667,7 +1743,7 @@ function getDay(ds) { return dayCache[ds] || (dayCache[ds] = TL.daily(ds)); }
 function results() { return store.get('results', {}); }
 // Each saved result carries its puzzle's id (TL.pid). When a content update changes a day's puzzles,
 // the old results move to an archive (they still count for the streak) and the new puzzles are playable.
-const CONTENT_VER = 4;
+const CONTENT_VER = 5;
 function archived() { return store.get('archive', {}); }
 function migrateResults() {
   const all = results(); const keys = Object.keys(all);
@@ -1693,12 +1769,12 @@ function migrateResults() {
 }
 function saveResult(ds, slot, r) {
   const all = results(); const e = all[ds] || { s: [null, null, null] };
-  e.s[slot] = r; if (e.s.every(Boolean) && !e.on) e.on = realToday;
+  e.s[slot] = r; if (e.s.every(Boolean) && !e.on) e.on = trueToday;
   all[ds] = e; store.set('results', all);
 }
 function dayDone(e) { return e && e.s.every(Boolean); }
 function streak() {
-  const all = results(); let n = 0; let d = realToday;
+  const all = results(); let n = 0; let d = trueToday;
   const arch = archived();
   const counted = (d) => (dayDone(all[d]) && all[d].on === d) || (arch[d] && arch[d].on === d);
   if (!counted(d)) d = addDays(d, -1);
@@ -1739,7 +1815,7 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div class="foot">Truthlock prototype v0.4 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
+    '<div class="foot">Truthlock prototype v0.5 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
@@ -1861,6 +1937,7 @@ function check() {
   P.hl = null;
   P.msg = { k: 'bad', t: '✗ Not quite. ' + esc(r.msg) };
   if (P.told.indexOf(r.msg) < 0) P.told.push(r.msg);
+  P.toldClue = r.clue !== undefined ? r.clue : null;
   renderPuzzle();
   const pl = document.getElementById('pl'); if (pl) { pl.classList.add('bad'); }
   const el = document.getElementById(TYPES[pz.type].hid(P.bad)); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1870,7 +1947,10 @@ function hint() {
   if (P.solved) return;
   const steps = P.ex.steps.filter(s => s.kind !== 'done');
   // skip any step the last wrong-answer message already explained (no paying twice for the same reasoning)
-  let k = P.hintPos; while (k < steps.length && P.told.indexOf(steps[k].text) >= 0) k++;
+  let k = P.hintPos;
+  const quoted = (st) => P.toldClue !== null && P.toldClue !== undefined && st.kind === 'clue' && st.clues && st.clues.length === 1 && st.clues[0] === P.toldClue;
+  while (k < steps.length && (P.told.indexOf(steps[k].text) >= 0 || (quoted(steps[k]) && k + 1 < steps.length))) k++;
+  P.toldClue = null;
   if (k >= steps.length) { P.msg = { k: 'hint', t: '💡 You have every step now. Fill in the answer!' }; renderPuzzle(); return; }
   const s = steps[k]; P.hintPos = k + 1; P.hints++;
   P.hl = s.clues && s.clues.length ? s.clues : s.cards || null;
@@ -2029,7 +2109,7 @@ const ISLECOL = ['#e07a5f', '#3d9a8b', '#7b6bd6', '#e0a23a'];
 const KNF = { K: { e: '🛡️', w: 'Knight' }, N: { e: '🎭', w: 'Knave' } };
 function knightsBoard() {
   const pz = P.pz;
-  let h = '<div class="rulebox"><div class="rule"><span class="kb">🛡️</span>Knights always tell the truth.</div><div class="rule"><span class="kb">🎭</span>Knaves always lie.</div></div>';
+  let h = '<div class="rulebox"><div class="rule"><span class="kb">🛡️</span>Knights always tell the truth.</div><div class="rule"><span class="kb">🎭</span>Knaves always lie.</div><div class="rule small">“A, or B, or both” is true when at least one part is true. “Of us” counts the speaker too.</div></div>';
   h += '<div class="isles n' + pz.n + '">' + pz.names.map((nm, i) => {
     const r = P.entry[i];
     return '<div class="cwrap isle' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cw' + i + '"><div class="ava' + (r ? ' set' : '') + '" style="background:' + ISLECOL[i % 4] + '" aria-label="' + esc(nm) + ': ' + (r ? KNF[r].w : 'not marked yet') + '" role="img">' + (r ? '<span class="badge">' + KNF[r].e + '</span>' : '') + nm.charAt(0) + '</div><div class="inm">' + esc(nm) + '</div>' +
@@ -2046,11 +2126,12 @@ function knightsWire() {
 function lampDot(j, st, sz) {
   const c = TL.LAMPS[j][1];
   if (st === '?') return '<span class="lamp hid" style="width:' + sz + 'px;height:' + sz + 'px" title="hidden">?</span>';
-  return '<span class="lamp' + (st === 'L' ? ' lit' : '') + '" style="width:' + sz + 'px;height:' + sz + 'px;' + (st === 'L' ? 'background:' + c + ';box-shadow:0 0 10px ' + c : 'border-color:' + c) + '"></span>';
+  const fs = Math.max(9, Math.round(sz * 0.5));
+  return '<span class="lamp' + (st === 'L' ? ' lit' : '') + '" style="width:' + sz + 'px;height:' + sz + 'px;font-size:' + fs + 'px;' + (st === 'L' ? 'background:' + c + ';box-shadow:0 0 10px ' + c : 'border-color:' + c + ';color:' + c) + '">' + TL.LAMPS[j][0].charAt(0) + '</span>';
 }
 function switchesBoard() {
   const pz = P.pz, n = pz.n;
-  let h = '<div class="lampkey">' + [...Array(n).keys()].map(j => '<span class="lk">' + lampDot(j, 'L', 18) + TL.LAMPS[j][0] + '</span>').join('') + '</div>';
+  let h = '<div class="swrule">Each switch works one lamp. Each lamp has one switch.</div><div class="lampkey">' + [...Array(n).keys()].map(j => '<span class="lk">' + lampDot(j, 'L', 18) + TL.LAMPS[j][0] + '</span>').join('') + '</div>';
   h += '<div class="tclues swtests">' + pz.tests.map((T, t) => '<div class="tclue swt' + (P.hl && P.hl.indexOf(t) >= 0 ? ' hl' : '') + (P.bad === t ? ' badc' : '') + '" id="cl' + t + '"><div class="no">' + (t + 1) + '</div><div class="swrow">' +
     '<div class="sws">' + T.up.map((u, s) => '<span class="swp' + (u ? ' on' : '') + '" aria-label="switch ' + TL.SW[s] + (u ? ' on' : ' off') + '">' + TL.SW[s] + '<small>' + (u ? 'ON' : 'off') + '</small></span>').join('') + '</div><div class="arrow">→</div>' +
     '<div class="lps" aria-label="' + T.see.map((v, j) => TL.LAMPS[j][0] + (v === 'L' ? ' lit' : v === 'D' ? ' dark' : ' hidden')).join(', ') + '">' + T.see.map((v, j) => lampDot(j, v, 20)).join('') + '</div></div></div>').join('') + '</div>';
@@ -2090,17 +2171,18 @@ const TUT = {
       { t: 'Start with Ben: “Ava and I are different kinds.” If Ben is a knight, that\'s true, so Ava is a knave. If Ben is a knave, it\'s a lie, so they\'re the same kind, and Ava is a knave again.', hl: [1] },
       { t: 'Either way, Ava is a knave. Tap 🎭 Knave under Ava.', hl: [0], wait: () => P.entry[0] === 'N' },
       { t: 'Ava is a knave, so “Ben is a knight” is a lie. Ben is a knave too. Mark Ben as a knave.', hl: [0, 1], wait: () => P.entry[1] === 'N' },
-      { t: 'Cleo says “Ben is a knave.” That\'s true, and only knights tell the truth. Mark Cleo as a 🛡️ knight, then tap Check.', hl: [2], on: 'chk' }
+      { t: 'Harder islands use two more kinds of words. “Ava is a knight, or Ben is a knave, or both” is true when at least one part is true. “Exactly one of the three of us is a knave” counts the speaker too.' },
+      { t: 'Back to this island. Cleo says “Ben is a knave.” That\'s true, and only knights tell the truth. Mark Cleo as a 🛡️ knight, then tap Check.', hl: [2], on: 'chk' }
     ]
   },
   switches: {
-    pz: { type: 'switches', tier: 'E', n: 3, tests: [{ up: [true, false, false], see: ['D', 'D', 'L'] }, { up: [true, true, false], see: ['L', 'D', 'L'] }], sol: [2, 0, 1] },
+    pz: { type: 'switches', tier: 'E', n: 3, tests: [{ up: [true, false, false], see: ['D', 'D', 'L'] }, { up: [true, true, false], see: ['L', 'D', 'L'] }, { up: [false, false, true], see: ['D', 'L', '?'] }], sol: [2, 0, 1] },
     steps: [
-      { t: 'Each switch (A, B, C) works one lamp. Find which one from the tests.' },
+      { t: 'Each switch (A, B, C) works one lamp, and each lamp has just one switch. Find which switch works which lamp from the tests.' },
       { t: 'Each test shows which switches were ON, and which lamps lit up. In test 1 only switch A was on, and only the Green lamp lit. So A works Green.', hl: [0] },
       { t: 'Tap the Green lamp next to switch A.', hl: [0], wait: () => P.entry[0] === 2 },
       { t: 'In test 2, A and B were on, and Red and Green lit. Green belongs to A, so B works Red. Tap Red next to switch B.', hl: [1], wait: () => P.entry[1] === 0 },
-      { t: 'That leaves Blue for switch C. Tap it, then tap Check.', on: 'chk' }
+      { t: 'Test 3 has a ? lamp: Green was hidden, so that test tells you nothing about Green. Only C was on, and Blue lit, so C works Blue. Tap Blue next to switch C, then tap Check.', hl: [2], on: 'chk' }
     ]
   },
   lock: {
