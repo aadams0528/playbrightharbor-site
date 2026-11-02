@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.16.3 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.16.4 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -573,13 +573,18 @@ function monScale(run) {
   return ease * (1 + 0.05 * Math.max(0, run.room - 1));
 }
 // v0.16: foes hit harder once GUARD is available (from 1-2), so a fight has some danger and good guarding pays off. Health is unchanged.
-const BITE = { '1-1': 1, '1-2': 1.3, '1-3': 1.4, '1-4': 1.2, '1-5': 1.5, '1-6': 1.45, '2-1': 1.45, '2-2': 1.6, '2-3': 1.45, '2-4': 1.4, '2-5': 1.3, '2-6': 1.35 }, ENDLESS_BITE = 1.25;
+// v0.16.4 (Alan: cleared Chapter 1 without Guard): foes hit harder and last longer, so skipping Guard is risky
+const BITE = { '1-1': 1, '1-2': 1.5, '1-3': 1.9, '1-4': 1.2, '1-5': 2.0, '1-6': 2.2, '2-1': 2.0, '2-2': 2.1, '2-3': 1.55, '2-4': 1.55, '2-5': 1.5, '2-6': 1.6 }, ENDLESS_BITE = 1.25;
 // a little more foe health early on, so fights last long enough for the foe to get a few strikes in (more chances to Guard)
-const TOUGH = { '1-2': 1.15, '1-3': 1.25, '1-4': 1.2, '1-5': 1.25, '2-1': 1.15, '2-2': 1.25, '2-3': 1.1 };
+const TOUGH = { '1-2': 1.4, '1-3': 1.8, '1-4': 1.2, '1-5': 1.9, '2-1': 1.8, '2-2': 1.9, '2-3': 1.25, '2-4': 1.2, '2-5': 1.2 };
+const BOSS_TOUGH = { '1-6': 2.4, '2-6': 1.5 }; // boss health (story)
+if (typeof process !== 'undefined' && process.env && process.env.BOSSOV) Object.assign(BOSS_TOUGH, JSON.parse(process.env.BOSSOV));
+if (typeof process !== 'undefined' && process.env && process.env.BITEOV) Object.assign(BITE, JSON.parse(process.env.BITEOV));
+if (typeof process !== 'undefined' && process.env && process.env.TOUGHOV) Object.assign(TOUGH, JSON.parse(process.env.TOUGHOV));
 function foeBite(run) { const sc = (typeof process !== 'undefined' && process.env && process.env.BITES) ? Number(process.env.BITES) : 1; const b = run.level ? (BITE[run.level] || 1.4) : ENDLESS_BITE; return 1 + (b - 1) * sc; }
 function makeMonster(type, run, elite) {
   const b = type === 'mimic' ? Object.assign({}, MONSTERS.mimic, MIMIC[run.depth]) : MONSTERS[type]; const k = (elite ? 1.35 : 1) * (b.boss ? (LV(run) ? LV(run).ease : firstDelve(run) ? 0.85 : 1) : monScale(run)) * (1 + 0.15 * ((run.tier || 1) - 1));
-  const bite = foeBite(run), hk = k * (b.boss ? 1 : (run.level && TOUGH[run.level]) || 1);
+  const bite = foeBite(run), hk = k * (b.boss ? ((run.level && BOSS_TOUGH[run.level]) || 1) : (run.level && TOUGH[run.level]) || 1);
   return { type, name: b.name, max: Math.round(b.hp * hk), hp: Math.round(b.hp * hk), atk: Math.max(1, Math.round(b.atk * k)) * bite,
     int: b.int, def: b.def || 0, regen: b.regen || 0, thorns: b.thorns || 0, trait: b.trait || null, boss: !!b.boss, elite: !!elite, timer: b.trait === 'ranged' ? 0.35 : b.int, stun: 0, tellCd: b.boss ? 4 : b.trait === 'caster' ? 2.6 : 0, tell: 0, caster: b.trait === 'caster', blk: 0, atkN: 0 };
 }
@@ -1751,7 +1756,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.16.3';
+const VERSION = 'v0.16.4';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
