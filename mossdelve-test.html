@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.16.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.16.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -412,7 +412,7 @@ const LEVELS = [
     intro: 'Every door is a choice. Chests hold gear that is yours forever, but the vines that bind them bite.',
     outro: 'A scrap of blue cloth on a thorn. Rowan\'s cloak. We are on the right path.',
     bonus: [{ t: 'chests', n: 1 }, { t: 'hp', p: 0.6 }] },
-  { id: '1-3', ch: 1, name: 'Whispers in the Dark', len: 5, end: 'stairs', ease: 1.0, events: false, shrineW: 20,
+  { id: '1-3', ch: 1, name: 'Whispers in the Dark', len: 5, end: 'stairs', ease: 1.0, events: false, shrineW: 20, force: [{ room: 3, door: { kind: 'fight', elite: true } }],
     intro: 'The moss grows thick here. Trust the clues, but not too much. Even a growl can be a friend in a cage.',
     outro: 'Rowan\'s small footprints in the moss, and huge ones right beside them. Something is leading Rowan deeper.',
     bonus: [{ t: 'foes', n: 4 }, { t: 'nopotion' }] },
@@ -493,7 +493,7 @@ function totalStars(save) { return LEVELS.reduce((a, l) => a + ((save.levels || 
 function levelOpen(save, id) { const i = LEVELS.findIndex(l => l.id === id); if (i <= 0) return true; const lv = LEVELS[i];
   if (LEVELS[i - 1].ch !== lv.ch) return chapterOpen(save, lv.ch); return ((save.levels || {})[LEVELS[i - 1].id] || 0) > 0; }
 
-function isMimic(run, rng) { const lv = LV(run); if (lv) return !lv.plain && rng() < (lv.mimic != null ? lv.mimic : 0.15); return !firstDelve(run) && rng() < 0.15; }
+function isMimic(run, rng) { const lv = LV(run); if (lv && !lv.plain && lv.bonus.some(g => g.t === 'mimics') && !(run.gs && run.gs.mimics) && ((run.chests || 0) >= 2 || run.room >= lv.len - 1)) return true; if (lv) return !lv.plain && rng() < (lv.mimic != null ? lv.mimic : 0.15); return !firstDelve(run) && rng() < 0.15; }
 const TRAITS = {
   fast: { name: 'Fast', tip: 'Fast foes hit often but softly. Barkskin and armor shine here.' },
   armored: { name: 'Armored', tip: 'Armored foes block a little of every hit. Big hits and your Flare cut through.' },
@@ -573,7 +573,7 @@ function monScale(run) {
   return ease * (1 + 0.05 * Math.max(0, run.room - 1));
 }
 // v0.16: foes hit harder once GUARD is available (from 1-2), so a fight has some danger and good guarding pays off. Health is unchanged.
-const BITE = { '1-1': 1, '1-2': 1.3, '1-3': 1.4, '1-4': 1.4, '1-5': 1.5, '1-6': 1.45, '2-1': 1.45, '2-2': 1.6, '2-3': 1.45, '2-4': 1.4, '2-5': 1.3, '2-6': 1.35 }, ENDLESS_BITE = 1.25;
+const BITE = { '1-1': 1, '1-2': 1.3, '1-3': 1.4, '1-4': 1.2, '1-5': 1.5, '1-6': 1.45, '2-1': 1.45, '2-2': 1.6, '2-3': 1.45, '2-4': 1.4, '2-5': 1.3, '2-6': 1.35 }, ENDLESS_BITE = 1.25;
 // a little more foe health early on, so fights last long enough for the foe to get a few strikes in (more chances to Guard)
 const TOUGH = { '1-2': 1.15, '1-3': 1.25, '1-4': 1.2, '1-5': 1.25, '2-1': 1.15, '2-2': 1.25, '2-3': 1.1 };
 function foeBite(run) { const sc = (typeof process !== 'undefined' && process.env && process.env.BITES) ? Number(process.env.BITES) : 1; const b = run.level ? (BITE[run.level] || 1.4) : ENDLESS_BITE; return 1 + (b - 1) * sc; }
@@ -621,9 +621,10 @@ function fightStep(run, f, dt, rng) {
   if (run.pet === 'fox' && m.hp > 0) { f.petT = (f.petT == null ? 1 : f.petT) - dt; if (f.petT <= 0) { f.petT += 2; const d = Math.max(1, Math.round(st.atk * 0.4 - m.def * 0.5)); m.hp -= d; ev.push({ t: 'petHit', dmg: d }); } }
   if (run.pet === 'sprite' && run.hp < st.maxHp) { f.petT = (f.petT == null ? 3 : f.petT) - dt; if (f.petT <= 0) { f.petT += 3; const a = Math.min(2, st.maxHp - run.hp); run.hp += a; ev.push({ t: 'heal', amt: a, pet: true }); } }
   const hurt = d => { const x = f.ward > 0 ? Math.max(1, Math.round(d / 2)) : d; run.hp -= x; return x; };
+  if (m.tellLate > 0) m.tellLate -= dt;
   // guardians wind up a big blow every few seconds (TELL_TIME to react); a Flare during the wind-up interrupts it
   if ((m.boss || m.caster) && m.stun <= 0 && m.hp > 0) {
-    if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY; startTurn(f, 'hero');
+    if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellLate = TELL_GRACE; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY; startTurn(f, 'hero');
       const rc = heroReact(run, f, m.caster ? 'spell' : 'heavy', rng), gd = guardTake(f, false), rm = Math.min(rc ? REACT[rc] : 1, gd ? GUARD_BIG : 1);
       const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2 * rm))) : hurt(Math.max(1, Math.round((m.atk * 2.5 - st.def) * rm))); ev.push({ t: 'swingM', spell: m.caster }); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster, react: rc, guard: gd }); } }
     else m.tellCd -= dt;
@@ -665,7 +666,7 @@ function heroReact(run, f, kind, rng) { const cls = run.cls || 'warden';
   if (cls === 'ranger') return rng() < 0.11 ? 'dodge' : null;
   if (cls === 'knight') return rng() < 0.12 ? 'block' : null;
   return rng() < 0.1 ? 'parry' : null; }
-const TELL_TIME = 1.8, TELL_EVERY = 6, CAST_EVERY = 5.5;
+const TELL_GRACE = 0.4, TELL_TIME = 1.8, TELL_EVERY = 6, CAST_EVERY = 5.5;
 // turn pacing: TELE = the foe's wind-up before each strike; TURN_PACE > 1 makes exchanges slower but each hit heavier
 const TELE = 0.75, TURN_PACE = 1.25;
 function turnPlan(f) { const hi = f.st.interval, mi = f.m.int, nH = Math.max(1, Math.min(3, Math.round(mi / hi))), nF = Math.max(1, Math.min(3, Math.round(hi / mi)));
@@ -697,6 +698,8 @@ function useFlare(run, f, rng) {
   if (sy.ember >= SYN_NEED && f.m.hp > 0) { heroHit(run, f, 1, rng, ev, true); f.m.burn = Math.max(f.m.burn || 0, 5); f.m.burnK = 0.6; ev.push({ t: 'wildfire' }); }
   if (sy.lantern >= SYN_NEED) { f.echo = true; f.m.stun += 0.5; ev.push({ t: 'echoReady' }); }
   if (run.pet === 'fox' && f.m.hp > 0) { const d = Math.max(1, Math.round(f.st.atk * 0.8)); f.m.hp -= d; ev.push({ t: 'pounce', dmg: d }); }
+  // v0.16.2: a Flare a split second after the big blow lands still counts as breaking it (taps on a phone land late)
+  if (!(f.m.tell > 0) && f.m.tellLate > 0) { f.m.tellLate = 0; ev.push({ t: 'interrupt', spell: f.m.caster, late: true }); }
   if (f.m.tell > 0) { f.m.tell = 0; f.m.tellCd = f.m.caster ? CAST_EVERY : TELL_EVERY; f.m.stun = 2.5; ev.push({ t: 'interrupt', spell: f.m.caster }); }
   checkEnd(run, f, ev); return ev;
 }
@@ -833,6 +836,14 @@ function genDoorsRaw(run, rng) {
     if (door.kind === 'fight' && !door.mon) { const used = out.filter(x => x.kind === 'fight').map(x => x.mon); const pool = POOL.filter(m => !used.includes(m)); door.mon = pool[Math.floor(rng() * pool.length)] || POOL[0]; }
     const at = out.findIndex(x => x.kind !== 'fight'); out[at >= 0 ? at : out.length - 1] = door; if (door.kind !== 'fight' && !out.some(x => x.kind === 'fight')) out.push(fightDoor());
     if (door.kind === 'event') run.events = 0; }
+  // v0.16.2: a star that needs a certain foe can always be earned. Until it is, every room offers a way to it.
+  if (lv && run.room >= 1) {
+    const need = t => lv.bonus.some(g => g.t === t) && !(run.gs && run.gs[t]);
+    const put = door => { const at = out.findIndex(x => x.kind !== 'fight'); if (at >= 0) out[at] = door; else if (out.length < 3) out.push(door); else out[out.length - 1] = door; };
+    if (need('mimics') && chestsLeft && !out.some(x => x.kind === 'chest')) put({ kind: 'chest' });
+    if (need('interrupts') && lv.bonus.some(g => g.t === 'interrupts' && g.spell)) { const caster = POOL.find(m => MONSTERS[m] && MONSTERS[m].trait === 'caster');
+      if (caster && !out.some(x => x.kind === 'fight' && x.mon === caster)) { const at = out.findIndex(x => x.kind === 'fight'); const door = { kind: 'fight', mon: caster, elite: false }; if (at >= 0 && out.filter(x => x.kind === 'fight').length > 1) out[at] = door; else put(door); } }
+  }
   return out;
 }
 
@@ -1739,7 +1750,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.16.1';
+const VERSION = 'v0.16.2';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2614,7 +2625,7 @@ function handleEvents(ev) {
     else if (e.t === 'bramble') { A.monFlash = 1; A.monKnock = 1; sparkle(L.monX, L.monY - ms * 0.4, '#8fcf6a', 30); for (let k = 0; k < 5; k++) slashes.push({ t: -k * 0.03, crit: true, a: (k - 2) * 0.45, flip: k % 2 === 0, kind: 'whip', col: '140,220,110' }); laneText('call', 'Bramble! ' + e.dmg, '#9fe68a', 0.9); buzz(10); }
     else if (e.t === 'pounce') { A.petBite = 1.4; A.monFlash = 0.8; A.monKnock = 1; impact(L.monX - ms * 0.2, L.monY - ms * 0.3, '255,170,90', true); laneText('call', 'Pounce ' + e.dmg, '#ffb36a', 0.85); }
     else if (e.t === 'petHit') { A.petBite = 1; A.monFlash = 0.6; laneText('dmg', '' + e.dmg, '#ffb36a', 0.8); }
-    else if (e.t === 'interrupt') { if (run.gs) run.gs.interrupts++; A.broke = 1; A.brokeTxt = e.spell ? 'Spell broken!' : 'Interrupted!'; A.brokeAt = { x: L.monX, y: L.monY - ms * 1.15 }; SFX.parry && SFX.parry(); tellUI = null; sparkle(L.monX, L.monY - ms * 0.5, '#ffd27a', 30); A.shake = RM ? 0 : 9; buzz([15, 30, 15]); }
+    else if (e.t === 'interrupt') { if (run.gs) run.gs.interrupts++; A.broke = 1; A.brokeTxt = e.late ? 'Just in time!' : e.spell ? 'Spell broken!' : 'Interrupted!'; A.brokeAt = { x: L.monX, y: L.monY - ms * 1.15 }; SFX.parry && SFX.parry(); tellUI = null; sparkle(L.monX, L.monY - ms * 0.5, '#ffd27a', 30); A.shake = RM ? 0 : 9; buzz([15, 30, 15]); }
     else if (e.t === 'fireFlask') { A.flash = RM ? 0.3 : 0.8; sparkle(L.monX, L.monY - ms * 0.4, '#ff8a3a', 36); deathBurst(L.monX, L.monY - ms * 0.4, ms * 0.6, false); SFX.flare(); }
     else if (e.t === 'ward') { toast('Ironbark! Half damage for 6 s', 1500); sparkle(L.heroX, L.heroY - L.u, '#9fe6a0', 20); SFX.heal(); }
     else if (e.t === 'laststand') { toast('Last Light saves you!', 1600); A.flash = 0.6; }
@@ -3262,6 +3273,9 @@ function drawRune(x, y, r, k) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createLinearGradient(0, y - r * 3, 0, y); g.addColorStop(0, 'rgba(255,220,140,0)'); g.addColorStop(1, `rgba(255,220,140,${a * 0.35})`); ctx.fillStyle = g; ctx.fillRect(x - r * 0.45, y - r * 3, r * 0.9, r * 3); ctx.restore();
 }
 function bar(x, y, w, frac, col) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 8); ctx.fillStyle = col; ctx.fillRect(x - w / 2, y, w * Math.max(0, frac), 6); }
+// a soft glow around the screen edge, shaped to the screen (an oval), added on top of the dark lantern light
+function edgeGlow(c0, c1, a0, a1) { if (a1 <= 0.005) return; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(W / 2, H / 2); ctx.scale(W / 2, H / 2);
+  const g = ctx.createRadialGradient(0, 0, 0.62, 0, 0, 1.18); g.addColorStop(0, `rgba(${c0},0)`); g.addColorStop(0.35, `rgba(${c0},${a0})`); g.addColorStop(1, `rgba(${c1},${a1})`); ctx.fillStyle = g; ctx.fillRect(-1, -1, 2, 2); ctx.restore(); }
 function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   if (mode === 'camp') { drawCamp(T); return; }
@@ -3345,8 +3359,11 @@ function draw() {
   ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
   if (A.flash) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,220,140,${A.flash * 0.35})`; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
   drawTorches(th);
+  // slow motion before a foe strike: the edges dim and cool, so the slow-down is felt (Muse couldn't notice it)
+  { const on = phase === 'fight' && fight && guardCue(); A.slowK = (A.slowK || 0) + ((on ? 1 : 0) - (A.slowK || 0)) * Math.min(1, (on ? 14 : 6) / 60);
+    if (A.slowK > 0.02) edgeGlow('70,130,240', '110,170,255', 0.1 * A.slowK, 0.4 * A.slowK); }
   // low health: a slow heartbeat pulse at the screen edge, so danger is felt before the health bar empties
-  if (run && phase === 'fight' && fight && run.hp > 0 && run.hp < fight.st.maxHp * 0.3) { const hb = Math.max(0, Math.sin(T * 5.2)) ** 6, k = (1 - run.hp / (fight.st.maxHp * 0.3)) * 0.5 + 0.5; const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(140,0,0,0)'); vg.addColorStop(1, `rgba(170,15,15,${(RM ? 0.18 : 0.12 + 0.22 * hb) * k})`); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
+  if (run && phase === 'fight' && fight && run.hp > 0 && run.hp < fight.st.maxHp * 0.3) { const hb = Math.max(0, Math.sin(T * 5.2)) ** 3, k = (1 - run.hp / (fight.st.maxHp * 0.3)) * 0.5 + 0.5; edgeGlow('210,20,20', '240,30,30', (RM ? 0.15 : 0.12 + 0.2 * hb) * k, (RM ? 0.5 : 0.38 + 0.4 * hb) * k); }
   if (A.hurtVig > 0) { const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(140,0,0,0)'); vg.addColorStop(1, `rgba(150,10,10,${A.hurtVig * 0.45})`); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
   // door pictures when the room is clear
   if (phase === 'choose' || phase === 'walk') {
