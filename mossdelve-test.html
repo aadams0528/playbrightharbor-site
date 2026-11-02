@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.16.2 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.16.3 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -587,7 +587,7 @@ function makeMonster(type, run, elite) {
 function newFight(run, type, elite) {
   const st = calcStats(run);
   const lv = LV(run); // some story levels start each fight with the lantern part-charged (to teach the Flare)
-  const m = makeMonster(type, run, elite); if (lv && lv.castCd && m.caster) m.tellCd = lv.castCd; // teaching level: casters start their spell sooner
+  const m = makeMonster(type, run, elite); if (lv && lv.castCd && m.caster) m.tellCd = lv.castCd; if (lv && m.caster && lv.bonus.some(g => g.t === 'interrupts' && g.spell) && !(run.gs && run.gs.interrupts)) m.tellCd = 0; // the spell star stays earnable: she starts her hex on her first turn // teaching level: casters start their spell sooner
   const f = { st, m, hTimer: st.interval * 0.6, flare: lv && lv.flareStart || 0, over: null, t: 0 };
   // v0.16.1: in story levels with GUARD (from 1-2), a normal foe always lives through your first turn, so every fight has at least one foe strike to Guard
   if (lv && run.level !== '1-1' && !m.boss) { const p = turnPlan(f), floor = Math.round(Math.max(1, st.atk * p.hm - m.def) * p.nH * 1.15) + 1; if (m.hp < floor) { m.hp = m.max = floor; } }
@@ -803,6 +803,7 @@ function addClues(run, doors, rng) {
 // Doors for the room the hero is standing in. A door is { kind: 'fight'|'chest'|'spring'|'shrine'|'event'|'guard', mon?, elite?, ev?, clue, rev }
 function genDoors(run, rng) { if (run.level) rng = levelRng(run); const ds = addClues(run, genDoorsRaw(run, rng), rng); const lv = LV(run);
   // companion story beat: your friend (or your lantern) sniffs out what is behind every door in this room
+  for (const d of ds) if (d.sure && d.elite && !d.rev) { d.clue = 'growl'; d.heavy = true; for (const o of ds) if (o !== d && o.clue === 'growl') o.clue = ds.some(x => x.clue === 'rustle') ? 'silence' : 'rustle'; }
   if (lv && lv.sniff === run.room && ds.length > 1) ds.forEach(d => { d.rev = true; d.sniff = true; });
   return ds; }
 function genDoorsRaw(run, rng) {
@@ -832,12 +833,12 @@ function genDoorsRaw(run, rng) {
   if (!out.some(x => x.kind === 'fight')) out[Math.floor(rng() * out.length)] = fightDoor();
   // story levels can place a door on purpose (a cage, an elite)
   if (lv && lv.force) for (const f of lv.force) if (f.room === run.room) {
-    let door = Object.assign({}, f.door); if (door.ev === 'cage' && (run.pets || []).length >= 3) door.ev = 'explorer';
+    let door = Object.assign({}, f.door); if (door.elite) door.sure = true; if (door.ev === 'cage' && (run.pets || []).length >= 3) door.ev = 'explorer';
     if (door.kind === 'fight' && !door.mon) { const used = out.filter(x => x.kind === 'fight').map(x => x.mon); const pool = POOL.filter(m => !used.includes(m)); door.mon = pool[Math.floor(rng() * pool.length)] || POOL[0]; }
     const at = out.findIndex(x => x.kind !== 'fight'); out[at >= 0 ? at : out.length - 1] = door; if (door.kind !== 'fight' && !out.some(x => x.kind === 'fight')) out.push(fightDoor());
     if (door.kind === 'event') run.events = 0; }
   // v0.16.2: a star that needs a certain foe can always be earned. Until it is, every room offers a way to it.
-  if (lv && run.room >= 1) {
+  if (lv) {
     const need = t => lv.bonus.some(g => g.t === t) && !(run.gs && run.gs[t]);
     const put = door => { const at = out.findIndex(x => x.kind !== 'fight'); if (at >= 0) out[at] = door; else if (out.length < 3) out.push(door); else out[out.length - 1] = door; };
     if (need('mimics') && chestsLeft && !out.some(x => x.kind === 'chest')) put({ kind: 'chest' });
@@ -1750,7 +1751,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.16.2';
+const VERSION = 'v0.16.3';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2542,7 +2543,7 @@ function guardFeedback(k) {
     setTimeout(() => toast(k === 'parry' ? 'Parry! No damage, and you struck back. Tap GUARD when the ring turns gold. A bit early is a Block (less damage).' : 'Block! Less damage. Wait for the gold ring for a Parry: no damage, and you strike back.', 3600), 400); }
 }
 function guardLesson() {
-  if (S.seen.guard) return; S.seen.guard = 1; save(); guardLessonOn = true; $('guard').classList.add('lift');
+  if (S.seen.guard) return; S.seen.guard = 1; save(); guardLessonOn = true; clearTimeout(toast.t); $('toast').classList.remove('on'); $('guard').classList.add('lift');
   const steps = 'New move: <b>GUARD</b> 🛡<br>You and the foe <b>take turns</b>. Before it swings, it <b>glows</b> and a <b>ring closes in</b>.<br>1. Wait for the ring to turn <b>gold</b> (like now!).<br>2. <b>Tap GUARD</b>.<br>Perfect timing is a <b>Parry</b>: no damage, and you strike back.';
   coach({ text: steps, target: $('guard'), finger: 'tap', fingerAt: (() => { const b = $('guard').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), valid: () => inFight(), until: done => { guardDone = () => { guardDone = null; done(); }; const iv = setInterval(() => { if (!guardDone) { clearInterval(iv); return; } if (!inFight()) { clearInterval(iv); guardLessonOn = false; $('guard').classList.remove('lift'); guardDone(); } }, 200); } })
     .then(ok => { guardLessonOn = false; $('guard').classList.remove('lift'); if (!ok) { S.seen.guard = 0; save(); } });
@@ -2570,6 +2571,13 @@ $('potion').addEventListener('click', e => {
   if (phase === 'fight' && fight) handleEvents(ev); else { for (const x of ev) if (x.t === 'heal') floatText(L.heroX - 26, L.heroY - L.u * 2.2, '+' + x.amt, '#8fcf6a', 1.3); updateHud(); }
   updatePotion();
 });
+// v0.16.3: the first big attack or spell (with the lantern full) pauses on its wind-up and teaches the interrupt, like the Guard lesson
+function interruptLesson() {
+  if (S.seen.interruptL) return; S.seen.interruptL = 1; save(); flareLessonOn = true; clearTimeout(toast.t); $('toast').classList.remove('on'); $('flare').classList.add('lift'); const m = fight.m;
+  coach({ text: `<b>${m.caster ? 'A spell is charging!' : 'A big attack is coming!'}</b> The bar over the foe is its wind-up.<br>1. While the bar fills, <b>tap FLARE now</b>.<br>2. Your Flare stops it cold and stuns the foe.`, target: $('flare'), finger: 'tap', fingerAt: (() => { const b = $('flare').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), valid: () => inFight() && fight.flare >= 1 && fight.m.tell > 0,
+    until: done => { coachDone = () => { coachDone = null; done(); }; const iv = setInterval(() => { if (!coachDone) { clearInterval(iv); return; } if (!inFight()) { clearInterval(iv); flareLessonOn = false; $('flare').classList.remove('lift'); coachDone(); } }, 200); } })
+    .then(ok => { if (!ok) { S.seen.interruptL = 0; save(); flareLessonOn = false; $('flare').classList.remove('lift'); } });
+}
 function flareLesson() {
   if (S.seen.flare) return; S.seen.flare = 1; save(); flareLessonOn = true; $('flare').classList.add('lift');
   coach({ text: 'Your lantern is charged! <b>Tap FLARE</b> for a big hit that also stuns the foe for a moment.', target: $('flare'), finger: 'tap', fingerAt: (() => { const b = $('flare').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), valid: () => inFight() && fight.flare >= 1, until: done => { coachDone = () => { coachDone = null; done(); }; const iv = setInterval(() => { if (!coachDone) { clearInterval(iv); return; } if (!inFight()) { clearInterval(iv); flareLessonOn = false; $('flare').classList.remove('lift'); coachDone(); } }, 200); } }).then(ok => { if (!ok) { S.seen.flare = 0; flareLessonOn = false; $('flare').classList.remove('lift'); save(); } });
@@ -3147,9 +3155,12 @@ function leaves(x, y, n) { for (let i = 0; i < n; i++) { const a = Math.random()
 
 // ---------------- main loop ----------------
 let last = performance.now();
+let gsSig = '';
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
   update(dt); draw();
+  // goal counters refresh the moment any goal stat changes (Muse: star counters lagged)
+  if (run && run.gs) { const sig = JSON.stringify(run.gs) + '|' + Math.ceil(run.hp); if (sig !== gsSig) { gsSig = sig; updateHud(); } }
   requestAnimationFrame(frame);
 }
 function update(dt) {
@@ -3170,6 +3181,7 @@ function update(dt) {
     else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt * (RM ? 0.7 : guardCue() ? 0.5 : 1), Math.random); if (ev.length) handleEvents(ev); }
     const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); const hold = fight.hold && fight.flare >= 1 && !(fight.m.tell > 0) && !(run.gs && run.gs.interrupts); fb.classList.toggle('hold', hold); $('flareDmg').textContent = hold ? 'save it' : fight.m.tell > 0 && fight.hold && fight.flare >= 1 ? 'NOW!' : Math.round(fight.st.atk * fight.st.flareMult);
     if (fight.flare >= 1 && !S.seen.flare && !paused) flareLesson();
+    if (fight.flare >= 1 && S.seen.flare && !S.seen.interruptL && fight.m.tell > 0 && !paused && !coachOpen && !fight.over) interruptLesson();
     if (guardOn()) { const gb = $('guard'); gb.style.setProperty('--p', (1 - (fight.gCd || 0) / GUARD_CD).toFixed(3)); gb.classList.toggle('ready', !(fight.gCd > 0)); gb.classList.toggle('up', fight.gT > 0); gb.classList.toggle('cue', guardCue() && fight.m.timer < PARRY_WIN);
       const m = fight.m; if (!S.seen.guard && S.seen.flare && !paused && !coachOpen && m.hp > 0 && m.stun <= 0 && !(m.tell > 0) && fight.turn === 'foe' && m.timer < PARRY_WIN * 0.85 && m.timer > 0.08 && !fight.over) guardLesson(); }
   }
