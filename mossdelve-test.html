@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.14 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.15 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -129,6 +129,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #guard.ready::before { background: radial-gradient(circle at 50% 40%, #cfeaff, #4f8fc0 60%, #1d3a55); } #guard.ready i { filter: none; } #guard.ready span { color: #10202e; }
 #guard.up { transform: scale(.92); box-shadow: 0 0 0 4px rgba(154,216,255,.8), 0 0 24px rgba(154,216,255,.7); }
 #guard.lift { z-index: 60; }
+#guard.cue { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(255,215,110,.9), 0 0 26px rgba(255,215,110,.8); }
 #flare.hold { animation: none; } #flare.hold small { text-transform: uppercase; letter-spacing: .05em; color: #ffe6a8; }
 @media (prefers-reduced-motion: reduce) { #flare.ready { animation: none; box-shadow: 0 0 0 4px rgba(242,181,74,.6); } .gearBig.reveal .ic, .gearBig.reveal .ic::before, .sheet, #quest.done, #quest .conf, #quest .qi.fadein { animation: none; } #quest .conf { display: none; } }
 .sheet h2 { margin: 0; font-family: var(--display); font-size: 22px; letter-spacing: 1px; text-align: center; color: var(--amber2); text-shadow: 0 2px 0 #2a1a06; }
@@ -604,8 +605,6 @@ function fightStep(run, f, dt, rng) {
   f.flare = Math.min(1, f.flare + st.flareRate * dt);
   if (f.gCd > 0) f.gCd = Math.max(0, f.gCd - dt); if (f.gT > 0) f.gT = Math.max(0, f.gT - dt);
   if (m.regen && m.hp < m.max) { m.hp = Math.min(m.max, m.hp + m.regen * dt); }
-  f.hTimer -= dt;
-  if (f.hTimer <= 0) { f.hTimer += st.interval; heroHit(run, f, 1, rng, ev, false); ev.push({ t: 'swingH' }); }
   if (f.ward > 0) f.ward -= dt;
   // the Ember Mage's fireball keeps burning
   if (m.burn > 0 && m.hp > 0) { m.burn -= dt; m.hp -= st.atk * (m.burnK || 0.4) * dt; }
@@ -615,23 +614,34 @@ function fightStep(run, f, dt, rng) {
   const hurt = d => { const x = f.ward > 0 ? Math.max(1, Math.round(d / 2)) : d; run.hp -= x; return x; };
   // guardians wind up a big blow every few seconds (TELL_TIME to react); a Flare during the wind-up interrupts it
   if ((m.boss || m.caster) && m.stun <= 0 && m.hp > 0) {
-    if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY;
+    if (m.tell > 0) { m.tell -= dt; if (m.tell <= 0) { m.tell = 0; m.tellCd = m.caster ? CAST_EVERY : TELL_EVERY; startTurn(f, 'hero');
       const rc = heroReact(run, f, m.caster ? 'spell' : 'heavy', rng), gd = guardTake(f, false), rm = Math.min(rc ? REACT[rc] : 1, gd ? GUARD_BIG : 1);
       const dmg = m.caster ? hurt(Math.max(1, Math.round(m.atk * 2 * rm))) : hurt(Math.max(1, Math.round((m.atk * 2.5 - st.def) * rm))); ev.push({ t: 'swingM', spell: m.caster }); ev.push({ t: 'hitH', dmg, heavy: true, spell: m.caster, react: rc, guard: gd }); } }
-    else { m.tellCd -= dt; if (m.tellCd <= 0) { m.tell = TELL_TIME; ev.push({ t: 'tell', spell: m.caster }); } }
+    else m.tellCd -= dt;
   }
-  if (m.stun > 0) m.stun -= dt; else if (!(m.tell > 0)) {
-    m.timer -= dt;
-    if (m.timer <= 0 && m.hp > 0) {
-      m.timer += m.int;
-      m.atkN = (m.atkN || 0) + 1; const bomb = m.trait === 'bomber' && m.atkN % 3 === 0;
-      const gd = guardTake(f, true); ev.push({ t: 'swingM', bomb });
-      if (gd === 'parry') { ev.push({ t: 'gParry' }); m.stun = Math.max(m.stun, 0.6); heroHit(run, f, GUARD_COUNTER, rng, ev, false); checkEnd(run, f, ev); return ev; }
-      const rc = gd ? null : heroReact(run, f, 'hit', rng);
-      if (rc === 'dodge') { ev.push({ t: 'dodge' }); checkEnd(run, f, ev); return ev; }
-      const raw = Math.round(m.atk * (bomb ? 2 : 1)) - st.def, dmg = hurt(Math.max(1, Math.round(raw * (gd ? GUARD_BLOCK : rc ? REACT[rc] : 1)))); ev.push({ t: 'hitH', dmg, bomb, react: rc, guard: gd, soaked: Math.min(st.def, Math.round(m.atk * (bomb ? 2 : 1)) - 1) });
-      if (st.thorns) { m.hp -= st.thorns; ev.push({ t: 'hitM', dmg: st.thorns, thorn: true }); }
-      if (st.syn && st.syn.thorns >= SYN_NEED) { f.taken = (f.taken || 0) + 1; if (f.taken % 3 === 0) { const b = Math.round(st.atk * 1.5); m.hp -= b; ev.push({ t: 'bramble', dmg: b }); } }
+  // TURNS: you strike, then the foe strikes. A faster side gets 2-3 strikes in its turn, and each strike is scaled so the
+  // damage per second matches the old real-time fights. Every foe strike has a clear wind-up (f.tele) for GUARD.
+  if (m.stun > 0) { m.stun -= dt; if (f.turn === 'foe' && !(m.tell > 0)) startTurn(f, 'hero'); }
+  if (!f.turn) startTurn(f, 'hero');
+  if (m.hp > 0 && !(m.tell > 0)) {
+    f.tt -= dt;
+    if (f.turn === 'hero') {
+      f.hTimer = f.tt; m.timer = f.tt + f.plan.fs;
+      if (f.tt <= 0) { heroHit(run, f, f.plan.hm, rng, ev, false); ev.push({ t: 'swingH' }); f.left--;
+        if (f.left > 0) f.tt += f.plan.hs; else if (m.stun > 0) startTurn(f, 'hero'); else { startTurn(f, 'foe');
+          if ((m.boss || m.caster) && m.tellCd <= 0) { m.tell = TELL_TIME; f.hTimer = 9; m.timer = 9; ev.push({ t: 'tell', spell: m.caster }); } } }
+    } else if (m.stun <= 0) {
+      m.timer = f.tt; f.hTimer = f.tt + f.plan.hs;
+      if (f.tt <= 0) { f.left--; if (f.left > 0) f.tt += f.plan.fs; else startTurn(f, 'hero');
+        m.atkN = (m.atkN || 0) + 1; const bomb = m.trait === 'bomber' && m.atkN % 3 === 0, fm = f.plan.fm;
+        const gd = guardTake(f, true); ev.push({ t: 'swingM', bomb });
+        if (gd === 'parry') { ev.push({ t: 'gParry' }); m.stun = Math.max(m.stun, 0.6); heroHit(run, f, GUARD_COUNTER * f.plan.hm, rng, ev, false); checkEnd(run, f, ev); return ev; }
+        const rc = gd ? null : heroReact(run, f, 'hit', rng);
+        if (rc === 'dodge') { ev.push({ t: 'dodge' }); checkEnd(run, f, ev); return ev; }
+        const raw = Math.round(m.atk * fm * (bomb ? 2 : 1)) - st.def, dmg = hurt(Math.max(1, Math.round(raw * (gd ? GUARD_BLOCK : rc ? REACT[rc] : 1)))); ev.push({ t: 'hitH', dmg, bomb, react: rc, guard: gd, soaked: Math.min(st.def, Math.round(m.atk * fm * (bomb ? 2 : 1)) - 1) });
+        if (st.thorns) { m.hp -= st.thorns; ev.push({ t: 'hitM', dmg: st.thorns, thorn: true }); }
+        if (st.syn && st.syn.thorns >= SYN_NEED) { f.taken = (f.taken || 0) + 1; if (f.taken % 3 === 0) { const b = Math.round(st.atk * 1.5); m.hp -= b; ev.push({ t: 'bramble', dmg: b }); } }
+      }
     }
   }
   checkEnd(run, f, ev);
@@ -647,9 +657,15 @@ function heroReact(run, f, kind, rng) { const cls = run.cls || 'warden';
   if (cls === 'knight') return rng() < 0.12 ? 'block' : null;
   return rng() < 0.1 ? 'parry' : null; }
 const TELL_TIME = 1.8, TELL_EVERY = 6, CAST_EVERY = 5.5;
+// turn pacing: TELE = the foe's wind-up before each strike; TURN_PACE > 1 makes exchanges slower but each hit heavier
+const TELE = 0.75, TURN_PACE = 1.25;
+function turnPlan(f) { const hi = f.st.interval, mi = f.m.int, nH = Math.max(1, Math.min(3, Math.round(mi / hi))), nF = Math.max(1, Math.min(3, Math.round(hi / mi)));
+  const hs = Math.max(0.32, Math.sqrt(hi * mi) * TURN_PACE * 0.45 / nH), fs = Math.max(TELE + 0.2, Math.sqrt(hi * mi) * TURN_PACE * 0.55 / nF), cyc = hs * nH + fs * nF;
+  return { nH, nF, hs, fs, hm: cyc / (nH * hi * nH) * nH, fm: cyc / (nF * mi * nF) * nF }; }
+function startTurn(f, who) { if (!f.plan || who === 'hero') f.plan = turnPlan(f); f.turn = who; f.left = who === 'hero' ? f.plan.nH : f.plan.nF; f.tt = who === 'hero' ? f.plan.hs : f.plan.fs; }
 // GUARD, the second tap move: tap just as a foe swings (it leans back first) to PARRY (no damage, and you strike back),
 // a little early to BLOCK (about a third of the damage). Big attacks and spells can only be softened, never parried.
-const GUARD_WIN = 0.6, PARRY_WIN = 0.35, GUARD_CD = 3.5, GUARD_BLOCK = 0.35, GUARD_BIG = 0.5, GUARD_COUNTER = 1;
+const GUARD_WIN = 0.8, PARRY_WIN = 0.35, GUARD_CD = 3.5, GUARD_BLOCK = 0.35, GUARD_BIG = 0.5, GUARD_COUNTER = 1;
 function useGuard(run, f) { if (f.over || f.gCd > 0) return false; f.gT = GUARD_WIN; f.gCd = GUARD_CD; return true; }
 // called when a hit lands: returns 'parry', 'block' or null and spends the guard
 function guardTake(f, canParry) { if (!(f.gT > 0)) return null; const age = GUARD_WIN - f.gT; f.gT = 0; return canParry && age <= PARRY_WIN ? 'parry' : 'block'; }
@@ -1714,7 +1730,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.14';
+const VERSION = 'v0.15';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2394,7 +2410,7 @@ function enterRoom2(d) {
   // the doors out of this room are decided now, shown once the room is cleared
   doors = genDoors(run, Math.random);
   A.monAlpha = 0; A.monScale = 1; A.chestOpen = 0; A.heroDown = 0;
-  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = Math.max(fight.flare, 0.8); if (run.level && fight.m.boss) fight.m.tellCd = 3.5;
+  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = 1; if (run.level && fight.m.boss) fight.m.tellCd = 1.2;
     // levels with a "stop the big attack" star: the lantern starts full against the guardian or a caster, and the button says to save it
     fight.hold = !!(run.level && LV(run).bonus.some(g => g.t === 'interrupts') && !(run.gs && run.gs.interrupts) && (fight.m.boss || fight.m.caster)); if (fight.hold) fight.flare = 1;
     setPhase('fight'); fightLessons(); if (fight.hold) setTimeout(() => lesson('holdFlare', [{ text: 'Your lantern is <b>full</b>. <b>Save your Flare</b> until this foe winds up (a bar fills over its head), then tap FLARE to stop it and earn the star.' }], () => phase === 'fight' && fight && fight.hold), 700); }
@@ -2489,6 +2505,9 @@ async function fightLessons() {
 let flareLessonOn = false, guardLessonOn = false;
 // GUARD: the second tap move, from level 1-2 on (Endless too)
 function guardOn() { return !!run && run.level !== '1-1'; }
+// the foe is winding up a normal strike (the last TELE seconds of its swing) and Guard is ready: glow, ring, slow motion
+function teleOn() { const m = fight && fight.m; return !!m && phase === 'fight' && fight.turn === 'foe' && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 && m.timer < TELE; }
+function guardCue() { return guardOn() && teleOn() && !(fight.gCd > 0) && !(fight.gT > 0); }
 function doGuard() {
   if (phase !== 'fight' || !fight || !guardOn() || (paused && !guardLessonOn)) return;
   if (!useGuard(run, fight)) { const b = $('guard'); b.animate && b.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 180); return; }
@@ -2496,11 +2515,11 @@ function doGuard() {
 }
 function guardFeedback(k) {
   if (!S.seen.guardDone && S.seen.guard) { S.seen.guardDone = 1; save();
-    setTimeout(() => toast(k === 'parry' ? 'Parry! No damage, and you struck back. Tap GUARD as a foe leans back. A bit early is a Block (less damage).' : 'Block! Less damage. Tap GUARD right as the foe leans back for a Parry: no damage, and you strike back.', 3600), 400); }
+    setTimeout(() => toast(k === 'parry' ? 'Parry! No damage, and you struck back. Tap GUARD when the ring turns gold. A bit early is a Block (less damage).' : 'Block! Less damage. Wait for the gold ring for a Parry: no damage, and you strike back.', 3600), 400); }
 }
 function guardLesson() {
   if (S.seen.guard) return; S.seen.guard = 1; save(); guardLessonOn = true; $('guard').classList.add('lift');
-  const steps = 'New move: <b>GUARD</b> 🛡<br>1. Watch the foe. It <b>leans back</b> right before it swings (like now!).<br>2. <b>Tap GUARD</b> just then.<br>Perfect timing is a <b>Parry</b>: no damage, and you strike back.';
+  const steps = 'New move: <b>GUARD</b> 🛡<br>You and the foe <b>take turns</b>. Before it swings, it <b>glows</b> and a <b>ring closes in</b>.<br>1. Wait for the ring to turn <b>gold</b> (like now!).<br>2. <b>Tap GUARD</b>.<br>Perfect timing is a <b>Parry</b>: no damage, and you strike back.';
   coach({ text: steps, target: $('guard'), finger: 'tap', fingerAt: (() => { const b = $('guard').getBoundingClientRect(); return { x: b.left + b.width * 0.55, y: b.top + b.height * 0.5 }; })(), valid: () => inFight(), until: done => { guardDone = () => { guardDone = null; done(); }; const iv = setInterval(() => { if (!guardDone) { clearInterval(iv); return; } if (!inFight()) { clearInterval(iv); guardLessonOn = false; $('guard').classList.remove('lift'); guardDone(); } }, 200); } })
     .then(ok => { guardLessonOn = false; $('guard').classList.remove('lift'); if (!ok) { S.seen.guard = 0; save(); } });
 }
@@ -3124,11 +3143,11 @@ function update(dt) {
   if (phase === 'fight' && fight) {
     A.monAlpha = Math.min(1, A.monAlpha + dt * 3);
     if (A.hitStop > 0) A.hitStop -= dt;
-    else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt, Math.random); if (ev.length) handleEvents(ev); }
+    else if (!paused && A.monAlpha >= 1) { const ev = fightStep(run, fight, dt * (RM ? 0.7 : guardCue() ? 0.5 : 1), Math.random); if (ev.length) handleEvents(ev); }
     const fb = $('flare'); fb.style.setProperty('--p', fight.flare.toFixed(3)); fb.classList.toggle('ready', fight.flare >= 1); fb.classList.toggle('urgent', fight.m.tell > 0 && fight.flare >= 1); const hold = fight.hold && fight.flare >= 1 && !(fight.m.tell > 0) && !(run.gs && run.gs.interrupts); fb.classList.toggle('hold', hold); $('flareDmg').textContent = hold ? 'save it' : fight.m.tell > 0 && fight.hold && fight.flare >= 1 ? 'NOW!' : Math.round(fight.st.atk * fight.st.flareMult);
     if (fight.flare >= 1 && !S.seen.flare && !paused) flareLesson();
-    if (guardOn()) { const gb = $('guard'); gb.style.setProperty('--p', (1 - (fight.gCd || 0) / GUARD_CD).toFixed(3)); gb.classList.toggle('ready', !(fight.gCd > 0)); gb.classList.toggle('up', fight.gT > 0);
-      const m = fight.m; if (!S.seen.guard && S.seen.flare && !paused && !coachOpen && m.hp > 0 && m.stun <= 0 && !(m.tell > 0) && m.timer < 0.3 && m.timer > 0.12 && !fight.over) guardLesson(); }
+    if (guardOn()) { const gb = $('guard'); gb.style.setProperty('--p', (1 - (fight.gCd || 0) / GUARD_CD).toFixed(3)); gb.classList.toggle('ready', !(fight.gCd > 0)); gb.classList.toggle('up', fight.gT > 0); gb.classList.toggle('cue', guardCue() && fight.m.timer < PARRY_WIN);
+      const m = fight.m; if (!S.seen.guard && S.seen.flare && !paused && !coachOpen && m.hp > 0 && m.stun <= 0 && !(m.tell > 0) && fight.turn === 'foe' && m.timer < PARRY_WIN * 0.85 && m.timer > 0.08 && !fight.over) guardLesson(); }
   }
   if (phase === 'won' && fight) { A.monAlpha = Math.max(0, A.monAlpha - dt * 1.5); A.monScale = 1 + (1 - A.monAlpha) * 0.15; }
   if (phase === 'lost') { A.heroDown = Math.min(1, A.heroDown + dt * 1.5); A.light = Math.max(0.25, A.light - dt * 0.6); }
@@ -3250,12 +3269,16 @@ function draw() {
     if (m.tell > 0) { const k = 1 - m.tell / TELL_TIME, pr = 0.5 + 0.5 * Math.sin(T * 18); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const tg = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * (0.8 + k * 0.3)); const tc = m.caster ? (m.type === 'shaman' ? '255,140,40' : '120,255,90') : '255,40,30'; tg.addColorStop(0, `rgba(${tc},${0.25 + 0.25 * pr})`); tg.addColorStop(1, `rgba(${tc},0)`); ctx.fillStyle = tg; ctx.fillRect(L.monX - ms * 1.2, L.monY - ms * 1.6, ms * 2.4, ms * 2.4); ctx.restore(); }
     if (m.elite && A.monAlpha > 0) { const ag = ctx.createRadialGradient(L.monX, L.monY - ms * 0.4, 0, L.monX, L.monY - ms * 0.4, ms * 0.9); ag.addColorStop(0, `rgba(255,80,60,${0.35 * A.monAlpha})`); ag.addColorStop(1, 'rgba(255,80,60,0)'); ctx.fillStyle = ag; ctx.fillRect(L.monX - ms, L.monY - ms * 1.3, ms * 2, ms * 1.8); }
     drawMonster(m.type, L.monX, L.monY, ms * (m.elite ? 1.12 : 1), T, { alpha: A.monAlpha * (1 - 0.7 * (A.monFade || 0)), scale: A.monScale, lunge: A.monLunge, flash: A.monFlash, knock: A.monKnock,
-      wind: phase === 'fight' && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 ? Math.max(0, 1 - m.timer / Math.min(0.32, m.int * 0.45)) : (m.tell > 0 ? 0.6 + 0.4 * Math.sin(T * 20) : 0), stun: m.stun, tell: m.tell > 0 ? 1 - m.tell / TELL_TIME : 0, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
+      wind: phase === 'fight' && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 && fight.turn === 'foe' ? Math.max(0, 1 - m.timer / TELE) : (m.tell > 0 ? 0.6 + 0.4 * Math.sin(T * 20) : 0), stun: m.stun, tell: m.tell > 0 ? 1 - m.tell / TELL_TIME : 0, shake: A.monFlash ? (Math.random() - 0.5) * 4 : 0 });
     if (A.monGuard) { const q = A.monGuard.t / 0.5, gx = L.monX + (L.heroX - L.monX) * 0.12, gy = L.monY - ms * 0.42 + (L.heroY - L.monY) * 0.06; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - q; ctx.strokeStyle = '#fff0c0'; ctx.lineWidth = 3;
       for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.arc(gx, gy, ms * (0.12 + q * 0.35 + i * 0.08), 0, 7); ctx.stroke(); } const fg = ctx.createRadialGradient(gx, gy, 0, gx, gy, ms * 0.25); fg.addColorStop(0, 'rgba(255,250,220,.9)'); fg.addColorStop(1, 'rgba(255,250,220,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(gx, gy, ms * 0.25, 0, 7); ctx.fill(); ctx.restore(); }
     if (phase === 'fight') { const by = L.monY - ms * (m.boss ? 1.12 : 0.95); bar(L.monX, by, Math.min(W * 0.5, ms * 0.9), m.hp / m.max, m.boss ? '#e0574a' : '#d77a4a');
-      // swing cue for GUARD: a quick white "!" flashes over the foe as it leans back to swing
-      if (guardOn() && m.stun <= 0 && !(m.tell > 0) && m.hp > 0 && m.timer < 0.32) { const q = 1 - m.timer / 0.32, fs = Math.max(16, Math.round(u * 0.6)); ctx.save(); ctx.font = `900 ${fs}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(10,10,20,.9)'; ctx.globalAlpha = 0.5 + 0.5 * q; const ex = L.monX + ms * 0.42, ey = by + fs * 0.2; ctx.strokeText('!', ex, ey); ctx.fillStyle = '#eaf6ff'; ctx.fillText('!', ex, ey); ctx.restore(); }
+      // swing cue for GUARD: the foe glows, a ring closes in on it, and it turns gold (with a "!") in the parry window
+      if (guardOn() && teleOn()) { const q = 1 - m.timer / TELE, inPar = m.timer < PARRY_WIN, cx = L.monX, cy = L.monY - ms * 0.42, rdy = !(fight.gCd > 0) || fight.gT > 0;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gg = ctx.createRadialGradient(cx, cy, ms * 0.2, cx, cy, ms * 0.85); const gc = inPar ? '255,215,110' : '170,220,255'; gg.addColorStop(0, `rgba(${gc},${0.1 + 0.25 * q})`); gg.addColorStop(1, `rgba(${gc},0)`); ctx.fillStyle = gg; ctx.fillRect(cx - ms, cy - ms, ms * 2, ms * 2); ctx.restore();
+        if (rdy) { const rr = ms * (0.5 + 0.75 * (1 - q)); ctx.save(); ctx.strokeStyle = inPar ? 'rgba(255,215,110,.95)' : `rgba(150,215,255,${0.6 + 0.35 * q})`; ctx.lineWidth = inPar ? 5 : 3.5; ctx.shadowColor = inPar ? 'rgba(255,200,90,.8)' : 'rgba(120,200,255,.8)'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7); ctx.stroke();
+          ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, ms * 0.5, 0, 7); ctx.stroke(); ctx.restore(); }
+        if (inPar) { const fs = Math.max(18, Math.round(u * 0.7)); ctx.save(); ctx.font = `900 ${fs}px Cinzel, Georgia, serif`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(10,10,20,.9)'; const ex = L.monX + ms * 0.62, ey = by + fs * 0.3; ctx.strokeText('!', ex, ey); ctx.fillStyle = '#ffe9a8'; ctx.fillText('!', ex, ey); ctx.restore(); } }
       tellUI = m.tell > 0 ? { x: L.monX, y: by, w: Math.min(W * 0.62, ms * 1.05), q: 1 - m.tell / TELL_TIME, caster: m.caster, type: m.type, ready: fight.flare >= 1 } : null;
       ctx.font = `700 ${Math.max(12, Math.round(u * 0.34))}px ui-rounded, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#f4ead6'; ctx.fillText((m.elite ? 'Elite ' : '') + m.name + (m.trait ? ' · ' + TRAITS[m.trait].name : ''), L.monX, by - 6);
       if (m.stun > 0) { const fs = Math.max(11, Math.round(u * 0.3)), sy = by - 6 - fs * 1.55; ctx.font = `800 ${fs}px ui-rounded, system-ui, sans-serif`; const tw = ctx.measureText('STUNNED').width + fs * 1.1;
