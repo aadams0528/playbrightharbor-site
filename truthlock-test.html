@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Truthlock prototype v0.2 (working title; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
+<!-- Truthlock prototype v0.4 (working title; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Truthlock (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -259,6 +259,39 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 @media (max-width:380px){.sharecard .row{font-size:24px!important;letter-spacing:0}}
 .tgl{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:700;color:var(--ink2);margin:0 0 12px}
 .tgl input{width:18px;height:18px}
+.isles{display:grid;gap:10px}
+.isles.n3{grid-template-columns:repeat(3,1fr)}
+.isles.n4{grid-template-columns:repeat(2,1fr)}
+.isle{display:flex;flex-direction:column;align-items:center}
+.ava{width:58px;height:58px;border-radius:50%;color:#fff;font-family:var(--disp);font-weight:700;font-size:28px;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 3px 0 rgba(0,0,0,.2);border:3px solid #fff}
+.ava .badge{position:absolute;right:-8px;bottom:-6px;font-size:22px}
+.inm{font-family:var(--disp);font-weight:600;font-size:16px;margin-top:4px}
+.isle .bubble{margin-top:10px;flex:1}
+.isle{height:100%}
+.picker.two .pk{height:auto;min-height:44px;line-height:1.15}
+.isles.n3 .picker.two .pk{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 0}
+.picker.two{grid-template-columns:1fr 1fr}
+.picker.two .pk{font-size:13px;font-family:var(--body);font-weight:800;padding:0 2px}
+.kb{font-size:20px;width:26px;text-align:center}
+.lampkey{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;font-weight:800;font-size:14px;margin-bottom:10px}
+.lk{display:inline-flex;align-items:center;gap:5px}
+.lamp{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#d9d4c6;border:3px solid #bbb;box-sizing:border-box;flex:none}
+.lamp.lit{border-color:#fff}
+.lamp.hid{background:#eee;border:2px dashed #aaa;color:#888;font-weight:800;font-size:13px}
+.swrow{display:flex;align-items:center;gap:8px}
+.sws,.lps{display:flex;gap:4px}
+.swt{grid-template-columns:28px 1fr!important;gap:6px!important;padding:7px 8px!important}
+.swrow{min-width:0}
+.swp{min-width:27px;height:36px;border-radius:8px;border:2px solid #cfc3a3;background:#f3eee0;color:#9a917c;font-family:var(--disp);font-weight:700;font-size:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.swp small{font-size:9px;font-family:var(--body);font-weight:800}
+.swp.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.swp.on small{color:var(--gold)}
+.swp.big{min-width:40px;height:40px}
+.arrow{color:var(--ink2);font-weight:800}
+.wires{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.wire{display:flex;align-items:center;gap:8px;justify-content:center}
+.lp{width:44px;height:44px;border-radius:12px;background:#fff;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
+.lp.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset}
 </style>
 </head>
 <body>
@@ -1246,7 +1279,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     if (wd === 6 && pool.slice(0, 3).indexOf('lock') < 0) pool = ['lock'].concat(pool.filter(t => t !== 'lock'));
     let picks = pool.slice(0, 3);
     // easiest-feeling type first
-    const ease = { balance: 0, chests: 1, lineup: 2, cards: 3, houses: 4, lock: 5 };
+    const ease = { balance: 0, chests: 1, switches: 1.5, lineup: 2, cards: 3, knights: 3.5, houses: 4, lock: 5 };
     return picks.sort((a, b) => ease[a] - ease[b]);
   }
   function daily2(dateStr) {
@@ -1255,7 +1288,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     const types = dailyTypes(dateStr);
     return tiers.map((t, s) => {
       const rng = TL.rngFrom('truthlock2|' + dateStr + '|' + s);
-      const pz = genAny(rng, types[s], t);
+      const pz = TL.genAny(rng, types[s], t);
       pz.slot = s; return pz;
     });
   }
@@ -1263,13 +1296,335 @@ h1,h2,h3{font-family:var(--disp);margin:0}
   // Puzzle id: a fingerprint of the puzzle's content. Saved results carry it, so a content update
   // that changes a day's puzzles never shows old results on new puzzles.
   function pid(pz) {
-    const core = JSON.stringify([pz.type, pz.n || pz.N, pz.clues || null, pz.code || null, pz.stmts || null, pz.signs || null, pz.rule || null, pz.sol === undefined ? null : pz.sol]);
+    const arr = [pz.type, pz.n || pz.N, pz.clues || null, pz.code || null, pz.stmts || null, pz.signs || null, pz.rule || null, pz.sol === undefined ? null : pz.sol];
+    if (pz.tests) arr.push(pz.tests); if (pz.names) arr.push(pz.names);
+    const core = JSON.stringify(arr);
     let h = 2166136261; for (let i = 0; i < core.length; i++) { h ^= core.charCodeAt(i); h = Math.imul(h, 16777619); }
     return pz.type + '-' + (h >>> 0).toString(36);
   }
   Object.assign(TL, { pid, KIND, clueText, evalClue, gridSolutions, explainGrid, genGrid, checkGrid, answerText,
     CHESTS, CRULE, signText, signTrue, chestSolutions, explainChests, genChests, checkChests, chestWhy,
     ROSTER, genAny, dailyTypes, daily: daily2 });
+})(typeof window !== 'undefined' ? window : this);
+
+/* Truthlock v0.4 types: Knights Island and Switches and Lamps. Extends TL from logic.js + logic2.js. */
+(function (root) {
+  'use strict';
+  const TL = (typeof module !== 'undefined' && module.exports) ? require('./logic.js') : root.TL;
+  const listWords = TL.listWords;
+  const orList = (a) => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' or ' + a[a.length - 1];
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // =====================================================================
+  // KNIGHTS ISLAND: knights always tell the truth, knaves always lie
+  // =====================================================================
+  const NAMES = ['Ava', 'Ben', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus', 'Ivy', 'Jon', 'Kai', 'Lux', 'Max', 'Nia', 'Oli', 'Pia', 'Rex', 'Sam', 'Tia', 'Uma', 'Zed'];
+  const KW = { K: 'knight', N: 'knave' };
+  const KWS = { K: 'knights', N: 'knaves' };
+  const CNTW = ['none', 'one', 'two', 'three', 'four'];
+  const other = (k) => k === 'K' ? 'N' : 'K';
+
+  function knEval(st, as) {
+    switch (st.t) {
+      case 'is': return as[st.a] === st.k;
+      case 'same': return as[st.a] === as[st.b];
+      case 'diff': return as[st.a] !== as[st.b];
+      case 'or': return as[st.a] === st.ka || as[st.b] === st.kb;
+      case 'both': return as[st.a] === st.ka && as[st.b] === st.kb;
+      case 'cnt': { const c = as.filter(x => x === st.k).length; return st.op === 'eq' ? c === st.c : c >= st.c; }
+    }
+    return false;
+  }
+  function knText(pz, i) {
+    const st = pz.stmts[i], N = (j) => j === i ? 'I' : pz.names[j];
+    const be = (j) => j === i ? 'am' : 'is';
+    switch (st.t) {
+      case 'is': return N(st.a) + ' ' + be(st.a) + ' a ' + KW[st.k] + '.';
+      case 'same': case 'diff': {
+        let a = st.a, b = st.b; if (a === i) { a = st.b; b = st.a; }
+        return N(a) + ' and ' + (b === i ? 'I' : N(b)) + ' are ' + (st.t === 'same' ? 'the same kind.' : 'different kinds.');
+      }
+      case 'or': {
+        let a = st.a, ka = st.ka, b = st.b, kb = st.kb; if (b === i) { [a, ka, b, kb] = [b, kb, a, ka]; }
+        return N(a) + ' ' + be(a) + ' a ' + KW[ka] + ', or ' + N(b) + ' ' + be(b) + ' a ' + KW[kb] + '.';
+      }
+      case 'both': {
+        let a = st.a, b = st.b; if (a === i) { a = st.b; b = st.a; }
+        return N(a) + ' and ' + (b === i ? 'I' : N(b)) + ' are both ' + KWS[st.ka] + '.';
+      }
+      case 'cnt': {
+        const w = st.op === 'eq' ? 'Exactly ' : 'At least ';
+        return w + CNTW[st.c] + ' of us ' + (st.c === 1 ? 'is a ' + KW[st.k] : 'are ' + KWS[st.k]) + '.';
+      }
+    }
+    return '?';
+  }
+  function knMentions(st, n) {
+    if (st.t === 'cnt') return [...Array(n).keys()];
+    return st.b === undefined ? [st.a] : [st.a, st.b];
+  }
+  function knAll(n) { const out = []; for (let m = 0; m < (1 << n); m++) out.push([...Array(n).keys()].map(i => (m >> i) & 1 ? 'N' : 'K')); return out; }
+  function knSolutions(pz) { return knAll(pz.n).filter(as => as.every((k, i) => (k === 'K') === knEval(pz.stmts[i], as))); }
+  // assignments consistent with domains and the given statement indexes
+  function knEnum(pz, dom, idxs) { return knAll(pz.n).filter(as => as.every((k, i) => dom[i].has(k)) && idxs.every(i => (as[i] === 'K') === knEval(pz.stmts[i], as))); }
+
+  function explainKnights(pz) {
+    const n = pz.n, nm = (i) => pz.names[i];
+    const dom = [...Array(n)].map(() => new Set(['K', 'N']));
+    const steps = []; let level = 0;
+    const solved = () => dom.every(s => s.size === 1);
+    const q = (i) => '“' + knText(pz, i) + '”';
+    const known = (ids) => ids.filter(j => dom[j].size === 1).map(j => nm(j) + ' is a ' + KW[[...dom[j]][0]]);
+    const said = new Set();
+    // one statement at a time
+    const single = (i) => {
+      const S = knEnum(pz, dom, [i]);
+      if (!S.length) return false;
+      const forced = [];
+      for (let j = 0; j < n; j++) if (dom[j].size === 2) { const v = new Set(S.map(a => a[j])); if (v.size === 1) forced.push([j, [...v][0]]); }
+      if (!forced.length) return false;
+      // prefer the speaker, then people the statement names
+      const ment = knMentions(pz.stmts[i], n);
+      forced.sort((x, y) => (y[0] === i) - (x[0] === i) || ment.includes(y[0]) - ment.includes(x[0]));
+      const [x, k] = forced[0];
+      const ctxIds = ment.filter(j => j !== x && j !== i);
+      if (dom[i].size === 1 && x !== i) {
+        const sk = [...dom[i]][0];
+        const ctx = known(ctxIds);
+        steps.push({ kind: 'clue', cards: [i], text: nm(i) + ' says ' + q(i) + ' We know ' + nm(i) + ' is a ' + KW[sk] + ', so those words are ' + (sk === 'K' ? 'true' : 'false') + '.' + (ctx.length ? ' We already know ' + listWords(ctx) + '.' : '') + ' So ' + nm(x) + ' is a ' + KW[k] + '.' });
+      } else if (x === i) {
+        const bad = other(k);
+        const need = bad === 'K';
+        const ctx = known(ctxIds);
+        steps.push({ kind: 'clue', cards: [i], text: nm(i) + ' says ' + q(i) + ' If ' + nm(i) + ' were a ' + KW[bad] + ', those words would have to be ' + (need ? 'true' : 'false') + '. But with ' + nm(i) + ' a ' + KW[bad] + ', they can’t be' + (ctx.length ? ' (we already know ' + listWords(ctx) + ')' : '') + '. So ' + nm(i) + ' is a ' + KW[k] + '.' });
+      } else {
+        // speaker unknown, both cases lead to the same fact about x
+        const ctx = known(ctxIds);
+        steps.push({ kind: 'clue', cards: [i], text: nm(i) + ' says ' + q(i) + (ctx.length ? ' We already know ' + listWords(ctx) + '.' : '') + ' If ' + nm(i) + ' is a knight, the words are true, so ' + nm(x) + ' is a ' + KW[k] + '. If ' + nm(i) + ' is a knave, the words are false, and ' + nm(x) + ' is still a ' + KW[k] + '. Either way, ' + nm(x) + ' is a ' + KW[k] + '.' });
+      }
+      dom[x] = new Set([k]); said.add(x);
+      return true;
+    };
+    // suppose x is k, follow single-statement consequences until something breaks
+    const suppose = (x, k) => {
+      const d = dom.map(s => new Set(s)); d[x] = new Set([k]);
+      const chain = [];
+      for (let g = 0; g < 12; g++) {
+        let prog = false;
+        for (let i = 0; i < n; i++) {
+          const S = knEnum(pz, d, [i]);
+          if (!S.length) return { chain, broke: i, d };
+          for (let j = 0; j < n; j++) if (d[j].size === 2) { const v = new Set(S.map(a => a[j])); if (v.size === 1) { d[j] = new Set(v); chain.push(nm(j) + ' would be a ' + KW[[...v][0]] + ' (' + nm(i) + '’s words)'); prog = true; } }
+        }
+        if (!prog) break;
+      }
+      return null;
+    };
+    let guard = 0;
+    while (!solved() && guard++ < 30) {
+      let done = false;
+      for (let i = 0; i < n && !done; i++) if (single(i)) { done = true; level = Math.max(level, 1); }
+      if (done) continue;
+      for (let x = 0; x < n && !done; x++) if (dom[x].size === 2) for (const k of ['K', 'N']) {
+        const r = suppose(x, k); if (!r) continue;
+        const j = r.broke; const jk = r.d[j].size === 1 ? [...r.d[j]][0] : null;
+        const why = jk ? nm(j) + ' would be a ' + KW[jk] + ' saying something ' + (jk === 'K' ? 'false' : 'true') : nm(j) + '’s words ' + q(j) + ' wouldn’t fit a knight or a knave';
+        steps.push({ kind: 'case', cards: [x, j], text: ('Suppose ' + nm(x) + ' were a ' + KW[k] + '. ' + (r.chain.length ? 'Then ' + listWords(r.chain) + '. ' : '') + 'But then ' + why + (jk ? ': ' + q(j) : '') + '. So ' + nm(x) + ' is a ' + KW[other(k)] + '.').replace('\u201d.', '\u201d') });
+        dom[x] = new Set([other(k)]); said.add(x); level = Math.max(level, 2); done = true; break;
+      }
+      if (done) continue;
+      const S = knEnum(pz, dom, [...Array(n).keys()]);
+      if (S.length === 1) { S[0].forEach((k, j) => dom[j] = new Set([k])); level = 3; steps.push({ kind: 'full', text: 'Checking every way that is left, only one fits all the words.' }); }
+      else break;
+    }
+    if (solved()) steps.push({ kind: 'done', text: knAnswer(pz, dom.map(s => [...s][0])) });
+    return { steps, level, solved: solved() };
+  }
+  function knAnswer(pz, sol) {
+    const ks = pz.names.filter((_, i) => sol[i] === 'K'), ns = pz.names.filter((_, i) => sol[i] === 'N');
+    const part = (arr, k) => arr.length ? listWords(arr) + (arr.length > 1 ? ' are ' + KWS[k] : ' is a ' + KW[k]) : '';
+    return cap([part(ks, 'K'), part(ns, 'N')].filter(Boolean).join(', and ')) + '.';
+  }
+  function knRandStmt(rng, n, i, tier) {
+    const others = [...Array(n).keys()].filter(j => j !== i);
+    const pool = tier === 'E' ? ['is', 'is', 'same', 'diff'] : tier === 'M' ? ['is', 'same', 'diff', 'or', 'both', 'cnt'] : ['is', 'same', 'diff', 'or', 'both', 'cnt', 'cnt', 'same'];
+    const t = rng.pick(pool);
+    const kk = () => rng.pick(['K', 'N']);
+    if (t === 'is') return { t, a: rng.pick(others), k: kk() };
+    if (t === 'same' || t === 'diff') {
+      const a = rng.pick(tier === 'E' ? others : [i].concat(others)); const b = rng.pick([i].concat(others).filter(j => j !== a));
+      return { t, a, b };
+    }
+    if (t === 'or' || t === 'both') {
+      const a = rng.pick([i].concat(others)); const b = rng.pick(others.filter(j => j !== a));
+      const ka = kk(); return t === 'both' ? { t, a, b, ka, kb: ka } : { t, a, b, ka, kb: kk() };
+    }
+    const k = kk(); return { t: 'cnt', k, op: rng.pick(['eq', 'eq', 'ge']), c: 1 + rng.int(n - 1) };
+  }
+  function genKnights(rng, tier) {
+    const n = tier === 'E' ? 3 : tier === 'M' ? rng.pick([3, 4]) : 4;
+    const want = { E: [1, 1], M: [1, 2], T: [2, 2], X: [2, 3] }[tier];
+    for (let attempt = 0; attempt < 3000; attempt++) {
+      const stmts = [...Array(n).keys()].map(i => knRandStmt(rng, n, i, tier));
+      if (stmts.filter(s => s.t === 'is').length > (tier === 'E' ? 2 : 1)) continue;
+      const names = rng.shuffle(NAMES).slice(0, n).sort();
+      const pz = { type: 'knights', n, names, stmts };
+      const sols = knSolutions(pz);
+      if (sols.length !== 1) continue;
+      const sol = sols[0];
+      if (sol.every(k => k === sol[0]) && tier !== 'X') continue;
+      const ex = explainKnights(pz);
+      if (!ex.solved || ex.level < want[0] || ex.level > want[1]) continue;
+      pz.sol = sol; pz.tier = tier; pz.level = ex.level;
+      return pz;
+    }
+    return null;
+  }
+  function checkKnights(pz, entry) {
+    if (entry.some(k => !k)) return { ok: false, msg: 'Mark everyone as a knight or a knave first.' };
+    for (let i = 0; i < pz.n; i++) {
+      const v = knEval(pz.stmts[i], entry);
+      if ((entry[i] === 'K') !== v) {
+        return { ok: false, card: i, msg: 'In your answer ' + pz.names[i] + ' is a ' + KW[entry[i]] + ', so ' + pz.names[i] + '’s words “' + knText(pz, i) + '” would have to be ' + (entry[i] === 'K' ? 'true' : 'false') + '. With the rest of your answer they’re ' + (v ? 'true' : 'false') + '.' };
+      }
+    }
+    return { ok: true };
+  }
+
+  // =====================================================================
+  // SWITCHES AND LAMPS: each switch works one lamp; work out which from the tests
+  // =====================================================================
+  const LAMPS = [['Red', '#e0574a'], ['Blue', '#4a7fe0'], ['Green', '#46a85a'], ['Yellow', '#f2c230']];
+  const SW = ['A', 'B', 'C', 'D'];
+  function swPerms(n) { const out = []; const rec = (cur) => { if (cur.length === n) { out.push(cur.slice()); return; } for (let i = 0; i < n; i++) if (cur.indexOf(i) < 0) { cur.push(i); rec(cur); cur.pop(); } }; rec([]); return out; }
+  // sol[s] = lamp index worked by switch s
+  function swFits(pz, sol, t) { const T = pz.tests[t]; for (let s = 0; s < pz.n; s++) { const v = T.see[sol[s]]; if (v !== '?' && (v === 'L') !== T.up[s]) return false; } return true; }
+  function swSolutions(pz) { return swPerms(pz.n).filter(sol => pz.tests.every((_, t) => swFits(pz, sol, t))); }
+  const LN = (j) => LAMPS[j][0];
+  function swAllowed(pz, t, s) { const T = pz.tests[t]; const out = []; for (let j = 0; j < pz.n; j++) if (T.see[j] === '?' || (T.see[j] === 'L') === T.up[s]) out.push(j); return out; }
+  function explainSwitches(pz) {
+    const n = pz.n;
+    const dom = [...Array(n)].map(() => new Set([...Array(n).keys()]));
+    const steps = []; let level = 0;
+    const solved = () => dom.every(d => d.size === 1);
+    const announced = new Set();
+    const lampList = (js) => orList(js.slice().sort().map(LN));
+    let guard = 0;
+    while (!solved() && guard++ < 60) {
+      let prog = false;
+      // a switch with one lamp left: no other switch can work that lamp
+      for (let s = 0; s < n; s++) if (dom[s].size === 1 && !announced.has(s)) {
+        announced.add(s); const j = [...dom[s]][0];
+        let hit = false; for (let o = 0; o < n; o++) if (o !== s && dom[o].has(j)) { dom[o].delete(j); hit = true; }
+        prog = true; if (hit) break;
+      }
+      if (prog) continue;
+      // a lamp only one switch can still work
+      for (let j = 0; j < n && !prog; j++) {
+        const can = [...Array(n).keys()].filter(s => dom[s].has(j));
+        if (can.length === 1 && dom[can[0]].size > 1) {
+          dom[can[0]] = new Set([j]);
+          steps.push({ kind: 'hidden', clues: [], text: 'No other switch can work the ' + LN(j) + ' lamp now, so switch ' + SW[can[0]] + ' works it.' });
+          prog = true;
+        }
+      }
+      if (prog) continue;
+      // one test, one switch
+      let best = null;
+      for (let t = 0; t < pz.tests.length; t++) for (let s = 0; s < n; s++) {
+        const al = swAllowed(pz, t, s); const rem = [...dom[s]].filter(j => al.indexOf(j) < 0);
+        if (!rem.length) continue;
+        const left = dom[s].size - rem.length;
+        const score = (left === 1 ? 100 : 0) + rem.length;
+        if (!best || score > best.score) best = { t, s, al, rem, score };
+      }
+      if (best) {
+        const { t, s, al, rem } = best; const T = pz.tests[t];
+        const before = [...dom[s]];
+        rem.forEach(j => dom[s].delete(j));
+        const left = [...dom[s]];
+        const hidden = T.see.some(v => v === '?');
+        const kind = T.up[s] ? (hidden ? 'lit or hidden' : 'lit') : (hidden ? 'dark or hidden' : 'dark');
+        let text = 'Test ' + (t + 1) + ': switch ' + SW[s] + ' is ' + (T.up[s] ? 'on' : 'off') + ', so its lamp is one that is ' + kind + ' there (' + lampList(al) + ').';
+        if (before.length < n) text += ' We already know switch ' + SW[s] + ' works the ' + lampList(before) + ' lamp.';
+        text += left.length === 1 ? ' So switch ' + SW[s] + ' works the ' + LN(left[0]) + ' lamp.' : ' So switch ' + SW[s] + ' works the ' + lampList(left) + ' lamp.';
+        steps.push({ kind: 'clue', clues: [t], text });
+        level = Math.max(level, 1);
+        continue;
+      }
+      // two switches sharing the same two lamps
+      let pair = false;
+      for (let a = 0; a < n && !pair; a++) for (let b = a + 1; b < n && !pair; b++) {
+        if (dom[a].size !== 2 || dom[b].size !== 2 || [...dom[a]].some(j => !dom[b].has(j))) continue;
+        const two = [...dom[a]];
+        const hits = [...Array(n).keys()].filter(o => o !== a && o !== b && two.some(j => dom[o].has(j)));
+        if (!hits.length) continue;
+        hits.forEach(o => two.forEach(j => dom[o].delete(j)));
+        steps.push({ kind: 'pair', clues: [], text: 'Switches ' + SW[a] + ' and ' + SW[b] + ' share the ' + LN(two[0]) + ' and ' + LN(two[1]) + ' lamps between them, so switch ' + listWords(hits.map(o => SW[o])) + ' can’t work either one.' });
+        level = Math.max(level, 2); pair = true;
+      }
+      if (pair) continue;
+      const S = swPerms(n).filter(sol => sol.every((j, s) => dom[s].has(j)) && pz.tests.every((_, t) => swFits(pz, sol, t)));
+      if (S.length === 1) { S[0].forEach((j, s) => dom[s] = new Set([j])); level = 3; steps.push({ kind: 'full', clues: [], text: 'Trying the wirings that are left against every test, only one works.' }); }
+      else break;
+    }
+    if (solved()) steps.push({ kind: 'done', clues: [], text: swAnswer(pz, dom.map(d => [...d][0])) });
+    return { steps, level, solved: solved() };
+  }
+  function swAnswer(pz, sol) { return cap(listWords(sol.map((j, s) => 'switch ' + SW[s] + ' works the ' + LN(j) + ' lamp'))) + '.'; }
+  function genSwitches(rng, tier) {
+    const n = tier === 'E' ? 3 : 4;
+    const hideOk = tier === 'T' || tier === 'X';
+    const want = { E: [1, 1], M: [1, 1], T: [1, 2], X: [1, 3] }[tier];
+    for (let attempt = 0; attempt < 2000; attempt++) {
+      const sol = rng.shuffle([...Array(n).keys()]);
+      const tests = [];
+      const pz = { type: 'switches', n, tests };
+      for (let k = 0; k < 6; k++) {
+        let up; do { up = [...Array(n).keys()].map(() => rng.int(2) === 1); } while (up.every(Boolean) || !up.some(Boolean));
+        const see = [...Array(n).keys()].map(j => { const s = sol.indexOf(j); return up[s] ? 'L' : 'D'; });
+        if (hideOk && rng.int(3) > 0) see[rng.int(n)] = '?';
+        tests.push({ up, see });
+        if (swSolutions(pz).length === 1) break;
+      }
+      if (swSolutions(pz).length !== 1) continue;
+      // drop tests that are not needed
+      for (let t = tests.length - 1; t >= 0; t--) { const keep = tests.splice(t, 1)[0]; if (swSolutions(pz).length !== 1) tests.splice(t, 0, keep); }
+      if (tier === 'E' && tests.length > 3) continue;
+      if (hideOk && !tests.some(T => T.see.includes('?'))) continue;
+      const ex = explainSwitches(pz);
+      if (!ex.solved || ex.level < want[0] || ex.level > want[1]) continue;
+      if (tier === 'M' && tests.length < 2) continue;
+      if (tier === 'X' && tests.length < 3) continue;
+      pz.sol = sol; pz.tier = tier; pz.level = ex.level;
+      return pz;
+    }
+    return null;
+  }
+  function checkSwitches(pz, entry) {
+    if (entry.some(j => j === null || j === undefined)) return { ok: false, msg: 'Pick a lamp for every switch first.' };
+    if (new Set(entry).size !== entry.length) return { ok: false, msg: 'Each switch works a different lamp.', rule: true };
+    for (let t = 0; t < pz.tests.length; t++) {
+      const T = pz.tests[t];
+      for (let s = 0; s < pz.n; s++) {
+        const j = entry[s]; const v = T.see[j];
+        if (v !== '?' && (v === 'L') !== T.up[s]) return { ok: false, clue: t, msg: 'Test ' + (t + 1) + ': in your answer switch ' + SW[s] + ' works the ' + LN(j) + ' lamp. Switch ' + SW[s] + ' is ' + (T.up[s] ? 'on' : 'off') + ' there, but the ' + LN(j) + ' lamp is ' + (v === 'L' ? 'lit' : 'dark') + '.' };
+      }
+    }
+    return { ok: true };
+  }
+
+  Object.assign(TL, { NAMES, KW, knEval, knText, knSolutions, explainKnights, genKnights, checkKnights, knAnswer,
+    LAMPS, SW, swSolutions, explainSwitches, genSwitches, checkSwitches, swAnswer });
+
+  // ---------- add both to the library and the Daily Three ----------
+  TL.ROSTER.push('knights', 'switches');
+  const genPrev = TL.genAny;
+  TL.genAny = function (rng, type, tier) {
+    if (type === 'knights') return genKnights(rng, tier);
+    if (type === 'switches') return genSwitches(rng, tier);
+    return genPrev(rng, type, tier);
+  };
 })(typeof window !== 'undefined' ? window : this);
 
 </script>
@@ -1299,9 +1654,9 @@ function addDays(ds, k) { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getD
 function weekOf(ds) { const wd = TL.weekday(ds); const mon = addDays(ds, -wd); return [0, 1, 2, 3, 4, 5, 6].map(i => addDays(mon, i)); }
 const TIERNAME = { E: 'Easy', M: 'Medium', T: 'Tricky', X: 'Toughest' };
 const TIERDOTS = { E: 1, M: 2, T: 3, X: 4 };
-const TYPENAME = { lock: 'Code Lock', cards: 'Truth Cards', lineup: 'Line-Up', houses: 'Who Lives Where', chests: 'Treasure Chests', balance: 'Balance Scales' };
-const TYPEEMOJI = { lock: '🔐', cards: '🃏', lineup: '🏁', houses: '🏠', chests: '💎', balance: '⚖️' };
-const SOLVEDHEAD = { lock: 'Unlocked! 🔓', cards: 'You got it! 🃏', lineup: 'Spot on! 🏁', houses: 'Moved in! 🏠', chests: 'Treasure! 💎', balance: 'Balanced! ⚖️' };
+const TYPENAME = { lock: 'Code Lock', cards: 'Truth Cards', lineup: 'Line-Up', houses: 'Who Lives Where', chests: 'Treasure Chests', balance: 'Balance Scales', knights: 'Knights Island', switches: 'Switches & Lamps' };
+const TYPEEMOJI = { lock: '🔐', cards: '🃏', lineup: '🏁', houses: '🏠', chests: '💎', balance: '⚖️', knights: '🏝️', switches: '🔌' };
+const SOLVEDHEAD = { lock: 'Unlocked! 🔓', cards: 'You got it! 🃏', lineup: 'Spot on! 🏁', houses: 'Moved in! 🏠', chests: 'Treasure! 💎', balance: 'Balanced! ⚖️', knights: 'Unmasked! 🏝️', switches: 'Lights on! 🔌' };
 const dayCache = {};
 function getDay(ds) { return dayCache[ds] || (dayCache[ds] = TL.daily(ds)); }
 
@@ -1309,7 +1664,7 @@ function getDay(ds) { return dayCache[ds] || (dayCache[ds] = TL.daily(ds)); }
 function results() { return store.get('results', {}); }
 // Each saved result carries its puzzle's id (TL.pid). When a content update changes a day's puzzles,
 // the old results move to an archive (they still count for the streak) and the new puzzles are playable.
-const CONTENT_VER = 3;
+const CONTENT_VER = 4;
 function archived() { return store.get('archive', {}); }
 function migrateResults() {
   const all = results(); const keys = Object.keys(all);
@@ -1381,7 +1736,7 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div class="foot">Truthlock prototype v0.3 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
+    '<div class="foot">Truthlock prototype v0.4 (working title)' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
@@ -1658,18 +2013,85 @@ function chestsBoard() {
 function chestsWire() {
   $app.querySelectorAll('.cb').forEach(b => b.onclick = () => { if (P.solved) return; P.entry = +b.dataset.i; P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null; renderPuzzle(); });
 }
+// --- knights island ---
+const ISLECOL = ['#e07a5f', '#3d9a8b', '#7b6bd6', '#e0a23a'];
+const KNF = { K: { e: '🛡️', w: 'Knight' }, N: { e: '🎭', w: 'Knave' } };
+function knightsBoard() {
+  const pz = P.pz;
+  let h = '<div class="rulebox"><div class="rule"><span class="kb">🛡️</span>Knights always tell the truth.</div><div class="rule"><span class="kb">🎭</span>Knaves always lie.</div></div>';
+  h += '<div class="isles n' + pz.n + '">' + pz.names.map((nm, i) => {
+    const r = P.entry[i];
+    return '<div class="cwrap isle' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cw' + i + '"><div class="ava' + (r ? ' set' : '') + '" style="background:' + ISLECOL[i % 4] + '" aria-label="' + esc(nm) + ': ' + (r ? KNF[r].w : 'not marked yet') + '" role="img">' + (r ? '<span class="badge">' + KNF[r].e + '</span>' : '') + nm.charAt(0) + '</div><div class="inm">' + esc(nm) + '</div>' +
+      '<div class="bubble">' + esc(TL.knText(pz, i)) + '</div>' +
+      '<div class="picker two">' + ['K', 'N'].map(x => '<button class="pk' + (r === x ? ' on' : '') + '" data-i="' + i + '" data-r="' + x + '" aria-pressed="' + (r === x) + '" aria-label="' + esc(nm) + ' is a ' + KNF[x].w.toLowerCase() + '">' + KNF[x].e + ' ' + KNF[x].w + '</button>').join('') + '</div></div>';
+  }).join('') + '</div>';
+  h += '<div class="ask">Who is a knight, and who is a knave?</div>';
+  return h;
+}
+function knightsWire() {
+  $app.querySelectorAll('.pk').forEach(b => b.onclick = () => { if (P.solved) return; const i = +b.dataset.i; P.entry[i] = P.entry[i] === b.dataset.r ? null : b.dataset.r; P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null; renderPuzzle(); });
+}
+// --- switches and lamps ---
+function lampDot(j, st, sz) {
+  const c = TL.LAMPS[j][1];
+  if (st === '?') return '<span class="lamp hid" style="width:' + sz + 'px;height:' + sz + 'px" title="hidden">?</span>';
+  return '<span class="lamp' + (st === 'L' ? ' lit' : '') + '" style="width:' + sz + 'px;height:' + sz + 'px;' + (st === 'L' ? 'background:' + c + ';box-shadow:0 0 10px ' + c : 'border-color:' + c) + '"></span>';
+}
+function switchesBoard() {
+  const pz = P.pz, n = pz.n;
+  let h = '<div class="lampkey">' + [...Array(n).keys()].map(j => '<span class="lk">' + lampDot(j, 'L', 18) + TL.LAMPS[j][0] + '</span>').join('') + '</div>';
+  h += '<div class="tclues swtests">' + pz.tests.map((T, t) => '<div class="tclue swt' + (P.hl && P.hl.indexOf(t) >= 0 ? ' hl' : '') + (P.bad === t ? ' badc' : '') + '" id="cl' + t + '"><div class="no">' + (t + 1) + '</div><div class="swrow">' +
+    '<div class="sws">' + T.up.map((u, s) => '<span class="swp' + (u ? ' on' : '') + '" aria-label="switch ' + TL.SW[s] + (u ? ' on' : ' off') + '">' + TL.SW[s] + '<small>' + (u ? 'ON' : 'off') + '</small></span>').join('') + '</div><div class="arrow">→</div>' +
+    '<div class="lps" aria-label="' + T.see.map((v, j) => TL.LAMPS[j][0] + (v === 'L' ? ' lit' : v === 'D' ? ' dark' : ' hidden')).join(', ') + '">' + T.see.map((v, j) => lampDot(j, v, 20)).join('') + '</div></div></div>').join('') + '</div>';
+  if (pz.tests.some(T => T.see.indexOf('?') >= 0)) h += '<div class="notehint" style="margin-top:4px">? = that lamp was hidden in this test.</div>';
+  h += '<div class="trayhd">Which lamp does each switch work?</div><div class="wires">' + [...Array(n).keys()].map(s => '<div class="wire"><span class="swp on big">' + TL.SW[s] + '</span><span class="arrow">→</span>' +
+    [...Array(n).keys()].map(j => '<button class="lp' + (P.entry[s] === j ? ' on' : '') + '" data-s="' + s + '" data-j="' + j + '" aria-pressed="' + (P.entry[s] === j) + '" aria-label="Switch ' + TL.SW[s] + ' works the ' + TL.LAMPS[j][0] + ' lamp">' + lampDot(j, P.entry[s] === j ? 'L' : 'D', 24) + '</button>').join('') + '</div>').join('') + '</div>';
+  h += '<div class="tools" style="grid-template-columns:1fr"><button class="tool" id="clr">Clear</button></div>';
+  return h;
+}
+function switchesWire() {
+  $app.querySelectorAll('.lp').forEach(b => b.onclick = () => {
+    if (P.solved) return; const s = +b.dataset.s, j = +b.dataset.j;
+    if (P.entry[s] === j) { P.entry[s] = null; }
+    else { const prev = P.entry.indexOf(j); if (prev >= 0 && prev !== s) { P.entry[prev] = null; if (!P.tutorial) toast('Moved the ' + TL.LAMPS[j][0] + ' lamp from switch ' + TL.SW[prev]); } P.entry[s] = j; }
+    P.bad = null; if (P.msg && P.msg.k === 'bad') P.msg = null; renderPuzzle();
+  });
+  document.getElementById('clr').onclick = () => { P.entry = P.entry.map(() => null); P.bad = null; P.msg = null; renderPuzzle(); };
+}
 const TYPES = {
   lock: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainLock(pz), board: () => lockBoard(), wire: () => wireLock(), check: (pz, e) => TL.checkLock(pz, e), answer: pz => 'The code is ' + pz.code.join(' '), hid: i => 'cl' + i },
   cards: { init: () => [null, null, null], explain: pz => TL.explainCards(pz), board: () => cardsBoard(), wire: () => wireCards(), check: (pz, e) => TL.checkCards(pz, e), answer: pz => pz.sol.map((r, i) => 'Card ' + (i + 1) + ': ' + TL.RN[r]).join(' · '), hid: i => 'cw' + i },
   lineup: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
   balance: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
   houses: { init: pz => ({ col: new Array(pz.N).fill(null), pet: new Array(pz.N).fill(null) }), explain: pz => TL.explainGrid(pz), board: () => housesBoard(), wire: () => housesWire(), check: (pz, e) => TL.checkGrid(pz, housesToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
+  knights: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainKnights(pz), board: () => knightsBoard(), wire: () => knightsWire(), check: (pz, e) => TL.checkKnights(pz, e), answer: pz => TL.knAnswer(pz, pz.sol), hid: i => 'cw' + i },
+  switches: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainSwitches(pz), board: () => switchesBoard(), wire: () => switchesWire(), check: (pz, e) => TL.checkSwitches(pz, e), answer: pz => TL.swAnswer(pz, pz.sol), hid: i => 'cl' + i },
   chests: { init: () => null, explain: pz => TL.explainChests(pz), board: () => chestsBoard(), wire: () => chestsWire(), check: (pz, e) => TL.checkChests(pz, e), answer: pz => 'The treasure was in the ' + TL.CHESTS[pz.sol][0] + ' chest', hid: i => 'ch' + i }
 };
 
 // =================== TUTORIALS ===================
 // Fixed, hand-checked lessons. Each step: text, highlight, and optional "wait for" condition.
 const TUT = {
+  knights: {
+    pz: { type: 'knights', tier: 'E', n: 3, names: ['Ava', 'Ben', 'Cleo'], stmts: [{ t: 'is', a: 1, k: 'K' }, { t: 'diff', a: 0, b: 1 }, { t: 'is', a: 1, k: 'N' }], sol: ['N', 'N', 'K'] },
+    steps: [
+      { t: 'Everyone on this island is a 🛡️ knight or a 🎭 knave. Knights always tell the truth. Knaves always lie. Who is who?', on: 'rules' },
+      { t: 'Start with Ben: “Ava and I are different kinds.” If Ben is a knight, that\'s true, so Ava is a knave. If Ben is a knave, it\'s a lie, so they\'re the same kind, and Ava is a knave again.', hl: [1] },
+      { t: 'Either way, Ava is a knave. Tap 🎭 Knave under Ava.', hl: [0], wait: () => P.entry[0] === 'N' },
+      { t: 'Ava is a knave, so “Ben is a knight” is a lie. Ben is a knave too. Mark Ben as a knave.', hl: [0, 1], wait: () => P.entry[1] === 'N' },
+      { t: 'Cleo says “Ben is a knave.” That\'s true, and only knights tell the truth. Mark Cleo as a 🛡️ knight, then tap Check.', hl: [2], on: 'chk' }
+    ]
+  },
+  switches: {
+    pz: { type: 'switches', tier: 'E', n: 3, tests: [{ up: [true, false, false], see: ['D', 'D', 'L'] }, { up: [true, true, false], see: ['L', 'D', 'L'] }], sol: [2, 0, 1] },
+    steps: [
+      { t: 'Each switch (A, B, C) works one lamp. Find which one from the tests.' },
+      { t: 'Each test shows which switches were ON, and which lamps lit up. In test 1 only switch A was on, and only the Green lamp lit. So A works Green.', hl: [0] },
+      { t: 'Tap the Green lamp next to switch A.', hl: [0], wait: () => P.entry[0] === 2 },
+      { t: 'In test 2, A and B were on, and Red and Green lit. Green belongs to A, so B works Red. Tap Red next to switch B.', hl: [1], wait: () => P.entry[1] === 0 },
+      { t: 'That leaves Blue for switch C. Tap it, then tap Check.', on: 'chk' }
+    ]
+  },
   lock: {
     pz: { type: 'lock', tier: 'E', n: 3, code: [8, 4, 0], clues: [{ g: [5, 1, 3], a: 0, b: 0 }, { g: [8, 4, 1], a: 2, b: 0 }, { g: [6, 2, 0], a: 1, b: 0 }] },
     steps: [
@@ -1779,7 +2201,7 @@ function tutSolved() {
   const tut = store.get('tut', {}); tut[type] = 1; store.set('tut', tut);
   TUT[type].steps.forEach(s => delete s.passed);
   openSheet('<h2>' + SOLVEDHEAD[type] + '</h2><div class="sub">That\'s all there is to it.</div>' +
-    '<div class="msg info" style="margin-bottom:14px">' + (type === 'cards' ? 'Stuck? Tap 💡 Hint. If you guess wrong, the game shows which card can\'t be what you said.' : type === 'chests' ? 'Stuck? Tap 💡 Hint. If you pick the wrong chest, the game shows which signs don\'t fit the rule.' : 'Stuck in a real puzzle? Tap 💡 Hint for the next step. If you\'re wrong, the game shows which clue your answer breaks.') + '</div>' +
+    '<div class="msg info" style="margin-bottom:14px">' + (type === 'cards' ? 'Stuck? Tap 💡 Hint. If you guess wrong, the game shows which card can\'t be what you said.' : type === 'chests' ? 'Stuck? Tap 💡 Hint. If you pick the wrong chest, the game shows which signs don\'t fit the rule.' : type === 'knights' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows whose words don\'t fit what you said.' : type === 'switches' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows which test your wiring breaks.' : 'Stuck in a real puzzle? Tap 💡 Hint for the next step. If you\'re wrong, the game shows which clue your answer breaks.') + '</div>' +
     '<button class="btn wide" id="tdone">' + (tutState.after ? 'Start the puzzle' : 'Done') + '</button>');
   document.getElementById('tdone').onclick = () => { const a = tutState.after; tutState = null; closeSheet(); if (a) a(); else renderHome(); };
 }
