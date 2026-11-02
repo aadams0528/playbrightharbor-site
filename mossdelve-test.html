@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Mossdelve prototype v0.16 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
+<!-- Mossdelve prototype v0.16.1 (working title; pocket dungeon). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/mossdelve/ (node build.js). Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Mossdelve (test version)</title>
@@ -254,7 +254,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       <button id="quest"></button>
       <div class="slots" id="slots"></div>
       <div class="tierRow hidden" id="tierRow"><button id="tierDown" aria-label="Easier">◀</button><b id="tierLbl"></b><button id="tierUp" aria-label="Harder">▶</button></div>
-      <div class="row3"><button class="btn small" id="collBtn">🎒 Collection</button><button class="btn small" id="forgeBtn">⚒️ Forge</button><button class="btn small" id="bestBtn">📖 Bestiary</button></div>
+      <div class="row3"><button class="btn small" id="collBtn">🎒 Collection</button><button class="btn small" id="forgeBtn">⚒️ Forge</button><button class="btn small" id="bestBtn">📖 Bestiary</button></div><button class="btn small hidden" id="guardAgain" style="margin-top:6px;width:100%">🛡 Practice Guard again</button>
       <button class="btn main" id="storyBtn">📜 The Lost Heir</button>
       <button class="btn" id="delveBtn">Endless delve</button>
       <button class="btn hidden" id="abandonBtn" style="font-size:13px;padding:8px">Start a new delve instead</button>
@@ -588,7 +588,10 @@ function newFight(run, type, elite) {
   const st = calcStats(run);
   const lv = LV(run); // some story levels start each fight with the lantern part-charged (to teach the Flare)
   const m = makeMonster(type, run, elite); if (lv && lv.castCd && m.caster) m.tellCd = lv.castCd; // teaching level: casters start their spell sooner
-  return { st, m, hTimer: st.interval * 0.6, flare: lv && lv.flareStart || 0, over: null, t: 0 };
+  const f = { st, m, hTimer: st.interval * 0.6, flare: lv && lv.flareStart || 0, over: null, t: 0 };
+  // v0.16.1: in story levels with GUARD (from 1-2), a normal foe always lives through your first turn, so every fight has at least one foe strike to Guard
+  if (lv && run.level !== '1-1' && !m.boss) { const p = turnPlan(f), floor = Math.round(Math.max(1, st.atk * p.hm - m.def) * p.nH * 1.15) + 1; if (m.hp < floor) { m.hp = m.max = floor; } }
+  return f;
 }
 
 function heroHit(run, f, mult, rng, ev, isFlare, critOk) {
@@ -1736,7 +1739,7 @@ function gearArt(id) {
 function gearImg(id, px, cls) { return `<img src="${gearArt(id)}" width="${px}" height="${px}" alt="" ${cls ? `class="${cls}"` : ''} style="display:block;margin:0 auto">`; }
 
 const RM = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const VERSION = 'v0.16';
+const VERSION = 'v0.16.1';
 
 // ---------------- game state ----------------
 let mode = 'camp', run = null, fight = null, phase = 'idle', roomSeed = 1, content = null, doors = [];
@@ -2057,6 +2060,7 @@ function renderCamp() {
   $('mute').textContent = S.mute ? '🔇' : '🔊';
   if (S.foxTrust === 1 && (S.pets || []).includes('fox')) { S.foxTrust = 2; save(); setTimeout(() => toast('🔥 Your Ember Fox sleeps by your boots now. It trusts you.', 3200), 800); }
   $('campStats').innerHTML = (S.runs ? `Delves: ${S.runs} · Wins: ${S.wins} · <span class="gold">🪙 ${S.gold || 0}</span>` : 'Swipe through rooms. Fights are automatic.') + ((S.pets || []).length < Object.keys(PETS).length && (S.runs || Object.keys(S.levels || {}).length) ? `<br><span class="nextFriend">🐾 Next friend: free a caged creature (${(S.pets || []).length}/${Object.keys(PETS).length} found). Listen for voices or growls.</span>` : '') + ` · ${VERSION}`;
+  show($('guardAgain'), !!S.seen.guard);
   $('forgeBtn').classList.toggle('dot', canForgeAny()); $('bestBtn').classList.toggle('dot', !!S.bestNew);
   const C = CLASSES[S.hero || 'warden']; const newCls = Object.keys(CLASSES).some(k => classUnlocked(k, S) && !(S.clsSeen || []).includes(k) && k !== 'warden');
   $('heroRow').innerHTML = `<span class="hic">${C.icon}</span><span><b>${C.name}</b><br>${C.desc.split('.')[0]}.</span><span class="chg">${newCls ? '✦ ' : ''}Change</span>`;
@@ -2084,6 +2088,8 @@ function renderCamp() {
 // the "tap a slot" card only shows on a bare camp screen; opening any panel cancels it, and it tries again next time camp shows
 let campCoachT = 0, campCoachOn = false;
 let campCoachKey = '';
+// leaving camp (a panel, the map, a delve) takes the camp tip down so it never shows over another screen
+function cancelCampCoach() { clearTimeout(campCoachT); if (campCoachOn && coachClose) { delete S.seen[campCoachKey]; save(); campCoachOn = false; coachClose(); } }
 function nextCampLesson() {
   const L2 = [
     { key: 'camp', on: (S.runs >= 1 || Object.keys(S.levels || {}).length > 0) && S.owned.length > 2, el: 'slots', text: 'Gear you find stays yours forever. Tap a slot to equip something better. The next delve gets easier.' },
@@ -2157,6 +2163,7 @@ function portrait(key, fn) { if (portraitCache[key]) return portraitCache[key]; 
 function heroImg(k) { return portrait('h_' + k, px => drawHero(px / 2, px * 0.95, px * 0.85, { t: 0, cls: k })); }
 function petImg(k) { return portrait('p_' + k, px => drawPet(k, px / 2, k === 'fox' ? px * 0.8 : px * 1.25, px * (k === 'fox' ? 0.9 : 0.7), 0.4)); }
 $('bestBtn').onclick = () => openBestiary();
+$('guardAgain').onclick = () => { delete S.seen.guard; delete S.seen.guardDone; save(); toast('Your next fight will show the Guard lesson again, step by step.', 2600); };
 function canForgeAny() { return Object.values(S.eq).some(id => id && forgeCost(id, S.stars[id]) != null && forgeCost(id, S.stars[id]) <= (S.gold || 0)); }
 // the forge: spend gold to add stars to gear; stars stay forever and apply from the next delve (or right away at camp)
 function openForge() {
@@ -2239,7 +2246,7 @@ function openCollection() {
 
 // ---------------- overlay sheet ----------------
 function openSheet(html, actions) {
-  if (mode === 'camp') { clearTimeout(campCoachT); if (campCoachOn && coachClose) { delete S.seen[campCoachKey]; save(); campCoachOn = false; coachClose(); } }
+  if (mode === 'camp') cancelCampCoach();
   const ov = $('overlay'); ov.innerHTML = `<div class="sheet">${html}</div>`; show(ov, true); overlayOpen = true;
   ov.querySelectorAll('[data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); const a = b.dataset.a; (actions[a] || (actions['*'] ? () => actions['*'](a) : () => {}))(); });
 }
@@ -2281,7 +2288,7 @@ function doorsRect() { const xs = doorSlots(doors.length); const x0 = xs[0] * W 
 
 // ---------------- run flow ----------------
 function heroStats() { return calcStats(run); }
-function startRun() {
+function startRun() { cancelCampCoach();
   run = newRun(S); run.hp = calcStats(run).maxHp; roomSeed = 1000 + S.runs * 37;
   content = { kind: 'start' }; doors = genDoors(run, Math.random);
   mode = 'run'; show($('camp'), false); show($('game'), true); fx = []; floats = []; updateHud(); layout();
@@ -2385,7 +2392,7 @@ document.addEventListener('keydown', e => {
 });
 
 function goDoor(i) {
-  if (coachOpen || phase !== 'choose') return;
+  if (coachOpen || overlayOpen || phase !== 'choose') return;
   const d = doors[i]; const xs = doorSlots(doors.length); SFX.step(); buzz(8);
   if (!$('voice').classList.contains('hidden')) { clearInterval(voiceT); clearTimeout(voiceT); if (voiceTyp) voiceTyp.stop(); show($('voice'), false); }
   if (run.level) { run.path = (run.path || '') + i; (run.trail = run.trail || []).push({ k: d.elite ? 'elite' : d.kind, n: doors.length, i }); }
@@ -2416,7 +2423,7 @@ function enterRoom2(d) {
   // the doors out of this room are decided now, shown once the room is cleared
   doors = genDoors(run, Math.random);
   A.monAlpha = 0; A.monScale = 1; A.chestOpen = 0; A.heroDown = 0;
-  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = 1; if (run.level && fight.m.boss) fight.m.tellCd = 1.2;
+  if (d.kind === 'fight' || d.kind === 'guard') { fight = newFight(run, d.mon, d.elite); if (!S.seen.flare) fight.flare = 0.8; if (run.level === '1-1') fight.flare = 1; if (guardOn() && !S.seen.guard && S.seen.flare && !fight.m.boss) { const hp = Math.max(fight.m.max, Math.round(fight.st.atk * 5)); fight.m.hp = fight.m.max = hp; } if (run.level && fight.m.boss) fight.m.tellCd = 1.2;
     // levels with a "stop the big attack" star: the lantern starts full against the guardian or a caster, and the button says to save it
     fight.hold = !!(run.level && LV(run).bonus.some(g => g.t === 'interrupts') && !(run.gs && run.gs.interrupts) && (fight.m.boss || fight.m.caster)); if (fight.hold) fight.flare = 1;
     setPhase('fight'); fightLessons(); if (fight.hold) setTimeout(() => lesson('holdFlare', [{ text: 'Your lantern is <b>full</b>. <b>Save your Flare</b> until this foe winds up (a bar fills over its head), then tap FLARE to stop it and earn the star.' }], () => phase === 'fight' && fight && fight.hold), 700); }
@@ -2594,7 +2601,7 @@ function handleEvents(ev) {
       A.react = { k: rk, t: 0 }; A.heroHurt = 0.35; SFX[RT[2]](); buzz(8); A.shake = RM ? 0 : (e.heavy ? 6 : 2);
       const cx = L.heroX + (L.monX - L.heroX) * 0.18, cy = L.heroY - u * 1.4 + (L.monY - L.heroY) * 0.12; sparkle(cx, cy, e.react === 'ward' ? '#9ad8ff' : '#fff2c0', e.react === 'ward' ? 18 : 14);
       laneText('hero', RT[0] + ' -' + e.dmg, RT[1], 0.8, 0.7);
-      if (!S.seen.react) { S.seen.react = 1; save(); setTimeout(() => toast('Your hero defends on their own: blocks, parries and dodges cut the damage. Each hero has a style.', 2600), 500); } }
+      if (!S.seen.react) { S.seen.react = 1; save(); setTimeout(() => toast(guardOn() ? 'Your hero sometimes dodges or blocks on their own. GUARD is yours to time: tap it when the ring turns gold.' : 'Your hero defends on their own: blocks and dodges cut the damage. Each hero has a style.', 3000), 500); } }
     else if (e.t === 'hitH') { A.heroHurt = 1; if (!e.thorn) { marks.push({ style: ATK_STYLE[fight.m.type] || 'claw', t: 0, heavy: !!e.heavy, a: (Math.random() - 0.5) * 0.4 }); SFX.hurt(); buzz(12); A.hurtVig = Math.min(1, 0.45 + e.dmg / Math.max(1, fight.st.maxHp) * 4); if (e.heavy) { A.shake = RM ? 0 : 12; A.hurtVig = 1; laneText('hero', 'Big hit!', '#ff7a6a', 0.95); } } laneText('hero', '-' + e.dmg, '#ff7a6a', e.thorn ? 0.8 : 1); }
     else if (e.t === 'gParry') { A.react = { k: 'parry', t: 0 }; SFX.parry ? SFX.parry() : SFX.clang(); buzz([10, 20, 10]); A.monKnock = 1; A.flash = RM ? 0.15 : 0.35; sparkle(L.heroX + (L.monX - L.heroX) * 0.3, L.heroY - u * 1.5 + (L.monY - L.heroY) * 0.25, '#ffffff', 22); laneText('hero', 'Parry!', '#f4f4ff', 1); if (run.gs) run.gs.parries = (run.gs.parries || 0) + 1; guardFeedback('parry'); }
     else if (e.t === 'heal') { laneText('heal', '+' + e.amt, '#8fcf6a', e.potion ? 1 : 0.8); if (e.pet) sparkle(L.heroX, L.heroY - u, '#aaffaa', 6); }
@@ -2903,11 +2910,11 @@ function sniffBeat() { if (!run || !doors.some(d => d.sniff) || run.sniffed === 
   setTimeout(() => { if (!run || phase !== 'choose') return; if (run.pet) { A.petHop = 1; floatText(L.heroX + L.u * 1.3, L.heroY - L.u * 1.5, '!', '#ffe08a', 1.2); } else A.flash = RM ? 0.15 : 0.4; sparkle(W / 2, L.wallB - L.doorH * 0.5, '#d8c8ff', 26); voiceLine(SNIFF[run.pet] || SNIFF.none, 5200); }, 500); }
 // ---- Ember Fox trust moment (Chapter 2, level 2-3): the fox balks at a thorn cage like its own; reassure it and it burns a safe way ----
 const TRUST_LINE = 'Brave little fox. It was scared, but it trusted you. That is worth more than any treasure.';
-function trustBeat() { const lv = run && LV(run); if (!lv || run.room < lv.trust || run.pet !== 'fox' || S.foxTrust || run.trustAsked || doors.length < 2) return; run.trustAsked = 1; const room = run.room;
+function trustBeat() { const lv = run && LV(run); if (!lv || !lv.trust || run.room < lv.trust || run.pet !== 'fox' || S.foxTrust || run.trustAsked || doors.length < 2) return; run.trustAsked = 1; const room = run.room;
   // wait for a calm moment (tips and sheets closed); if the player walks on first, offer it in the next room instead
   const tryShow = () => { if (!run || run.room !== room) { if (run) run.trustAsked = 0; return; } if (phase !== 'choose' || coachOpen || overlayOpen || !$('overlay').classList.contains('hidden')) { setTimeout(tryShow, 400); return; } showTrust(); };
   setTimeout(tryShow, 900); }
-function showTrust() { A.petHop = 1;
+function showTrust() { if (phase !== 'choose' || overlayOpen || coachOpen) { run.trustAsked = 0; return; } A.petHop = 1;
     openSheet(`<h2>A Thorny Cage</h2><p>An old cage of thorns hangs across the path, just like the one your <b>Ember Fox</b> was trapped in. A baby mole trembles inside.</p><p>Your fox stops dead. Its ears go flat, and it will not go any closer.</p>
       <button class="card" data-a="calm"><div class="ic">🤲</div><div class="tx"><b>Kneel and calm your fox</b><span>Show it you're right here</span></div></button>
       <button class="card" data-a="later"><div class="ic">👣</div><div class="tx"><b>Give it space</b><span>Maybe another time</span></div></button>`, {
@@ -2934,7 +2941,7 @@ let mapCh = 0;
 function chLevels(n) { return LEVELS.filter(l => l.ch === n); }
 function maxOpenCh() { let n = 1; while (chLevels(n + 1).length && chapterOpen(S, n + 1)) n++; return n; }
 function defaultCh() { const top = maxOpenCh(); for (let n = 1; n <= top; n++) if (chLevels(n).some(l => !(S.levels || {})[l.id])) return n; return top; }
-function openMap() {
+function openMap() { cancelCampCoach();
   hush(); mode = 'map'; run = null; if (!mapCh || mapCh > maxOpenCh()) mapCh = defaultCh();
   const ch = mapCh, C = CHAPTERS.find(c => c.n === ch), lvls = chLevels(ch), got = chapterStars(S, ch), top = maxOpenCh(), N = CHAPTERS.find(c => c.n === ch + 1), nOpen = N && chLevels(ch + 1).length && chapterOpen(S, ch + 1);
   const items = lvls.map(l => [`Level ${l.id}, ${l.name}: ${levelOpen(S, l.id) ? ((S.levels || {})[l.id] || 0) + ' of 3 stars' : 'locked'}`, () => { if (levelOpen(S, l.id)) openLevelCard(l.id); }]);
@@ -3014,7 +3021,7 @@ function openLevelCard(id) {
   openSheet(h, { close: closeSheet, play: () => { closeSheet(); hush(); startLevel(id, true); } });
   speak(heirTxt(lv.intro));
 }
-function startLevel(id, fromCard) {
+function startLevel(id, fromCard) { cancelCampCoach();
   run = newLevelRun(S, id); if (S.keepsake && UP_BY_ID[S.keepsake]) applyUpgrade(run, S.keepsake); run.hp = calcStats(run).maxHp; run.trail = []; roomSeed = 5000 + LEVELS.findIndex(l => l.id === id) * 53;
   content = { kind: 'start' }; doors = genDoors(run, Math.random); fight = null; fx = []; floats = []; trail = []; projs = []; sparks = []; marks = [];
   mode = 'run'; show($('camp'), false); show($('mapUI'), false); show($('game'), true); A.fade = 1; A.fadeDir = -1; A.heroDown = 0; A.light = 1;
