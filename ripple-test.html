@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.3 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.3.1 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
 <title>Ripple (test version)</title>
@@ -53,7 +53,7 @@ h1#title svg{width:30px;height:30px}
 .counter b{font-size:20px}
 .counter .par{color:var(--ink-soft);font-weight:600}
 .helpbtn{width:40px;height:40px;border-radius:14px;font-weight:800;font-size:18px}
-.solvebtn{min-height:36px;padding:0 10px;border-radius:12px;font-size:13px}
+.solvebtn{min-height:36px;padding:0 10px;border-radius:12px;font-size:12px;border:2px dashed #b58b2a;background:#fff8e1;color:#7a5a12;box-shadow:none}
 /* play screen fills exactly one screen: the board takes whatever height is left, so the
    intro card, stone bar and Undo/Restart row always fit (short phones, 1180x757 desktop) */
 body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
@@ -67,6 +67,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 .stone svg{width:26px;height:26px}
 .stone[aria-pressed="true"]{border-color:var(--accent);background:#e8f6f2}
 .stone:disabled{opacity:.45;cursor:default}
+.coach.hidden.slot{display:flex!important;visibility:hidden}
 .coach{margin:8px 0 0;background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:10px 14px;display:flex;flex-direction:column;gap:6px;border:2px solid #f3dc8b;flex:0 0 auto}
 .coach p{margin:0;font-size:16.5px;line-height:1.3;font-weight:650}
 .coachRow .btn{min-height:42px}
@@ -120,6 +121,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 @keyframes pop{from{transform:scale(0)}}
 .card .row{display:flex;gap:10px;margin-top:14px}
 .card .row .btn{flex:1}
+.toast.clue{top:max(6px,env(safe-area-inset-top));pointer-events:auto;cursor:pointer;background:#24473f;border:2px solid #f3dc8b;max-width:min(460px,calc(100vw - 24px))}
 .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:14px;z-index:20;transition:opacity .3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
 /* svg bits */
 .leaf{transition:transform 240ms cubic-bezier(.25,.8,.35,1)}
@@ -167,14 +169,14 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.2 prototype</div>
+    <div class="ver" id="ver">Ripple v0.3.1 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
     <div class="hud">
       <div class="lvname" id="lvName"></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn solvebtn hidden" id="btnSolve">Solve</button>
+        <button class="btn solvebtn hidden" id="btnSolve" title="Tester tool: plays the answer">Solve (tester)</button>
         <button class="icon helpbtn hidden" id="btnHelp" aria-label="Show tips again">?</button>
         <div class="counter"><span><b id="taps">0</b> taps</span><span class="par">par <span id="par">0</span></span></div>
       </div>
@@ -580,7 +582,7 @@ function starsFor(taps, par) { return taps <= par ? 3 : taps <= par + 2 ? 2 : 1;
 
 /* ---------- drawing ---------- */
 function drawBoard() {
-  var lv = G.level, w = lv.w, h = lv.h, W = w * 100, H = h * 100, R = rnd(lv.id * 977 + 13);
+  var lv = G.level, w = lv.w, h = lv.h, W = w * 100, H = h * 100, R = rnd(visSeed(lv) * 977 + 13);
   var svg = $('board');
   svg.setAttribute('viewBox', (-M) + ' ' + (-M) + ' ' + (W + 2 * M) + ' ' + (H + 2 * M));
   svg.innerHTML = '';
@@ -622,7 +624,7 @@ function drawBoard() {
   layers.pads = el('g', {}, svg);
   G.padEls = {};
   (lv.pads || []).forEach(function (p, j) {
-    var cx = p.c * 100 + 50, cy = p.r * 100 + 50, PR = rnd(lv.id * 31 + j * 7), cr = CRIT[p.k];
+    var cx = p.c * 100 + 50, cy = p.r * 100 + 50, PR = rnd(visSeed(lv) * 31 + j * 7), cr = CRIT[p.k];
     var g = el('g', { 'data-pad': p.k }, layers.pads);
     el('path', { d: lily(cx, cy, 44, PR, -Math.PI / 2 + (PR() - 0.5) * 1.6), fill: cr.padFill, stroke: cr.padLine, 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
     var gh = el('g', { transform: 'translate(' + cx + ',' + cy + ') scale(.82)' }, g);
@@ -632,7 +634,7 @@ function drawBoard() {
   // rocks
   var gs = el('g', {}, svg);
   (lv.rocks || []).forEach(function (p, j) {
-    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, RR = rnd(lv.id * 101 + j * 17);
+    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, RR = rnd(visSeed(lv) * 101 + j * 17);
     el('path', { d: blob(cx + 2, cy + 7, 40, 33, 0.25, 8, RR), fill: '#2f6f74', opacity: 0.45 }, gs);
     el('path', { d: blob(cx, cy, 39, 34, 0.28, 8, RR), fill: 'url(#rockg)', stroke: '#5b6668', 'stroke-width': 3.5 }, gs);
     el('path', { d: blob(cx - 11, cy - 12, 13, 7, 0.3, 6, RR), fill: '#d2dadb', opacity: 0.8 }, gs);
@@ -640,7 +642,7 @@ function drawBoard() {
   });
   // anchored lilies: deep green, flower, rope stake
   (lv.anchors || []).forEach(function (p, j) {
-    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, AR = rnd(lv.id * 211 + j * 5), na = -Math.PI / 4;
+    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, AR = rnd(visSeed(lv) * 211 + j * 5), na = -Math.PI / 4;
     el('path', { d: lily(cx + 2, cy + 5, 46, AR, na), fill: '#1d5a40', opacity: 0.35 }, gs);
     el('path', { d: lily(cx, cy, 46, AR, na), fill: '#2e7d58', stroke: '#1b4f39', 'stroke-width': 3.5 }, gs);
     for (var v = 0; v < 6; v++) { var a = na + 0.6 + v * 0.9; el('path', { d: 'M' + cx + ',' + cy + 'L' + f(cx + Math.cos(a) * 36) + ',' + f(cy + Math.sin(a) * 36), stroke: '#5fa57d', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.8 }, gs); }
@@ -654,7 +656,7 @@ function drawBoard() {
   // leaves
   layers.leaves = el('g', {}, svg);
   G.leafEls = lv.leaves.map(function (l, j) {
-    var LR = rnd(lv.id * 53 + j * 11), outer = el('g', { class: 'leaf', 'data-leaf': l.k }, layers.leaves);
+    var LR = rnd(visSeed(lv) * 53 + j * 11), outer = el('g', { class: 'leaf', 'data-leaf': l.k }, layers.leaves);
     var nudge = el('g', {}, outer), bob = el('g', { class: 'bob' }, nudge);
     bob.style.animationDelay = (-LR() * 3) + 's';
     var rot = (LR() * 360) | 0, lp = [];
@@ -676,7 +678,7 @@ function drawBoard() {
   // near the edge so they do not cover critter faces.
   var gr = el('g', { 'pointer-events': 'none' }, svg);
   (lv.reeds || []).forEach(function (e, j) {
-    var RR = rnd(lv.id * 401 + j * 3), x, y, rot;
+    var RR = rnd(visSeed(lv) * 401 + j * 3), x, y, rot;
     if (e[2] === 'E') { x = (e[1] + 1) * 100; y = e[0] * 100 + 50; rot = 0; } else { x = e[1] * 100 + 50; y = (e[0] + 1) * 100; rot = 90; }
     var g = el('g', { transform: 'translate(' + x + ',' + y + ') rotate(' + rot + ')' }, gr);
     el('path', { d: 'M0,-45L0,45', stroke: '#f6efd8', 'stroke-width': 17, 'stroke-linecap': 'round', opacity: 0.55 }, g);
@@ -737,6 +739,22 @@ function placeLeaves(animate, dur) {
   });
   markHome();
 }
+function homeSet() {
+  var out = {}; Object.keys(G.board.pads).forEach(function (k) { var i = G.level.leaves.findIndex(function (l) { return l.k === k; }); if (i >= 0 && G.st.pos[i] === G.board.pads[k]) out[k] = i; });
+  return out;
+}
+function landedHome(before) { // a critter that just reached its pad: one gold ring and a little hop
+  var now = homeSet();
+  Object.keys(now).forEach(function (k) {
+    if (k in before) return;
+    var p = cellXY(G.board.pads[k]);
+    var ring = el('circle', { cx: p.x, cy: p.y, r: 46, fill: 'none', stroke: '#f0b429', 'stroke-width': 7, opacity: 0 }, layers.fx);
+    ring.style.transformBox = 'fill-box'; ring.style.transformOrigin = 'center';
+    if (!anim(ring, [{ transform: 'scale(.7)', opacity: 1 }, { transform: 'scale(1.35)', opacity: 0 }], { duration: RM ? 1 : 520, easing: 'ease-out' })) ring.remove();
+    setTimeout(function () { ring.remove(); }, 560);
+    if (!RM) anim(G.leafEls[now[k]].firstChild, [{ transform: 'translateY(0)' }, { transform: 'translateY(-14px) scale(1.06)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 360, easing: 'ease-out' });
+  });
+}
 function markHome() {
   var lv = G.level;
   Object.keys(G.padEls).forEach(function (k) {
@@ -751,14 +769,32 @@ function markHome() {
 
 /* ---------- effects ---------- */
 function anim(node, frames, opts) { try { return node.animate(frames, opts); } catch (e) { return null; } }
+var RM = false; try { RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
 function ripple(idx, big) {
-  var p = cellXY(idx), reach = 250;
-  [0, 90].forEach(function (delay, n) {
-    var ring = el('circle', { cx: p.x, cy: p.y, r: reach, fill: 'none', stroke: '#ffffff', 'stroke-width': big ? 9 : 6, 'vector-effect': 'non-scaling-stroke', opacity: 0 }, layers.fx);
-    ring.style.transformBox = 'fill-box'; ring.style.transformOrigin = 'center';
-    var a = anim(ring, [{ transform: 'scale(.06)', opacity: n ? 0.55 : 0.9 }, { transform: 'scale(1)', opacity: 0 }], { duration: 320 + n * 40, delay: delay, easing: 'cubic-bezier(.2,.6,.3,1)' });
-    setTimeout(function () { ring.remove(); }, 520);
-    if (!a) ring.remove();
+  var p = cellXY(idx), w = G.level.w, r0 = (idx / w) | 0, c0 = idx % w;
+  var core = el('circle', { cx: p.x, cy: p.y, r: 44, fill: 'none', stroke: '#ffffff', 'stroke-width': big ? 8 : 6, opacity: 0 }, layers.fx);
+  core.style.transformBox = 'fill-box'; core.style.transformOrigin = 'center';
+  if (!anim(core, [{ transform: 'scale(.2)', opacity: 0.9 }, { transform: 'scale(1)', opacity: 0 }], { duration: 260, easing: 'ease-out' })) core.remove();
+  setTimeout(function () { core.remove(); }, 300);
+  L.DIRS.forEach(function (d) { // one wave crest per direction, the ripple's real plus-shaped reach
+    var k = 0, stopLily = false;
+    while (k < 2) {
+      var r = r0 + d[0] * (k + 1), c = c0 + d[1] * (k + 1);
+      if (r < 0 || r >= G.level.h || c < 0 || c >= w) break;
+      if (G.board.cell[r * w + c] === 2) { stopLily = true; break; }
+      k++;
+    }
+    var dist = k * 100 + (stopLily ? 46 : 0); if (!dist) return;
+    var crest = el('path', { d: 'M' + (p.x + d[0] * 30 + d[1] * 18) + ',' + (p.y - d[1] * 30 + d[0] * 18) + 'Q' + (p.x + d[1] * 34) + ',' + (p.y + d[0] * 34) + ' ' + (p.x - d[0] * 30 + d[1] * 18) + ',' + (p.y + d[1] * 30 + d[0] * 18), fill: 'none', stroke: '#ffffff', 'stroke-width': big ? 12 : 9, 'stroke-linecap': 'round', opacity: 0, class: 'crest' }, layers.fx);
+    var dur = 160 + dist * 1.1;
+    if (!anim(crest, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: 'translate(' + d[1] * (dist - 30) * 0.7 + 'px,' + d[0] * (dist - 30) * 0.7 + 'px)', opacity: 0.95, offset: 0.7 }, { transform: 'translate(' + d[1] * (dist - 30) + 'px,' + d[0] * (dist - 30) + 'px)', opacity: stopLily ? 0.9 : 0 }], { duration: RM ? 1 : dur, easing: 'cubic-bezier(.3,.6,.4,1)' })) crest.remove();
+    setTimeout(function () {
+      crest.remove();
+      if (stopLily && !RM) { // the wave breaks against the tied lily
+        var sx = p.x + d[1] * (dist - 16), sy = p.y + d[0] * (dist - 16);
+        for (var q = -1; q <= 1; q++) { var sp = el('circle', { cx: sx, cy: sy, r: 4.5, fill: '#e9fbff' }, layers.fx); anim(sp, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: 'translate(' + (-d[1] * 14 + d[0] * q * 14) + 'px,' + (-d[0] * 14 + d[1] * q * 14) + 'px)', opacity: 0 }], { duration: 240 }); setTimeout(function (x) { x.remove(); }.bind(null, sp), 260); }
+      }
+    }, RM ? 1 : dur);
   });
   var drops = big ? 10 : 7;
   for (var i = 0; i < drops; i++) {
@@ -796,6 +832,7 @@ function dragonfly() {
   setTimeout(function () { g.remove(); }, 2300);
 }
 function bloom() {
+  if (RM) { chime(); return; }
   var lv = G.level, R = Math.random;
   (lv.pads || []).forEach(function (p, j) {
     var cx = p.c * 100 + 50, cy = p.r * 100 + 50;
@@ -910,7 +947,7 @@ function showCoach() {
   var c = G.coach;
   if (!c || c.i >= c.steps.length) { G.coach = null; $('coach').classList.add('hidden'); hud(); return; }
   var s = c.steps[c.i];
-  $('coach').classList.remove('hidden');
+  $('coach').classList.remove('hidden'); $('coach').classList.add('slot');
   $('coachText').textContent = s.text;
   $('coachStep').textContent = c.steps.length > 1 ? 'Step ' + (c.i + 1) + ' of ' + c.steps.length : '';
   var tutorialTap = !!s.tap && c.kind === 'tutorial';
@@ -964,7 +1001,7 @@ function afterDemo(s) {
 }
 
 /* ---------- play ---------- */
-function hintReady() { return !G.won && !G.coach && (G.restarted || G.taps >= G.level.par + 3); }
+function hintReady() { return !G.won && !G.coach && (G.restarted || G.taps >= G.level.par); }
 function hud() {
   if (!G.level) return;
   $('taps').textContent = G.taps;
@@ -989,10 +1026,13 @@ function hud() {
 }
 
 function setPlaying(on) { document.body.classList.toggle('playing', !!on); }
+// visual seed: chapter ponds use their numeric id; daily ponds use their day number (their id is text)
+function visSeed(lv) { return typeof lv.id === 'number' ? lv.id : (lv.seed || 7); }
 function enterPond(level, title, sub) {
   G.level = level; G.board = L.makeBoard(level); G.st = L.initialState(level);
   G.hist = []; G.taps = 0; G.busy = false; G.won = false; G.useBig = false;
-  G.restarted = false; G.hinted = false; G.hint = -1; G.hintStage = 0; G.tipShown = false;
+  G.restarted = false; G.hinted = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {};
+  $('coach').classList.remove('slot');
   hideHold();
   $('screenSelect').classList.add('hidden'); $('screenPlay').classList.remove('hidden');
   ['winCard', 'howCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); });
@@ -1030,7 +1070,7 @@ function dayNum(key) { var p = key.split('-').map(Number); return Math.round((Da
 function prevKey(key) { var p = key.split('-').map(Number); return dateKey(new Date(p[0], p[1] - 1, p[2] - 1)); }
 function dailyLevel(key) {
   var n = DAILY.length, base = DAILY[((dayNum(key) % n) + n) % n];
-  return Object.assign({}, base, { id: 'daily-' + key });
+  return Object.assign({}, base, { id: 'daily-' + key, seed: 1000 + ((dayNum(key) % 997) + 997) % 997 });
 }
 function dailyUnlocked() { return tester || !!progress.stars[LEVELS[2].id]; }
 function streakNow() { var t = todayKey(); return (daily.last === t || daily.last === prevKey(t)) ? daily.streak : 0; }
@@ -1061,17 +1101,19 @@ function tap(idx, fromSolver) {
   plop(useBig);
   ripple(idx, useBig);
   var longest = 0;
+  var reachDist = {}; res.reached.forEach(function (h) { reachDist[h.i] = h.dist; });
+  var wasHome = homeSet();
   res.moves.forEach(function (mv) {
     var e = G.leafEls[mv.i];
     if (mv.steps === 0) { bump(mv.i, mv.dir); return; }
-    var dur = 170 + mv.steps * 90, p = cellXY(mv.to);
-    longest = Math.max(longest, dur);
-    e.style.transition = 'transform ' + dur + 'ms cubic-bezier(.25,.8,.35,1) 70ms';
+    var dur = 170 + mv.steps * 90, p = cellXY(mv.to), wait = RM ? 0 : 40 + (reachDist[mv.i] || 1) * 90;
+    longest = Math.max(longest, dur + wait - 70);
+    e.style.transition = 'transform ' + dur + 'ms cubic-bezier(.25,.8,.35,1) ' + wait + 'ms';
     e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
   });
   hud();
   setTimeout(function () {
-    G.busy = false; markHome();
+    G.busy = false; markHome(); landedHome(wasHome);
     if (L.isWin(G.board, G.st)) { if (G.coach) finishCoach(); win(); }
     else if (coachStep && coachStep.tap && G.coach) {
       if (G.coach.kind === 'tutorial') { G.coach.i++; showCoach(); }
@@ -1108,7 +1150,7 @@ function win() {
     $('winTitle').textContent = 'The pond is calm';
     $('winLine').textContent = 'You used ' + G.taps + (G.taps === 1 ? ' tap' : ' taps') + '. Par is ' + lv.par + '.';
     $('winTip').textContent = s === 3 ? (G.taps < lv.par ? 'Even better than par!' : 'Right on par. Lovely.') : 'Match par to earn 3 stars.';
-    if (G.hinted) $('winTip').textContent = 'A hint was used, so this pond tops out at 2 stars. Play again without one for 3.';
+    if (G.hinted) $('winTip').textContent = s === 2 ? 'A hint was used, so this pond tops out at 2 stars. Play again without one for 3.' : 'You used a hint and went past par. Try again at par, without a hint, for 3 stars.';
     if (G.mode === 'chapter' && G.li === 0 && first) $('winTip').textContent = 'Undo takes back a tap. Restart starts the pond again.';
     if (first) {
       var nv = G.mode === 'daily' ? noteVisitor('daily', Object.keys(daily.done).length - 1) : noteVisitor('ch', G.li);
@@ -1175,22 +1217,44 @@ function hintClue(m) {
     if (r2 < 0 || r2 >= lv.h || c2 < 0 || c2 >= w || G.board.cell[r1 * w + c1] !== 2) return;
     var li = L.leafAt(G.st, r2 * w + c2); if (li !== -1 && lv.leaves[li].k !== 'leaf') kept.push('the ' + lv.leaves[li].k);
   });
+  // at most 2 short sentences: what moves, then the shield or the payoff
   if (kept.length) s += ' The tied lily keeps ' + names(kept) + ' still.';
-  if (home.length) s += ' That brings ' + names(home) + ' home.';
+  else if (home.length) s += ' That brings ' + names(home) + ' home.';
   if (m.big) s = 'Use the big stone. ' + s;
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+function solveNow() { // one solver run per board position (Moon Pond solves can take a second)
+  var k = L.key(G.board, G.st);
+  if (!(k in G.solCache)) G.solCache[k] = L.solve(G.level, G.st);
+  return G.solCache[k];
+}
+// step 1 is also a picture: arrows on the leaves this splash would move (no splash cell shown)
+function clueArrows(m) {
+  clearHL();
+  var res = L.applyMove(G.board, G.st, m.idx, !!m.big);
+  res.moves.forEach(function (mv) {
+    if (!mv.steps) return;
+    var a = cellXY(mv.from), t = cellXY(mv.to), d = L.DIRS[mv.dir];
+    var sx = a.x + d[1] * 26, sy = a.y + d[0] * 26, ex = t.x - d[1] * 14, ey = t.y - d[0] * 14;
+    var g = el('g', { class: 'clue-arrow' }, layers.hl);
+    [['#1f3d37', 13], ['#fff3a0', 8]].forEach(function (c) {
+      el('path', { d: 'M' + sx + ',' + sy + 'L' + ex + ',' + ey, stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
+      el('path', { d: 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 - d[0] * 13) + ',' + (-d[0] * 16 - d[1] * 13) + 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 + d[0] * 13) + ',' + (-d[0] * 16 + d[1] * 13), stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', fill: 'none', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
+    });
+  });
+}
 function showHint() {
   if (G.busy || G.won || !hintReady()) return;
-  var sol = L.solve(G.level, G.st);
+  var sol = solveNow();
   if (!sol) { clearHL(); toast('No way home from here. Undo a few taps or Restart.', 2400); $('btnUndo').classList.add('glow'); return; }
   if (!sol.length) return;
   G.hinted = true;
   if (G.hintStage !== 1) { // step 1: explain before revealing
     G.hintStage = 1;
     var clue = hintClue(sol[0]);
-    if (G.level.hintTip && !G.tipShown) { G.tipShown = true; clue += ' ' + G.level.hintTip.replace(/^Tip: /, 'Tip: '); }
-    toast(clue, 6000).classList.add('clue');
+    if (G.level.hintTip && !G.tipShown && !/tied lily/.test(clue)) { G.tipShown = true; clue += ' ' + G.level.hintTip; }
+    clueArrows(sol[0]);
+    var ct = toast(clue, 600000); ct.classList.add('clue');
     hud(); return;
   }
   clearHL();
@@ -1246,13 +1310,21 @@ function showHold(idx) {
       var xx = a.x + d[1] * 22, xy = a.y + d[0] * 22, q = 11;
       el('circle', { cx: xx, cy: xy, r: 17, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3.5 }, gb);
       el('path', { d: 'M' + (xx - q * .6) + ',' + (xy - q * .6) + 'l' + (q * 1.2) + ',' + (q * 1.2) + 'M' + (xx + q * .6) + ',' + (xy - q * .6) + 'l' + (-q * 1.2) + ',' + (q * 1.2), stroke: '#ffffff', 'stroke-width': 4, 'stroke-linecap': 'round' }, gb);
-      var why = 'blocked: ' + blockerName(mv.from, mv.dir), tw = 26 + why.length * 11.5, lx = Math.max(tw / 2 - 10, Math.min(lv.w * 100 + 10 - tw / 2, a.x)), ly = a.y - 52 < 8 ? a.y + 60 : a.y - 52;
+      var why = 'blocked: ' + blockerName(mv.from, mv.dir), tw = 26 + why.length * 11.5, lx = Math.max(tw / 2 - 10, Math.min(lv.w * 100 + 10 - tw / 2, a.x)), ly = a.y < lv.h * 50 ? a.y + 62 : a.y - 54;
       el('rect', { x: lx - tw / 2, y: ly - 17, width: tw, height: 32, rx: 16, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3, class: 'pv-why' }, gb);
       var tx = el('text', { x: lx, y: ly + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, gb);
       tx.textContent = why;
       return;
     }
     el('circle', { cx: t.x, cy: t.y, r: 38, fill: 'none', stroke: '#ffffff', 'stroke-width': 4, 'stroke-dasharray': '9 7', class: 'pv-ghost' }, pv);
+    if (useBig && mv.steps < 2) { // big stone: this leaf stops after 1 of its 2 steps; say what stops it
+      var px = t.x + d[1] * 44, py = t.y + d[0] * 44, qx = d[0] * 24, qy = d[1] * 24, gp = el('g', { class: 'pv-blocked pv-partial' }, pv);
+      el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#ffffff', 'stroke-width': 14, 'stroke-linecap': 'round' }, gp);
+      el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#e5484d', 'stroke-width': 8, 'stroke-linecap': 'round' }, gp);
+      var pw = 'stops: ' + blockerName(mv.to, mv.dir), pwW = 26 + pw.length * 11.5, plx = Math.max(pwW / 2 - 10, Math.min(lv.w * 100 + 10 - pwW / 2, t.x)), ply = t.y < lv.h * 50 ? t.y + 62 : t.y - 54;
+      el('rect', { x: plx - pwW / 2, y: ply - 17, width: pwW, height: 32, rx: 16, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3 }, gp);
+      var pt = el('text', { x: plx, y: ply + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, gp); pt.textContent = pw;
+    }
     var sx = a.x + d[1] * 30, sy = a.y + d[0] * 30, ex = t.x - d[1] * 18, ey = t.y - d[0] * 18;
     el('path', { d: 'M' + sx + ',' + sy + 'L' + ex + ',' + ey, stroke: '#ffffff', 'stroke-width': 7, 'stroke-linecap': 'round', class: 'pv-arrow' }, pv);
     el('path', { d: 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 14 - d[0] * 12) + ',' + (-d[0] * 14 - d[1] * 12) + 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 14 + d[0] * 12) + ',' + (-d[0] * 14 + d[1] * 12), stroke: '#ffffff', 'stroke-width': 7, 'stroke-linecap': 'round', fill: 'none' }, pv);
@@ -1341,7 +1413,7 @@ function habitatSVG(full) {
   s += '<ellipse cx="58" cy="112" rx="9" ry="5" fill="#9aa5a6" stroke="#5f6a6c" stroke-width="1.3"/>';
   var nv = full ? null : newVisitor;
   HAB.forEach(function (art, i) { if (full || hc.solved[i]) s += '<g class="hab-item' + (nv && nv.kind === 'ch' && nv.i === i ? ' hab-new' : '') + '" data-item="' + i + '">' + art + '</g>'; });
-  for (var n = 0; n < Math.min(hc.daily, 40); n++) s += '<g class="hab-item hab-daily' + (nv && nv.kind === 'daily' && nv.i === n ? ' hab-new' : '') + '">' + dailyItem(n) + '</g>';
+  for (var n = Math.max(0, hc.daily - 40); n < hc.daily; n++) s += '<g class="hab-item hab-daily' + (nv && nv.kind === 'daily' && nv.i === n ? ' hab-new' : '') + '">' + dailyItem(n) + '</g>';
   if (!full && !hc.chapter && !hc.daily) s += '<text x="160" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff" opacity=".9">Solve ponds to bring visitors here</text>';
   return s + '</svg>';
 }
@@ -1412,6 +1484,7 @@ function toast(msg, ms) {
   [].forEach.call(document.querySelectorAll('.toast'), function (x) { x.remove(); });
   var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t);
   setTimeout(function () { t.style.opacity = '0'; }, ms); setTimeout(function () { t.remove(); }, ms + 400);
+  if (ms > 60000) t.addEventListener('click', function () { t.remove(); });
   return t;
 }
 function setTester() {
@@ -1421,7 +1494,7 @@ function setTester() {
 function setMute(m) {
   muted = m; store.set('muted', m);
   $('btnMute').setAttribute('aria-pressed', String(m));
-  $('btnMute').setAttribute('aria-label', m ? 'Sound off' : 'Sound on');
+  $('btnMute').setAttribute('aria-label', 'Mute sound');
   $('muteWaves').classList.toggle('hidden', m); $('muteX').classList.toggle('hidden', !m);
 }
 function setPreviewSetting(on, quiet) {
