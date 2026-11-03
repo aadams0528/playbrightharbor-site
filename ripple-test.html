@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.3.2 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.4 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
 <title>Ripple (test version)</title>
@@ -86,7 +86,10 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 /* home: habitat, daily pond, options */
 .habitat{background:var(--card);border-radius:22px;box-shadow:var(--shadow);padding:8px 8px 6px;margin:2px 0 12px}
 .habitat svg{display:block;width:100%;height:auto;border-radius:16px}
-.hab-new{transform-box:fill-box;transform-origin:center;animation:habnew 1.1s ease-in-out 4;filter:drop-shadow(0 0 3px #fff3a0) drop-shadow(0 0 6px #fff3a0)}
+.habitat [data-name]{cursor:pointer}
+.hab-feat-new{animation:habin .9s ease-out both}
+@keyframes habin{from{transform:translateY(-12px);opacity:0}}
+.hab-new{transform-box:fill-box;transform-origin:center;animation:habin .7s ease-out both,habnew 1.1s ease-in-out .7s 4;filter:drop-shadow(0 0 3px #fff3a0) drop-shadow(0 0 6px #fff3a0)}
 @keyframes habnew{50%{transform:scale(1.35)}}
 .habitat.fresh .cap{color:var(--accent)}
 .habitat .cap{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;font-weight:700;color:var(--ink-soft);padding:6px 6px 0}
@@ -123,6 +126,11 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 .card .row .btn{flex:1}
 .toast.clue{top:max(6px,env(safe-area-inset-top));pointer-events:auto;cursor:pointer;background:#24473f;border:2px solid #f3dc8b;max-width:min(460px,calc(100vw - 24px))}
 .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:14px;z-index:20;transition:opacity .3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+:root{transition:none}
+body{transition:background .5s}
+body[data-theme="moon"] .lvname,body[data-theme="moon"] #title{color:#eef4ff}
+body[data-theme="moon"] .lvname small{color:#b9c8dd}
+body[data-theme="moon"] .overlay{background:rgba(6,14,28,.3)}
 .toast.nudge{top:auto;bottom:calc(112px + env(safe-area-inset-bottom))}
 /* svg bits */
 .leaf{transition:transform 240ms cubic-bezier(.25,.8,.35,1)}
@@ -147,7 +155,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 .leaf.home .halo{opacity:.75}
 .hit{fill:transparent;cursor:pointer}
 @media (min-width:700px){ #levelGrid{grid-template-columns:repeat(4,minmax(0,1fr))} }
-@media (prefers-reduced-motion:reduce){ .bob,.pulse,.glow,.pring.home .glowring,.hab-new{animation:none} }
+@media (prefers-reduced-motion:reduce){ .bob,.pulse,.glow,.pring.home .glowring,.hab-new,.hab-feat-new{animation:none} }
 @media (max-height:700px){ header.top{height:46px} .icon{width:44px;height:44px} .hud{margin:2px 2px 6px} .controls{margin-top:8px} .stone{min-height:46px} }
 </style>
 </head>
@@ -170,7 +178,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.3.2 prototype</div>
+    <div class="ver" id="ver">Ripple v0.4 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -588,12 +596,9 @@ function drawBoard() {
   svg.setAttribute('viewBox', (-M) + ' ' + (-M) + ' ' + (W + 2 * M) + ' ' + (H + 2 * M));
   svg.innerHTML = '';
   var defs = el('defs', {}, svg);
-  var moon = lv.theme === 'moon'; // Moon Pond: night water, darker bank, a moon reflection
-  defs.innerHTML = (moon
-    ? '<radialGradient id="water" cx="70%" cy="25%" r="85%"><stop offset="0" stop-color="#5b8fae"/><stop offset=".55" stop-color="#3a6889"/><stop offset="1" stop-color="#25496a"/></radialGradient>' +
-      '<linearGradient id="bank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f9a7a"/><stop offset="1" stop-color="#4c7160"/></linearGradient>'
-    : '<radialGradient id="water" cx="45%" cy="38%" r="75%"><stop offset="0" stop-color="#7cc2bd"/><stop offset=".6" stop-color="#5aa9a8"/><stop offset="1" stop-color="#3f8c94"/></radialGradient>' +
-      '<linearGradient id="bank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a7cf83"/><stop offset="1" stop-color="#86b96a"/></linearGradient>') +
+  var T = THEMES[G.theme] || THEMES.spring, moon = G.theme === 'moon'; // look only: pieces keep one palette in every theme
+  defs.innerHTML = '<radialGradient id="water" cx="' + T.wc[0] + '%" cy="' + T.wc[1] + '%" r="80%"><stop offset="0" stop-color="' + T.water[0] + '"/><stop offset=".58" stop-color="' + T.water[1] + '"/><stop offset="1" stop-color="' + T.water[2] + '"/></radialGradient>' +
+    '<linearGradient id="bank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + T.bank[0] + '"/><stop offset="1" stop-color="' + T.bank[1] + '"/></linearGradient>' +
     '<radialGradient id="rockg" cx="38%" cy="32%" r="80%"><stop offset="0" stop-color="#b3bdbe"/><stop offset="1" stop-color="#7b878a"/></radialGradient>';
   // bank + water (organic edge)
   var bankPts = [], i;
@@ -604,7 +609,8 @@ function drawBoard() {
   for (i = 0; i < steps; i++) wp.push([W - i / steps * W, H + 4 - R() * 6]);
   for (i = 0; i < steps; i++) wp.push([-4 + R() * 6, H - i / steps * H]);
   wp[0] = [6, 6]; wp[steps] = [W - 6, 6]; wp[2 * steps] = [W - 6, H - 6]; wp[3 * steps] = [6, H - 6];
-  el('path', { d: smooth(wp, true), fill: moon ? '#1d3a55' : '#3a7f86', transform: 'translate(0,3)' }, svg);
+  el('path', { d: smooth(wp, true), fill: T.under, transform: 'translate(0,3)' }, svg);
+  rimDecor(T.decor, W, H, R, svg);
   el('path', { d: smooth(wp, true), fill: 'url(#water)' }, svg);
   if (moon) { // the moon's reflection: a soft glow, a pale crescent and broken light streaks under it
     var mx = W * 0.45, my = H * 0.09, gm = el('g', { 'pointer-events': 'none', class: 'moon' }, svg);
@@ -659,6 +665,7 @@ function drawBoard() {
   G.leafEls = lv.leaves.map(function (l, j) {
     var LR = rnd(visSeed(lv) * 53 + j * 11), outer = el('g', { class: 'leaf', 'data-leaf': l.k }, layers.leaves);
     var nudge = el('g', {}, outer), bob = el('g', { class: 'bob' }, nudge);
+    nudge.style.transformBox = 'fill-box'; nudge.style.transformOrigin = 'center';
     bob.style.animationDelay = (-LR() * 3) + 's';
     var rot = (LR() * 360) | 0, lp = [];
     for (var q = 0; q < 12; q++) {
@@ -671,7 +678,8 @@ function drawBoard() {
     el('path', { d: 'M-36,0L40,0M-6,0L10,-20M-6,0L10,20M14,0L28,-14M14,0L28,14M-22,0L-10,-22M-22,0L-10,22', stroke: '#8fd08a', 'stroke-width': 2.4, 'stroke-linecap': 'round', fill: 'none', opacity: 0.75 }, lg);
     if (l.k !== 'leaf') {
       el('circle', { class: 'halo', r: 33, fill: '#fff7c2' }, bob); // glows when this critter is home
-      var cg = el('g', { transform: 'scale(.9)' }, bob); cg.innerHTML = critterSVG(l.k, false);
+      var cg = el('g', { transform: 'scale(.9)' }, bob), cgi = el('g', { class: 'crit' }, cg); cgi.innerHTML = critterSVG(l.k, false);
+      cgi.style.transformBox = 'fill-box'; cgi.style.transformOrigin = 'center bottom';
     }
     return outer;
   });
@@ -716,6 +724,43 @@ function drawBoard() {
   }
   placeLeaves(false);
 }
+/* themes: each stretch of ponds gets its own light and shoreline. Only the water, bank, rim
+   decorations and the page around the board change; leaves, critters, pads, rocks, reeds and
+   tied lilies look the same everywhere, so the board reads the same at a glance. */
+var THEMES = {
+  spring: { water: ['#7cc2bd', '#5aa9a8', '#3f8c94'], wc: [45, 38], under: '#3a7f86', bank: ['#a7cf83', '#86b96a'], page: ['#e7f2e8', '#bcd9c8'], decor: 'blossom', label: 'spring morning' },
+  day:    { water: ['#80c8cd', '#56a8b2', '#3b899a'], wc: [50, 30], under: '#357a8a', bank: ['#b3d88c', '#8cc06a'], page: ['#e3f3f4', '#b2dad8'], decor: 'daisy', label: 'bright day' },
+  golden: { water: ['#8fc7b4', '#5ca5a0', '#41808a'], wc: [62, 28], under: '#3b7480', bank: ['#d2d58c', '#adb868'], page: ['#f8efd5', '#e8d2a0'], decor: 'cattail', label: 'golden hour' },
+  moon:   { water: ['#5b8fae', '#3a6889', '#25496a'], wc: [70, 25], under: '#1d3a55', bank: ['#6f9a7a', '#4c7160'], page: ['#2c4260', '#13223a'], decor: 'stars', night: true, label: 'moonlight' },
+  marsh:  { water: ['#88c2ab', '#5ea096', '#3f8081'], wc: [40, 34], under: '#376f70', bank: ['#c6c97c', '#9aa85c'], page: ['#eef1d8', '#cbd8a9'], decor: 'cattail', label: 'reed marsh' }
+};
+function themeFor(lv) {
+  if (lv.theme) return lv.theme;
+  if (G.mode === 'daily') return ['spring', 'day', 'golden'][(lv.seed || 0) % 3];
+  return G.li < 4 ? 'spring' : G.li < 8 ? 'day' : 'golden'; // chapter 1 moves from morning to golden hour, then Moon Pond
+}
+function applyTheme(name) {
+  var T = THEMES[name], b = document.body;
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (!T) { b.removeAttribute('data-theme'); b.style.removeProperty('--bg-top'); b.style.removeProperty('--bg-bot'); if (m) m.setAttribute('content', '#cfe5d6'); return; }
+  b.setAttribute('data-theme', name); b.style.setProperty('--bg-top', T.page[0]); b.style.setProperty('--bg-bot', T.page[1]);
+  if (m) m.setAttribute('content', T.page[0]);
+}
+function rimDecor(kind, W, H, R, svg) { // small touches on the bank only, never over a cell
+  var g = el('g', { 'pointer-events': 'none', class: 'rim' }, svg), spots = [], i, n = 10;
+  for (i = 0; i < n; i++) { // even spread round the rim, mid-bank (the bank is 16 units wide)
+    var t = (i + 0.3 + R() * 0.4) / n * 2 * (W + H), x, y;
+    if (t < W) { x = t; y = -9; } else if (t < W + H) { x = W + 9; y = t - W; } else if (t < 2 * W + H) { x = W - (t - W - H); y = H + 9; } else { x = -9; y = H - (t - 2 * W - H); }
+    spots.push([f(x), f(y)]);
+  }
+  spots.forEach(function (p, j) {
+    var x = p[0], y = p[1];
+    if (kind === 'blossom') { var c = j % 2 ? '#f7b7cf' : '#fde2a6'; for (var q = 0; q < 5; q++) el('circle', { cx: f(x + Math.cos(q * 1.257) * 4.2), cy: f(y + Math.sin(q * 1.257) * 4.2), r: 3.4, fill: c }, g); el('circle', { cx: x, cy: y, r: 2.4, fill: '#f6c945' }, g); }
+    if (kind === 'daisy') { for (var q2 = 0; q2 < 6; q2++) el('ellipse', { cx: f(x + Math.cos(q2 * 1.047) * 4), cy: f(y + Math.sin(q2 * 1.047) * 4), rx: 2.6, ry: 1.7, fill: '#ffffff', transform: 'rotate(' + (q2 * 60) + ' ' + f(x + Math.cos(q2 * 1.047) * 4) + ' ' + f(y + Math.sin(q2 * 1.047) * 4) + ')' }, g); el('circle', { cx: x, cy: y, r: 2.3, fill: '#f6c945' }, g); }
+    if (kind === 'cattail') { el('rect', { x: x - 2.6, y: y - 6, width: 5.2, height: 11, rx: 2.6, fill: '#8a5a2e' }, g); el('path', { d: 'M' + (x + 4) + ',' + (y + 6) + 'q2,-6 6,-9', stroke: '#5f8a33', 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round' }, g); }
+    if (kind === 'stars' && j % 2) el('circle', { cx: x, cy: y, r: 2, fill: '#fff6c9', opacity: 0.8 }, g);
+  });
+}
 function cellLabel(idx) {
   var w = G.level.w, s = 'row ' + (((idx / w) | 0) + 1) + ', column ' + (idx % w + 1) + ', ';
   var li = L.leafAt(G.st, idx), cell = G.board.cell[idx];
@@ -753,7 +798,13 @@ function landedHome(before) { // a critter that just reached its pad: one gold r
     ring.style.transformBox = 'fill-box'; ring.style.transformOrigin = 'center';
     if (!anim(ring, [{ transform: 'scale(.7)', opacity: 1 }, { transform: 'scale(1.35)', opacity: 0 }], { duration: RM ? 1 : 520, easing: 'ease-out' })) ring.remove();
     setTimeout(function () { ring.remove(); }, 560);
-    if (!RM) anim(G.leafEls[now[k]].firstChild, [{ transform: 'translateY(0)' }, { transform: 'translateY(-14px) scale(1.06)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 360, easing: 'ease-out' });
+    if (!RM) {
+      anim(G.leafEls[now[k]].firstChild, [{ transform: 'translateY(0)' }, { transform: 'translateY(-14px) scale(1.06)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 360, easing: 'ease-out' });
+      var c = G.leafEls[now[k]].querySelector('.crit'); // and each one's own happy move
+      if (c) anim(c, k === 'duck' ? [{ transform: 'rotate(0)' }, { transform: 'rotate(-12deg)', offset: 0.25 }, { transform: 'rotate(12deg)', offset: 0.6 }, { transform: 'rotate(0)' }]
+        : k === 'frog' ? [{ transform: 'scale(1)' }, { transform: 'scale(1.14,.86)', offset: 0.3 }, { transform: 'scale(.94,1.08)', offset: 0.6 }, { transform: 'scale(1)' }]
+        : [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: k === 'turtle' ? 700 : 560, delay: 120, easing: 'ease-in-out' });
+    }
   });
 }
 function markHome() {
@@ -808,6 +859,21 @@ function ripple(idx, big) {
   anim(stone, [{ opacity: 1, transform: 'translateY(-30px)' }, { opacity: 0.8, transform: 'translateY(0)', offset: 0.5 }, { opacity: 0, transform: 'translateY(0)' }], { duration: 260 });
   setTimeout(function () { stone.remove(); }, 280);
 }
+function d1(dir) { return L.DIRS[dir][1] !== 0; } // true for a left/right move
+/* idle life: now and then one critter does its own small thing (frog bobs, duck looks around,
+   turtle tucks in). Tiny, on the critter only, never while a move, a preview or a lesson runs. */
+function idleTick() {
+  if (RM || !G.level || G.busy || G.won || document.body.dataset.preview === '1' || !document.body.classList.contains('playing') || document.hidden) return;
+  var ks = []; G.level.leaves.forEach(function (l, i) { if (l.k !== 'leaf') ks.push(i); });
+  if (!ks.length) return;
+  var i = ks[(Math.random() * ks.length) | 0], k = G.level.leaves[i].k, c = G.leafEls[i] && G.leafEls[i].querySelector('.crit');
+  if (!c) return;
+  var kf = k === 'frog' ? [{ transform: 'translateY(0)' }, { transform: 'translateY(-5px) scale(1.03,.97)', offset: 0.35 }, { transform: 'translateY(0)' }]
+    : k === 'duck' ? [{ transform: 'rotate(0)' }, { transform: 'rotate(-9deg)', offset: 0.3 }, { transform: 'rotate(7deg)', offset: 0.65 }, { transform: 'rotate(0)' }]
+    : [{ transform: 'scale(1)' }, { transform: 'scale(.92,.9)', offset: 0.4 }, { transform: 'scale(1)' }];
+  anim(c, kf, { duration: 620, easing: 'ease-in-out' });
+}
+setInterval(idleTick, 2400);
 function bump(i, dir) {
   var d = L.DIRS[dir], n = G.leafEls[i].firstChild;
   anim(n, [{ transform: 'translate(0,0)' }, { transform: 'translate(' + d[1] * 7 + 'px,' + d[0] * 7 + 'px)' }, { transform: 'translate(0,0)' }], { duration: 230, delay: 70, easing: 'ease-out' });
@@ -846,6 +912,24 @@ function bloom() {
 // instant win read: every critter hops and each pad bursts the moment the last leaf lands
 function winBurst() {
   var lv = G.level;
+  if (!RM) { // the whole pond settles: two calm rings roll out from the middle, under a shower of petals from each pad
+    var W = lv.w * 100, H = lv.h * 100;
+    [0, 1].forEach(function (n) {
+      var wv = el('circle', { cx: W / 2, cy: H / 2, r: Math.max(W, H) * 0.62, fill: 'none', stroke: '#ffffff', 'stroke-width': 10 - n * 4, opacity: 0 }, layers.fx);
+      wv.style.transformBox = 'fill-box'; wv.style.transformOrigin = 'center';
+      if (!anim(wv, [{ transform: 'scale(.05)', opacity: 0.7 }, { transform: 'scale(1)', opacity: 0 }], { duration: 900, delay: 160 + n * 220, easing: 'ease-out' })) wv.remove();
+      setTimeout(function () { wv.remove(); }, 1400);
+    });
+    (lv.pads || []).forEach(function (p, j) {
+      var cx = p.c * 100 + 50, cy = p.r * 100 + 50, cols = ['#f7b7cf', '#fde2a6', '#ffffff', '#c9b6f2'];
+      for (var q = 0; q < 10; q++) {
+        var a = q / 10 * Math.PI * 2 + j, dist = 70 + (q % 3) * 22, pt = el('ellipse', { cx: cx, cy: cy, rx: 6, ry: 11, fill: cols[(q + j) % 4], stroke: '#d98aa8', 'stroke-width': 1 }, layers.fx);
+        pt.style.transformBox = 'fill-box'; pt.style.transformOrigin = 'center';
+        anim(pt, [{ transform: 'translate(0,0) rotate(0) scale(.4)', opacity: 1 }, { transform: 'translate(' + f(Math.cos(a) * dist) + 'px,' + f(Math.sin(a) * dist + 18) + 'px) rotate(' + (200 + q * 30) + 'deg) scale(1)', opacity: 0 }], { duration: 900, delay: 220 + j * 90, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'backwards' });
+        setTimeout(function (x) { x.remove(); }, 1250 + j * 90, pt);
+      }
+    });
+  }
   lv.leaves.forEach(function (l, i) {
     if (l.k === 'leaf') return;
     var n = G.leafEls[i].firstChild;
@@ -1041,6 +1125,7 @@ function enterPond(level, title, sub) {
   $('lvName').innerHTML = '';
   $('lvName').appendChild(document.createTextNode(title));
   var sm = document.createElement('small'); sm.textContent = sub; $('lvName').appendChild(sm);
+  G.theme = themeFor(level); applyTheme(G.theme);
   drawBoard();
 }
 function startLevel(i, opts) {
@@ -1116,6 +1201,7 @@ function tap(idx, fromSolver) {
     var dur = 170 + mv.steps * 90, p = cellXY(mv.to), wait = RM ? 0 : 40 + (reachDist[mv.i] || 1) * 90;
     longest = Math.max(longest, dur + wait - 70);
     e.style.transition = 'transform ' + dur + 'ms cubic-bezier(.25,.8,.35,1) ' + wait + 'ms';
+    if (!RM) { var sx = d1(mv.dir) ? 0.84 : 1.1, sy = d1(mv.dir) ? 1.1 : 0.84; anim(e.firstChild, [{ transform: 'scale(1,1)' }, { transform: 'scale(' + sx + ',' + sy + ')', offset: 0.25 }, { transform: 'scale(1.04,.97)', offset: 0.7 }, { transform: 'scale(1,1)' }], { duration: dur + 60, delay: wait, easing: 'ease-out' }); }
     e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
   });
   hud();
@@ -1154,7 +1240,7 @@ function win() {
   setTimeout(function () {
     var box = $('winStars'); box.innerHTML = '';
     for (var k = 0; k < 3; k++) { var sv = starSVG(k < s); if (k < s) { sv.classList.add('on'); sv.style.animationDelay = (k * 0.15) + 's'; } box.appendChild(sv); }
-    $('winTitle').textContent = 'The pond is calm';
+    $('winTitle').textContent = s === 3 && G.taps < lv.par ? 'Better than par!' : s === 3 ? 'The pond is calm' : 'Everyone is home';
     $('winLine').textContent = 'You used ' + G.taps + (G.taps === 1 ? ' tap' : ' taps') + '. Par is ' + lv.par + '.';
     $('winTip').textContent = s === 3 ? (G.taps < lv.par ? 'Even better than par!' : 'Right on par. Lovely.') : 'Match par to earn 3 stars.';
     if (G.hinted) $('winTip').textContent = s === 2 ? 'A hint was used, so this pond tops out at 2 stars. Play again without one for 3.' : 'You used a hint and went past par. Try again at par, without a hint, for 3 stars.';
@@ -1172,7 +1258,7 @@ function win() {
       $('btnNext').textContent = last ? 'Finish chapter' : 'Next pond';
     }
     $('winCard').classList.remove('hidden');
-  }, 850);
+  }, RM ? 600 : 1150);
 }
 
 function starSVG(on) {
@@ -1416,6 +1502,13 @@ function dailyItem(n) {
   if (t === 3) s = '<g transform="translate(' + bx + ',' + by + ')"><circle r="3.4" fill="#e2483d" stroke="#7a1d17" stroke-width=".9"/><path d="M0,-3.4v6.8" stroke="#7a1d17" stroke-width=".8"/><circle cx="-1.4" cy="-1" r=".7" fill="#1b2a1b"/><circle cx="1.4" cy="1.2" r=".7" fill="#1b2a1b"/></g>';
   return s;
 }
+var HAB_FEATS = [ // drawn under the visitors
+  { at: 5, name: 'a little wooden dock', art: '<g><rect x="250" y="98" width="44" height="7" rx="2" fill="#b98a55" stroke="#7a5430" stroke-width="1.4"/><path d="M258,105v10M270,105v10M284,105v10" stroke="#7a5430" stroke-width="2.4" stroke-linecap="round"/><path d="M262,98v7M274,98v7M286,98v7" stroke="#8f6539" stroke-width="1"/></g>' },
+  { at: 10, name: 'stepping stones', art: '<g fill="#a9b3b4" stroke="#6a7476" stroke-width="1.2"><ellipse cx="96" cy="118" rx="8" ry="4"/><ellipse cx="114" cy="124" rx="7" ry="3.6"/><ellipse cx="131" cy="128" rx="7.5" ry="3.6"/></g>' },
+  { at: 20, name: 'a footbridge', art: '<g><path d="M118,46q42,-26 84,0" fill="none" stroke="#8f6539" stroke-width="5" stroke-linecap="round"/><path d="M118,40q42,-26 84,0" fill="none" stroke="#b98a55" stroke-width="2.4" stroke-linecap="round"/><path d="M130,38v8M146,31v9M160,29v9M174,31v9M190,38v8" stroke="#7a5430" stroke-width="1.6"/></g>' },
+  { at: 30, name: 'a willow tree', art: '<g><path d="M18,130v-50" stroke="#7a5430" stroke-width="5" stroke-linecap="round"/><ellipse cx="22" cy="66" rx="24" ry="20" fill="#7fb35a"/><path d="M6,66q-2,24 2,40M16,70q0,26 2,38M30,70q2,24 0,36M40,64q4,20 2,32" stroke="#5f9445" stroke-width="2" fill="none" stroke-linecap="round"/></g>' },
+  { at: 50, name: 'a little waterfall', art: '<g><path d="M150,0h26v12q-13,8 -26,0z" fill="#8d999b" stroke="#5b6668" stroke-width="1.2"/><path d="M155,10v26M163,11v30M171,10v24" stroke="#e6f7ff" stroke-width="3" stroke-linecap="round" opacity=".85"/></g>' }
+];
 var HAB_NAMES = ['a white water flower', 'a dragonfly', 'a reed clump', 'a jumping fish', 'a snail', 'cattails', 'a butterfly', 'a pink water lily', 'a heron', 'a sunning turtle', 'fireflies', 'the moon'];
 var DAILY_NAMES = ['a wildflower', 'a floating leaf', 'a little fish', 'a ladybug'];
 var MILESTONES = [5, 10, 20, 30, 50];
@@ -1438,9 +1531,11 @@ function habitatSVG(full) {
   s += '<ellipse cx="160" cy="84" rx="136" ry="48" fill="#3a7f86"/><ellipse cx="160" cy="82" rx="134" ry="46" fill="url(#hwt)"/>';
   s += '<ellipse cx="120" cy="70" rx="40" ry="10" fill="#fff" opacity=".08"/><ellipse cx="210" cy="96" rx="30" ry="7" fill="#fff" opacity=".07"/>';
   s += '<ellipse cx="58" cy="112" rx="9" ry="5" fill="#9aa5a6" stroke="#5f6a6c" stroke-width="1.3"/>';
-  var nv = full ? null : newVisitor;
-  HAB.forEach(function (art, i) { if (full || hc.solved[i]) s += '<g class="hab-item' + (nv && nv.kind === 'ch' && nv.i === i ? ' hab-new' : '') + '" data-item="' + i + '">' + art + '</g>'; });
-  for (var n = Math.max(0, hc.daily - 40); n < hc.daily; n++) s += '<g class="hab-item hab-daily' + (nv && nv.kind === 'daily' && nv.i === n ? ' hab-new' : '') + '">' + dailyItem(n) + '</g>';
+  var nv = full ? null : newVisitor, tot = full ? 99 : hc.chapter + hc.daily;
+  // milestone features: the pond itself grows, not just the count
+  HAB_FEATS.forEach(function (ft) { if (tot >= ft.at) s += '<g class="hab-feat' + (nv && nv.total === ft.at ? ' hab-feat-new' : '') + '" data-feat="' + ft.at + '" data-name="' + ft.name + ', for ' + ft.at + ' visitors">' + ft.art + '</g>'; });
+  HAB.forEach(function (art, i) { if (full || hc.solved[i]) s += '<g class="hab-item' + (nv && nv.kind === 'ch' && nv.i === i ? ' hab-new' : '') + '" data-item="' + i + '" data-name="' + HAB_NAMES[i] + ', from pond ' + (i + 1) + '">' + art + '</g>'; });
+  for (var n = Math.max(0, hc.daily - 40); n < hc.daily; n++) s += '<g class="hab-item hab-daily' + (nv && nv.kind === 'daily' && nv.i === n ? ' hab-new' : '') + '" data-name="' + DAILY_NAMES[n % 4] + ', from a daily pond">' + dailyItem(n) + '</g>';
   if (!full && !hc.chapter && !hc.daily) s += '<text x="160" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff" opacity=".9">Solve ponds to bring visitors here</text>';
   return s + '</svg>';
 }
@@ -1448,7 +1543,7 @@ function habitatSVG(full) {
 /* ---------- level select / home ---------- */
 function showSelect() {
   if (G.busy) return;
-  hideHold(); setPlaying(false);
+  hideHold(); setPlaying(false); applyTheme(null);
   $('screenPlay').classList.add('hidden'); $('screenSelect').classList.remove('hidden');
   ['winCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); });
   // habitat
@@ -1457,7 +1552,8 @@ function showSelect() {
   $('habitatCap').textContent = vis ? 'Your pond: ' + vis + (vis === 1 ? ' visitor' : ' visitors') + '. Each solved pond brings one more.' : 'Your pond is waiting for visitors.';
   if (newVisitor) {
     var ms = MILESTONES.indexOf(newVisitor.total) !== -1;
-    $('habitatCap').textContent = (ms ? 'Milestone: ' + newVisitor.total + ' visitors! ' : '') + 'New visitor: ' + newVisitor.name + ' (it\'s glowing). Your pond: ' + vis + (vis === 1 ? ' visitor.' : ' visitors.');
+    var feat = HAB_FEATS.find(function (ft) { return ft.at === newVisitor.total; });
+    $('habitatCap').textContent = (ms ? 'Milestone: ' + newVisitor.total + ' visitors' + (feat ? ', and ' + feat.name + ' appeared' : '') + '! ' : '') + 'New visitor: ' + newVisitor.name + ' (it\'s glowing). Your pond: ' + vis + (vis === 1 ? ' visitor.' : ' visitors.');
     $('habitat').classList.add('fresh');
     newVisitor = null;
   } else $('habitat').classList.remove('fresh');
@@ -1598,6 +1694,10 @@ $('btnHowClose').addEventListener('click', function () { $('howCard').classList.
 $('btnHowTutorial').addEventListener('click', function () { $('howCard').classList.add('hidden'); startLevel(0, { forceIntro: true }); });
 $('btnPreviewSet').addEventListener('click', function () { setPreviewSetting(!settings.preview); });
 $('btnMute').addEventListener('click', function () { setMute(!muted); });
+$('habitatArt').addEventListener('click', function (ev) { // tap a visitor to see who it is
+  var g = ev.target.closest && ev.target.closest('[data-name]'); if (!g) return;
+  var n = g.getAttribute('data-name'); toast(n.charAt(0).toUpperCase() + n.slice(1) + '.', 2200);
+});
 var titleTaps = 0, titleTimer = null;
 $('title').addEventListener('click', function () {
   titleTaps++; clearTimeout(titleTimer); titleTimer = setTimeout(function () { titleTaps = 0; }, 1500);
