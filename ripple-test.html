@@ -123,6 +123,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 .card .row .btn{flex:1}
 .toast.clue{top:max(6px,env(safe-area-inset-top));pointer-events:auto;cursor:pointer;background:#24473f;border:2px solid #f3dc8b;max-width:min(460px,calc(100vw - 24px))}
 .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:14px;z-index:20;transition:opacity .3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+.toast.nudge{top:auto;bottom:calc(112px + env(safe-area-inset-bottom))}
 /* svg bits */
 .leaf{transition:transform 240ms cubic-bezier(.25,.8,.35,1)}
 .bob{animation:bob 3.2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
@@ -607,9 +608,9 @@ function drawBoard() {
   el('path', { d: smooth(wp, true), fill: 'url(#water)' }, svg);
   if (moon) { // the moon's reflection: a soft glow, a pale crescent and broken light streaks under it
     var mx = W * 0.45, my = H * 0.09, gm = el('g', { 'pointer-events': 'none', class: 'moon' }, svg);
-    el('ellipse', { cx: mx, cy: my, rx: 120, ry: 85, fill: '#fff6c9', opacity: 0.09 }, gm);
-    el('path', { d: 'M' + (mx + 6) + ',' + (my - 34) + 'a34,34 0 1 0 22,58a28,28 0 1 1 -22,-58z', fill: '#fff6c9', opacity: 0.34 }, gm);
-    for (i = 0; i < 5; i++) el('rect', { x: mx - 40 + R() * 20, y: my + 52 + i * 26, width: 70 - i * 9, height: 5, rx: 2.5, fill: '#fff6c9', opacity: 0.22 - i * 0.03 }, gm);
+    el('ellipse', { cx: mx, cy: my, rx: 120, ry: 85, fill: '#fff6c9', opacity: 0.06 }, gm);
+    el('path', { d: 'M' + (mx + 6) + ',' + (my - 34) + 'a34,34 0 1 0 22,58a28,28 0 1 1 -22,-58z', fill: '#fff6c9', opacity: 0.22 }, gm);
+    for (i = 0; i < 5; i++) el('rect', { x: mx - 40 + R() * 20, y: my + 52 + i * 26, width: 70 - i * 9, height: 5, rx: 2.5, fill: '#fff6c9', opacity: 0.13 - i * 0.02 }, gm);
     [0.12, 0.33, 0.52, 0.93].forEach(function (q, n) { el('circle', { cx: W * q, cy: -7 - (n % 2) * 3, r: 2.6, fill: '#fff6c9', opacity: 0.85 }, gm); });
   }
   // soft light patches on the water
@@ -1062,7 +1063,8 @@ function previewNudge() {
   if (G.coach || !settings.preview || seen.pvUsed || seen.pvNudge) return;
   if (G.mode === 'chapter' && G.li < 3) return; // ponds 1-3 teach it themselves
   seen.pvNudge = true; store.set('seen', seen);
-  toast('New: press and hold any water to preview a ripple. Let go to cancel.', 4200);
+  var nt = toast('New: press and hold any water to preview a ripple.', 3000); nt.classList.add('nudge');
+  document.addEventListener('pointerdown', function () { nt.remove(); }, { once: true, capture: true });
 }
 function dateKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function todayKey() { return dateOverride || dateKey(new Date()); }
@@ -1300,6 +1302,17 @@ function showHold(idx) {
       el('rect', { x: p.x - 44, y: p.y - 44, width: 88, height: 88, rx: 26, fill: '#ffffff', 'fill-opacity': 0.16, stroke: '#ffffff', 'stroke-opacity': 0.5, 'stroke-width': 3, 'stroke-dasharray': '8 7', class: 'pv-cell' }, pv);
     }
   });
+  var placed = []; // preview pills already drawn: a new pill takes the first free spot so labels never overlap
+  function pillPos(cx, cy, tw) {
+    var lx = Math.max(tw / 2 - 10, Math.min(lv.w * 100 + 10 - tw / 2, cx)), down = cy < lv.h * 50;
+    var offs = down ? [62, -54, 96, -88, 130, -122] : [-54, 62, -88, 96, -122, 130];
+    for (var o = 0; o < offs.length; o++) {
+      var ly = cy + offs[o], box = { x0: lx - tw / 2 - 4, x1: lx + tw / 2 + 4, y0: ly - 21, y1: ly + 19 };
+      if (box.y0 < -14 || box.y1 > lv.h * 100 + 14) continue;
+      if (!placed.some(function (q) { return box.x0 < q.x1 && q.x0 < box.x1 && box.y0 < q.y1 && q.y0 < box.y1; })) { placed.push(box); return { x: lx, y: ly }; }
+    }
+    return { x: lx, y: cy + offs[0] };
+  }
   res.moves.forEach(function (mv) {
     var a = cellXY(mv.from), t = cellXY(mv.to), d = L.DIRS[mv.dir];
     if (mv.steps === 0) { // blocked: a red stop bar on the side it would have moved, a red X on the leaf, and what blocks it
@@ -1310,7 +1323,7 @@ function showHold(idx) {
       var xx = a.x + d[1] * 22, xy = a.y + d[0] * 22, q = 11;
       el('circle', { cx: xx, cy: xy, r: 17, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3.5 }, gb);
       el('path', { d: 'M' + (xx - q * .6) + ',' + (xy - q * .6) + 'l' + (q * 1.2) + ',' + (q * 1.2) + 'M' + (xx + q * .6) + ',' + (xy - q * .6) + 'l' + (-q * 1.2) + ',' + (q * 1.2), stroke: '#ffffff', 'stroke-width': 4, 'stroke-linecap': 'round' }, gb);
-      var why = 'blocked: ' + blockerName(mv.from, mv.dir), tw = 26 + why.length * 11.5, lx = Math.max(tw / 2 - 10, Math.min(lv.w * 100 + 10 - tw / 2, a.x)), ly = a.y < lv.h * 50 ? a.y + 62 : a.y - 54;
+      var why = 'blocked: ' + blockerName(mv.from, mv.dir), tw = 26 + why.length * 11.5, lp = pillPos(a.x, a.y, tw), lx = lp.x, ly = lp.y;
       el('rect', { x: lx - tw / 2, y: ly - 17, width: tw, height: 32, rx: 16, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3, class: 'pv-why' }, gb);
       var tx = el('text', { x: lx, y: ly + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, gb);
       tx.textContent = why;
@@ -1321,7 +1334,7 @@ function showHold(idx) {
       var px = t.x + d[1] * 44, py = t.y + d[0] * 44, qx = d[0] * 24, qy = d[1] * 24, gp = el('g', { class: 'pv-blocked pv-partial' }, pv);
       el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#ffffff', 'stroke-width': 14, 'stroke-linecap': 'round' }, gp);
       el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#e5484d', 'stroke-width': 8, 'stroke-linecap': 'round' }, gp);
-      var pw = 'stops: ' + blockerName(mv.to, mv.dir), pwW = 26 + pw.length * 11.5, plx = Math.max(pwW / 2 - 10, Math.min(lv.w * 100 + 10 - pwW / 2, t.x)), ply = t.y < lv.h * 50 ? t.y + 62 : t.y - 54;
+      var pw = 'stops: ' + blockerName(mv.to, mv.dir), pwW = 26 + pw.length * 11.5, pp = pillPos(t.x, t.y, pwW), plx = pp.x, ply = pp.y;
       el('rect', { x: plx - pwW / 2, y: ply - 17, width: pwW, height: 32, rx: 16, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3 }, gp);
       var pt = el('text', { x: plx, y: ply + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, gp); pt.textContent = pw;
     }
@@ -1580,7 +1593,8 @@ if (tester) $('btnSolve').classList.remove('hidden');
 window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' : G.li + 1, mode: G.mode, taps: G.taps, won: G.won, busy: G.busy, coach: G.coach ? G.coach.i : -1,
     hint: G.hint, hinted: G.hinted, preview: document.body.dataset.preview === '1', par: G.level ? G.level.par : 0 }; },
   solution: function () { return L.solve(G.level, G.st); }, start: function (i) { startLevel(i); }, startDaily: startDaily,
-  dailyLevel: function () { return dailyLevel(todayKey()); } };
+  dailyLevel: function () { return dailyLevel(todayKey()); },
+  hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
 // first visit: go straight into the tutorial pond
 if (!progress.stars[LEVELS[0].id]) startLevel(0); else showSelect();
 })();
