@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.3.1 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.3.2 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
 <title>Ripple (test version)</title>
@@ -170,7 +170,7 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.3.1 prototype</div>
+    <div class="ver" id="ver">Ripple v0.3.2 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -1002,7 +1002,7 @@ function afterDemo(s) {
 }
 
 /* ---------- play ---------- */
-function hintReady() { return !G.won && !G.coach && (G.restarted || G.taps >= G.level.par); }
+function hintReady() { return !G.won && !G.coach; } // one rule everywhere: Hint is there from the first tap, after any lesson
 function hud() {
   if (!G.level) return;
   $('taps').textContent = G.taps;
@@ -1050,7 +1050,7 @@ function startLevel(i, opts) {
   var intro = G.level.intro;
   var want = intro && (opts.forceIntro || (intro === 'tutorial' ? !progress.stars[G.level.id] : !seen[intro]));
   G.coach = want ? buildCoach(G.level) : (G.level.tip ? buildCoach(G.level) : null);
-  $('btnHelp').classList.toggle('hidden', !intro);
+  $('btnHelp').classList.remove('hidden'); // tips are always one tap away
   showCoach();
   hud();
   store.set('last', i);
@@ -1082,7 +1082,7 @@ function startDaily() {
   var key = todayKey();
   G.mode = 'daily'; G.dailyKey = key; G.li = -1;
   enterPond(dailyLevel(key), 'Daily pond', prettyDate(key) + ' · ' + dailyLevel(key).name);
-  G.coach = null; $('btnHelp').classList.add('hidden'); setTimeout(previewNudge, 0);
+  G.coach = null; $('btnHelp').classList.remove('hidden'); setTimeout(previewNudge, 0);
   showCoach(); hud();
 }
 
@@ -1095,6 +1095,11 @@ function tap(idx, fromSolver) {
   if (!res) {
     // first-time reminder: you tap the water, not the animal
     if (!fromSolver && L.leafAt(G.st, idx) !== -1 && (seen.water || 0) < 2) { seen.water = (seen.water || 0) + 1; store.set('seen', seen); toast('Tap the water, not the animal.'); }
+    return false;
+  }
+  if (!fromSolver && !res.moves.some(function (mv) { return mv.steps > 0; })) { // nothing can move: show why, but the tap is free
+    ripple(idx, false); res.moves.forEach(function (mv) { bump(mv.i, mv.dir); });
+    toast('Nothing can move from there, so that tap is free.', 2200);
     return false;
   }
   var coachStep = G.coach ? G.coach.steps[G.coach.i] : null;
@@ -1213,14 +1218,14 @@ function hintClue(m) {
   else if (dirs.length === 1 && byDir[dirs[0]].length > 1) s = 'Move ' + names(byDir[dirs[0]]) + ' ' + DIRWORD[dirs[0]] + ' together.';
   else s = 'Move ' + names(dirs.map(function (d) { return names(byDir[d]) + ' ' + DIRWORD[d]; })) + '.';
   // shield: a critter right behind a tied lily on the ripple line stays still
-  var r0 = (m.idx / w) | 0, c0 = m.idx % w, kept = [];
+  var r0 = (m.idx / w) | 0, c0 = m.idx % w, kept = [], keptDir = {};
   L.DIRS.forEach(function (d) {
     var r1 = r0 + d[0], c1 = c0 + d[1], r2 = r0 + 2 * d[0], c2 = c0 + 2 * d[1];
     if (r2 < 0 || r2 >= lv.h || c2 < 0 || c2 >= w || G.board.cell[r1 * w + c1] !== 2) return;
-    var li = L.leafAt(G.st, r2 * w + c2); if (li !== -1 && lv.leaves[li].k !== 'leaf') kept.push('the ' + lv.leaves[li].k);
+    var li = L.leafAt(G.st, r2 * w + c2); if (li !== -1 && lv.leaves[li].k !== 'leaf') { kept.push('the ' + lv.leaves[li].k); keptDir[d[0] + ',' + d[1]] = 1; }
   });
   // at most 2 short sentences: what moves, then the shield or the payoff
-  if (kept.length) s += ' The tied lily keeps ' + names(kept) + ' still.';
+  if (kept.length) { var kd = Object.keys(keptDir), where = kd.length === 1 ? { '-1,0': ' above', '1,0': ' below', '0,-1': ' left of', '0,1': ' right of' }[kd[0]] + ' your splash' : ''; s += ' The tied lily' + where + ' keeps ' + names(kept) + ' still.'; }
   else if (home.length) s += ' That brings ' + names(home) + ' home.';
   if (m.big) s = 'Use the big stone. ' + s;
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -1243,6 +1248,14 @@ function clueArrows(m) {
       el('path', { d: 'M' + sx + ',' + sy + 'L' + ex + ',' + ey, stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
       el('path', { d: 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 - d[0] * 13) + ',' + (-d[0] * 16 - d[1] * 13) + 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 + d[0] * 13) + ',' + (-d[0] * 16 + d[1] * 13), stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', fill: 'none', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
     });
+  });
+  var w = G.level.w, r0 = (m.idx / w) | 0, c0 = m.idx % w; // ring the tied lily that keeps a critter still
+  L.DIRS.forEach(function (d) {
+    var r1 = r0 + d[0], c1 = c0 + d[1], r2 = r0 + 2 * d[0], c2 = c0 + 2 * d[1];
+    if (r2 < 0 || r2 >= G.level.h || c2 < 0 || c2 >= w || G.board.cell[r1 * w + c1] !== 2) return;
+    var li = L.leafAt(G.st, r2 * w + c2); if (li === -1 || G.level.leaves[li].k === 'leaf') return;
+    var p = cellXY(r1 * w + c1);
+    el('circle', { cx: p.x, cy: p.y, r: 44, fill: 'none', stroke: '#fff3a0', 'stroke-width': 7, 'stroke-dasharray': '10 8', class: 'clue-shield' }, layers.hl);
   });
 }
 function showHint() {
@@ -1353,6 +1366,7 @@ function solvePlay() {
   var sol = L.solve(G.level, G.st);
   if (!sol) { toast('No solution from here. Try Restart.'); return; }
   G.coach = null; $('coach').classList.add('hidden'); clearHL();
+  G.hinted = true; // the tester Solve counts as a hint: at most 2 stars, never more than Hint
   var k = 0;
   (function step() {
     if (k >= sol.length || G.won) return;
@@ -1537,7 +1551,7 @@ board.addEventListener('pointerdown', function (ev) {
   if (!L.canTap(G.board, G.st, idx, false)) return;
   if (hold) clearTimeout(hold.timer);
   hold = { id: ev.pointerId, idx: idx, x: ev.clientX, y: ev.clientY, shown: false };
-  hold.timer = setTimeout(function () { if (hold && !G.busy && !G.won) hold.shown = showHold(hold.idx); }, 350);
+  hold.timer = setTimeout(function () { if (hold && !G.busy && !G.won) hold.shown = showHold(hold.idx); }, 250);
 });
 board.addEventListener('pointermove', function (ev) {
   if (!hold || hold.id !== ev.pointerId || hold.shown) return;
@@ -1559,6 +1573,10 @@ $('btnSolve').addEventListener('click', solvePlay);
 $('btnMenu').addEventListener('click', function () { if (!G.busy) showSelect(); });
 $('btnHelp').addEventListener('click', function () {
   if (G.busy || G.won) return;
+  if (!G.level.intro || G.mode === 'daily') { // ponds without a lesson: the general tips, until tapped away
+    toast('Tips: press and hold any water to preview a ripple. Hint gives a clue first, then the cell (a hinted pond earns at most 2 stars).', 600000).classList.add('clue');
+    return;
+  }
   G.coach = null;
   if (G.taps > 0) resetPond(); // tips walk through from the start of the pond
   G.coach = buildCoach(G.level); showCoach();
