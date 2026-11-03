@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<!-- Ripple prototype (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#cfe5d6">
+<title>Ripple (test version)</title>
+<!-- Ripple prototype - Bright Harbor Games. Built by build.js from game.template.html + logic.js + levels.json. Edit those, not this file. -->
+<style>
+:root{
+  --bg-top:#e7f2e8; --bg-bot:#bcd9c8; --ink:#1f3d37; --ink-soft:#4d6b63; --card:#fffcf3;
+  --line:#d8e5da; --accent:#2c8a7e; --accent-ink:#ffffff; --gold:#f0b429; --gold-dim:#c9d6cd;
+  --btn:#ffffff; --btn-ink:#1f3d37; --shadow:0 6px 18px rgba(31,61,55,.14);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  min-height:100vh;min-height:100dvh;background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));
+  color:var(--ink);font-family:ui-rounded,"SF Pro Rounded","Nunito","Segoe UI",system-ui,-apple-system,sans-serif;
+  overflow-x:hidden;-webkit-user-select:none;user-select:none;
+}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+#app{max-width:560px;margin:0 auto;padding:max(10px,env(safe-area-inset-top)) 12px max(14px,env(safe-area-inset-bottom));display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:8px;height:52px}
+h1#title{margin:0;font-size:28px;letter-spacing:.5px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:8px;cursor:default}
+h1#title svg{width:30px;height:30px}
+.icon{width:48px;height:48px;border-radius:16px;border:0;background:var(--btn);box-shadow:var(--shadow);display:grid;place-items:center;padding:0}
+.icon svg{width:24px;height:24px}
+.icon[aria-pressed="true"]{opacity:.65}
+.hidden{display:none!important}
+.screen{flex:1;display:flex;flex-direction:column}
+/* level select */
+.sub{margin:6px 2px 14px;color:var(--ink-soft);font-size:16px;line-height:1.35}
+.totals{font-weight:700;color:var(--ink-soft);margin:0 2px 10px;font-size:15px}
+#levelGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{position:relative;border:0;border-radius:20px;background:var(--card);box-shadow:var(--shadow);padding:12px 6px 10px;min-height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.tile .num{font-size:26px;font-weight:800;color:var(--accent)}
+.tile .nm{font-size:12.5px;color:var(--ink-soft);text-align:center;line-height:1.15;min-height:2.3em;display:flex;align-items:center}
+.tile .st{display:flex;gap:2px}
+.tile .st svg{width:16px;height:16px}
+.tile.locked{background:#e5ede6;box-shadow:none}
+.tile.locked .num{color:#a3b5ab}
+.tile .lock{width:22px;height:22px;opacity:.55}
+.tile .badge{position:absolute;top:7px;right:8px;font-size:10.5px;font-weight:800;color:#fff;background:var(--accent);border-radius:8px;padding:2px 6px}
+.tester{margin-top:14px;font-size:13px;color:var(--ink-soft);text-align:center}
+/* play */
+.hud{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 2px 8px;min-height:40px}
+.lvname{font-weight:800;font-size:17px;line-height:1.15}
+.lvname small{display:block;font-weight:600;color:var(--ink-soft);font-size:13px}
+.counter{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:14px;padding:6px 12px;box-shadow:var(--shadow);font-weight:700;font-size:15px;white-space:nowrap}
+.counter b{font-size:20px}
+.counter .par{color:var(--ink-soft);font-weight:600}
+.helpbtn{width:40px;height:40px;border-radius:14px;font-weight:800;font-size:18px}
+.boardWrap{width:100%;max-width:min(520px,calc(100dvh - 330px));min-width:min(100%,300px);margin:0 auto;aspect-ratio:1/1;position:relative}
+#board{width:100%;height:100%;display:block;touch-action:manipulation;overflow:visible}
+.stoneBar{display:flex;gap:10px;justify-content:center;margin:10px 0 0}
+.stone{flex:1;max-width:200px;min-height:52px;border-radius:16px;border:3px solid transparent;background:var(--btn);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:15px}
+.stone svg{width:26px;height:26px}
+.stone[aria-pressed="true"]{border-color:var(--accent);background:#e8f6f2}
+.stone:disabled{opacity:.45;cursor:default}
+.coach{margin:10px 0 0;background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:12px 14px;display:flex;flex-direction:column;gap:8px;border:2px solid #f3dc8b}
+.coach p{margin:0;font-size:17px;line-height:1.35;font-weight:650}
+.coachRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.coachRow span{color:var(--ink-soft);font-size:13px;font-weight:700}
+.coach.nudge{animation:nudge .35s}
+@keyframes nudge{20%{transform:translateX(-6px)}50%{transform:translateX(6px)}80%{transform:translateX(-3px)}}
+.btn{min-height:48px;padding:0 18px;border-radius:16px;border:0;background:var(--btn);box-shadow:var(--shadow);font-weight:750;font-size:16px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn svg{width:20px;height:20px}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.controls{display:flex;gap:10px;justify-content:center;margin-top:12px}
+.controls .btn{flex:1;max-width:170px}
+.glow{animation:glow 1.1s ease-in-out infinite}
+@keyframes glow{50%{box-shadow:0 0 0 6px rgba(240,180,41,.55),var(--shadow)}}
+/* overlay */
+.overlay{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(24,52,46,.18);z-index:10;pointer-events:none}
+.overlay .card{pointer-events:auto}
+.card{width:100%;max-width:420px;background:var(--card);border-radius:24px;box-shadow:0 14px 40px rgba(31,61,55,.25);padding:20px 18px 18px;text-align:center;animation:rise .35s ease-out}
+@keyframes rise{from{transform:translateY(30px);opacity:0}}
+.card h2{margin:0 0 6px;font-size:26px}
+.card p{margin:4px 0;color:var(--ink-soft);font-size:16px}
+.stars{display:flex;justify-content:center;gap:8px;margin:10px 0}
+.stars svg{width:46px;height:46px}
+.stars svg.on{animation:pop .45s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes pop{from{transform:scale(0)}}
+.card .row{display:flex;gap:10px;margin-top:14px}
+.card .row .btn{flex:1}
+.toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:14px;z-index:20;transition:opacity .3s}
+/* svg bits */
+.leaf{transition:transform 240ms cubic-bezier(.25,.8,.35,1)}
+.bob{animation:bob 3.2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(2deg)}}
+.pulse{transform-box:fill-box;transform-origin:center;animation:pulse 1.2s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.7);opacity:1}100%{transform:scale(1.25);opacity:0}}
+.tapdot{animation:tapdot 1.2s ease-in-out infinite}
+@keyframes tapdot{50%{opacity:.35}}
+.hl{animation:hl 1.4s ease-in-out infinite}
+@keyframes hl{50%{opacity:.35}}
+.padring{transition:opacity .3s}
+.home .padring{opacity:1!important}
+.hit{fill:transparent;cursor:pointer}
+@media (min-width:700px){ #levelGrid{grid-template-columns:repeat(4,minmax(0,1fr))} }
+@media (prefers-reduced-motion:reduce){ .bob,.pulse,.glow{animation:none} }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button class="icon" id="btnMenu" aria-label="All ponds"><svg viewBox="0 0 24 24" fill="none" stroke="#1f3d37" stroke-width="2.4" stroke-linecap="round"><rect x="4" y="4" width="6" height="6" rx="2"/><rect x="14" y="4" width="6" height="6" rx="2"/><rect x="4" y="14" width="6" height="6" rx="2"/><rect x="14" y="14" width="6" height="6" rx="2"/></svg></button>
+    <h1 id="title"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="#2c8a7e" stroke-width="2.5" opacity=".45"/><circle cx="16" cy="16" r="8" fill="none" stroke="#2c8a7e" stroke-width="2.5" opacity=".75"/><circle cx="16" cy="16" r="3.4" fill="#2c8a7e"/></svg>Ripple</h1>
+    <button class="icon" id="btnMute" aria-label="Sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="#1f3d37" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="#1f3d37"/><path id="muteWaves" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path id="muteX" d="M16 9.5l5 5M21 9.5l-5 5" class="hidden"/></svg></button>
+  </header>
+
+  <section id="screenSelect" class="screen">
+    <p class="sub">Drop pebbles. Ripples push the leaves. Bring every critter home to its own pad.</p>
+    <div class="totals" id="totals"></div>
+    <div id="levelGrid"></div>
+    <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
+  </section>
+
+  <section id="screenPlay" class="screen hidden">
+    <div class="hud">
+      <div class="lvname" id="lvName"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="icon helpbtn hidden" id="btnHelp" aria-label="Show tips again">?</button>
+        <div class="counter"><span><b id="taps">0</b> taps</span><span class="par">par <span id="par">0</span></span></div>
+      </div>
+    </div>
+    <div class="boardWrap"><svg id="board" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pond"></svg></div>
+    <div class="stoneBar hidden" id="stoneBar">
+      <button class="stone" id="btnPebble" aria-pressed="true"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="17" rx="8" ry="6" fill="#9aa5a6" stroke="#5f6a6c" stroke-width="2"/></svg>Pebble</button>
+      <button class="stone" id="btnBig" aria-pressed="false"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="16" rx="12.5" ry="10" fill="#7d8a8c" stroke="#4b5557" stroke-width="2.2"/><ellipse cx="11" cy="12" rx="4" ry="2.5" fill="#b8c2c3"/></svg>Big stone <b id="bigCount">1</b></button>
+    </div>
+    <div id="coach" class="coach hidden" role="status" aria-live="polite">
+      <p id="coachText"></p>
+      <div class="coachRow"><span id="coachStep"></span><button class="btn primary" id="coachNext">Next</button></div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="btnUndo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0,-6)"/></svg>Undo</button>
+      <button class="btn" id="btnRestart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>Restart</button>
+      <button class="btn hidden" id="btnSolve">Solve</button>
+    </div>
+  </section>
+
+  <div id="winCard" class="overlay hidden">
+    <div class="card">
+      <h2 id="winTitle">The pond is calm</h2>
+      <div class="stars" id="winStars"></div>
+      <p id="winLine"></p>
+      <p id="winTip"></p>
+      <div class="row"><button class="btn" id="btnReplay">Play again</button><button class="btn primary" id="btnNext">Next pond</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Ripple - shared move logic. Used by the game (inlined into prototype.html by build.js)
+ * and by solver.js / gen.js / check.js in node. Keep this file the ONLY source of rules.
+ *
+ * RULES
+ * - Grid w x h. Cell index = r*w + c.
+ * - Static pieces: rocks (fill a cell), anchored lilies (fill a cell), reeds (sit on the
+ *   EDGE between two neighbouring cells).
+ * - Movable pieces: leaves. A leaf carries a critter (frog, duck, turtle) or is plain ('leaf').
+ * - A move = tap an EMPTY water cell (no rock, no anchored lily, no leaf). Pads are water,
+ *   so an empty pad can be tapped.
+ * - Ripple reach: the 2 cells in each of the 4 straight directions from the splash.
+ *   Rocks and reeds do NOT stop the ripple (it washes over them).
+ *   An anchored lily DOES stop the ripple: cells behind it on that line are not reached.
+ *   The bank (grid edge) ends the line.
+ * - Every leaf reached slides directly away from the splash: 1 step for a pebble,
+ *   2 steps for a big stone (one step at a time, stopping at the first blocked step).
+ * - A step is blocked by: the bank, a rock, an anchored lily, a reed on the edge being
+ *   crossed, or a leaf in the target cell (as the board stands at that moment).
+ *
+ * SIMULTANEOUS-MOVE RESOLUTION (one fixed rule, used by game and solver alike):
+ *   Leaves are resolved FARTHEST FROM THE SPLASH FIRST (distance 2 before distance 1).
+ *   Each leaf finishes all of its steps before the next leaf moves, and the board is
+ *   updated live. So when two leaves sit in a line, the far one moves first and the
+ *   near one can then follow into the cell it left ("a little train"). If the far one
+ *   is blocked, the near one is blocked by it too.
+ *   Leaves on different lines move in different directions away from the splash and can
+ *   never meet, so ties at the same distance are processed in fixed order up, down,
+ *   left, right; the order cannot change the result.
+ * - Win: every critter leaf sits on the pad of its own kind. Plain leaves don't matter.
+ *   Pads can be left again, so order matters.
+ */
+(function (root) {
+  'use strict';
+  var DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // up, down, left, right
+  var CRITTERS = ['frog', 'duck', 'turtle'];
+
+  function edgeKey(a, b) { return a < b ? a + ':' + b : b + ':' + a; }
+
+  // Build the static board from a level object.
+  function makeBoard(level) {
+    var w = level.w, h = level.h, n = w * h;
+    var cell = new Uint8Array(n); // 0 water, 1 rock, 2 anchored lily
+    (level.rocks || []).forEach(function (p) { cell[p[0] * w + p[1]] = 1; });
+    (level.anchors || []).forEach(function (p) { cell[p[0] * w + p[1]] = 2; });
+    var reeds = {};
+    // reed: [r, c, 'E'] = between (r,c) and (r,c+1); [r, c, 'S'] = between (r,c) and (r+1,c)
+    (level.reeds || []).forEach(function (e) {
+      var a = e[0] * w + e[1];
+      var b = e[2] === 'E' ? a + 1 : a + w;
+      reeds[edgeKey(a, b)] = true;
+    });
+    var kinds = level.leaves.map(function (l) { return l.k; });
+    var pads = {};
+    (level.pads || []).forEach(function (p) { pads[p.k] = p.r * w + p.c; });
+    return { w: w, h: h, n: n, cell: cell, reeds: reeds, kinds: kinds, pads: pads };
+  }
+
+  function initialState(level) {
+    return {
+      pos: level.leaves.map(function (l) { return l.r * level.w + l.c; }),
+      big: level.big || 0
+    };
+  }
+
+  function leafAt(state, idx) {
+    for (var i = 0; i < state.pos.length; i++) if (state.pos[i] === idx) return i;
+    return -1;
+  }
+
+  function canTap(board, state, idx, useBig) {
+    if (idx < 0 || idx >= board.n) return false;
+    if (board.cell[idx] !== 0) return false;
+    if (leafAt(state, idx) !== -1) return false;
+    if (useBig && state.big <= 0) return false;
+    return true;
+  }
+
+  // Which leaves the ripple reaches, in resolution order (farthest first).
+  function reached(board, state, idx) {
+    var w = board.w, r0 = (idx / w) | 0, c0 = idx % w, out = [];
+    for (var d = 0; d < 4; d++) {
+      for (var k = 1; k <= 2; k++) {
+        var r = r0 + DIRS[d][0] * k, c = c0 + DIRS[d][1] * k;
+        if (r < 0 || r >= board.h || c < 0 || c >= w) break;
+        var j = r * w + c;
+        if (board.cell[j] === 2) break; // anchored lily soaks up the ripple
+        var li = leafAt(state, j);
+        if (li !== -1) out.push({ i: li, dir: d, dist: k });
+      }
+    }
+    out.sort(function (a, b) { return b.dist - a.dist || a.dir - b.dir; }); // stable tiebreak
+    return out;
+  }
+
+  // Apply a tap. Returns { state, moves:[{i, from, to, steps, dir}], reached:[...] } or null if illegal.
+  function applyMove(board, state, idx, useBig) {
+    if (!canTap(board, state, idx, useBig)) return null;
+    var w = board.w;
+    var pos = state.pos.slice();
+    var occ = {};
+    pos.forEach(function (p, i) { occ[p] = i; });
+    var hits = reached(board, state, idx);
+    var push = useBig ? 2 : 1;
+    var moves = [];
+    hits.forEach(function (hit) {
+      var cur = pos[hit.i], from = cur, steps = 0;
+      var dr = DIRS[hit.dir][0], dc = DIRS[hit.dir][1];
+      for (var s = 0; s < push; s++) {
+        var r = ((cur / w) | 0) + dr, c = (cur % w) + dc;
+        if (r < 0 || r >= board.h || c < 0 || c >= w) break;      // bank
+        var nx = r * w + c;
+        if (board.cell[nx] !== 0) break;                           // rock / anchored lily
+        if (board.reeds[edgeKey(cur, nx)]) break;                  // reed
+        if (occ[nx] !== undefined) break;                          // another leaf
+        delete occ[cur]; occ[nx] = hit.i; cur = nx; steps++;
+      }
+      pos[hit.i] = cur;
+      moves.push({ i: hit.i, from: from, to: cur, steps: steps, dir: hit.dir });
+    });
+    return { state: { pos: pos, big: state.big - (useBig ? 1 : 0) }, moves: moves, reached: hits };
+  }
+
+  function isWin(board, state) {
+    for (var i = 0; i < board.kinds.length; i++) {
+      var k = board.kinds[i];
+      if (k === 'leaf') continue;
+      if (state.pos[i] !== board.pads[k]) return false;
+    }
+    return true;
+  }
+
+  // Canonical key: plain leaves are interchangeable, so sort their positions.
+  function key(board, state) {
+    var crit = [], plain = [];
+    for (var i = 0; i < state.pos.length; i++) {
+      if (board.kinds[i] === 'leaf') plain.push(state.pos[i]); else crit.push(state.pos[i]);
+    }
+    plain.sort(function (a, b) { return a - b; });
+    return crit.join(',') + '/' + plain.join(',') + '|' + state.big;
+  }
+
+  // All legal taps from a state: [{idx, big}]
+  function legalMoves(board, state) {
+    var out = [];
+    for (var idx = 0; idx < board.n; idx++) {
+      if (!canTap(board, state, idx, false)) continue;
+      out.push({ idx: idx, big: false });
+      if (state.big > 0) out.push({ idx: idx, big: true });
+    }
+    return out;
+  }
+
+  // Breadth-first search. Returns array of taps [{idx, big}] (shortest), or null.
+  // Optional maxDepth: give up on paths longer than that (used by the level generator).
+  function solve(level, startState, maxStates, maxDepth) {
+    var board = makeBoard(level);
+    var start = startState || initialState(level);
+    maxStates = maxStates || 2000000;
+    if (isWin(board, start)) return [];
+    var seen = new Map();
+    var k0 = key(board, start);
+    seen.set(k0, null);
+    var queue = [start], keys = [k0], depth = [0], head = 0;
+    maxDepth = maxDepth || Infinity;
+    while (head < queue.length) {
+      var st = queue[head], sk = keys[head], dp = depth[head]; head++;
+      if (dp >= maxDepth) continue;
+      var ms = legalMoves(board, st);
+      for (var m = 0; m < ms.length; m++) {
+        var res = applyMove(board, st, ms[m].idx, ms[m].big);
+        var nk = key(board, res.state);
+        if (seen.has(nk)) continue;
+        seen.set(nk, { prev: sk, move: ms[m] });
+        if (isWin(board, res.state)) {
+          var path = [], cur = nk;
+          while (seen.get(cur)) { path.unshift(seen.get(cur).move); cur = seen.get(cur).prev; }
+          return path;
+        }
+        if (seen.size > maxStates) return null;
+        queue.push(res.state); keys.push(nk); depth.push(dp + 1);
+      }
+    }
+    return null;
+  }
+
+  var api = {
+    DIRS: DIRS, CRITTERS: CRITTERS, makeBoard: makeBoard, initialState: initialState,
+    leafAt: leafAt, canTap: canTap, reached: reached, applyMove: applyMove, isWin: isWin,
+    key: key, legalMoves: legalMoves, solve: solve
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.RippleLogic = api;
+})(this);
+
+</script>
+<script>
+var LEVELS = [{"id":1,"name":"First Splash","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":2}],"intro":"tutorial","par":2},{"id":2,"name":"Two Friends","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":2}],"intro":"two","par":2},{"id":3,"name":"Side by Side","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":4,"c":2},{"k":"duck","r":0,"c":2}],"par":3},{"id":4,"name":"Stepping Stones","w":5,"h":5,"rocks":[[1,4],[2,1]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":4},{"k":"duck","r":3,"c":2}],"intro":"rock","par":3},{"id":5,"name":"Rocky Cove","w":6,"h":6,"rocks":[[4,4],[3,0],[0,2]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":4},{"k":"turtle","r":1,"c":0}],"par":4},{"id":6,"name":"Reed Bed","w":6,"h":6,"rocks":[[2,2]],"reeds":[[2,3,"S"],[4,2,"S"],[4,1,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":4,"c":3}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":3,"c":3}],"intro":"reed","par":4},{"id":7,"name":"Whispering Reeds","w":6,"h":6,"rocks":[[0,2],[5,1]],"reeds":[[4,4,"S"],[2,3,"S"],[1,3,"E"],[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":4,"c":4},{"k":"duck","r":0,"c":0},{"k":"turtle","r":2,"c":2}],"par":5},{"id":8,"name":"Tied Lily","w":6,"h":6,"rocks":[[4,1]],"reeds":[[2,4,"E"]],"anchors":[[1,4]],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":3,"c":2}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":5,"c":2}],"intro":"anchor","par":4},{"id":9,"name":"Still Corner","w":6,"h":6,"rocks":[[5,0],[2,1]],"reeds":[[4,3,"E"],[1,1,"E"]],"anchors":[[2,4],[4,3]],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":2},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":3,"c":5},{"k":"turtle","r":1,"c":0}],"par":5},{"id":10,"name":"Big Stone","w":6,"h":6,"rocks":[[4,2],[2,3]],"reeds":[[3,4,"E"]],"anchors":[],"big":1,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":2}],"pads":[{"k":"frog","r":3,"c":4},{"k":"duck","r":4,"c":5}],"intro":"big","par":4},{"id":11,"name":"Deep Ripples","w":7,"h":7,"rocks":[[2,2],[6,6]],"reeds":[[4,1,"E"],[5,3,"E"]],"anchors":[[3,4]],"big":1,"leaves":[{"k":"frog","r":1,"c":5},{"k":"duck","r":2,"c":5},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":2},{"k":"turtle","r":1,"c":4}],"par":6},{"id":12,"name":"Moon Pond","w":7,"h":7,"rocks":[[2,1],[1,4],[6,5]],"reeds":[[2,3,"S"],[1,3,"S"],[4,2,"S"]],"anchors":[[3,5]],"big":2,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":2,"c":2},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":2,"c":6},{"k":"duck","r":4,"c":0},{"k":"turtle","r":5,"c":0}],"par":7}];
+</script>
+<script>
+(function () {
+'use strict';
+var L = window.RippleLogic;
+
+/* ---------- save: one tiny store helper, everything under one key prefix ---------- */
+var store = {
+  prefix: 'ripple.v1.',
+  get: function (k, d) { try { var v = localStorage.getItem(this.prefix + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem(this.prefix + k, JSON.stringify(v)); } catch (e) {} }
+};
+var progress = store.get('progress', { stars: {}, best: {} });
+if (!progress || typeof progress !== 'object') progress = { stars: {}, best: {} };
+progress.stars = progress.stars || {}; progress.best = progress.best || {};
+var seen = store.get('seen', {}) || {};
+var muted = !!store.get('muted', false);
+var tester = /[?&]unlock=1\b/.test(location.search);
+
+/* ---------- helpers ---------- */
+var $ = function (id) { return document.getElementById(id); };
+var NS = 'http://www.w3.org/2000/svg';
+function rnd(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function f(n) { return Math.round(n * 10) / 10; }
+// closed smooth path through points (Catmull-Rom -> cubic Bezier)
+function smooth(pts, closed) {
+  var n = pts.length, d = 'M' + f(pts[0][0]) + ',' + f(pts[0][1]);
+  var get = function (i) { return closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))]; };
+  var end = closed ? n : n - 1;
+  for (var i = 0; i < end; i++) {
+    var p0 = get(i - 1), p1 = get(i), p2 = get(i + 1), p3 = get(i + 2);
+    d += 'C' + f(p1[0] + (p2[0] - p0[0]) / 6) + ',' + f(p1[1] + (p2[1] - p0[1]) / 6) + ' ' +
+      f(p2[0] - (p3[0] - p1[0]) / 6) + ',' + f(p2[1] - (p3[1] - p1[1]) / 6) + ' ' + f(p2[0]) + ',' + f(p2[1]);
+  }
+  return d + (closed ? 'Z' : '');
+}
+function blob(cx, cy, rx, ry, wob, n, R) {
+  var pts = [];
+  for (var i = 0; i < n; i++) {
+    var a = (i / n) * Math.PI * 2 + (R() - 0.5) * 0.35, k = 1 + (R() - 0.5) * wob;
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return smooth(pts, true);
+}
+// lily pad: round wobbly disc with a notch toward angle `na`
+function lily(cx, cy, r, R, na) {
+  var pts = [], gap = 0.32, n = 11;
+  for (var i = 0; i <= n; i++) {
+    var a = na + gap + (i / n) * (Math.PI * 2 - 2 * gap), k = 1 + (R() - 0.5) * 0.09;
+    pts.push([cx + Math.cos(a) * r * k, cy + Math.sin(a) * r * k]);
+  }
+  var c = [cx + Math.cos(na) * r * 0.08, cy + Math.sin(na) * r * 0.08];
+  return 'M' + f(c[0]) + ',' + f(c[1]) + 'L' + f(pts[0][0]) + ',' + f(pts[0][1]) + smooth(pts, false).replace(/^M[^C]*/, '') + 'Z';
+}
+function el(tag, attrs, parent) {
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- critters: distinct by SHAPE and COLOUR ---------- */
+var CRIT = {
+  frog:   { name: 'frog',   col: '#6cc644', dark: '#2f7a2a', padFill: '#d6f2c9', padLine: '#4aa83a' },
+  duck:   { name: 'duck',   col: '#f7d038', dark: '#a87b0c', padFill: '#fbf0bd', padLine: '#d4a10f' },
+  turtle: { name: 'turtle', col: '#e0873a', dark: '#87420f', padFill: '#f7d9bf', padLine: '#c76a22' }
+};
+function hexPts(r, rot) { var p = []; for (var i = 0; i < 6; i++) { var a = rot + i * Math.PI / 3; p.push(f(Math.cos(a) * r) + ',' + f(Math.sin(a) * r)); } return p.join(' '); }
+function critterSVG(k, ghost) {
+  var c = CRIT[k], s = '';
+  if (ghost) {
+    var g = 'fill="' + c.padLine + '" opacity=".38"';
+    if (k === 'frog') s = '<ellipse cx="0" cy="5" rx="20" ry="15" ' + g + '/><circle cx="-10" cy="-9" r="7.5" ' + g + '/><circle cx="10" cy="-9" r="7.5" ' + g + '/>';
+    if (k === 'duck') s = '<ellipse cx="4" cy="6" rx="19" ry="12" ' + g + '/><circle cx="-9" cy="-8" r="9.5" ' + g + '/><path d="M-17,-10L-27,-6L-17,-2Z" ' + g + '/><path d="M20,2L28,-7L25,9Z" ' + g + '/>';
+    if (k === 'turtle') s = '<polygon points="' + hexPts(19, Math.PI / 6) + '" ' + g + '/><circle cx="0" cy="-23" r="6" ' + g + '/>';
+    return s;
+  }
+  var st = 'stroke="' + c.dark + '" stroke-width="2.6" stroke-linejoin="round"';
+  if (k === 'frog') {
+    s = '<ellipse cx="-14" cy="14" rx="7" ry="4" fill="' + c.col + '" ' + st + '/><ellipse cx="14" cy="14" rx="7" ry="4" fill="' + c.col + '" ' + st + '/>' +
+      '<ellipse cx="0" cy="4" rx="21" ry="16" fill="' + c.col + '" ' + st + '/>' +
+      '<circle cx="-10" cy="-10" r="8" fill="' + c.col + '" ' + st + '/><circle cx="10" cy="-10" r="8" fill="' + c.col + '" ' + st + '/>' +
+      '<circle cx="-10" cy="-10" r="4.6" fill="#fff"/><circle cx="10" cy="-10" r="4.6" fill="#fff"/><circle cx="-9.4" cy="-9.4" r="2.3" fill="#1b2a1b"/><circle cx="10.6" cy="-9.4" r="2.3" fill="#1b2a1b"/>' +
+      '<path d="M-9,7Q0,13 9,7" fill="none" stroke="' + c.dark + '" stroke-width="2.4" stroke-linecap="round"/><circle cx="-14" cy="3" r="2.2" fill="#f4a3a8" opacity=".8"/><circle cx="14" cy="3" r="2.2" fill="#f4a3a8" opacity=".8"/>';
+  }
+  if (k === 'duck') {
+    s = '<path d="M19,1L29,-8L26,9Z" fill="' + c.col + '" ' + st + '/>' +
+      '<ellipse cx="4" cy="6" rx="20" ry="13" fill="' + c.col + '" ' + st + '/>' +
+      '<path d="M0,4Q8,-2 15,5Q8,12 0,4Z" fill="#fde98a" stroke="' + c.dark + '" stroke-width="1.8"/>' +
+      '<circle cx="-9" cy="-9" r="10" fill="' + c.col + '" ' + st + '/>' +
+      '<path d="M-17,-11L-29,-6L-17,-2Z" fill="#f08a24" stroke="#a5520d" stroke-width="2" stroke-linejoin="round"/>' +
+      '<circle cx="-11" cy="-12" r="2.4" fill="#1b2a1b"/>';
+  }
+  if (k === 'turtle') {
+    s = '<circle cx="0" cy="-23" r="7" fill="#c9b37a" ' + st + '/><circle cx="-2.5" cy="-25" r="1.5" fill="#1b2a1b"/><circle cx="2.5" cy="-25" r="1.5" fill="#1b2a1b"/>' +
+      '<ellipse cx="-17" cy="-11" rx="6" ry="4.5" fill="#c9b37a" ' + st + '/><ellipse cx="17" cy="-11" rx="6" ry="4.5" fill="#c9b37a" ' + st + '/>' +
+      '<ellipse cx="-16" cy="14" rx="6" ry="4.5" fill="#c9b37a" ' + st + '/><ellipse cx="16" cy="14" rx="6" ry="4.5" fill="#c9b37a" ' + st + '/>' +
+      '<polygon points="' + hexPts(20, Math.PI / 6) + '" fill="' + c.col + '" ' + st + '/>' +
+      '<polygon points="' + hexPts(9, Math.PI / 6) + '" fill="#f2a65e" stroke="' + c.dark + '" stroke-width="2"/>' +
+      '<path d="M0,-9V-20M7.8,-4.5L17,-10M7.8,4.5L17,10M0,9V20M-7.8,4.5L-17,10M-7.8,-4.5L-17,-10" stroke="' + c.dark + '" stroke-width="2"/>';
+  }
+  return s;
+}
+
+/* ---------- audio (soft, optional) ---------- */
+var actx = null;
+function audio() {
+  if (muted) return null;
+  try { if (!actx) { var A = window.AudioContext || window.webkitAudioContext; if (!A) return null; actx = new A(); } if (actx.state === 'suspended') actx.resume(); } catch (e) { return null; }
+  return actx;
+}
+function plop(big) {
+  var a = audio(); if (!a) return;
+  try {
+    var t = a.currentTime, o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(big ? 380 : 620, t); o.frequency.exponentialRampToValueAtTime(big ? 90 : 170, t + 0.18);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(big ? 0.32 : 0.22, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.3);
+  } catch (e) {}
+}
+function chime() {
+  var a = audio(); if (!a) return;
+  try {
+    [523.25, 659.25, 783.99, 1046.5].forEach(function (fr, i) {
+      var t = a.currentTime + i * 0.11, o = a.createOscillator(), g = a.createGain();
+      o.type = 'triangle'; o.frequency.value = fr;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.75);
+    });
+  } catch (e) {}
+}
+
+/* ---------- game state ---------- */
+var G = { li: 0, level: null, board: null, st: null, hist: [], taps: 0, busy: false, won: false, useBig: false, coach: null, leafEls: [], padEls: {} };
+var layers = {};
+var M = 16; // board margin (svg units, 1 cell = 100)
+
+function cellXY(idx) { var w = G.level.w; return { x: (idx % w) * 100 + 50, y: ((idx / w) | 0) * 100 + 50 }; }
+function unlocked(i) { return tester || i === 0 || !!progress.stars[LEVELS[i - 1].id]; }
+function starsFor(taps, par) { return taps <= par ? 3 : taps <= par + 2 ? 2 : 1; }
+
+/* ---------- drawing ---------- */
+function drawBoard() {
+  var lv = G.level, w = lv.w, h = lv.h, W = w * 100, H = h * 100, R = rnd(lv.id * 977 + 13);
+  var svg = $('board');
+  svg.setAttribute('viewBox', (-M) + ' ' + (-M) + ' ' + (W + 2 * M) + ' ' + (H + 2 * M));
+  svg.innerHTML = '';
+  var defs = el('defs', {}, svg);
+  defs.innerHTML =
+    '<radialGradient id="water" cx="45%" cy="38%" r="75%"><stop offset="0" stop-color="#7cc2bd"/><stop offset=".6" stop-color="#5aa9a8"/><stop offset="1" stop-color="#3f8c94"/></radialGradient>' +
+    '<linearGradient id="bank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a7cf83"/><stop offset="1" stop-color="#86b96a"/></linearGradient>' +
+    '<radialGradient id="rockg" cx="38%" cy="32%" r="80%"><stop offset="0" stop-color="#b3bdbe"/><stop offset="1" stop-color="#7b878a"/></radialGradient>';
+  // bank + water (organic edge)
+  var bankPts = [], i;
+  el('rect', { x: -M, y: -M, width: W + 2 * M, height: H + 2 * M, rx: 34, fill: 'url(#bank)' }, svg);
+  var wp = [], steps = 6;
+  for (i = 0; i < steps; i++) wp.push([i / steps * W, -4 + R() * 6]);
+  for (i = 0; i < steps; i++) wp.push([W + 4 - R() * 6, i / steps * H]);
+  for (i = 0; i < steps; i++) wp.push([W - i / steps * W, H + 4 - R() * 6]);
+  for (i = 0; i < steps; i++) wp.push([-4 + R() * 6, H - i / steps * H]);
+  wp[0] = [6, 6]; wp[steps] = [W - 6, 6]; wp[2 * steps] = [W - 6, H - 6]; wp[3 * steps] = [6, H - 6];
+  el('path', { d: smooth(wp, true), fill: '#3a7f86', transform: 'translate(0,3)' }, svg);
+  el('path', { d: smooth(wp, true), fill: 'url(#water)' }, svg);
+  // soft light patches on the water
+  for (i = 0; i < 4; i++) el('path', { d: blob(R() * W, R() * H, 60 + R() * 70, 30 + R() * 40, 0.4, 7, R), fill: '#ffffff', opacity: 0.05 }, svg);
+  // cells
+  var gcells = el('g', {}, svg);
+  for (var r = 0; r < h; r++) for (var c = 0; c < w; c++) {
+    if (G.board.cell[r * w + c]) continue;
+    el('rect', { x: c * 100 + 7, y: r * 100 + 7, width: 86, height: 86, rx: 26, fill: '#ffffff', 'fill-opacity': 0.07, stroke: '#ffffff', 'stroke-opacity': 0.12, 'stroke-width': 2 }, gcells);
+  }
+  // pads
+  layers.pads = el('g', {}, svg);
+  G.padEls = {};
+  (lv.pads || []).forEach(function (p, j) {
+    var cx = p.c * 100 + 50, cy = p.r * 100 + 50, PR = rnd(lv.id * 31 + j * 7), cr = CRIT[p.k];
+    var g = el('g', { 'data-pad': p.k }, layers.pads);
+    el('path', { d: lily(cx, cy, 44, PR, -Math.PI / 2 + (PR() - 0.5) * 1.6), fill: cr.padFill, stroke: cr.padLine, 'stroke-width': 5, 'stroke-dasharray': '10 7', 'stroke-linecap': 'round' }, g);
+    el('circle', { class: 'padring', cx: cx, cy: cy, r: 47, fill: 'none', stroke: '#fff7c2', 'stroke-width': 6, opacity: 0 }, g);
+    var gh = el('g', { transform: 'translate(' + cx + ',' + cy + ') scale(.82)' }, g);
+    gh.innerHTML = critterSVG(p.k, true);
+    G.padEls[p.k] = g;
+  });
+  // rocks
+  var gs = el('g', {}, svg);
+  (lv.rocks || []).forEach(function (p, j) {
+    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, RR = rnd(lv.id * 101 + j * 17);
+    el('path', { d: blob(cx + 2, cy + 7, 40, 33, 0.25, 8, RR), fill: '#2f6f74', opacity: 0.45 }, gs);
+    el('path', { d: blob(cx, cy, 39, 34, 0.28, 8, RR), fill: 'url(#rockg)', stroke: '#5b6668', 'stroke-width': 3.5 }, gs);
+    el('path', { d: blob(cx - 11, cy - 12, 13, 7, 0.3, 6, RR), fill: '#d2dadb', opacity: 0.8 }, gs);
+    el('path', { d: 'M' + (cx + 6) + ',' + (cy + 4) + 'q8,4 12,14', fill: 'none', stroke: '#5b6668', 'stroke-width': 2.5, 'stroke-linecap': 'round', opacity: 0.7 }, gs);
+  });
+  // anchored lilies: deep green, flower, rope stake
+  (lv.anchors || []).forEach(function (p, j) {
+    var cx = p[1] * 100 + 50, cy = p[0] * 100 + 50, AR = rnd(lv.id * 211 + j * 5), na = -Math.PI / 4;
+    el('path', { d: lily(cx + 2, cy + 5, 46, AR, na), fill: '#1d5a40', opacity: 0.35 }, gs);
+    el('path', { d: lily(cx, cy, 46, AR, na), fill: '#2e7d58', stroke: '#1b4f39', 'stroke-width': 3.5 }, gs);
+    for (var v = 0; v < 6; v++) { var a = na + 0.6 + v * 0.9; el('path', { d: 'M' + cx + ',' + cy + 'L' + f(cx + Math.cos(a) * 36) + ',' + f(cy + Math.sin(a) * 36), stroke: '#5fa57d', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.8 }, gs); }
+    // rope + stake (shows it is tied in place)
+    el('path', { d: 'M' + (cx - 30) + ',' + (cy + 26) + 'q12,-14 26,-20', fill: 'none', stroke: '#a77b4a', 'stroke-width': 4, 'stroke-linecap': 'round' }, gs);
+    el('circle', { cx: cx - 31, cy: cy + 28, r: 7, fill: '#8a5d32', stroke: '#5d3c1d', 'stroke-width': 2.5 }, gs);
+    var fl = el('g', { transform: 'translate(' + cx + ',' + cy + ')' }, gs);
+    var pet = ''; for (var q = 0; q < 7; q++) pet += '<ellipse cx="0" cy="-12" rx="6.5" ry="12" fill="#f6b2cb" stroke="#d47398" stroke-width="1.6" transform="rotate(' + (q * 360 / 7) + ')"/>';
+    fl.innerHTML = pet + '<circle r="6" fill="#fbd65a" stroke="#d6a51b" stroke-width="1.5"/>';
+  });
+  // reeds on cell edges
+  (lv.reeds || []).forEach(function (e, j) {
+    var RR = rnd(lv.id * 401 + j * 3), x, y, rot;
+    if (e[2] === 'E') { x = (e[1] + 1) * 100; y = e[0] * 100 + 50; rot = 0; } else { x = e[1] * 100 + 50; y = (e[0] + 1) * 100; rot = 90; }
+    var g = el('g', { transform: 'translate(' + x + ',' + y + ') rotate(' + rot + ')' }, gs);
+    el('path', { d: 'M0,-44L0,44', stroke: '#5c4a2c', 'stroke-width': 13, 'stroke-linecap': 'round', opacity: 0.55 }, g);
+    for (var b = 0; b < 7; b++) {
+      var by = -40 + b * 13.3, dir = (b % 2 ? 1 : -1), len = 16 + RR() * 12;
+      el('path', { d: 'M0,' + f(by) + 'q' + f(dir * len * 0.3) + ',' + f(-len * 0.5) + ' ' + f(dir * len) + ',' + f(-len * 0.6 - RR() * 6), fill: 'none', stroke: b % 3 ? '#6c9a3c' : '#4f7f2e', 'stroke-width': 4.2, 'stroke-linecap': 'round' }, g);
+    }
+    [-26, 4, 30].forEach(function (cy2, q) { el('rect', { x: -4.5 + (q - 1) * 2, y: cy2 - 9, width: 9, height: 18, rx: 4.5, fill: '#7a4f2a', stroke: '#4d3017', 'stroke-width': 1.5 }, g); });
+  });
+  // leaves
+  layers.leaves = el('g', {}, svg);
+  G.leafEls = lv.leaves.map(function (l, j) {
+    var LR = rnd(lv.id * 53 + j * 11), outer = el('g', { class: 'leaf', 'data-leaf': l.k }, layers.leaves);
+    var nudge = el('g', {}, outer), bob = el('g', { class: 'bob' }, nudge);
+    bob.style.animationDelay = (-LR() * 3) + 's';
+    var rot = (LR() * 360) | 0, lp = [];
+    for (var q = 0; q < 12; q++) {
+      var a = q / 12 * Math.PI * 2, rr = 41 * (1 + (LR() - 0.5) * 0.08) * (1 - 0.18 * Math.pow(Math.cos(a), 8)), tip = Math.cos(a) > 0.97 ? 1.12 : 1;
+      lp.push([Math.cos(a) * rr * tip, Math.sin(a) * rr * 0.86]);
+    }
+    var lg = el('g', { transform: 'rotate(' + rot + ')' }, bob);
+    el('path', { d: smooth(lp, true), fill: '#26585a', opacity: 0.35, transform: 'translate(2,5)' }, lg);
+    el('path', { d: smooth(lp, true), fill: l.k === 'leaf' ? '#5fa35a' : '#4e9a52', stroke: '#2e6a37', 'stroke-width': 3 }, lg);
+    el('path', { d: 'M-36,0L40,0M-6,0L10,-20M-6,0L10,20M14,0L28,-14M14,0L28,14M-22,0L-10,-22M-22,0L-10,22', stroke: '#8fd08a', 'stroke-width': 2.4, 'stroke-linecap': 'round', fill: 'none', opacity: 0.75 }, lg);
+    if (l.k !== 'leaf') { var cg = el('g', { transform: 'scale(.9)' }, bob); cg.innerHTML = critterSVG(l.k, false); }
+    return outer;
+  });
+  layers.fx = el('g', { 'pointer-events': 'none' }, svg);
+  layers.hl = el('g', { 'pointer-events': 'none' }, svg);
+  // hit targets (top)
+  var hits = el('g', {}, svg);
+  for (r = 0; r < h; r++) for (c = 0; c < w; c++) {
+    el('rect', { class: 'hit', x: c * 100, y: r * 100, width: 100, height: 100, 'data-cell': r * w + c }, hits);
+  }
+  placeLeaves(false);
+}
+
+function placeLeaves(animate, dur) {
+  G.leafEls.forEach(function (e, i) {
+    var p = cellXY(G.st.pos[i]);
+    e.style.transition = animate ? 'transform ' + (dur || 200) + 'ms cubic-bezier(.25,.8,.35,1)' : 'none';
+    e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+  });
+  markHome();
+}
+function markHome() {
+  var lv = G.level;
+  Object.keys(G.padEls).forEach(function (k) {
+    var i = lv.leaves.findIndex(function (l) { return l.k === k; });
+    G.padEls[k].classList.toggle('home', i >= 0 && G.st.pos[i] === G.board.pads[k]);
+  });
+}
+
+/* ---------- effects ---------- */
+function anim(node, frames, opts) { try { return node.animate(frames, opts); } catch (e) { return null; } }
+function ripple(idx, big) {
+  var p = cellXY(idx), reach = 250;
+  [0, 90].forEach(function (delay, n) {
+    var ring = el('circle', { cx: p.x, cy: p.y, r: reach, fill: 'none', stroke: '#ffffff', 'stroke-width': big ? 9 : 6, 'vector-effect': 'non-scaling-stroke', opacity: 0 }, layers.fx);
+    ring.style.transformBox = 'fill-box'; ring.style.transformOrigin = 'center';
+    var a = anim(ring, [{ transform: 'scale(.06)', opacity: n ? 0.55 : 0.9 }, { transform: 'scale(1)', opacity: 0 }], { duration: 320 + n * 40, delay: delay, easing: 'cubic-bezier(.2,.6,.3,1)' });
+    setTimeout(function () { ring.remove(); }, 520);
+    if (!a) ring.remove();
+  });
+  var drops = big ? 10 : 7;
+  for (var i = 0; i < drops; i++) {
+    var a2 = i / drops * Math.PI * 2 + Math.random() * 0.4, d = (big ? 34 : 24) + Math.random() * 10;
+    var dot = el('circle', { cx: p.x, cy: p.y, r: big ? 5 : 4, fill: '#e9fbff' }, layers.fx);
+    anim(dot, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: 'translate(' + f(Math.cos(a2) * d) + 'px,' + f(Math.sin(a2) * d - 8) + 'px)', opacity: 0 }], { duration: 300, easing: 'ease-out' });
+    setTimeout(function (x) { x.remove(); }.bind(null, dot), 320);
+  }
+  var stone = el('ellipse', { cx: p.x, cy: p.y, rx: big ? 14 : 9, ry: big ? 10 : 7, fill: '#7d8a8c' }, layers.fx);
+  anim(stone, [{ opacity: 1, transform: 'translateY(-30px)' }, { opacity: 0.8, transform: 'translateY(0)', offset: 0.5 }, { opacity: 0, transform: 'translateY(0)' }], { duration: 260 });
+  setTimeout(function () { stone.remove(); }, 280);
+}
+function bump(i, dir) {
+  var d = L.DIRS[dir], n = G.leafEls[i].firstChild;
+  anim(n, [{ transform: 'translate(0,0)' }, { transform: 'translate(' + d[1] * 7 + 'px,' + d[0] * 7 + 'px)' }, { transform: 'translate(0,0)' }], { duration: 230, delay: 70, easing: 'ease-out' });
+}
+function flower(x, y, delay, scale) {
+  var g = el('g', { transform: 'translate(' + x + ',' + y + ')' }, layers.fx), inner = el('g', {}, g);
+  var cols = ['#f7b7cf', '#fde2a6', '#ffffff'], col = cols[(Math.random() * 3) | 0], s = '';
+  for (var q = 0; q < 6; q++) s += '<ellipse cx="0" cy="-9" rx="5" ry="9" fill="' + col + '" stroke="#d98aa8" stroke-width="1.2" transform="rotate(' + (q * 60) + ')"/>';
+  inner.innerHTML = s + '<circle r="4.5" fill="#f6c945"/>';
+  inner.style.transformBox = 'fill-box'; inner.style.transformOrigin = 'center';
+  inner.style.transform = 'scale(' + scale + ')';
+  anim(inner, [{ transform: 'scale(0) rotate(-40deg)' }, { transform: 'scale(' + scale + ') rotate(0)' }], { duration: 480, delay: delay, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+}
+function dragonfly() {
+  var W = G.level.w * 100, H = G.level.h * 100;
+  var g = el('g', {}, layers.fx), body = el('g', {}, g);
+  body.innerHTML = '<ellipse cx="-9" cy="-6" rx="13" ry="4.5" fill="#d8f3ff" opacity=".85" transform="rotate(-25)"/><ellipse cx="-9" cy="6" rx="13" ry="4.5" fill="#d8f3ff" opacity=".85" transform="rotate(25)"/>' +
+    '<ellipse cx="9" cy="-6" rx="11" ry="4" fill="#d8f3ff" opacity=".85" transform="rotate(25)"/><ellipse cx="9" cy="6" rx="11" ry="4" fill="#d8f3ff" opacity=".85" transform="rotate(-25)"/>' +
+    '<rect x="-3" y="-3" width="34" height="6" rx="3" fill="#2a9bb3"/><circle cx="-4" cy="0" r="5.5" fill="#2a9bb3"/>';
+  var y0 = H * 0.3, kf = [];
+  for (var i = 0; i <= 8; i++) kf.push({ transform: 'translate(' + f(-60 + i / 8 * (W + 120)) + 'px,' + f(y0 + Math.sin(i * 1.3) * 40 + i * 12) + 'px) rotate(180deg)' });
+  if (!anim(g, kf, { duration: 2200, easing: 'ease-in-out', fill: 'forwards' })) g.remove();
+  setTimeout(function () { g.remove(); }, 2300);
+}
+function bloom() {
+  var lv = G.level, R = Math.random;
+  (lv.pads || []).forEach(function (p, j) {
+    var cx = p.c * 100 + 50, cy = p.r * 100 + 50;
+    flower(cx + 26, cy - 26, 120 + j * 140, 1.1); flower(cx - 30, cy + 22, 200 + j * 140, 0.8);
+  });
+  for (var i = 0; i < 6; i++) flower(R() * lv.w * 100, R() * lv.h * 100, 300 + i * 90, 0.6 + R() * 0.4);
+  dragonfly();
+  chime();
+}
+
+/* ---------- highlight / coach ---------- */
+function clearHL() { if (layers.hl) layers.hl.innerHTML = ''; ['btnBig', 'btnUndo', 'btnRestart'].forEach(function (id) { $(id).classList.remove('glow'); }); }
+function hlCell(idx, strong) {
+  var p = cellXY(idx);
+  if (strong) {
+    el('circle', { cx: p.x, cy: p.y, r: 46, fill: '#fff6b0', 'fill-opacity': 0.28, class: 'tapdot' }, layers.hl);
+    el('circle', { cx: p.x, cy: p.y, r: 44, fill: 'none', stroke: '#fff3a0', 'stroke-width': 7, class: 'pulse' }, layers.hl);
+    el('circle', { cx: p.x, cy: p.y, r: 10, fill: '#fff3a0' }, layers.hl);
+  } else {
+    el('rect', { x: p.x - 48, y: p.y - 48, width: 96, height: 96, rx: 28, fill: 'none', stroke: '#fff3a0', 'stroke-width': 6, class: 'hl' }, layers.hl);
+  }
+}
+function hlReed(e) {
+  var w = G.level.w, a = e[0] * w + e[1], b = e[2] === 'E' ? a + 1 : a + w, pa = cellXY(a), pb = cellXY(b);
+  el('rect', { x: Math.min(pa.x, pb.x) - 48, y: Math.min(pa.y, pb.y) - 48, width: Math.abs(pa.x - pb.x) + 96, height: Math.abs(pa.y - pb.y) + 96, rx: 28, fill: 'none', stroke: '#fff3a0', 'stroke-width': 6, class: 'hl' }, layers.hl);
+}
+function idxOf(p) { return p[0] * G.level.w + p[1]; }
+
+function buildCoach(lv) {
+  var w = lv.w, startPos = function (k) { var l = lv.leaves.find(function (x) { return x.k === k; }); return l.r * w + l.c; };
+  var pads = (lv.pads || []).map(function (p) { return p.r * w + p.c; });
+  var leaves = lv.leaves.map(function (l) { return l.r * w + l.c; });
+  if (lv.intro === 'tutorial') return { kind: 'tutorial', i: 0, steps: [
+    { text: 'Help the frog reach its green pad.', cells: [startPos('frog')].concat(pads) },
+    { text: 'Tap the glowing water to drop a pebble.', tap: true },
+    { text: 'The ripple pushed the leaf one step away from the splash.', cells: [] },
+    { text: 'Ripples reach two cells. Tap the glowing spot again.', tap: true }
+  ] };
+  if (lv.intro === 'two') {
+    var sol = L.solve(lv), b = L.makeBoard(lv), st = L.initialState(lv), dbl = null;
+    sol.forEach(function (m) { if (dbl !== null) return; var res = L.applyMove(b, st, m.idx, m.big); if (res.moves.filter(function (x) { return x.steps; }).length > 1) dbl = m.idx; st = res.state; });
+    return { kind: 'intro', i: 0, steps: [
+      { text: 'Two critters now. Each one has its own pad.', cells: pads },
+      { text: 'Match the shape and the colour.', cells: pads.concat(leaves) },
+      { text: 'One splash can push two leaves at once.', cells: dbl === null ? [] : [dbl] }
+    ] };
+  }
+  if (lv.intro === 'rock') { var rk = [idxOf(lv.rocks[0])]; return { kind: 'intro', i: 0, steps: [
+    { text: 'This is a rock.', cells: rk },
+    { text: 'Leaves stop when they bump into a rock.', cells: rk },
+    { text: 'Ripples still pass over rocks.', cells: rk }
+  ] }; }
+  if (lv.intro === 'reed') { var rd = lv.reeds[0]; return { kind: 'intro', i: 0, steps: [
+    { text: 'These are reeds. They grow between two cells.', reed: rd },
+    { text: 'Leaves can not slide through reeds.', reed: rd },
+    { text: 'Ripples still pass over them.', reed: rd }
+  ] }; }
+  if (lv.intro === 'anchor') { var an = [idxOf(lv.anchors[0])]; return { kind: 'intro', i: 0, steps: [
+    { text: 'This lily is tied down. It never moves.', cells: an },
+    { text: 'Leaves stop when they bump into it.', cells: an },
+    { text: 'It also stops ripples. Leaves behind it stay still.', cells: an }
+  ] }; }
+  if (lv.intro === 'big') return { kind: 'intro', i: 0, steps: [
+    { text: 'New: the big stone. You get only ' + (lv.big === 1 ? 'one' : lv.big) + ' here.', btn: 'btnBig' },
+    { text: 'Its ripple pushes leaves two steps, not one.', btn: 'btnBig' },
+    { text: 'Tap the big stone button. Then tap the water.', btn: 'btnBig' }
+  ] };
+  return null;
+}
+function showCoach() {
+  clearHL();
+  var c = G.coach;
+  if (!c || c.i >= c.steps.length) { G.coach = null; $('coach').classList.add('hidden'); return; }
+  var s = c.steps[c.i];
+  $('coach').classList.remove('hidden');
+  $('coachText').textContent = s.text;
+  $('coachStep').textContent = 'Step ' + (c.i + 1) + ' of ' + c.steps.length;
+  $('coachNext').classList.toggle('hidden', !!s.tap);
+  $('coachNext').textContent = c.i === c.steps.length - 1 ? 'Play' : 'Next';
+  (s.cells || []).forEach(function (i) { hlCell(i, false); });
+  if (s.reed) hlReed(s.reed);
+  if (s.btn) $(s.btn).classList.add('glow');
+  if (s.tap) { var sol = L.solve(G.level, G.st); if (sol && sol.length) { s.target = sol[0].idx; hlCell(s.target, true); } }
+}
+function coachNext() {
+  if (!G.coach) return;
+  G.coach.i++;
+  if (G.coach.i >= G.coach.steps.length && G.coach.kind === 'intro') { seen[G.level.intro] = true; store.set('seen', seen); }
+  showCoach();
+}
+function coachBlocks(idx) {
+  // returns true if the coach wants this tap blocked
+  var c = G.coach; if (!c) return false;
+  var s = c.steps[c.i];
+  if (s.tap && idx === s.target) return false;
+  $('coach').classList.remove('nudge'); void $('coach').offsetWidth; $('coach').classList.add('nudge');
+  return true;
+}
+
+/* ---------- play ---------- */
+function hud() {
+  $('taps').textContent = G.taps;
+  $('par').textContent = G.level.par;
+  $('btnUndo').disabled = !G.hist.length;
+  var hasBig = (G.level.big || 0) > 0;
+  $('stoneBar').classList.toggle('hidden', !hasBig);
+  if (hasBig) {
+    if (G.st.big <= 0) G.useBig = false;
+    $('bigCount').textContent = '×' + G.st.big;
+    $('btnBig').disabled = G.st.big <= 0;
+    $('btnBig').setAttribute('aria-pressed', String(G.useBig));
+    $('btnPebble').setAttribute('aria-pressed', String(!G.useBig));
+  }
+  document.body.dataset.busy = G.busy ? '1' : '0';
+  document.body.dataset.won = G.won ? '1' : '0';
+  document.body.dataset.level = String(G.li + 1);
+}
+
+function startLevel(i, opts) {
+  opts = opts || {};
+  G.li = i; G.level = LEVELS[i]; G.board = L.makeBoard(G.level); G.st = L.initialState(G.level);
+  G.hist = []; G.taps = 0; G.busy = false; G.won = false; G.useBig = false;
+  $('screenSelect').classList.add('hidden'); $('screenPlay').classList.remove('hidden'); $('winCard').classList.add('hidden');
+  $('lvName').innerHTML = '';
+  $('lvName').appendChild(document.createTextNode('Pond ' + (i + 1)));
+  var sm = document.createElement('small'); sm.textContent = G.level.name; $('lvName').appendChild(sm);
+  drawBoard();
+  var intro = G.level.intro;
+  var want = intro && (opts.forceIntro || (intro === 'tutorial' ? !progress.stars[G.level.id] : !seen[intro]));
+  G.coach = want ? buildCoach(G.level) : null;
+  $('btnHelp').classList.toggle('hidden', !intro);
+  showCoach();
+  hud();
+  store.set('last', i);
+}
+
+function tap(idx, fromSolver) {
+  if (G.busy || G.won) return false;
+  if (!fromSolver && coachBlocks(idx)) return false;
+  var useBig = G.useBig && G.st.big > 0;
+  var res = L.applyMove(G.board, G.st, idx, useBig);
+  if (!res) return false;
+  G.hist.push(G.st); G.st = res.state; G.taps++; G.busy = true; G.useBig = false;
+  clearHL();
+  plop(useBig);
+  ripple(idx, useBig);
+  var longest = 0;
+  res.moves.forEach(function (mv) {
+    var e = G.leafEls[mv.i];
+    if (mv.steps === 0) { bump(mv.i, mv.dir); return; }
+    var dur = 170 + mv.steps * 90, p = cellXY(mv.to);
+    longest = Math.max(longest, dur);
+    e.style.transition = 'transform ' + dur + 'ms cubic-bezier(.25,.8,.35,1) 70ms';
+    e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+  });
+  hud();
+  setTimeout(function () {
+    G.busy = false; markHome();
+    if (L.isWin(G.board, G.st)) { win(); }
+    else if (G.coach) { var s = G.coach.steps[G.coach.i]; if (s && s.tap) { G.coach.i++; showCoach(); } }
+    hud();
+  }, Math.max(330, longest + 90));
+  return true;
+}
+
+function win() {
+  G.won = true; G.coach = null; $('coach').classList.add('hidden'); clearHL();
+  var lv = G.level, s = starsFor(G.taps, lv.par), id = lv.id;
+  var first = !progress.stars[id];
+  progress.stars[id] = Math.max(progress.stars[id] || 0, s);
+  progress.best[id] = Math.min(progress.best[id] || 999, G.taps);
+  store.set('progress', progress);
+  bloom();
+  hud();
+  setTimeout(function () {
+    var box = $('winStars'); box.innerHTML = '';
+    for (var k = 0; k < 3; k++) { var sv = starSVG(k < s); if (k < s) { sv.classList.add('on'); sv.style.animationDelay = (k * 0.15) + 's'; } box.appendChild(sv); }
+    $('winTitle').textContent = 'The pond is calm';
+    $('winLine').textContent = 'You used ' + G.taps + (G.taps === 1 ? ' tap' : ' taps') + '. Par is ' + lv.par + '.';
+    $('winTip').textContent = s === 3 ? (G.taps < lv.par ? 'Even better than par!' : 'Right on par. Lovely.') : 'Match par to earn 3 stars.';
+    if (G.li === 0 && first) $('winTip').textContent = 'Undo takes back a tap. Restart starts the pond again.';
+    var last = G.li === LEVELS.length - 1;
+    $('btnNext').textContent = last ? 'All ponds' : 'Next pond';
+    $('winCard').classList.remove('hidden');
+  }, 1100);
+}
+
+function starSVG(on) {
+  var s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '0 0 24 24');
+  s.innerHTML = '<path d="M12 2.6l2.8 6 6.5.7-4.9 4.4 1.4 6.4L12 16.9 6.2 20.1l1.4-6.4L2.7 9.3l6.5-.7z" fill="' + (on ? '#f0b429' : '#d3ddd6') + '" stroke="' + (on ? '#c98a10' : '#b9c7be') + '" stroke-width="1.4" stroke-linejoin="round"/>';
+  if (on) s.classList.add('on-star');
+  return s;
+}
+
+function undo() {
+  if (G.busy || G.won || !G.hist.length) return;
+  if (G.coach && G.coach.kind === 'tutorial') return;
+  G.st = G.hist.pop(); G.taps = Math.max(0, G.taps - 1); G.useBig = false;
+  placeLeaves(true, 200); hud();
+}
+function restart() {
+  if (G.busy) return;
+  if (G.coach && G.coach.kind === 'tutorial') return;
+  G.st = L.initialState(G.level); G.hist = []; G.taps = 0; G.won = false; G.useBig = false;
+  $('winCard').classList.add('hidden');
+  placeLeaves(true, 260); hud();
+}
+
+/* ---------- tester: play the solver's solution ---------- */
+function solvePlay() {
+  if (G.busy || G.won) return;
+  var sol = L.solve(G.level, G.st);
+  if (!sol) { toast('No solution from here. Try Restart.'); return; }
+  G.coach = null; $('coach').classList.add('hidden'); clearHL();
+  var k = 0;
+  (function step() {
+    if (k >= sol.length || G.won) return;
+    if (G.busy) { setTimeout(step, 60); return; }
+    G.useBig = !!sol[k].big; tap(sol[k].idx, true); k++;
+    setTimeout(step, 520);
+  })();
+}
+
+/* ---------- level select ---------- */
+function showSelect() {
+  $('screenPlay').classList.add('hidden'); $('screenSelect').classList.remove('hidden'); $('winCard').classList.add('hidden');
+  var grid = $('levelGrid'); grid.innerHTML = '';
+  var total = 0;
+  LEVELS.forEach(function (lv, i) {
+    var st = progress.stars[lv.id] || 0; total += st;
+    var b = document.createElement('button'); b.className = 'tile'; b.dataset.level = String(i + 1);
+    var open = unlocked(i);
+    if (!open) { b.classList.add('locked'); b.disabled = true; b.setAttribute('aria-label', 'Pond ' + (i + 1) + ', locked'); }
+    else b.setAttribute('aria-label', 'Pond ' + (i + 1) + ', ' + lv.name + ', ' + st + ' of 3 stars');
+    b.innerHTML = '<span class="num">' + (i + 1) + '</span><span class="nm"></span>';
+    b.querySelector('.nm').textContent = lv.name;
+    var badge = { rock: 'New', reed: 'New', anchor: 'New', big: 'New' }[lv.intro];
+    if (badge && open && !seen[lv.intro]) { var bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = badge; b.appendChild(bd); }
+    if (open) { var row = document.createElement('span'); row.className = 'st'; for (var k = 0; k < 3; k++) row.appendChild(starSVG(k < st)); b.appendChild(row); }
+    else { var lk = document.createElementNS(NS, 'svg'); lk.setAttribute('viewBox', '0 0 24 24'); lk.setAttribute('class', 'lock'); lk.innerHTML = '<rect x="5" y="10" width="14" height="10" rx="3" fill="#8aa197"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="#8aa197" stroke-width="2.4"/>'; b.appendChild(lk); }
+    b.addEventListener('click', function () { if (unlocked(i)) startLevel(i); });
+    grid.appendChild(b);
+  });
+  $('totals').textContent = total + ' of ' + (LEVELS.length * 3) + ' stars';
+  $('testerNote').classList.toggle('hidden', !tester);
+}
+
+function toast(msg) {
+  var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(function () { t.style.opacity = '0'; }, 1600); setTimeout(function () { t.remove(); }, 2000);
+}
+function setTester() {
+  tester = true; $('btnSolve').classList.remove('hidden'); toast('Tester tools on');
+  if (!$('screenSelect').classList.contains('hidden')) showSelect();
+}
+function setMute(m) {
+  muted = m; store.set('muted', m);
+  $('btnMute').setAttribute('aria-pressed', String(m));
+  $('btnMute').setAttribute('aria-label', m ? 'Sound off' : 'Sound on');
+  $('muteWaves').classList.toggle('hidden', m); $('muteX').classList.toggle('hidden', !m);
+}
+
+/* ---------- wire up ---------- */
+$('board').addEventListener('click', function (ev) {
+  var t = ev.target; if (!t || !t.getAttribute) return;
+  var c = t.getAttribute('data-cell'); if (c == null) return;
+  tap(parseInt(c, 10), false);
+});
+$('coachNext').addEventListener('click', coachNext);
+$('btnUndo').addEventListener('click', undo);
+$('btnRestart').addEventListener('click', restart);
+$('btnSolve').addEventListener('click', solvePlay);
+$('btnMenu').addEventListener('click', function () { if (!G.busy) showSelect(); });
+$('btnHelp').addEventListener('click', function () {
+  if (G.busy || G.won) return;
+  G.coach = null;
+  if (G.level.intro === 'tutorial') restart(); // the tutorial walks through from the start
+  G.coach = buildCoach(G.level); showCoach();
+});
+$('btnPebble').addEventListener('click', function () { G.useBig = false; hud(); });
+$('btnBig').addEventListener('click', function () {
+  if (G.st.big <= 0) return;
+  G.useBig = !G.useBig; hud();
+  if (G.coach && G.coach.steps[G.coach.i] && G.coach.steps[G.coach.i].btn === 'btnBig') { G.coach.i = G.coach.steps.length - 1; coachNext(); }
+});
+$('btnReplay').addEventListener('click', function () { startLevel(G.li); });
+$('btnNext').addEventListener('click', function () { if (G.li < LEVELS.length - 1) startLevel(G.li + 1); else showSelect(); });
+$('btnMute').addEventListener('click', function () { setMute(!muted); });
+var titleTaps = 0, titleTimer = null;
+$('title').addEventListener('click', function () {
+  titleTaps++; clearTimeout(titleTimer); titleTimer = setTimeout(function () { titleTaps = 0; }, 1500);
+  if (titleTaps >= 5) { titleTaps = 0; setTester(); }
+});
+
+setMute(muted);
+if (tester) $('btnSolve').classList.remove('hidden');
+// test hook (read-only view of state, used by the Playwright check)
+window.__ripple = { get state() { return { level: G.li + 1, taps: G.taps, won: G.won, busy: G.busy, coach: G.coach ? G.coach.i : -1 }; },
+  solution: function () { return L.solve(G.level, G.st); }, start: function (i) { startLevel(i); } };
+// first visit: go straight into the tutorial pond
+if (!progress.stars[LEVELS[0].id]) startLevel(0); else showSelect();
+})();
+</script>
+</body>
+</html>
