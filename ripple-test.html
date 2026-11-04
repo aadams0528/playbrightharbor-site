@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.5.1 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.5.2 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -61,6 +61,17 @@ body.playing #app{height:100vh;height:100dvh;min-height:0;overflow:hidden}
 #screenPlay{min-height:0}
 .boardWrap{flex:1 1 0;min-height:150px;width:100%;max-width:520px;margin:0 auto;position:relative}
 #board{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation;overflow:visible;-webkit-touch-callout:none}
+#scene{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block}
+body:not(.playing) #scene{display:none}
+@keyframes glint{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.9;transform:scale(1)}}
+@keyframes drift{from{transform:translate(0,0)}to{transform:translate(-60px,18px)}}
+@keyframes sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+@keyframes fly{0%,100%{opacity:.15}50%{opacity:.95}}
+#board .glint{transform-box:fill-box;transform-origin:center;animation:glint 4.5s ease-in-out infinite}
+#board .caustic{animation:drift 14s ease-in-out infinite alternate}
+#board .weed,#scene .sway{transform-box:fill-box;transform-origin:bottom center;animation:sway 5s ease-in-out infinite}
+#scene .fly{animation:fly 3.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){#board .glint,#board .caustic,#board .weed,#scene .sway,#scene .fly{animation:none}#board .glint{opacity:.5}}
 #board .hit:focus{outline:none}
 #board .hit:focus-visible{stroke:#fff3a0;stroke-width:6;fill:rgba(255,246,176,.15)}
 .stoneBar{display:flex;gap:10px;justify-content:center;margin:10px 0 0}
@@ -180,7 +191,7 @@ body[data-theme="moon"] .overlay{background:rgba(6,14,28,.3)}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.5.1 prototype</div>
+    <div class="ver" id="ver">Ripple v0.5.2 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -192,7 +203,7 @@ body[data-theme="moon"] .overlay{background:rgba(6,14,28,.3)}
         <div class="counter"><span><b id="taps">0</b> taps</span><span class="par">par <span id="par">0</span></span></div>
       </div>
     </div>
-    <div class="boardWrap"><svg id="board" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Pond board. Tap empty water to drop a pebble."></svg></div>
+    <div class="boardWrap"><svg id="scene" aria-hidden="true" focusable="false"></svg><svg id="board" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Pond board. Tap empty water to drop a pebble."></svg></div>
     <div class="stoneBar hidden" id="stoneBar">
       <button class="stone" id="btnPebble" aria-pressed="true"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="17" rx="8" ry="6" fill="#9aa5a6" stroke="#5f6a6c" stroke-width="2"/></svg>Pebble</button>
       <button class="stone" id="btnBig" aria-pressed="false"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="16" rx="12.5" ry="10" fill="#7d8a8c" stroke="#4b5557" stroke-width="2.2"/><ellipse cx="11" cy="12" rx="4" ry="2.5" fill="#b8c2c3"/></svg>Big stone <b id="bigCount">1</b></button>
@@ -617,16 +628,18 @@ function drawBoard() {
     '<radialGradient id="rockg" cx="38%" cy="32%" r="80%"><stop offset="0" stop-color="#b3bdbe"/><stop offset="1" stop-color="#7b878a"/></radialGradient>';
   // bank + water (organic edge)
   var bankPts = [], i;
-  el('rect', { x: -M, y: -M, width: W + 2 * M, height: H + 2 * M, rx: 34, fill: 'url(#bank)' }, svg);
+  el('rect', { x: -M, y: -M, width: W + 2 * M, height: H + 2 * M, rx: 34, fill: 'url(#bank)', class: 'bankbox', opacity: $('scene') ? 0 : 1 }, svg); // the meadow behind is the bank now
   var wp = [], steps = 6;
-  for (i = 0; i < steps; i++) wp.push([i / steps * W, -4 + R() * 6]);
-  for (i = 0; i < steps; i++) wp.push([W + 4 - R() * 6, i / steps * H]);
-  for (i = 0; i < steps; i++) wp.push([W - i / steps * W, H + 4 - R() * 6]);
-  for (i = 0; i < steps; i++) wp.push([-4 + R() * 6, H - i / steps * H]);
-  wp[0] = [6, 6]; wp[steps] = [W - 6, 6]; wp[2 * steps] = [W - 6, H - 6]; wp[3 * steps] = [6, H - 6];
+  for (i = 0; i < steps; i++) wp.push([i / steps * W, -3 - R() * 9]); // a natural, wobbly shore that bulges into the bank
+  for (i = 0; i < steps; i++) wp.push([W + 3 + R() * 9, i / steps * H]);
+  for (i = 0; i < steps; i++) wp.push([W - i / steps * W, H + 3 + R() * 9]);
+  for (i = 0; i < steps; i++) wp.push([-3 - R() * 9, H - i / steps * H]);
+  wp[0] = [0, 0]; wp[steps] = [W, 0]; wp[2 * steps] = [W, H]; wp[3 * steps] = [0, H];
+  el('path', { d: smooth(wp, true), fill: 'none', stroke: T.lip, 'stroke-width': 11, 'stroke-linejoin': 'round', opacity: 0.9 }, svg); // sandy shore lip
   el('path', { d: smooth(wp, true), fill: T.under, transform: 'translate(0,3)' }, svg);
   rimDecor(T.decor, W, H, R, svg);
   el('path', { d: smooth(wp, true), fill: 'url(#water)' }, svg);
+  waterLife(svg, defs, wp, W, H, T, R);
   if (moon) { // the moon's reflection: a soft glow, a pale crescent and broken light streaks under it
     var mx = W * 0.45, my = H * 0.09, gm = el('g', { 'pointer-events': 'none', class: 'moon' }, svg);
     el('ellipse', { cx: mx, cy: my, rx: 120, ry: 85, fill: '#fff6c9', opacity: 0.06 }, gm);
@@ -640,7 +653,7 @@ function drawBoard() {
   var gcells = el('g', {}, svg);
   for (var r = 0; r < h; r++) for (var c = 0; c < w; c++) {
     if (G.board.cell[r * w + c]) continue;
-    el('rect', { x: c * 100 + 7, y: r * 100 + 7, width: 86, height: 86, rx: 26, fill: '#ffffff', 'fill-opacity': 0.07, stroke: '#ffffff', 'stroke-opacity': 0.12, 'stroke-width': 2 }, gcells);
+    el('circle', { cx: c * 100 + 50, cy: r * 100 + 50, r: 41, fill: '#ffffff', 'fill-opacity': 0.07, stroke: '#ffffff', 'stroke-opacity': 0.13, 'stroke-width': 2 }, gcells); // a soft round spot per cell
   }
   // pads
   layers.pads = el('g', {}, svg);
@@ -757,11 +770,11 @@ function drawBoard() {
    decorations and the page around the board change; leaves, critters, pads, rocks, reeds and
    tied lilies look the same everywhere, so the board reads the same at a glance. */
 var THEMES = {
-  spring: { water: ['#7cc2bd', '#5aa9a8', '#3f8c94'], wc: [45, 38], under: '#3a7f86', bank: ['#a7cf83', '#86b96a'], page: ['#e7f2e8', '#bcd9c8'], decor: 'blossom', label: 'spring morning' },
-  day:    { water: ['#80c8cd', '#56a8b2', '#3b899a'], wc: [50, 30], under: '#357a8a', bank: ['#b3d88c', '#8cc06a'], page: ['#e3f3f4', '#b2dad8'], decor: 'daisy', label: 'bright day' },
-  golden: { water: ['#8fc7b4', '#5ca5a0', '#41808a'], wc: [62, 28], under: '#3b7480', bank: ['#d2d58c', '#adb868'], page: ['#f8efd5', '#e8d2a0'], decor: 'cattail', label: 'golden hour' },
-  moon:   { water: ['#5b8fae', '#3a6889', '#25496a'], wc: [70, 25], under: '#1d3a55', bank: ['#6f9a7a', '#4c7160'], page: ['#2c4260', '#13223a'], decor: 'stars', night: true, label: 'moonlight' },
-  marsh:  { water: ['#88c2ab', '#5ea096', '#3f8081'], wc: [40, 34], under: '#376f70', bank: ['#c6c97c', '#9aa85c'], page: ['#eef1d8', '#cbd8a9'], decor: 'cattail', label: 'reed marsh' }
+  spring: { water: ['#7cc2bd', '#5aa9a8', '#3f8c94'], wc: [45, 38], under: '#3a7f86', bank: ['#a7cf83', '#86b96a'], lip: '#e8dcae', bush: ['#6fae5a', '#4f8f45'], page: ['#e7f2e8', '#bcd9c8'], decor: 'blossom', label: 'spring morning' },
+  day:    { water: ['#80c8cd', '#56a8b2', '#3b899a'], wc: [50, 30], under: '#357a8a', bank: ['#b3d88c', '#8cc06a'], lip: '#ece2b8', bush: ['#72b45c', '#4f9445'], page: ['#e3f3f4', '#b2dad8'], decor: 'daisy', label: 'bright day' },
+  golden: { water: ['#8fc7b4', '#5ca5a0', '#41808a'], wc: [62, 28], under: '#3b7480', bank: ['#d2d58c', '#adb868'], lip: '#efd9a0', bush: ['#9aa84e', '#76863a'], page: ['#f8efd5', '#e8d2a0'], decor: 'cattail', label: 'golden hour' },
+  moon:   { water: ['#5b8fae', '#3a6889', '#25496a'], wc: [70, 25], under: '#1d3a55', bank: ['#6f9a7a', '#4c7160'], lip: '#9fae9a', bush: ['#3f6a55', '#2c5042'], page: ['#2c4260', '#13223a'], decor: 'stars', night: true, label: 'moonlight' },
+  marsh:  { water: ['#88c2ab', '#5ea096', '#3f8081'], wc: [40, 34], under: '#376f70', bank: ['#c6c97c', '#9aa85c'], lip: '#e3d9a6', bush: ['#86a24f', '#61803a'], page: ['#eef1d8', '#cbd8a9'], decor: 'cattail', label: 'reed marsh' }
 };
 function themeFor(lv) {
   if (lv.theme) return lv.theme;
@@ -776,6 +789,94 @@ function applyTheme(name) {
   b.setAttribute('data-theme', name); b.style.setProperty('--bg-top', T.page[0]); b.style.setProperty('--bg-bot', T.page[1]);
   if (m) m.setAttribute('content', T.page[0]);
 }
+/* v0.5.2: the water has depth and life (look only, never over a piece): a darker band near the shore,
+   faint pebbles and swaying weed on the bed, drifting light, and a few twinkling glints */
+function waterLife(svg, defs, wp, W, H, T, R) {
+  var cp = el('clipPath', { id: 'wclip' }, defs); el('path', { d: smooth(wp, true) }, cp);
+  var g = el('g', { 'clip-path': 'url(#wclip)', 'pointer-events': 'none', class: 'wlife' }, svg), i, night = !!T.night;
+  el('path', { d: smooth(wp, true), fill: 'none', stroke: T.under, 'stroke-width': 46, opacity: 0.32 }, g); // deeper water toward the bank
+  el('path', { d: smooth(wp, true), fill: 'none', stroke: T.under, 'stroke-width': 18, opacity: 0.3 }, g);
+  for (i = 0; i < 9; i++) { // pebbles on the pond bed
+    var px = R() * W, py = R() * H;
+    el('path', { d: blob(px, py, 7 + R() * 9, 5 + R() * 6, 0.35, 6, R), fill: night ? '#9fb8c8' : '#e8f1e4', opacity: 0.1 }, g);
+  }
+  for (i = 0; i < 6; i++) { // weed tufts along the shore
+    var side = i % 4, t = 0.15 + R() * 0.7, wx = side === 0 ? t * W : side === 1 ? W - 8 : side === 2 ? t * W : 8, wy = side === 0 ? 8 : side === 1 ? t * H : side === 2 ? H - 8 : t * H;
+    var wg = el('g', { class: 'weed', style: 'animation-delay:' + (-R() * 5).toFixed(1) + 's' }, g), ang = [90, 180, 270, 0][side];
+    for (var b = 0; b < 3; b++) el('path', { d: 'M' + f(wx + (b - 1) * 6) + ',' + f(wy) + 'q' + f(-6 + R() * 12) + ',' + f(-16 - R() * 10) + ' ' + f(-2 + R() * 4) + ',' + f(-30 - R() * 12), fill: 'none', stroke: night ? '#2c5a6e' : '#2f7d6a', 'stroke-width': 4, 'stroke-linecap': 'round', opacity: 0.32, transform: 'rotate(' + ang + ' ' + f(wx) + ' ' + f(wy) + ')' }, wg);
+  }
+  var cg = el('g', { class: 'caustic' }, g); // light net drifting slowly across the water
+  for (i = 0; i < 16; i++) {
+    var cx = -60 + R() * (W + 120), cy = -40 + R() * (H + 80), rw = 26 + R() * 30;
+    el('path', { d: 'M' + f(cx - rw) + ',' + f(cy) + 'q' + f(rw * 0.5) + ',' + f(-rw * 0.45) + ' ' + f(rw) + ',0t' + f(rw) + ',0', fill: 'none', stroke: night ? '#cfe3ff' : '#ffffff', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: night ? 0.07 : 0.1 }, cg);
+  }
+  for (i = 0; i < 6; i++) { // glints
+    var gx = 20 + R() * (W - 40), gy = 20 + R() * (H - 40), s = 5 + R() * 4;
+    el('path', { d: 'M' + f(gx) + ',' + f(gy - s) + 'Q' + f(gx) + ',' + f(gy) + ' ' + f(gx + s) + ',' + f(gy) + 'Q' + f(gx) + ',' + f(gy) + ' ' + f(gx) + ',' + f(gy + s) + 'Q' + f(gx) + ',' + f(gy) + ' ' + f(gx - s) + ',' + f(gy) + 'Q' + f(gx) + ',' + f(gy) + ' ' + f(gx) + ',' + f(gy - s) + 'Z', fill: '#ffffff', class: 'glint', style: 'animation-delay:' + (i * 0.8 + R()).toFixed(1) + 's' }, g);
+  }
+}
+/* v0.5.2: a little meadow around the pond, filling the space round the board (behind it, look only) */
+function drawScene(T) {
+  var sc = $('scene'), bd = $('board'); if (!sc || !bd || !G.level) return;
+  var sr = sc.getBoundingClientRect(), br = bd.getBoundingClientRect(); if (!sr.width || !br.width) return;
+  var lv = G.level, VW = lv.w * 100 + 2 * M, VH = lv.h * 100 + 2 * M, k = Math.min(br.width / VW, br.height / VH);
+  var bw = VW * k, bh = VH * k, bx = br.left - sr.left + (br.width - bw) / 2, by = br.top - sr.top + (br.height - bh) / 2;
+  var sw = sr.width, sh = sr.height, R = rnd(visSeed(lv) * 389 + 7), cell = 100 * k, night = !!T.night, i;
+  sc.setAttribute('viewBox', '0 0 ' + f(sw) + ' ' + f(sh)); sc.innerHTML = '';
+  var defs = el('defs', {}, sc);
+  defs.innerHTML = '<radialGradient id="mead" cx="50%" cy="45%" r="62%"><stop offset="0" stop-color="' + T.bank[0] + '"/><stop offset="1" stop-color="' + T.bank[1] + '"/></radialGradient>';
+  // the meadow: a soft rounded patch reaching past the board (more room above and below on phones)
+  var wr = bd.parentNode.getBoundingClientRect(); // stay inside the board's own space vertically (never under the buttons)
+  var padY = Math.min(cell * 1.5, Math.max(0, Math.min(by - (wr.top - sr.top), (wr.bottom - sr.top) - (by + bh)) - 4)), padX = Math.min(cell * 1.2, Math.max(0, (sw - bw) / 2 - 2));
+  var cx = bx + bw / 2, cy = by + bh / 2, rx = bw / 2 + padX, ry = bh / 2 + padY, pts = [];
+  for (i = 0; i < 28; i++) { // rounded rectangle with a wobbly edge
+    var a = i / 28 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), e = 4, q = Math.pow(Math.pow(Math.abs(ca), e) + Math.pow(Math.abs(sa), e), -1 / e), j = 1 - R() * 0.05;
+    pts.push([cx + ca * rx * q * j, cy + sa * ry * q * j]);
+  }
+  el('path', { d: smooth(pts, true), fill: T.bank[1], transform: 'translate(0,4)', opacity: 0.55 }, sc);
+  el('path', { d: smooth(pts, true), fill: 'url(#mead)' }, sc);
+  function outside(x, y, m) { return x < bx - m || x > bx + bw + m || y < by - m || y > by + bh + m; }
+  function inMeadow(x, y) { var dx = (x - cx) / rx, dy = (y - cy) / ry; return Math.pow(Math.abs(dx), 4) + Math.pow(Math.abs(dy), 4) < 0.8; }
+  function spot(m) { for (var t = 0; t < 60; t++) { var x = cx + (R() * 2 - 1) * rx, y = cy + (R() * 2 - 1) * ry; if (inMeadow(x, y) && outside(x, y, m)) return [x, y]; } return null; }
+  var g = el('g', {}, sc), p, n;
+  for (n = 0; n < 4; n++) { // bushes, mostly at the corners
+    if (padY < cell * 0.45) break; // no room for bushes (short screens)
+    var x0 = bx + bw * ([0.12, 0.86, 0.2, 0.8][n] + (R() - 0.5) * 0.08), y0 = n < 2 ? by - padY * 0.45 : by + bh + padY * 0.5;
+    var bg = el('g', {}, g), s = cell * (0.28 + R() * 0.1);
+    for (var b = 0; b < 5; b++) { var bxx = x0 + (b - 2) * s * 0.42, byy = y0 - Math.abs(b - 2) * -s * 0.14 - (b % 2) * s * 0.25; el('circle', { cx: f(bxx), cy: f(byy + 3), r: f(s * 0.55), fill: T.bush[1] }, bg); }
+    for (b = 0; b < 5; b++) { var bx2 = x0 + (b - 2) * s * 0.42, by2 = y0 - Math.abs(b - 2) * -s * 0.14 - (b % 2) * s * 0.25; el('circle', { cx: f(bx2), cy: f(by2), r: f(s * 0.5), fill: T.bush[0] }, bg); el('circle', { cx: f(bx2 - s * 0.15), cy: f(by2 - s * 0.18), r: f(s * 0.16), fill: '#ffffff', opacity: night ? 0.06 : 0.16 }, bg); }
+    if (!night && T.decor !== 'cattail') for (b = 0; b < 3; b++) el('circle', { cx: f(x0 + (R() - 0.5) * s * 1.8), cy: f(y0 - R() * s * 0.6), r: f(s * 0.09), fill: T.decor === 'blossom' ? '#f7b7cf' : '#ffffff' }, bg);
+  }
+  for (n = 0; n < 42; n++) { // grass tufts
+    p = spot(3); if (!p) continue;
+    var tl = cell * (0.08 + R() * 0.07), tg = el('g', { opacity: 0.55 + R() * 0.35 }, g);
+    for (var t2 = -1; t2 <= 1; t2++) el('path', { d: 'M' + f(p[0] + t2 * tl * 0.3) + ',' + f(p[1]) + 'q' + f(t2 * tl * 0.1) + ',' + f(-tl * 0.6) + ' ' + f(t2 * tl * 0.55) + ',' + f(-tl * (t2 ? 0.95 : 1.25)), fill: 'none', stroke: T.bush[1], 'stroke-width': f(Math.max(1.4, cell * 0.022)), 'stroke-linecap': 'round' }, tg);
+  }
+  for (n = 0; n < 5; n++) { // stones
+    p = spot(6); if (!p) continue; var rs = cell * (0.06 + R() * 0.06);
+    el('path', { d: blob(p[0], p[1] + rs * 0.25, rs * 1.1, rs * 0.75, 0.3, 6, R), fill: '#000000', opacity: 0.12 }, g);
+    el('path', { d: blob(p[0], p[1], rs, rs * 0.7, 0.3, 6, R), fill: night ? '#7d8d97' : '#a9b4b4', stroke: night ? '#55646d' : '#7d8a8a', 'stroke-width': 1.2 }, g);
+  }
+  for (n = 0; n < 12; n++) { // flowers (or reeds by the marsh, fireflies at night)
+    p = spot(5); if (!p) continue; var fs2 = cell * (0.045 + R() * 0.03);
+    if (night) { el('circle', { cx: f(p[0]), cy: f(p[1] - cell * 0.2), r: f(fs2 * 0.55), fill: '#fff4a8', class: 'fly', style: 'animation-delay:' + (R() * 3).toFixed(1) + 's' }, g); continue; }
+    if (T.decor === 'cattail') {
+      var rg = el('g', { class: 'sway', style: 'animation-delay:' + (-R() * 5).toFixed(1) + 's' }, g), hgt = cell * (0.35 + R() * 0.2);
+      el('path', { d: 'M' + f(p[0]) + ',' + f(p[1]) + 'q' + f(cell * 0.03) + ',' + f(-hgt * 0.5) + ' 0,' + f(-hgt), stroke: '#6b8f3a', 'stroke-width': f(Math.max(1.5, cell * 0.022)), fill: 'none', 'stroke-linecap': 'round' }, rg);
+      el('rect', { x: f(p[0] - fs2 * 0.6), y: f(p[1] - hgt - fs2 * 0.4), width: f(fs2 * 1.2), height: f(fs2 * 3), rx: f(fs2 * 0.6), fill: '#8a5a2e' }, rg);
+      el('path', { d: 'M' + f(p[0]) + ',' + f(p[1]) + 'q' + f(cell * 0.12) + ',' + f(-hgt * 0.3) + ' ' + f(cell * 0.16) + ',' + f(-hgt * 0.6), stroke: '#7fa346', 'stroke-width': f(Math.max(1.3, cell * 0.018)), fill: 'none', 'stroke-linecap': 'round' }, rg);
+      continue;
+    }
+    var col = T.decor === 'blossom' ? (n % 2 ? '#f7b7cf' : '#fde2a6') : (n % 3 ? '#ffffff' : '#ffd36b');
+    el('path', { d: 'M' + f(p[0]) + ',' + f(p[1] + fs2 * 2.4) + 'L' + f(p[0]) + ',' + f(p[1]), stroke: T.bush[1], 'stroke-width': 1.3 }, g);
+    for (var q = 0; q < 5; q++) el('circle', { cx: f(p[0] + Math.cos(q * 1.257) * fs2), cy: f(p[1] + Math.sin(q * 1.257) * fs2), r: f(fs2 * 0.75), fill: col }, g);
+    el('circle', { cx: f(p[0]), cy: f(p[1]), r: f(fs2 * 0.55), fill: '#f6c945' }, g);
+  }
+}
+var sceneTimer = null;
+function sceneSoon() { clearTimeout(sceneTimer); sceneTimer = setTimeout(function () { if (G.level && document.body.classList.contains('playing')) drawScene(THEMES[G.theme] || THEMES.spring); }, 60); }
+window.addEventListener('resize', sceneSoon);
+try { new ResizeObserver(sceneSoon).observe(document.querySelector('.boardWrap')); } catch (e) {} // the lesson card and stone bar change the board's room
 function rimDecor(kind, W, H, R, svg) { // small touches on the bank only, never over a cell
   var g = el('g', { 'pointer-events': 'none', class: 'rim' }, svg), spots = [], i, n = 10;
   for (i = 0; i < n; i++) { // even spread round the rim, mid-bank (the bank is 16 units wide)
@@ -1184,6 +1285,7 @@ function enterPond(level, title, sub) {
   var sm = document.createElement('small'); sm.textContent = sub; $('lvName').appendChild(sm);
   G.theme = themeFor(level); applyTheme(G.theme);
   drawBoard();
+  sceneSoon();
 }
 function startLevel(i, opts) {
   opts = opts || {};
