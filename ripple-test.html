@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.5.5 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.5.6 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -214,7 +214,7 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.5.5 prototype</div>
+    <div class="ver" id="ver">Ripple v0.5.6 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -1200,10 +1200,11 @@ function buildCoach(lv) {
   ] };
   if (lv.intro === 'log') return { kind: 'intro', i: 0, steps: [
     { text: 'New: a floating log. Ripples push it like a leaf, but it has no pad. Tap the glow and watch it drift.', cells: [startPos('log')], tap: true, demo: demo, then: true },
-    { text: 'The log stays where you push it, like a rock you can move. Park it next to a critter and it holds that critter still while others slide.', logCell: true, next: 'Play' }
+    { text: 'The log stays where you push it, like a rock you can move. Push it once more to park it where it will help. Tap the glow.', tap: true, then: true },
+    { text: 'Parked! A log next to a critter holds that critter still while others slide. Finish the pond and watch it work.', logCell: true, next: 'Play' }
   ] };
   if (lv.intro === 'offpad') return { kind: 'intro', i: 0, steps: [
-    { text: 'Sometimes a critter has to leave its pad for a moment to make room. It can come back later.', cells: pads, next: 'Play' }
+    { text: 'Here ' + offPadWho(lv) + ' has to leave its pad for a moment to make room. It can come back later.', cells: pads, next: 'Play' }
   ] };
   if (lv.intro === 'shield') {
     var who = shieldedCritter(lv, demo);
@@ -1220,13 +1221,20 @@ function buildCoach(lv) {
   return null;
 }
 // a tap that moves nothing because a gate holds the leaf back (the gate lesson's second step)
+function offPadWho(lv) { // the critter that steps off its pad on the stored best line (v0.5.6, Muse)
+  var b = L.makeBoard(lv), st = L.initialState(lv), who = null;
+  (lv.line || []).forEach(function (m) { var r = L.applyMove(b, st, m[0], !!m[1]); if (!r) return;
+    r.moves.forEach(function (mv) { var k = lv.leaves[mv.i].k; if (!who && mv.steps > 0 && b.pads[k] === mv.from) who = k; }); st = r.state; });
+  return who ? 'the ' + who : 'a critter';
+}
+function isGateStop(i) { // v0.5.6 (Cooper): any tap where nothing moves because a gate holds a leaf back
+  var res = L.applyMove(G.board, G.st, i, false);
+  if (!res || !res.moves.length || res.moves.some(function (mv) { return mv.steps > 0; })) return false;
+  return res.moves.some(function (mv) { return blockerName(mv.from, mv.dir) === 'gate'; });
+}
 function gateStopTap() {
   var n = G.level.w * G.level.h;
-  for (var i = 0; i < n; i++) {
-    var res = L.applyMove(G.board, G.st, i, false);
-    if (!res || !res.moves.length || res.moves.some(function (mv) { return mv.steps > 0; })) continue;
-    if (res.moves.some(function (mv) { return blockerName(mv.from, mv.dir) === 'gate'; })) return i;
-  }
+  for (var i = 0; i < n; i++) if (isGateStop(i)) return i;
   return -1;
 }
 // v0.5.4 log lesson: critters a tap leaves still because the log (where it ends up) is in the way
@@ -1283,7 +1291,7 @@ function showCoach() {
     if (s.rev) s.target = gateStopTap();
     else if (s.demo != null && G.taps === 0) s.target = s.demo;
     else { var sol = L.solve(G.level, G.st); s.target = sol && sol.length ? sol[0].idx : -1; }
-    if (s.target >= 0) hlCell(s.target, true);
+    if (s.target >= 0) { hlCell(s.target, true); var te = G.hitEls && G.hitEls[s.target]; if (te) te.setAttribute('aria-label', cellLabel(s.target) + '. The glowing cell: tap here.'); }
   }
   if (s.hold) { var so = L.solve(G.level, G.st); s.target = so && so.length ? so[0].idx : -1; if (s.target >= 0) hlCell(s.target, false); }
   hud();
@@ -1306,6 +1314,7 @@ function coachBlocks(idx) {
   var s = c.steps[c.i];
   if (s.hold) return false;                          // the preview tip never blocks play
   if (s.tap && idx === s.target && (!s.big || G.useBig)) return false;
+  if (s.rev && isGateStop(idx)) return false; // an equivalent push-back shows the same thing
   if (!s.tap && c.kind !== 'tutorial') { finishCoach(); return false; } // a tap on the pond closes a plain card
   if (s.big && !G.useBig) $('btnBig').classList.add('glow');
   $('coach').classList.remove('nudge'); void $('coach').offsetWidth; $('coach').classList.add('nudge');
@@ -1427,7 +1436,7 @@ function tap(idx, fromSolver) {
   if (!fromSolver && !res.moves.some(function (mv) { return mv.steps > 0; })) { // nothing can move: show why, but the tap is free
     ripple(idx, false); res.moves.forEach(function (mv) { bump(mv.i, mv.dir); });
     var rs = G.coach && G.coach.steps[G.coach.i];
-    if (rs && rs.rev && idx === rs.target) { afterDemo(rs); return false; }
+    if (rs && rs.rev && (idx === rs.target || isGateStop(idx))) { afterDemo(rs); return false; }
     toast('Nothing can move from there, so that tap is free.', 2200);
     return false;
   }
@@ -1822,7 +1831,7 @@ function habitatSVG(full) {
   var nv = full ? null : newVisitor, tot = full ? 99 : hc.chapter + hc.daily;
   // milestone features: the pond itself grows, not just the count
   HAB_FEATS.forEach(function (ft) { if (tot >= ft.at) s += '<g class="hab-feat' + (nv && nv.total === ft.at ? ' hab-feat-new' : '') + '" data-feat="' + ft.at + '" data-name="' + ft.name + ', for ' + ft.at + ' visitors">' + ft.art + '</g>'; });
-  HAB.forEach(function (art, i) { if (full || hc.solved[i]) s += '<g class="hab-item' + (nv && nv.kind === 'ch' && nv.i === i ? ' hab-new' : '') + '" data-item="' + i + '" tabindex="0" role="button" aria-label="' + HAB_NAMES[i] + ', from pond ' + (i + 1) + '" data-name="' + HAB_NAMES[i] + ', from pond ' + (i + 1) + '">' + (i === 11 && dayNow ? '<g opacity=".45">' + art + '</g>' : art) + '</g>'; });
+  HAB.forEach(function (art, i) { if ((full === true || (typeof full === 'number' && chapterOf(i) <= full)) || hc.solved[i]) s += '<g class="hab-item' + (nv && nv.kind === 'ch' && nv.i === i ? ' hab-new' : '') + '" data-item="' + i + '" tabindex="0" role="button" aria-label="' + HAB_NAMES[i] + ', from pond ' + (i + 1) + '" data-name="' + HAB_NAMES[i] + ', from pond ' + (i + 1) + '">' + (i === 11 && dayNow ? '<g opacity=".45">' + art + '</g>' : art) + '</g>'; });
   for (var n = Math.max(0, hc.daily - 40); n < hc.daily; n++) s += '<g class="hab-item hab-daily' + (nv && nv.kind === 'daily' && nv.i === n ? ' hab-new' : '') + '" tabindex="0" role="button" aria-label="' + DAILY_NAMES[n % 4] + ', from a daily pond" data-name="' + DAILY_NAMES[n % 4] + ', from a daily pond">' + dailyItem(n) + '</g>';
   if (!full && !hc.chapter && !hc.daily) s += '<text x="160" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff" opacity=".9">Solve ponds to bring visitors here</text>';
   return s + '</svg>';
@@ -1898,7 +1907,7 @@ function showChapterDone() {
   $('chTitle').textContent = ch === 1 ? 'Chapter 1 complete' : 'Reed Garden sample complete';
   $('chLine').textContent = ch === 1 ? 'Your pond is full of life. Thank you for playing.' : 'You have mastered the one-way gate and the floating log. Thank you for playing.';
   $('chNext').textContent = more ? 'Chapter 2 is open: the Reed Garden.' : 'More Reed Garden ponds coming soon.';
-  $('chapterScene').innerHTML = habitatSVG(true);
+  $('chapterScene').innerHTML = habitatSVG(ch); // v0.5.6 (Cooper): no peeking at later chapters' visitors
   $('chapterCard').classList.remove('hidden');
 }
 
@@ -2026,7 +2035,7 @@ setPreviewSetting(settings.preview, true);
 if (tester) $('btnSolve').classList.remove('hidden');
 // test hook (read-only view of state, used by the Playwright check)
 window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' : G.li + 1, mode: G.mode, taps: G.taps, won: G.won, busy: G.busy, coach: G.coach ? G.coach.i : -1,
-    hint: G.hint, hinted: G.hinted, preview: document.body.dataset.preview === '1', par: G.level ? G.level.par : 0 }; },
+    hint: G.hint, hinted: G.hinted, preview: document.body.dataset.preview === '1', par: G.level ? G.level.par : 0, pos: G.st ? G.st.pos.slice() : [] }; },
   solution: function () { return L.solve(G.level, G.st); }, start: function (i) { startLevel(i); }, startDaily: startDaily,
   dailyLevel: function () { return dailyLevel(todayKey()); },
   coachTarget: function () { var c = G.coach; return c && c.steps[c.i] && c.steps[c.i].target != null ? c.steps[c.i].target : -1; }, hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
