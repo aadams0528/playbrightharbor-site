@@ -39,6 +39,7 @@ button:focus-visible{outline:3px solid var(--lantern);outline-offset:2px}
 .pill .st{color:var(--lantern)}
 button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-space:nowrap}
 .brand{min-width:0}.brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:400px){.brand{font-size:22px;white-space:nowrap}.brand small{white-space:normal;font-size:10px;letter-spacing:1px}.top{gap:6px}.top .pill{padding:5px 9px}} /* 360px phones: the title wrapped to two lines and the subtitle lost the level count */
 .pill.done{border-color:rgba(63,214,138,.6)}
 .streak{font-size:15px;font-weight:800;margin:4px 0 2px}
 .iconbtn{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;font-size:17px;font-weight:800;padding:0}
@@ -82,6 +83,9 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .finale canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:0}
 .finText{position:relative;width:min(380px,100%);display:flex;flex-direction:column;gap:10px;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .6s ease,transform .6s ease}
 .finText.show{opacity:1;transform:none}
+.finale:focus{outline:none}
+.finText:not(.show){pointer-events:none} /* a fast-forward tap must never press the not-yet-visible Continue button */
+.finSkip{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);text-align:center;font-size:13px;font-weight:800;letter-spacing:.5px;color:rgba(232,242,251,.55);pointer-events:none}
 .finText h2{margin:0;font-family:var(--display);font-weight:800;font-size:30px;line-height:1.05;background:linear-gradient(90deg,#ff5d6c,#ff9a3c,#ffd23f,#3fd68a,#4da3ff,#b678ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 .finText p{margin:0;color:var(--ink-soft);font-weight:700;font-size:15px;line-height:1.4}
 .finText .st{color:var(--lantern);font-weight:800}
@@ -147,7 +151,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.61 · 270 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.62 · 270 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -174,8 +178,8 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 </div>
 
 <div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
-<div class="finale" id="finale" role="dialog" aria-label="The river runs free" hidden><canvas id="finCv" aria-hidden="true"></canvas>
-  <div class="finText" id="finText"><h2>The river runs free!</h2><p id="finSub"></p><p class="st" id="finStars"></p><button class="big" id="finGo">Continue</button></div></div>
+<div class="finale" id="finale" role="dialog" aria-label="The river runs free" tabindex="-1" hidden><canvas id="finCv" aria-hidden="true"></canvas>
+  <div class="finText" id="finText"><h2>The river runs free!</h2><p id="finSub"></p><p class="st" id="finStars"></p><button class="big" id="finGo">Continue</button></div><div class="finSkip" id="finSkip">Tap to fast-forward</div></div>
 <div class="toast" id="toast"></div>
 
 <script id="engine">
@@ -684,7 +688,9 @@ function resize(){
   const wide=matchMedia("(min-width:900px) and (min-aspect-ratio:5/4)").matches;
   const maxH=wide?Math.max(200,window.innerHeight-document.querySelector(".top").offsetHeight-pad-24)
     :Math.max(200,window.innerHeight-kids.reduce((a,e)=>a+e.offsetHeight,0)-10*kids.length-pad-2);
-  cs=Math.floor(Math.min(r.width/G.w,maxH/G.h));
+  const ncs=Math.floor(Math.min(r.width/G.w,maxH/G.h));
+  if(ncs<4)return; // the board's box can be 0 wide for a moment (hidden, mid-rotation, emulator switch): keep the last size (v0.61 review)
+  cs=ncs;
   dpr=Math.min(3,window.devicePixelRatio||1);
   cv.style.width=cs*G.w+"px";cv.style.height=cs*G.h+"px";cv.style.margin="0 auto";
   cv.width=cs*G.w*dpr;cv.height=cs*G.h*dpr;
@@ -692,6 +698,9 @@ function resize(){
 // Re-measure the tip too: a phone app's web view can start before the screen has its real size, and a tip
 // measured then is far too tall (Alan's Android, Oct 16: board shrunk and pushed down, buttons cut off).
 window.addEventListener("resize",()=>{if(G){reserveTip();resize();}});
+// The board also re-fits whenever the tip block changes height: turning color marks on mid-level wraps the legend into
+// more rows, which pushed the bottom buttons off a phone screen (v0.61 review). resize() sizes only the board, so no loop.
+try{let tipH=0;new ResizeObserver(()=>{const h=document.querySelector(".tip").offsetHeight;if(G&&h!==tipH){tipH=h;resize();}}).observe(document.querySelector(".tip"));}catch(e){}
 
 // ---------- sound ----------
 let ac=null;
@@ -994,7 +1003,7 @@ function playFinale(done){
   const bandCol=t=>{const x=t*(FIN_COLS.length-1),i=Math.min(FIN_COLS.length-2,Math.floor(x));return mixHex(COLORS[FIN_COLS[i]],COLORS[FIN_COLS[i+1]],x-i);};
   const lumpy=(g,cx,cy,rx,ry,seed)=>{g.beginPath();for(let a=0;a<72;a++){const q=a/72*Math.PI*2,w=1+.045*Math.sin(q*5+seed)+.03*Math.sin(q*11+seed*2)+.015*(rnd(seed+a)-.5);g.lineTo(cx+Math.cos(q)*rx*w,cy+Math.sin(q)*ry*w);}g.closePath();g.fill();};
   const bed=(g,upto,r0,col,seed)=>{for(let i=0;i<=upto;i+=2){const [x,y]=pts[i],r=r0*(1+.1*Math.sin(i*.9+seed)+.08*(rnd(i+seed)-.5));g.fillStyle=col(i);g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();}}; // lumpy edges, not a smooth tube
-  function frame(now){
+  function frame(now){if(W<1||H<1)return;
     const T=skip?FIN_END:now-t0,g=fc.getContext("2d"),reveal=Math.min(1,T/FIN_DRAW),ease=1-Math.pow(1-reveal,2),n=Math.max(1,Math.round(ease*(pts.length-1)));
     const [ex,ey]=pts[pts.length-1],pr=Math.min(W*.42,190),pv=Math.min(H*.075,52),sw=Math.min(W*.13,62);
     g.clearRect(0,0,W,H);
@@ -1026,16 +1035,19 @@ function playFinale(done){
     const home=Math.max(0,(T-(FIN_END-900))/900);
     if(home>0)for(let k=0;k<14;k++){const a=Math.min(1,home)*(.45+.45*Math.sin(T/500+k*2)),x=ex+(rnd(k+200)-.5)*pr*2.2+(still?0:Math.sin(T/900+k)*10),y=ey-pv*1.2-rnd(k+300)*H*.35+(still?0:Math.cos(T/1100+k)*8);
       g.save();g.globalAlpha=a;g.fillStyle="#ffd27a";g.shadowColor="#ffd27a";g.shadowBlur=10;g.beginPath();g.arc(x,y,2.2,0,Math.PI*2);g.fill();g.restore();}
-    if(T>=FIN_DRAW+400&&!txt.classList.contains("show")){txt.classList.add("show");$("finGo").focus();}
+    if(T>=FIN_DRAW+400&&!txt.classList.contains("show")){txt.classList.add("show");$("finSkip").hidden=true;$("finGo").focus();}
     if(!still)finRaf=requestAnimationFrame(frame);
   }
   function end(){cancelAnimationFrame(finRaf);finRaf=0;window.removeEventListener("resize",onRs);el.hidden=true;$("app").inert=false;done&&done();}
   function onRs(){layout();if(still)frame(performance.now());}
   layout();window.addEventListener("resize",onRs);
-  fc.onclick=()=>{if(!txt.classList.contains("show")){skip=true;if(still)frame(performance.now());}};
+  $("finSkip").hidden=still; // only while there's an animation to skip; Continue takes over once the text is up
+  const ff=()=>{if(!txt.classList.contains("show"))skip=true;};
+  el.onclick=e=>{if(e.target!==$("finGo"))ff();};
+  el.onkeydown=e=>{if(e.target===$("finGo")||!["Enter"," ","Escape"].includes(e.key))return;e.preventDefault();if(txt.classList.contains("show"))end();else ff();};
   $("finGo").onclick=end;
   if(!still)[523,659,784,1047,1319,1568].forEach((f,i)=>tone(f,.5,"sine",.06,.3+i*.22)); // a slow, rising chime as the river runs
-  if(still){txt.classList.add("show");frame(t0);$("finGo").focus();}else finRaf=requestAnimationFrame(frame);
+  if(still){txt.classList.add("show");frame(t0);$("finGo").focus();}else{el.focus();finRaf=requestAnimationFrame(frame);}
 }
 // ---------- Daily River ----------
 // One puzzle a day from the DAILY bank, the same for everyone on the same date. Slot = weekday (Monday gentle,
@@ -1119,7 +1131,7 @@ function showSettings(){
    ${TEST_BUILD?"<p>Testing tip: try a level with shapes off, then on. Which made it easier to follow the streams?</p>":""}
    <button class="ghost" id="close">Close</button>`);
   $("tShapes").onclick=e=>{opts.shapes=!opts.shapes;e.currentTarget.classList.toggle("on",opts.shapes);e.currentTarget.setAttribute("aria-checked",opts.shapes);store.set("opts",opts);};
-  $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);e.currentTarget.setAttribute("aria-checked",opts.marks);store.set("opts",opts);renderLegend();};
+  $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);e.currentTarget.setAttribute("aria-checked",opts.marks);store.set("opts",opts);renderLegend();reserveTip();resize();};
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);e.currentTarget.setAttribute("aria-checked",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
   $("tLessons").onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Show all again?";return;} // a second tap confirms
@@ -1684,7 +1696,8 @@ function pathSegments(p,skipCell){
 let frameNow=0;
 // With the system "reduce motion" setting the ambient motion holds still (flowing light, pulses, bobbing critters, pool
 // breathing, marching dashes); one-off feedback still plays out in real time and the lesson finger still moves (v0.59 review).
-function draw(now){const live=now;if(calm())now=0;frameNow=now;
+function draw(now){if(!(cs>=4))return; // no zero-size riverbed picture (drawImage throws on a 0-wide canvas)
+  const live=now;if(calm())now=0;frameNow=now;
   const W=cs*G.w,H=cs*G.h;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   // riverbed (pre-drawn once per board) + moving light caustics
