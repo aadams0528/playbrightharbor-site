@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.6.3 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.6.4 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -144,6 +144,16 @@ body:not(.playing) #scene{display:none}
 .visitor .vcap{font-size:19px;font-weight:800;margin:8px 0 0;color:var(--ink)}
 .visitor .vsub{font-size:15px;font-weight:700;margin:4px 0 0;color:#a26b00}
 #winCard .row{animation:rise .35s ease-out .8s backwards}
+#winCard .card{padding:14px 14px 14px}
+#winCard .wtop{display:flex;gap:12px;align-items:center;text-align:left;margin-bottom:10px} /* v0.6.4: compact win card, visitor beside the words */
+#winCard .wtext{flex:1;min-width:0}
+#winCard .wtext h2{margin:0 0 2px;font-size:21px}
+#winCard .wtext .stars{justify-content:flex-start;margin:2px 0 4px}
+#winCard .wtext p{margin:2px 0;font-size:14px;line-height:1.3}
+#winCard .visitor{margin:0;flex:none;width:96px;text-align:center}
+#winCard .visitor svg{width:80px;height:80px}
+#winCard .visitor .vcap{font-size:13px;margin:4px 0 0;line-height:1.2}
+#winCard .visitor .vsub{font-size:12px;margin:2px 0 0}
 body[data-theme="moon"] .visitor svg{background:radial-gradient(circle at 45% 38%,#4f7aa3,#25496a)}
 body[data-theme="moon"] .visitor .vcap{color:#eef4ff}body[data-theme="moon"] .visitor .vsub{color:#f5d77a}
 @media (prefers-reduced-motion:reduce){.visitor,#winCard .row{animation:none}}
@@ -216,7 +226,7 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.6.3 prototype</div>
+    <div class="ver" id="ver">Ripple v0.6.4 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -271,11 +281,15 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
 
   <div id="winCard" class="overlay hidden">
     <div class="card">
-      <h2 id="winTitle">The pond is calm</h2>
-      <div class="stars" id="winStars"></div>
-      <p id="winLine"></p>
-      <p id="winTip"></p>
-      <div id="winVisitor" class="visitor hidden" aria-live="polite"></div>
+      <div class="wtop">
+        <div id="winVisitor" class="visitor hidden" aria-live="polite"></div>
+        <div class="wtext">
+          <h2 id="winTitle">The pond is calm</h2>
+          <div class="stars" id="winStars"></div>
+          <p id="winLine"></p>
+          <p id="winTip"></p>
+        </div>
+      </div>
       <div class="row"><button class="btn" id="btnReplay">Play again</button><button class="btn primary" id="btnNext">Next pond</button></div>
     </div>
   </div>
@@ -1028,6 +1042,13 @@ function homeSet() {
   var out = {}; Object.keys(G.board.pads).forEach(function (k) { var i = G.level.leaves.findIndex(function (l) { return l.k === k; }); if (i >= 0 && G.st.pos[i] === G.board.pads[k]) out[k] = i; });
   return out;
 }
+function afterTapNotes(before) { // v0.6.4 (Muse r6): say when a home critter gets knocked off, and when the pond can't be finished from here
+  var now = homeSet(), off = Object.keys(before).filter(function (k) { return !(k in now); });
+  if (off.length && !seen.knockOff) { seen.knockOff = true; store.set('seen', seen); toast('Ripples can push a critter back off its pad. Plan the order.', 2800); return; }
+  if (G.stuckSaid || G.level.w * G.level.h > 25) return; // small ponds only, so the check stays instant
+  var sol = solveNow();
+  if (!sol) { G.stuckSaid = true; toast('No way home from here. Try Undo.', 2800); $('btnUndo').classList.add('glow'); }
+}
 function landedHome(before) { // a critter that just reached its pad: one gold ring and a little hop
   var now = homeSet();
   Object.keys(now).forEach(function (k) {
@@ -1438,7 +1459,7 @@ function afterDemo(s) {
   if (rest && rest.length === G.level.par - G.taps) return;
   G.busy = true; hud();
   setTimeout(function () {
-    G.st = L.initialState(G.level); G.hist = []; G.taps = 0; G.useBig = false; G.busy = false;
+    G.st = L.initialState(G.level); G.hist = []; G.stuckSaid = false; G.taps = 0; G.useBig = false; G.busy = false;
     placeLeaves(true, 320); hud(); toast('Now you try.', 1800);
   }, 1300);
 }
@@ -1473,7 +1494,7 @@ function setPlaying(on) { document.body.classList.toggle('playing', !!on); }
 function visSeed(lv) { return typeof lv.id === 'number' ? lv.id : (lv.seed || 7); }
 function enterPond(level, title, sub) {
   G.level = level; G.board = L.makeBoard(level); G.st = L.initialState(level);
-  G.hist = []; G.taps = 0; G.busy = false; G.won = false; G.useBig = false;
+  G.hist = []; G.stuckSaid = false; G.taps = 0; G.busy = false; G.won = false; G.useBig = false;
   G.restarted = false; G.hinted = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {};
   $('coach').classList.remove('slot');
   hideHold();
@@ -1581,6 +1602,7 @@ function tap(idx, fromSolver) {
       if (G.coach.kind === 'tutorial') { G.coach.i++; showCoach(); }
       else afterDemo(coachStep);
     }
+    else if (!G.coach) afterTapNotes(wasHome);
     hud();
   }, Math.max(330, longest + 90));
   return true;
@@ -1628,7 +1650,7 @@ function win() {
     }
     $('winCard').classList.remove('hidden');
     fitVisitor();
-  }, RM ? 600 : 1150);
+  }, RM ? 600 : 1700); // v0.6.4: the solved pond shows a moment longer before the card rises
 }
 function showVisitor(nv) { // the visitor's own picture, big, with its name in real text
   var art = nv.kind === 'ch' ? HAB[nv.i] : dailyItem(nv.i), name = nv.name.charAt(0).toUpperCase() + nv.name.slice(1);
@@ -1656,11 +1678,11 @@ function undo() {
   if (G.busy || G.won || !G.hist.length) return;
   if (G.coach && G.coach.kind === 'tutorial') return;
   if (G.coach) finishCoach(); // v0.6.1 (Cooper r6): Undo during a lesson closes it (like Restart), so its steps can't fall out of step with the board
-  G.st = G.hist.pop(); G.taps = Math.max(0, G.taps - 1); G.useBig = false; G.hint = -1; G.hintStage = 0; clearHL();
+  G.stuckSaid = false; G.st = G.hist.pop(); G.taps = Math.max(0, G.taps - 1); G.useBig = false; G.hint = -1; G.hintStage = 0; clearHL();
   placeLeaves(true, 200); hud();
 }
 function resetPond() {
-  G.st = L.initialState(G.level); G.hist = []; G.taps = 0; G.won = false; G.useBig = false; G.hint = -1; G.hintStage = 0;
+  G.st = L.initialState(G.level); G.hist = []; G.stuckSaid = false; G.taps = 0; G.won = false; G.useBig = false; G.hint = -1; G.hintStage = 0;
   $('winCard').classList.add('hidden'); $('btnHelp').classList.remove('hidden'); clearHL();
   placeLeaves(true, 260);
 }
@@ -1685,8 +1707,15 @@ function hintClue(m) {
     if (k === 'log') return;
     if (mv.to === G.board.pads[k]) home.push('the ' + k);
   });
+  var snapper = '', snapDir = -1; // v0.6.4 (Muse r6): name the leaf whose blocked push snaps the cracked reed
+  if (snapped) res.moves.forEach(function (mv) {
+    var d = L.DIRS[mv.dir], cur = mv.to, r = ((cur / w) | 0) + d[0], c = (cur % w) + d[1]; if (r < 0 || r >= lv.h || c < 0 || c >= w) return;
+    var sj = G.board.snaps[Math.min(cur, r * w + c) + ':' + Math.max(cur, r * w + c)];
+    if (sj !== undefined && res.snapped.indexOf(sj) !== -1 && !snapper) { var k = lv.leaves[mv.i].k; snapper = k === 'leaf' ? 'the plain leaf' : 'the ' + k; snapDir = mv.dir; }
+  });
   var dirs = Object.keys(byDir), s;
-  if (!dirs.length) s = plain ? 'Clear a plain leaf out of the way first.' : 'Find a splash that sets things up.';
+  if (!dirs.length && snapper) s = 'Push ' + snapper + ' ' + DIRWORD[snapDir] + ' into the cracked reed to snap it.';
+  else if (!dirs.length) s = plain ? 'Clear a plain leaf out of the way first.' : 'Find a splash that sets things up.';
   else if (dirs.length === 1 && byDir[dirs[0]].length > 1) s = 'Move ' + names(byDir[dirs[0]]) + ' ' + DIRWORD[dirs[0]] + ' together.';
   else s = 'Move ' + names(dirs.map(function (d) { return names(byDir[d]) + ' ' + DIRWORD[d]; })) + '.';
   // shield: a critter right behind a tied lily on the ripple line stays still
@@ -1698,8 +1727,8 @@ function hintClue(m) {
   });
   // at most 2 short sentences: what moves, then the shield or the payoff
   if (kept.length) { var kd = Object.keys(keptDir), where = kd.length === 1 ? { '-1,0': ' above', '1,0': ' below', '0,-1': ' left of', '0,1': ' right of' }[kd[0]] + ' your splash' : ''; s += ' The tied lily' + where + ' keeps ' + names(kept) + ' still.'; }
-  else if (home.length) s += snapped ? ' That snaps the cracked reed and brings ' + names(home) + ' home.' : ' That brings ' + names(home) + ' home.'; // v0.6.2 (Nikola): two sentences at most
-  else if (snapped) s += ' That snaps the cracked reed.';
+  else if (home.length) s += snapped && dirs.length ? ' That brings ' + names(home) + ' home, and ' + snapper + ' snaps the cracked reed.' : ' That brings ' + names(home) + ' home.'; // v0.6.2 (Nikola): two sentences at most
+  else if (snapped && dirs.length) s += ' ' + snapper.charAt(0).toUpperCase() + snapper.slice(1) + ' snaps the cracked reed.';
   else { var held = logHeld(res); if (held.length) s += ' The log holds ' + names(held) + ' still.'; }
   if (m.big) s = 'Use the big stone. ' + s;
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -2183,7 +2212,7 @@ if (tester) $('btnSolve').classList.remove('hidden');
 // test hook (read-only view of state, used by the Playwright check)
 window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' : G.li + 1, mode: G.mode, taps: G.taps, won: G.won, busy: G.busy, coach: G.coach ? G.coach.i : -1,
     hint: G.hint, hinted: G.hinted, preview: document.body.dataset.preview === '1', par: G.level ? G.level.par : 0, pos: G.st ? G.st.pos.slice() : [], snap: G.st ? G.st.snap || 0 : 0 }; },
-  solution: function () { return L.solve(G.level, G.st); }, start: function (i) { startLevel(i); }, startDaily: startDaily,
+  solution: function () { return L.solve(G.level, G.st); }, clue: function () { var so = solveNow(); return so && so.length ? hintClue(so[0]) : null; }, start: function (i) { startLevel(i); }, startDaily: startDaily,
   dailyLevel: function () { return dailyLevel(todayKey()); },
   coachTarget: function () { var c = G.coach; return c && c.steps[c.i] && c.steps[c.i].target != null ? c.steps[c.i].target : -1; }, hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
 // first visit: go straight into the tutorial pond
