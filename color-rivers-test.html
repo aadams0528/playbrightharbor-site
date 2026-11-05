@@ -44,7 +44,7 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 .iconbtn{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;font-size:17px;font-weight:800;padding:0}
 
 .tip{display:flex;flex-direction:column;gap:6px;min-height:52px;position:relative}
-.coach.float{position:absolute;left:0;right:0;top:26px;z-index:5;background:#16283a;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.coach.float{position:absolute;left:0;right:0;top:0;z-index:5;background:#16283a;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .tip h2{margin:0;font-family:var(--display);font-weight:700;font-size:20px;line-height:1.1;text-wrap:balance}
 .tip p{margin:0;font-size:14.5px;font-weight:700;color:var(--ink-soft);line-height:1.35}
 .coach{display:flex;flex-direction:column;gap:8px;padding:11px 13px;border-radius:14px;background:rgba(255,210,122,.09);border:1.5px solid rgba(255,210,122,.35);animation:coachIn .35s ease}
@@ -77,6 +77,15 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .tool span{font-size:18px;line-height:1}
 
 [hidden]{display:none!important}
+/* the ending: the river comes back to life after the last level (v0.61) */
+.finale{position:fixed;inset:0;z-index:6;background:radial-gradient(120% 80% at 50% 0%,var(--pond-lift) 0%,var(--pond) 45%,var(--pond-deep) 100%);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 28px);box-sizing:border-box}
+.finale canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:0}
+.finText{position:relative;width:min(380px,100%);display:flex;flex-direction:column;gap:10px;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .6s ease,transform .6s ease}
+.finText.show{opacity:1;transform:none}
+.finText h2{margin:0;font-family:var(--display);font-weight:800;font-size:30px;line-height:1.05;background:linear-gradient(90deg,#ff5d6c,#ff9a3c,#ffd23f,#3fd68a,#4da3ff,#b678ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.finText p{margin:0;color:var(--ink-soft);font-weight:700;font-size:15px;line-height:1.4}
+.finText .st{color:var(--lantern);font-weight:800}
+@media (prefers-reduced-motion:reduce){.finText{transition:none}}
 .sheet{position:fixed;inset:0;display:grid;place-items:center;background:rgba(4,12,22,.66);padding:16px;z-index:5;backdrop-filter:blur(3px)}
 .card{background:linear-gradient(180deg,#1b3b58,#12293f);border:1.5px solid rgba(255,255,255,.14);border-radius:22px;padding:20px 18px;width:min(380px,100%);box-sizing:border-box;display:flex;flex-direction:column;gap:12px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.45);max-height:88vh;overflow-y:auto}
 .card h3{margin:0;font-family:var(--display);font-size:26px;font-weight:800;line-height:1.05}
@@ -138,7 +147,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.60 · 270 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.61 · 270 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -165,6 +174,8 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 </div>
 
 <div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
+<div class="finale" id="finale" role="dialog" aria-label="The river runs free" hidden><canvas id="finCv" aria-hidden="true"></canvas>
+  <div class="finText" id="finText"><h2>The river runs free!</h2><p id="finSub"></p><p class="st" id="finStars"></p><button class="big" id="finGo">Continue</button></div></div>
 <div class="toast" id="toast"></div>
 
 <script id="engine">
@@ -502,7 +513,7 @@ if(typeof module!=="undefined")module.exports={CHAPTERS,HAND,LEVELS,DAILY,DELTA,
 <script>
 // ---------- Game ----------
 const $=id=>document.getElementById(id);
-const cv=$("board"),ctx=cv.getContext("2d");
+const cv=$("board");let ctx=cv.getContext("2d"); // let: the finale scene borrows critter() for its own canvas
 // a negative radius throws (Cooper, Oct 20: a win spark on Weir did, and the board stopped drawing), so clamp every circle
 {const arc=ctx.arc.bind(ctx);ctx.arc=(x,y,r,a,b,ccw)=>arc(x,y,Math.max(0,r),a,b,ccw);}
 const store={get(k,d){try{const v=localStorage.getItem("cr-"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("cr-"+k,JSON.stringify(v));}catch(e){}}};
@@ -618,10 +629,14 @@ function markSVG(c){const m=marksOf(c);if(!m.length)return"";const h=10,step=9,W
   const parts=m.map((b,k)=>{const x=1+step*k+step/2,w=h*.42;
     return b===1?`<path d="M${x-w} 0L${x+w} 5L${x-w} 10Z"/>`:b===4?`<path d="M${x+w} 0L${x-w} 5L${x+w} 10Z"/>`:`<path d="M${x-w*.75} 10L${x+w*.75} 0" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`;}).join("");
   return `<svg class="mk" width="${W}" height="${h}" viewBox="0 0 ${W} ${h}" fill="currentColor" style="color:#e8f2fb" aria-hidden="true">${parts}</svg>`;}
-function drawMarks(x,y,c,h){ // a dark pill with the color's marks, on the board
+function drawMarks(x,y,c,h,bare){ // the color's marks, on the board: on a stream they sit bare on the water with a thin
+  // dark edge; on a den, nest or filter a soft pill keeps them readable over the art (v0.61: the old black pills were heavy)
   const m=marksOf(c);if(!m.length)return;const step=h*1.05,w=m.length*step+h*.5,r=h*.42+h*.25;
-  ctx.save();ctx.fillStyle="rgba(4,12,22,.78)";rrect(x-w/2,y-r,w,r*2,r);ctx.fill();
-  ctx.fillStyle=ctx.strokeStyle="#f2f8ff";m.forEach((b,k)=>markPath(ctx,b,x-w/2+h*.25+step*(k+.5),y,h));ctx.restore();
+  ctx.save();if(!bare){ctx.fillStyle="rgba(4,12,22,.45)";rrect(x-w/2,y-r,w,r*2,r);ctx.fill();}
+  const at=k=>x-w/2+h*.25+step*(k+.5);
+  ctx.lineJoin="round";ctx.fillStyle=ctx.strokeStyle="rgba(4,12,22,.6)";ctx.save();
+  m.forEach((b,k)=>{markPath(ctx,b,at(k),y,h);ctx.lineCap="round";ctx.lineWidth=b===2?h*.5:h*.3;ctx.stroke();});ctx.restore(); // edge: the mark drawn fat in dark first
+  ctx.fillStyle=ctx.strokeStyle="#f2f8ff";m.forEach((b,k)=>markPath(ctx,b,at(k),y,h));ctx.restore();
 }
 function recolor(){col=computeColors(G,paths);}
 // Breakthrough tools: the crew button (under the board on phones, in the side column on wide screens). Tap it, then tap the dam (saw) or boulder clump (pick).
@@ -931,13 +946,13 @@ function win(){
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":lv+1,stars:s,ink,hints:hintsUsed});
   if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
-  const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id];
+  const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id],ending=lv===LEVELS.length-1&&!prog.stars[id];
   if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
   prog.stars[id]=Math.max(prog.stars[id]||0,s);prog.total=starSum(prog.stars); // total + highest: what leaderboards will rank on
   if(lv+1>(prog.highest||0)){prog.highest=lv+1;prog.highestId=id;}
   prog.sinceAd=(prog.sinceAd||0)+1;
   saveProg();updateStars();
-  const at=lv;setTimeout(()=>{if(lv===at&&won)showWin(s,ink,fresh);},800);
+  const at=lv;setTimeout(()=>{if(lv===at&&won){if(ending)playFinale(()=>showWin(s,ink,fresh));else showWin(s,ink,fresh);}},800);
 }
 function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</span>`).join("");}
 // Re-traces and hints are still counted silently in prog.trace (kept for playtest analysis); nothing is shown to the player.
@@ -946,10 +961,81 @@ function showWin(s,ink,fresh){
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`Solved! So close to a perfect route: just ${over} ink over. Three stars at ${G.par}.`:`Solved! Can you find a shorter river? Three stars at ${G.par} ink.`; // near-miss drives the retry
   openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
    ${last?`<p>${LEVELS.every(L=>prog.stars[L.id])?"You've played every river so far.":"Final river complete!"} More rivers arrive with each update.</p>${dailyOpen()?`<button class="big" id="goDaily">☀︎ Play today's Daily River</button><button class="ghost" id="goLevels">See all levels</button>`:`<button class="big" id="goLevels">See all levels</button>`}`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
-   <button class="ghost" id="goRetry">${s===3||(prog.stars[ID(lv)]||0)===3?"Play again":"Play again for more stars"}</button>`);
+   <button class="ghost" id="goRetry">${s===3||(prog.stars[ID(lv)]||0)===3?"Play again":"Play again for more stars"}</button>${last?`<button class="showme" id="goEnding" style="align-self:center">Watch the ending again</button>`:""}`);
   $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
   if(last||locked)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();goNext();};
   if(last&&$("goDaily"))$("goDaily").onclick=()=>{closeSheet();startDaily();};
+  if(last)$("goEnding").onclick=()=>{closeSheet();playFinale(()=>showWin(s,ink,fresh));};
+}
+// ---------- the ending ----------
+// After the last level the river comes back to life (v0.61, from the v0.59 review: "celebrate the river and critters the
+// player helped"): a rainbow river runs down the screen into a home pool and a parade of critters, every color and shape,
+// swims home. Made from the game's own critters and colors. Skippable (a tap jumps to the end, Continue moves on), and
+// with reduced motion it is one still picture. Plays once, on the first clear of the last level; the win card can replay it.
+const FIN_COLS=[1,3,2,6,4,5],FIN_N=12,FIN_DRAW=1600,FIN_GAP=260,FIN_SWIM=2600,FIN_END=FIN_DRAW+FIN_GAP*(FIN_N-1)+FIN_SWIM+600;
+let finRaf=0;
+function playFinale(done){
+  const el=$("finale"),fc=$("finCv"),txt=$("finText"),stars=starSum(prog.stars),all=LEVELS.every(L=>prog.stars[L.id]);
+  const flowing=LEVELS.filter(L=>prog.stars[L.id]).length;
+  $("finSub").textContent=all?`Every critter is home. All ${LEVELS.length} rivers run clear again.`:`The last river runs clear. ${flowing} of ${LEVELS.length} rivers are flowing so far.`;
+  $("finStars").textContent=`★ ${stars} of ${LEVELS.length*3} stars`;
+  el.hidden=false;$("app").inert=true;txt.classList.remove("show");
+  const still=calm(),t0=performance.now();let skip=still,W=0,H=0,pts=[],len=[],total=0;const glow=document.createElement("canvas");
+  const rnd=(k)=>{const x=Math.sin(k*127.1+311.7)*43758.5453;return x-Math.floor(x);}; // fixed "random", so stones and reeds don't jump
+  function layout(){const r=el.getBoundingClientRect(),d=Math.min(3,window.devicePixelRatio||1);W=r.width;H=r.height;
+    fc.width=glow.width=W*d;fc.height=glow.height=H*d;fc.getContext("2d").setTransform(d,0,0,d,0,0);
+    pts=[];len=[0];total=0;const A=Math.min(W*.27,150),y1=H*.56;
+    const off=t=>A*Math.sin(t*Math.PI*2.4+.5)*(1-t*.55)+A*.12*Math.sin(t*Math.PI*9);
+    for(let i=0;i<=160;i++){const t=i/160,x=W/2+off(t)-off(1)*t,y=-30+t*(y1+30);
+      if(i){const [px,py]=pts[i-1];total+=Math.hypot(x-px,y-py);len.push(total);}pts.push([x,y]);}}
+  const at=u=>{u=Math.max(0,Math.min(1,u))*total;let i=1;while(i<len.length-1&&len[i]<u)i++;const f=(u-len[i-1])/((len[i]-len[i-1])||1);
+    return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*f,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*f];};
+  const mixHex=(a,b,f)=>{const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16),c=k=>Math.round(((A>>k)&255)*(1-f)+((B>>k)&255)*f);return `rgb(${c(16)},${c(8)},${c(0)})`;};
+  const bandCol=t=>{const x=t*(FIN_COLS.length-1),i=Math.min(FIN_COLS.length-2,Math.floor(x));return mixHex(COLORS[FIN_COLS[i]],COLORS[FIN_COLS[i+1]],x-i);};
+  const lumpy=(g,cx,cy,rx,ry,seed)=>{g.beginPath();for(let a=0;a<72;a++){const q=a/72*Math.PI*2,w=1+.045*Math.sin(q*5+seed)+.03*Math.sin(q*11+seed*2)+.015*(rnd(seed+a)-.5);g.lineTo(cx+Math.cos(q)*rx*w,cy+Math.sin(q)*ry*w);}g.closePath();g.fill();};
+  const bed=(g,upto,r0,col,seed)=>{for(let i=0;i<=upto;i+=2){const [x,y]=pts[i],r=r0*(1+.1*Math.sin(i*.9+seed)+.08*(rnd(i+seed)-.5));g.fillStyle=col(i);g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();}}; // lumpy edges, not a smooth tube
+  function frame(now){
+    const T=skip?FIN_END:now-t0,g=fc.getContext("2d"),reveal=Math.min(1,T/FIN_DRAW),ease=1-Math.pow(1-reveal,2),n=Math.max(1,Math.round(ease*(pts.length-1)));
+    const [ex,ey]=pts[pts.length-1],pr=Math.min(W*.42,190),pv=Math.min(H*.075,52),sw=Math.min(W*.13,62);
+    g.clearRect(0,0,W,H);
+    // banks: mossy edges and stones, so the river sits in a real bed
+    g.lineCap=g.lineJoin="round";bed(g,pts.length-1,sw*.85,()=>"#173c2a",3);bed(g,pts.length-1,sw*.68,()=>"#1d4a33",9);
+    g.fillStyle="#173c2a";lumpy(g,ex,ey+pv*.4,pr*1.07,pv*1.32,5);
+    for(let k=0;k<26;k++){const [x,y]=at(rnd(k)),side=rnd(k+50)<.5?-1:1,dx=side*sw*(.72+rnd(k+90)*.2),r=3+rnd(k+70)*5;
+      g.fillStyle=k%3?"#5d6a72":"#748089";g.beginPath();for(let a=0;a<7;a++){const q=a/7*Math.PI*2,rr=r*(.75+rnd(k*7+a)*.4);g.lineTo(x+dx+Math.cos(q)*rr*1.3,y+Math.sin(q)*rr);}g.closePath();g.fill();}
+    // the river, drawn in from the top: a rainbow of the game's colors
+    const L=pts.length-1,band=(g,w,cap,wob)=>{g.lineCap=cap;for(let i=1;i<=n;i++){g.strokeStyle=bandCol(i/L);g.lineWidth=w*(1+wob*Math.sin(i*.7)+wob*.6*Math.sin(i*1.9));g.beginPath();g.moveTo(...pts[i-1]);g.lineTo(...pts[i]);g.stroke();}};
+    const og=glow.getContext("2d");og.setTransform(1,0,0,1,0,0);og.clearRect(0,0,glow.width,glow.height);og.setTransform(fc.width/W,0,0,fc.height/H,0,0);
+    band(og,sw*1.45,"round",0);g.save();g.globalAlpha=.2;g.drawImage(glow,0,0,W,H);g.restore(); // soft glow on the banks, drawn whole then faded so joins don't show
+    band(g,sw,"round",.07); // the water: its width wanders a little, like a real stream
+    g.save();g.strokeStyle="rgba(255,255,255,.35)";g.lineWidth=2.5;g.setLineDash([8,18]);g.lineDashOffset=-(T*.05);g.beginPath();for(let i=0;i<=n;i++)i?g.lineTo(...pts[i]):g.moveTo(...pts[i]);g.stroke();g.restore();
+    // the home pool waits, dark, until the river reaches it, then fills with clear water
+    const fill=Math.min(1,Math.max(0,(T-FIN_DRAW*.85)/700));
+    g.fillStyle="#0b2033";lumpy(g,ex,ey+pv*.4,pr,pv,11);
+    if(fill>0){g.save();g.globalAlpha=fill;const pg=g.createRadialGradient(ex,ey+pv*.4,4,ex,ey+pv*.4,pr);pg.addColorStop(0,"#5fb6e8");pg.addColorStop(1,"#1f5f8c");
+      g.fillStyle=pg;lumpy(g,ex,ey+pv*.4,pr*.95,pv*.9,11);g.restore();}
+    // critters swim down and gather around the pool
+    const keep=ctx;ctx=g;
+    try{for(let k=0;k<FIN_N;k++){const st=FIN_DRAW*.6+k*FIN_GAP,u=(T-st)/FIN_SWIM;if(u<=0)continue;
+      const slot=(k+.5)/FIN_N,ang=Math.PI*(.92-.84*slot),sx=ex+Math.cos(ang)*pr*.78*(k%2?.62:1),sy=ey+pv*.4-Math.sin(ang)*pv*.15+(k%2?-pv*.35:pv*.35);
+      let x,y;if(u<1){[x,y]=at(u*u*(3-2*u));}else{const f=Math.min(1,(u-1)*FIN_SWIM/500),e=f*f*(3-2*f);[x,y]=at(1);x+=(sx-x)*e;y+=(sy-y)*e;}
+      const mask=FIN_COLS[k%6],bob=still?0:Math.sin(T/320+k)*2.5,blink=!still&&((T/1000+k*1.3)%3.6)<.12;
+      critter(x,y+bob,Math.min(W*.034,15),SHAPES[(k+Math.floor(k/6))%6],mask,14,blink,u<1&&!still?T/140+k:null);}}
+    finally{ctx=keep;}
+    // fireflies over the water once everyone is home
+    const home=Math.max(0,(T-(FIN_END-900))/900);
+    if(home>0)for(let k=0;k<14;k++){const a=Math.min(1,home)*(.45+.45*Math.sin(T/500+k*2)),x=ex+(rnd(k+200)-.5)*pr*2.2+(still?0:Math.sin(T/900+k)*10),y=ey-pv*1.2-rnd(k+300)*H*.35+(still?0:Math.cos(T/1100+k)*8);
+      g.save();g.globalAlpha=a;g.fillStyle="#ffd27a";g.shadowColor="#ffd27a";g.shadowBlur=10;g.beginPath();g.arc(x,y,2.2,0,Math.PI*2);g.fill();g.restore();}
+    if(T>=FIN_DRAW+400&&!txt.classList.contains("show")){txt.classList.add("show");$("finGo").focus();}
+    if(!still)finRaf=requestAnimationFrame(frame);
+  }
+  function end(){cancelAnimationFrame(finRaf);finRaf=0;window.removeEventListener("resize",onRs);el.hidden=true;$("app").inert=false;done&&done();}
+  function onRs(){layout();if(still)frame(performance.now());}
+  layout();window.addEventListener("resize",onRs);
+  fc.onclick=()=>{if(!txt.classList.contains("show")){skip=true;if(still)frame(performance.now());}};
+  $("finGo").onclick=end;
+  if(!still)[523,659,784,1047,1319,1568].forEach((f,i)=>tone(f,.5,"sine",.06,.3+i*.22)); // a slow, rising chime as the river runs
+  if(still){txt.classList.add("show");frame(t0);$("finGo").focus();}else finRaf=requestAnimationFrame(frame);
 }
 // ---------- Daily River ----------
 // One puzzle a day from the DAILY bank, the same for everyone on the same date. Slot = weekday (Monday gentle,
@@ -1731,12 +1817,12 @@ function draw(now){const live=now;if(calm())now=0;frameNow=now;
     const blink=((now/1000+k*1.7)%4)<.12;
     critter(cx,cy+Math.sin(now/400+k)*cs*.02,cs*.21,SHAPES[k%SHAPES.length],src.mask,cs*.3,blink);
   });
-  if(opts.marks){ // marks along each stream: where its color changes, then every third cell
+  if(opts.marks){ // marks along each stream: where its color changes, then every fourth cell
     const busy=new Set(crosses.map(x=>x.cell));
     paths.forEach((path,p)=>{let pend=true,gap=0;for(let k=1;k<path.length;k++){
       const cell=path[k],t=G.cells[cell].t;if(col[p][k]!==col[p][k-1])pend=true;
       const ok=t==="empty"&&!busy.has(cell)&&k<path.length-1;
-      if(ok&&(pend||gap>=2)){drawMarks(...C(cell),col[p][k],cs*.17);pend=false;gap=0;}else gap++;}});
+      if(ok&&(pend||gap>=3)){drawMarks(...C(cell),col[p][k],cs*.17,true);pend=false;gap=0;}else gap++;}});
     G.nests.forEach(n=>{const [x,y]=C(n.i);drawMarks(x+cs*.27,y+cs*.31,n.mask,cs*.15);});
     G.sources.forEach(s=>{const [x,y]=C(s.i);drawMarks(x+cs*.27,y+cs*.31,s.mask,cs*.15);});
     G.cells.forEach((c,i)=>{if(c.t==="filter"){const [x,y]=C(i);drawMarks(x+cs*.24,y+cs*.3,c.f,cs*.15);}});
