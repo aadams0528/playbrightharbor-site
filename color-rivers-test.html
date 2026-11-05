@@ -138,7 +138,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.59 · 270 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.60 · 270 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -512,7 +512,7 @@ const ID=i=>LEVELS[i].id,IDX=id=>LEVELS.findIndex(L=>L.id===id);
 let prog=(()=>{
   const blank={v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0,noAds:false,sinceAd:0,lastAd:0,hintDay:"",hintsLeft:0,bonusHints:0};
   const saved=store.get("prog3",null);if(saved){const p=Object.assign(blank,saved),far=LEVELS.reduce((m,L,i)=>p.stars[L.id]?i+1:m,0);
-    if(far>0&&far!==p.highest){p.highest=far;p.highestId=LEVELS[far-1].id;} // levels were added or retired: count from where they really are
+    if(far!==p.highest){p.highest=far;p.highestId=far?LEVELS[far-1].id:undefined;} // levels were added or retired: count from where they really are
     return p;}
   const old=store.get("prog2",null);if(!old)return blank;
   const byId=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>LEVELS[+k]).map(([k,v])=>[ID(+k),v]));
@@ -945,7 +945,7 @@ function showWin(s,ink,fresh){
   const last=lv===LEVELS.length-1,locked=!last&&!prog.all&&!gateOK(lv+1),nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`Solved! So close to a perfect route: just ${over} ink over. Three stars at ${G.par}.`:`Solved! Can you find a shorter river? Three stars at ${G.par} ink.`; // near-miss drives the retry
   openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
-   ${last?`<p>You've played every river so far. More rivers arrive with each update.</p>${dailyOpen()?`<button class="big" id="goDaily">☀︎ Play today's Daily River</button><button class="ghost" id="goLevels">See all levels</button>`:`<button class="big" id="goLevels">See all levels</button>`}`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
+   ${last?`<p>${LEVELS.every(L=>prog.stars[L.id])?"You've played every river so far.":"Final river complete!"} More rivers arrive with each update.</p>${dailyOpen()?`<button class="big" id="goDaily">☀︎ Play today's Daily River</button><button class="ghost" id="goLevels">See all levels</button>`:`<button class="big" id="goLevels">See all levels</button>`}`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
    <button class="ghost" id="goRetry">${s===3||(prog.stars[ID(lv)]||0)===3?"Play again":"Play again for more stars"}</button>`);
   $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
   if(last||locked)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();goNext();};
@@ -975,7 +975,9 @@ function recordDaily(n,s){store.set("onDaily",null); // done: a reload goes back
 }
 function updateDailyBtn(){const b=$("dailyBtn");if(!b)return;b.hidden=!dailyOpen();if(b.hidden)return;
   const k=streakNow();b.innerHTML=`<span class="st">☀︎</span>${k?`🔥${k}`:dailyDone()?"✓":"Daily"}`;b.setAttribute("aria-label",`Daily River${dailyDone()?", done today":""}${k?`, ${k}-day streak`:""}`);b.classList.toggle("done",dailyDone());}
-function startDaily(keep,extra){daily=dailyFor(dayNum());const k=streakNow();daily.tip+=k?` 🔥 ${k}-day streak: keep it going!`:" Play every day to grow a 🔥 streak.";startLevel("daily",keep,null,extra);}
+// Every way into the Daily (header, map, finale, reload) picks up today's unfinished drawing; Restart is the only way to clear it (v0.59 review)
+function startDaily(keep,extra){if(keep===undefined){const dd=store.get("ddraw",null);if(dd&&dd.day===dayNum()){keep=dd.paths;extra=dd;}}
+  daily=dailyFor(dayNum());const k=streakNow();daily.tip+=k?` 🔥 ${k}-day streak: keep it going!`:" Play every day to grow a 🔥 streak.";startLevel("daily",keep,null,extra);}
 // back to a chapter level with its saved drawing, if there is one
 function resumeLevel(i){const dr=store.get("draw",null);if(dr&&dr.id===ID(i))startLevel(i,dr.paths,dr.cut,dr);else startLevel(i);}
 function showDailyWin(s,ink){
@@ -1017,7 +1019,7 @@ function showChapter(id){
   openSheet(`<button class="ghost back" id="back">‹ River map</button><div class="chap"><b>${C.id?`Chapter ${chNo(C.id)} · `:""}${C.title}</b><span>★ ${I.got}/${I.max}</span></div>
     ${C.note?`<p class="chnote">${C.note}</p>`:""}${I.shut?`<p class="chnote">🔒 Opens at ★ ${chGoal(I.prev)} in Chapter ${chNo(I.prev)} (you have ${chStars(I.prev)})</p>`:""}
     <div class="grid">${I.ids.map(btn).join("")}</div><button class="ghost" id="close">Close</button>`);
-  document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{closeSheet();startLevel(+b.dataset.lv);});
+  document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{closeSheet();resumeLevel(+b.dataset.lv);});
   $("back").onclick=showLevels;$("close").onclick=closeSheet;
 }
 function showSettings(){
@@ -1274,11 +1276,12 @@ let taps=0,tapT=0;
 $("brand").addEventListener("click",()=>{if(!TEST_BUILD)return;const n=performance.now();taps=n-tapT<3000?taps+1:1;tapT=n;if(taps>=5){testerUnlock();taps=0;}});
 // Tester builds: 5 taps on the title (up to 3 s apart, so automated clicks count) or a ?unlock=1 / #unlock=1 link.
 // `npm run build:release` makes TEST_BUILD false, which turns all of this off for the store app.
-const TEST_BUILD="beta"!=="release";
+const TEST_BUILD="beta"==="beta"; // fails closed: only a build marked beta gets tester tools
 function testerUnlock(){prog.all=true;prog.testLock=false;saveProg();if(typeof updateStars=="function")updateStars();toast("Tester mode: all levels open");}
 try{if(TEST_BUILD&&/[?&#]unlock=1\b/.test(location.search+location.hash))testerUnlock();}catch(e){}
 // ?lock=1 turns tester mode off again (stars kept), so chapter star gates show; ?fresh=1 starts over as a brand-new player
-try{const q=location.search+location.hash;
+// Store builds ignore both links, so no URL can reset a player's progress (v0.59 review).
+try{const q=TEST_BUILD?location.search+location.hash:"";
   if(/[?&#]fresh=1\b/.test(q)){Object.keys(prog).forEach(k=>delete prog[k]);Object.assign(prog,{v:3,all:false,stars:{},answers:{},trace:{},seen:{},plays:{},highest:0,total:0,noAds:false,sinceAd:0,lastAd:0,hintDay:"",hintsLeft:0,bonusHints:0});saveProg();store.set("cur",null);setTimeout(()=>toast("Fresh start: progress cleared"),400);}
   else if(/[?&#]lock=1\b/.test(q)){prog.all=false;prog.testLock=true;saveProg();setTimeout(()=>toast("Tester mode off: chapter star goals are on"),400);}
   // Test builds open every level by default (Alan, Oct 14: testers lose progress and need to pick any level).
@@ -1593,7 +1596,9 @@ function pathSegments(p,skipCell){
 }
 
 let frameNow=0;
-function draw(now){frameNow=now;
+// With the system "reduce motion" setting the ambient motion holds still (flowing light, pulses, bobbing critters, pool
+// breathing, marching dashes); one-off feedback still plays out in real time and the lesson finger still moves (v0.59 review).
+function draw(now){const live=now;if(calm())now=0;frameNow=now;
   const W=cs*G.w,H=cs*G.h;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   // riverbed (pre-drawn once per board) + moving light caustics
@@ -1638,7 +1643,7 @@ function draw(now){frameNow=now;
       drawStroke(s.pts,s.color,lw,glow,s.d0);
     });
   });
-  G.cells.forEach((c,i)=>{if(c.t==="bridge")drawBridge(i,now);});
+  G.cells.forEach((c,i)=>{if(c.t==="bridge")drawBridge(i,live);});
   later.forEach(s=>{ // over the bridge: dark casing so it reads as passing over
     drawStroke(s.pts,s.color,lw*.7,glow*.6,s.d0); // slimmer on the deck so the planks and rails show
   });
@@ -1650,7 +1655,7 @@ function draw(now){frameNow=now;
     ctx.save();ctx.globalAlpha=.45;ctx.setLineDash([cs*.06,cs*.12]);ctx.lineDashOffset=-now/40;ctx.lineCap="round";ctx.strokeStyle=color;ctx.lineWidth=cs*.07;
     ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.restore();
     if(i+1===path.length-1){
-      const exit=path[i+1],d=stubDir(path,i),t=Math.min(1,(now-(popAt[p+":"+exit]||0))/350),ease=1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2); // pops out with a little overshoot
+      const exit=path[i+1],d=stubDir(path,i),t=Math.min(1,(live-(popAt[p+":"+exit]||0))/350),ease=1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2); // pops out with a little overshoot
       const len=cs*.5*ease,tip=[b[0]+d[0]*len,b[1]+d[1]*len],pulse=.5+.5*Math.sin(now/200);
       drawStroke([b,tip],color,lw*.9,glow,0);
       ctx.save();ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=cs*.3;ctx.beginPath();ctx.arc(tip[0],tip[1],cs*(.1+.03*pulse),0,Math.PI*2);ctx.fill();ctx.restore();
@@ -1662,9 +1667,9 @@ function draw(now){frameNow=now;
     ctx.beginPath();ctx.arc(cx,cy,cs*(.2+.03*pulse),0,Math.PI*2);ctx.fill();ctx.restore();
   });
   // board wash: the whole pond briefly takes on the new color
-  if(wash){const a=(now-wash.t)/900;if(a>=1)wash=null;else{ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=hexA(COLORS[wash.color],wash.strength*Math.sin(a*Math.PI));ctx.fillRect(0,0,W,H);ctx.restore();}}
-  sparks=sparks.filter(s=>now-s.t<(s.big?1600:900));
-  sparks.forEach(s=>{const dur=s.big?1600:700,sc=s.big?2.6:1;const a=Math.max(0,(now-s.t)/dur);const [cx,cy]=C(s.cell);ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle=COLORS[s.color];ctx.lineWidth=cs*.06;ctx.beginPath();for(let r=0;r<3;r++){const ar=Math.max(0,a-r*.15);if(ar>0){ctx.globalAlpha=(1-ar)*(1-r*.25);ctx.beginPath();ctx.arc(cx,cy,cs*(.2+ar*.9*sc),0,Math.PI*2);ctx.stroke();}}ctx.globalAlpha=1-a;if(s.big){ctx.globalAlpha=(1-a)*.35;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx,cy,cs*(.3+a*1.6),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1-a;}
+  if(wash){const a=(live-wash.t)/900;if(a>=1)wash=null;else{ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=hexA(COLORS[wash.color],wash.strength*Math.sin(a*Math.PI));ctx.fillRect(0,0,W,H);ctx.restore();}}
+  sparks=sparks.filter(s=>live-s.t<(s.big?1600:900));
+  sparks.forEach(s=>{const dur=s.big?1600:700,sc=s.big?2.6:1;const a=Math.max(0,(live-s.t)/dur);const [cx,cy]=C(s.cell);ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle=COLORS[s.color];ctx.lineWidth=cs*.06;ctx.beginPath();for(let r=0;r<3;r++){const ar=Math.max(0,a-r*.15);if(ar>0){ctx.globalAlpha=(1-ar)*(1-r*.25);ctx.beginPath();ctx.arc(cx,cy,cs*(.2+ar*.9*sc),0,Math.PI*2);ctx.stroke();}}ctx.globalAlpha=1-a;if(s.big){ctx.globalAlpha=(1-a)*.35;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx,cy,cs*(.3+a*1.6),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1-a;}
     for(let k=0;k<8;k++){const ang=k*Math.PI/4;ctx.fillStyle=COLORS[s.color];ctx.beginPath();ctx.arc(cx+Math.cos(ang)*cs*(.25+a*.45*sc),cy+Math.sin(ang)*cs*(.25+a*.45*sc),cs*(s.big?.06:.035),0,Math.PI*2);ctx.fill();}ctx.restore();});
   // nests
   const st=nestStatus(G,paths,col);
@@ -1736,21 +1741,21 @@ function draw(now){frameNow=now;
     G.sources.forEach(s=>{const [x,y]=C(s.i);drawMarks(x+cs*.27,y+cs*.31,s.mask,cs*.15);});
     G.cells.forEach((c,i)=>{if(c.t==="filter"){const [x,y]=C(i);drawMarks(x+cs*.24,y+cs*.3,c.f,cs*.15);}});
   }
-  drawSurface(now);drawStubs(now);drawHints(now);drawToolHint(now);drawLesson(now);
+  drawSurface(now);drawStubs(now);drawHints(now);drawToolHint(live);drawLesson(live);
   // active tip
   if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
     ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
   // fireworks particles
-  parts=parts.filter(q=>now-q.t0<q.life);
-  parts.forEach(q=>{const t=(now-q.t0)/1000;if(t<0)return;const al=1-(now-q.t0)/q.life;
+  parts=parts.filter(q=>live-q.t0<q.life);
+  parts.forEach(q=>{const t=(live-q.t0)/1000;if(t<0)return;const al=1-(live-q.t0)/q.life;
     if(q.ring){ // a broken half-ring of foam bulging back from the obstacle
       const a0=Math.atan2(-q.uy,-q.ux),rr=cs*(.12+.38*(1-al));ctx.save();ctx.strokeStyle=q.c;ctx.globalAlpha=al*.8;ctx.lineWidth=cs*.035*al+1;ctx.lineCap="round";
       for(let j=-2;j<=2;j++){const a=a0+j*.42;ctx.beginPath();ctx.arc(q.x,q.y,rr*(1+.08*((j*7)%3)),a-.16,a+.16);ctx.stroke();}ctx.restore();return;}
     const x=q.x+q.vx*t,y=q.y+q.vy*t+cs*(q.g||1.6)*t*t;
     ctx.save();ctx.globalCompositeOperation="lighter";ctx.fillStyle=q.c;ctx.globalAlpha=al;ctx.beginPath();ctx.arc(x,y,q.r||cs*.045,0,Math.PI*2);ctx.fill();ctx.restore();});
-  drawToolFx(now);
+  drawToolFx(live);
   // win shimmer
-  if(won){const a=Math.min(1,(now-wonAt)/600);ctx.fillStyle=`rgba(255,240,200,${.12*Math.sin(a*Math.PI)})`;ctx.fillRect(0,0,W,H);}
+  if(won){const a=Math.min(1,(live-wonAt)/600);ctx.fillStyle=`rgba(255,240,200,${.12*Math.sin(a*Math.PI)})`;ctx.fillRect(0,0,W,H);}
 }
 // one bad frame must never stop the game: schedule the next frame first, and reset the canvas state if a draw throws
 let drawErr=0;
