@@ -94,6 +94,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card.g .year{color:var(--good)} .card.n .year{color:var(--near)} .card.m .year{color:var(--miss)}
 .card.hinted::after{content:"💡";position:absolute;top:4px;left:calc(var(--card-h) - 22px);font-size:15px}
 .card.flip{animation:flip .6s ease}
+.card.flip .year{animation:yearIn .6s ease}
+@keyframes yearIn{0%,50%{opacity:0}100%{opacity:1}}
 @keyframes flip{0%{transform:perspective(700px) rotateX(0)}50%{transform:perspective(700px) rotateX(90deg)}100%{transform:perspective(700px) rotateX(0)}}
 .card.bump{animation:bump .35s ease}
 @keyframes bump{50%{transform:scale(1.04)}}
@@ -146,6 +148,7 @@ body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!importan
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
 footer{font-size:12px;color:var(--muted);text-align:center;margin-top:auto}
 textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);color:var(--ink);box-sizing:border-box}
+@media (min-width:900px) and (pointer:fine){.app{max-width:600px}.ctext{font-size:17px;line-height:1.3}.ctext small{font-size:13.5px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* v2 additions: clue chips between cards, hint tags, score dial, tiers, reveal panel */
 .chip{position:absolute;left:calc(var(--card-h) + 18px);height:22px;min-width:22px;padding-inline:7px;border-radius:999px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:4px;z-index:4;pointer-events:none;box-sizing:border-box;border:1.5px solid var(--paper);transform:translateY(-50%)}
@@ -830,7 +833,7 @@ function feedbackLine(){
   if(G.attempt<2){h.textContent="Drag the cards, or use the arrows.";return}
   let ok=0,no=0,un=0;
   for(let i=0;i<G.order.length-1;i++){const a=G.order[i],b=G.order[i+1];let v=G.known[a+">"+b];if(v===undefined&&G.known[b+">"+a]!==undefined)v=!G.known[b+">"+a];v===undefined?un++:v?ok++:no++}
-  h.innerHTML=`${G.lastOk!=null?`<b>Your last check (try ${G.attempt-1}):</b> ${G.lastOk} of ${G.order.length-1} neighbors were in order.<br>`:""}As the cards sit now: ${ok} ✓ · ${no} ✗${un?` · ${un} not checked yet`:""}. A ✓ means that pair is the right way round, not that a card is in its final spot.`;
+  h.innerHTML=`${G.lastOk!=null?`<b>Try ${G.attempt-1} result:</b> ${G.lastOk} of ${G.order.length-1} neighbors were in order.<br>`:""}<b>Tags on the cards</b> show what your checks proved about the pairs that sit together now: ${ok} ✓ · ${no} ✗${un?` · ${un} not checked yet`:""}. Moving cards doesn't use a try. A ✓ means that pair is the right way round, not that a card is in its final spot.`;
 }
 
 // ---------- drag ----------
@@ -926,16 +929,10 @@ function finish(){
   if(G.kind==="tutorial"){S.tutorialDone=true;save();track("tutorial_done")}
   else track("puzzle_done",{mode:G.kind,puzzle:G.n||0,score:G.score,tries:Math.min(G.attempt,TRIES),hints:G.hintsUsed,placed:G.placed.length,gave_up:G.gaveUp?1:0});
   list.querySelectorAll(".chip").forEach(c=>c.remove());
-  G.order.forEach((id,i)=>{const el=cardEls[id];setTimeout(()=>{el.classList.add("done","flip",pos[i]);countUp(el.querySelector(".year"),yr(id));buzz(12)},i*320)});
+  G.order.forEach((id,i)=>{const el=cardEls[id];setTimeout(()=>{el.classList.add("done","flip",pos[i]);buzz(12)},i*320)});
   $("#play").hidden=true;
   setTimeout(()=>{G.order=t;layout();if(G.score>=90||G.milestone)fireworks();showResult()},G.order.length*320+800);
   persist();
-}
-// The year spins up to its value as each card flips.
-function countUp(el,y){
-  if(!el||matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  const s=y-60,t0=performance.now(),D=650;
-  const f=t=>{const p=Math.min(1,(t-t0)/D),e=1-Math.pow(1-p,3);el.textContent=Math.round(s+(y-s)*e);if(p<1)requestAnimationFrame(f)};f(t0);
 }
 function recordDaily(){
   const n=G.n;let note="";
@@ -967,8 +964,9 @@ function surpriseCard(){ // the card you had furthest from its spot (or the olde
 function showResult(){
   const r=$("#result"),n=G.ids.length;$("#board").after($("#stories"));
   if(G.kind==="tutorial"){
-    r.innerHTML=`<h2>${G.marks.every(m=>m==="g")?"You've got it!":"That's the idea!"}</h2>
+    r.innerHTML=`<p class="milestone" style="margin:0">Lesson complete</p><h2>${G.marks.every(m=>m==="g")?"You've got it!":"That's the idea!"}</h2>
       <p style="margin:0">In the real game you get 5 cards and 3 tries. After each try, a green ✓ between two cards means that pair is the right way round, and a red ✗ means it's reversed.</p>
+      <p style="margin:0"><b>Now play today's 5-card puzzle.</b> This one is scored and starts your streak.</p>
       <div class="row"><button class="btn primary" id="go">Play today's puzzle</button></div>`;
     r.hidden=false;showStories(sortIds(G.ids)[0]);$("#go").onclick=()=>{tutorial=false;setMode("daily")};return;
   }
@@ -1050,7 +1048,7 @@ function tick(){clearInterval(cdTimer);const f=()=>{const el=$("#cd");if(!el)ret
 
 // ---------- screens ----------
 function render(){
-  $("#result").hidden=true;$("#stories").hidden=true;$("#board").after($("#stories"));$("#play").hidden=false;stopPicking();
+  $("#sr").textContent="";$("#result").hidden=true;$("#stories").hidden=true;$("#board").after($("#stories"));$("#play").hidden=false;stopPicking();
   if(!G.done)hideBanner();
   $("#hintLine").textContent=G.kind==="tutorial"?"The Gutenberg Bible is the oldest. Drag it to the top, then check.":"Drag the cards, or use the arrows.";
   $("#diff").hidden=G.kind!=="practice";$("#pill").hidden=G.kind==="practice";
@@ -1070,6 +1068,7 @@ function render(){
 // keep the order the player locked in, for the near-miss line and reloads
 const _finish=finish;finish=function(){G.finalOrder=G.order.slice();_finish()};
 function setMode(m){
+  $("#sr").textContent=""; // a move or check line from the last puzzle must not carry over
   ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",m===t.toLowerCase()));
   const game=m==="daily"||m==="practice";
   $("#meta").hidden=$("#board").hidden=!game;$("#play").hidden=!game;$("#result").hidden=true;$("#stories").hidden=true;
