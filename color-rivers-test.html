@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.70 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.71 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -707,7 +707,11 @@ function breakFx(cells){const now=performance.now(),saw=G.tool==="saw",cols=saw?
     parts.push({x:cx,y:cy,vx:Math.cos(a)*v,vy:Math.sin(a)*v-cs*1.2,t0:now+n*60,life:600+Math.random()*500,c:cols[k%4],r:cs*(.03+Math.random()*.05),g:6});}
     parts.push({ring:true,x:cx,y:cy,t0:now+n*60,life:520,c:"#dff1ff",ux:0,uy:1});});
   splishSound();buzz([30,20,40]);}
-function updateInk(){const ink=inkOf(paths);$("inkNow").textContent=`Ink ${ink}`;$("inkPar").textContent=`★★★ at ${G.par} ink or less`;}
+function updateInk(){const ink=inkOf(paths),L=bonus&&bonus.long;
+  // a Long River scores both boards together, so show both while playing (Cooper, v0.69)
+  if(L&&longRun){const up=L.stage?longRun.upInk:ink,down=L.stage?ink:(longRun.down&&longRun.colors?inkOf(longRun.down):0);
+    $("inkNow").textContent=`Ink ${up} up + ${down} down = ${up+down}`;$("inkPar").textContent=`★★★ at ${longPar(L.k)} or less`;return;}
+  $("inkNow").textContent=`Ink ${ink}`;$("inkPar").textContent=`★★★ at ${G.par} ink or less`;}
 function updateStars(){$("totalStars").textContent=starSum(prog.stars);}
 
 // The board takes whatever height the rest of the screen leaves, so Hint/Restart/Levels always fit (Muse, v0.30).
@@ -933,7 +937,8 @@ let lastCrossColors="";
 function saveDraft(clear){
   // the Daily keeps its own draft, so a reload mid-Daily (a phone call) comes back to it and the level draft stays (Nikola, v0.57)
   // a challenge river keeps its own draft, like the Daily, so a reload mid-challenge keeps the drawing (Cooper, v0.64)
-  if(bonus&&bonus.long)return; // the Long River sample keeps no draft
+  // a Long River keeps both boards, what was sent down and each board's Undo, so a reload picks it up (Cooper, v0.69)
+  if(bonus&&bonus.long){if(!clear)longSave();return;}
   if(bonus){store.set("cdraw",clear||won?null:{id:bonus.id,paths,undo:undoStack.slice(-20)});return;}
   if(daily){store.set("ddraw",clear||won?null:{day:daily.day,paths,undo:undoStack.slice(-20)});return;}
   store.set("draw",clear||won?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null,
@@ -1138,18 +1143,28 @@ function longLevel(k,stage,colors){const R=LONGS[k],part=stage?R.down:R.up;let i
   return {id:R.id,name:R.name,tip:part.tip,map,sol:part.sol,mix:true,long:{k,stage}};}
 const longOpen=R=>chalOpen({after:R.after});
 const longPar=k=>{const R=LONGS[k];return parseLevel({map:R.up.map,sol:R.up.sol}).par+parseLevel({map:R.down.map.map(r=>r.replace(/\*/g,"Y")),sol:R.down.sol}).par;};
+// the board being left keeps its drawing and its Undo (Cooper, v0.69: Undo was lost on every switch)
+function longSync(){if(!longRun||!bonus||!bonus.long)return;const d=paths.map(p=>p.slice()),u=undoStack.slice(-20);
+  if(bonus.long.stage){longRun.down=d;longRun.downUndo=u;}else{longRun.up=d;longRun.upUndo=u;}}
+function longSave(){longSync();const L=bonus.long;store.set("ldraw",won&&L.stage?null:{...longRun,id:LONGS[L.k].id,stage:L.stage});}
+// from the River map or a reload: an unfinished Long River carries on where it was left
+function resumeLong(k){const ld=store.get("ldraw",null);
+  if(ld&&ld.id===LONGS[k].id&&ld.k===k){longRun={k,up:ld.up||null,colors:Array.isArray(ld.colors)?ld.colors:null,down:ld.down||null,upInk:ld.upInk||0,upUndo:ld.upUndo,downUndo:ld.downUndo};
+    startLong(k,ld.stage&&longRun.colors?1:0);}
+  else{longRun=null;startLong(k);}}
 function startLong(k,stage=0){
   if(!longRun||longRun.k!==k)longRun={k,up:null,colors:null,down:null,upInk:0};
-  if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined);}
-  else{bonus=longLevel(k,0);startLevel("bonus",longRun.up||undefined);}
+  if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined,null,{undo:longRun.downUndo});}
+  else{bonus=longLevel(k,0);startLevel("bonus",longRun.up||undefined,null,{undo:longRun.upUndo});}
+  updateInk();
   if(!stage&&!prog.seen.long){prog.seen.long=1;saveProg();teachOnce("long","Long River: send every stream to an outlet at the bottom. The colours you send down become the critters on the board below.");}
 }
 function longWon(ink){const L=bonus.long,k=L.k;
   if(!L.stage){const colors=nestStatus(G,paths,col).map(s=>s.color),same=longRun.colors&&longRun.colors.join()===colors.join();
-    longRun.up=paths.map(p=>p.slice());longRun.upInk=ink;if(!same)longRun.down=null;longRun.colors=colors;
+    longRun.up=paths.map(p=>p.slice());longRun.upUndo=undoStack.slice(-20);longRun.upInk=ink;if(!same){longRun.down=null;longRun.downUndo=null;}longRun.colors=colors;
     toast("The colours flow downstream…");const at=bonus;setTimeout(()=>{if(bonus===at&&won)startLong(k,1);},900);return;}
   const total=longRun.upInk+ink,par=longPar(k),s=starsFor(total,par),R=LONGS[k],first=!prog.stars[R.id];
-  prog.stars[R.id]=Math.max(prog.stars[R.id]||0,s);saveProg();store.set("onChal",null);
+  prog.stars[R.id]=Math.max(prog.stars[R.id]||0,s);saveProg();store.set("onChal",null);store.set("ldraw",null);
   const at=bonus;setTimeout(()=>{if(bonus!==at||!won)return;const over=total-par;
     const note=s===3?`Perfect river! ${total} ink across both boards.`:over<=2?`So close: just ${over} ink over. Three stars at ${par}.`:`Solved in ${total} ink across both boards. Reach ${par} for three stars.`;
     openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>
@@ -1158,7 +1173,7 @@ function longWon(ink){const L=bonus.long,k=L.k;
 }
 // the other board, small, under the tip: upstream shows what is flowing down right now; downstream offers the way back up
 function updatePeek(){const el=$("longPeek"),L=bonus&&bonus.long;if(!el||!L)return;const R=LONGS[L.k];
-  if(L.stage){el.innerHTML=`<button class="showme" id="goUp">↑ Back upstream</button> <small>Change what flows down. Your drawing here is kept.</small>`;$("goUp").onclick=()=>{longRun.down=paths.map(p=>p.slice());startLong(L.k,0);};return;}
+  if(L.stage){el.innerHTML=`<button class="showme" id="goUp">↑ Back upstream</button> <small>Change what flows down. Your drawing here is kept.</small>`;$("goUp").onclick=()=>{longSync();startLong(L.k,0);};return;}
   const st=nestStatus(G,paths,col),w=R.down.map[0].length;let i=0;
   const cell=ch=>{if(ch==="#")return `<i style="background:#5d6b78"></i>`;
     if(ch==="*"){const c=st[i++].color,ok=c>0&&c!==7;return `<i class="in" style="${ok?`background:${COLORS[c]}`:""}">${ok?"":"?"}</i>`;}
@@ -1167,7 +1182,7 @@ function updatePeek(){const el=$("longPeek"),L=bonus&&bonus.long;if(!el||!L)retu
   const back=longRun&&longRun.colors&&isWin(G,paths,col)&&st.map(s=>s.color).join()===longRun.colors.join();
   el.innerHTML=`<small>Downstream needs:</small><div class="peek" style="grid-template-columns:repeat(${w},1fr)">${R.down.map.join("").split("").map(cell).join("")}</div>`+
     (back?`<button class="showme" id="goDown">↓ Back downstream</button>`:"");
-  if(back)$("goDown").onclick=()=>{longRun.up=paths.map(p=>p.slice());longRun.upInk=inkOf(paths);startLong(L.k,1);};
+  if(back)$("goDown").onclick=()=>{longSync();longRun.upInk=inkOf(paths);startLong(L.k,1);};
 }
 function resumeLevel(i){const dr=store.get("draw",null);if(dr&&dr.id===ID(i))startLevel(i,dr.paths,dr.cut,dr);else startLevel(i);}
 function showDailyWin(s,ink){
@@ -1199,13 +1214,13 @@ function showLevels(){
     <svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" class="bank"/><path d="${d}" class="water"/><path d="${d}" class="shine"/></svg>${stops}</div></div>
     ${CHALLENGES.length?`<div class="chap"><b>✦ Challenge rivers</b><span>★ ${CHALLENGES.reduce((a,c)=>a+(prog.stars[c.id]||0),0)}/${CHALLENGES.length*3}</span></div>
     <p class="chnote">Optional extra-hard rivers. One opens after each of these chapters; skip any you like.</p>
-    <div class="grid five">${CHALLENGES.map((c,k)=>{const o=chalOpen(c);return `<button class="lv chal${o&&!prog.stars[c.id]?" new":""}" data-chal="${k}" ${o?`title="${c.name}"`:"disabled"} aria-label="Challenge river ${k+1}${o?`: ${c.name}`:`, opens after Chapter ${chNo(c.after)}`}">${o?`✦${k+1}`:"🔒"}<small>${o?(prog.stars[c.id]?"★".repeat(prog.stars[c.id]):"New"):`Ch ${chNo(c.after)}`}</small></button>`;}).join("")}</div>${(()=>{const open=CHALLENGES.map((c,k)=>chalOpen(c)?`<span style="white-space:nowrap">${k+1} ${c.name}</span>`:null).filter(Boolean);return open.length?`<p class="chalNames">${open.join(" · ")}</p>`:"";})()}`:""}
+    <div class="grid five">${CHALLENGES.map((c,k)=>{const o=chalOpen(c);return `<button class="lv chal${o&&!prog.stars[c.id]&&!prog.plays[c.id]?" new":""}" data-chal="${k}" ${o?`title="${c.name}"`:"disabled"} aria-label="Challenge river ${k+1}${o?`: ${c.name}`:`, opens after Chapter ${chNo(c.after)}`}">${o?`✦${k+1}`:"🔒"}<small>${o?(prog.stars[c.id]?"★".repeat(prog.stars[c.id]):"New"):`Ch ${chNo(c.after)}`}</small></button>`;}).join("")}</div>${(()=>{const open=CHALLENGES.map((c,k)=>chalOpen(c)?`<span style="white-space:nowrap">${k+1} ${c.name}</span>`:null).filter(Boolean);return open.length?`<p class="chalNames">${open.join(" · ")}</p>`:"";})()}`:""}
     ${LONGS.length?`<div class="chap"><b>〰 Long River</b><span>★ ${LONGS.reduce((a,R)=>a+(prog.stars[R.id]||0),0)}/${LONGS.length*3}</span></div>
     <p class="chnote">New: two boards, one river. The colours you send down become the critters on the board below.</p>
-    <div class="grid five">${LONGS.map((R,k)=>{const o=longOpen(R);return `<button class="lv chal${o&&!prog.stars[R.id]?" new":""}" data-long="${k}" ${o?`title="${R.name}"`:"disabled"} aria-label="Long River ${k+1}${o?`: ${R.name}`:`, opens after Chapter ${chNo(R.after)}`}">${o?`〰${k+1}`:"🔒"}<small>${o?(prog.stars[R.id]?"★".repeat(prog.stars[R.id]):"New"):`Ch ${chNo(R.after)}`}</small></button>`;}).join("")}</div>`:""}
+    <div class="grid five">${LONGS.map((R,k)=>{const o=longOpen(R);return `<button class="lv chal${o&&!prog.stars[R.id]&&!prog.plays[R.id]?" new":""}" data-long="${k}" ${o?`title="${R.name}"`:"disabled"} aria-label="Long River ${k+1}${o?`: ${R.name}`:`, opens after Chapter ${chNo(R.after)}`}">${o?`〰${k+1}`:"🔒"}<small>${o?(prog.stars[R.id]?"★".repeat(prog.stars[R.id]):"New"):`Ch ${chNo(R.after)}`}</small></button>`;}).join("")}</div>`:""}
     <button class="ghost" id="close">Close</button>`);
   document.querySelectorAll("[data-chal]").forEach(b=>b.onclick=()=>{closeSheet();startBonus(+b.dataset.chal);});
-  document.querySelectorAll("[data-long]").forEach(b=>b.onclick=()=>{closeSheet();longRun=null;startLong(+b.dataset.long);});
+  document.querySelectorAll("[data-long]").forEach(b=>b.onclick=()=>{closeSheet();resumeLong(+b.dataset.long);});
   document.querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>showChapter(+b.dataset.ch));
   if($("goDaily"))$("goDaily").onclick=()=>{closeSheet();startDaily();};
   $("close").onclick=closeSheet;
@@ -1968,10 +1983,12 @@ function boot(data){
   if(ci<0&&cur!=null)ci=prog.highest||0; // that level was retired: pick up after the furthest level played, not at Level 1 (Nikola, v0.57)
   const start=Math.max(0,data&&Number.isInteger(data.lv)?data.lv:Math.min(ci>=0?ci:0,openCount()-1)),dr=store.get("draw",null),mine=dr&&dr.id===ID(start)&&!(data&&data.paths);
   const oc=store.get("onChal",null),onChal=!(data&&Number.isInteger(data.lv))&&oc?CHALLENGES.findIndex(c=>c.id===oc&&chalOpen(c)):-1;
+  const onLong=!(data&&Number.isInteger(data.lv))&&oc?LONGS.findIndex(R=>R.id===oc&&longOpen(R)):-1;
   const dd=store.get("ddraw",null),onDaily=!(data&&Number.isInteger(data.lv))&&store.get("onDaily",null)===dayNum()&&dailyOpen(); // not on a live-update snapshot
   if(data&&data.daily&&dailyOpen()){daily=dailyFor(dayNum());startLevel("daily",data.paths);}
   else if(onDaily){lv=start;startDaily(dd&&dd.day===dayNum()?dd.paths:null,dd);} // reloaded mid-Daily: back to it, drawing and all
   else if(onChal>=0){lv=start;startBonus(onChal);} // reloaded mid-challenge: back to it, drawing and all
+  else if(onLong>=0){lv=start;resumeLong(onLong);} // reloaded mid-Long River: both boards come back (Cooper, v0.69)
   else startLevel(start,mine?dr.paths:data&&data.paths,mine?dr.cut:null,mine?dr:null);
   requestAnimationFrame(loop);
 }
