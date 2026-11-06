@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.6.5 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.6.6 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -135,6 +135,7 @@ body:not(.playing) #scene{display:none}
 .card .scene svg{display:block;width:100%;height:auto;border-radius:16px;margin:6px 0}
 .glow{animation:glow 1.1s ease-in-out infinite}
 @keyframes glow{50%{box-shadow:0 0 0 6px rgba(240,180,41,.55),var(--shadow)}}
+#btnUndo.glow{outline:3px solid #f0b429;outline-offset:2px} /* v0.6.6 (Muse r7): a steady gold ring, so the Undo nudge shows even in a still screenshot */
 /* overlay */
 .overlay{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(24,52,46,.18);z-index:10;pointer-events:none}
 .overlay .card{pointer-events:auto}
@@ -226,7 +227,7 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.6.5 prototype</div>
+    <div class="ver" id="ver">Ripple v0.6.6 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -1044,10 +1045,10 @@ function homeSet() {
 }
 function afterTapNotes(before) { // v0.6.4 (Muse r6): say when a home critter gets knocked off, and when the pond can't be finished from here
   var now = homeSet(), off = Object.keys(before).filter(function (k) { return !(k in now); });
-  if (off.length && !seen.knockOff) { seen.knockOff = true; store.set('seen', seen); toast('Ripples can push a critter back off its pad. Plan the order.', 2800); return; }
-  if (G.stuckSaid || G.level.w * G.level.h > 25) return; // small ponds only, so the check stays instant
-  var sol = solveNow();
-  if (!sol) { G.stuckSaid = true; toast('No way home from here. Try Undo.', 2800); $('btnUndo').classList.add('glow'); }
+  var stuck = !G.stuckSaid && G.level.w * G.level.h <= 25 && !solveNow(); // small ponds only, so the check stays instant
+  if (stuck) { G.stuckSaid = true; $('btnUndo').classList.add('glow'); }
+  if (off.length && !seen.knockOff) { seen.knockOff = true; store.set('seen', seen); toast('Ripples can push a critter back off its pad.' + (stuck ? ' No way home from here now: try Undo.' : ' Plan the order.'), 3200); return; }
+  if (stuck) toast('No way home from here. Try Undo.', 2800);
 }
 function landedHome(before) { // a critter that just reached its pad: one gold ring and a little hop
   var now = homeSet();
@@ -1584,13 +1585,13 @@ function tap(idx, fromSolver) {
     snapFx(res.snapped, RM ? 0 : 200);
     if (!seen.snapOnce && !(G.coach && G.level.intro === 'snap')) { seen.snapOnce = true; store.set('seen', seen); setTimeout(function () { toast('Snap! That cracked reed is gone. Leaves can pass there now.', 2600); }, 450); }
   }
+  var wasHome = homeSet(); // v0.6.6: who was home BEFORE this tap (was read after the move, so landing rings and the knocked-off tip never fired)
   G.hist.push(G.st); G.st = res.state; G.taps++; G.busy = true; G.useBig = false; G.hint = -1; G.hintStage = 0;
   clearHL();
   plop(useBig);
   ripple(idx, useBig);
   var longest = 0;
   var reachDist = {}; res.reached.forEach(function (h) { reachDist[h.i] = h.dist; });
-  var wasHome = homeSet();
   res.moves.forEach(function (mv) {
     var e = G.leafEls[mv.i];
     if (mv.steps === 0) { bump(mv.i, mv.dir); return; }
