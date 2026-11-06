@@ -135,7 +135,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .stop.r .lab i{left:auto;right:0}
 .back{margin:0 0 6px;align-self:flex-start;width:auto}
 .chnote{font-size:12px;opacity:.7;margin:-4px 2px 0;text-align:left}
-.grid.five{grid-template-columns:repeat(5,1fr)}.lv.chal{border-color:rgba(255,210,122,.45);color:var(--lantern)}
+.grid.five{grid-template-columns:repeat(5,1fr)}.lv.chal{border-color:rgba(255,210,122,.45);color:var(--lantern)}.lv.chal.new{box-shadow:0 0 0 2px var(--lantern);}.lv.chal.new small{color:var(--lantern);font-weight:700}.chalNames{font-size:12px;opacity:.8;margin:6px 2px 0;line-height:1.5}
 .adbox{display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 12px;border-radius:14px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 12px,rgba(255,255,255,.02) 12px 24px);border:1.5px dashed rgba(255,255,255,.2)}
 .adbox small{opacity:.7;font-size:12px}.adcount{font-family:var(--display);font-size:30px;color:var(--lantern)}
 .big:disabled{opacity:.45}
@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.64 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.65 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -591,7 +591,7 @@ const SHAPES=["round","square","drop","star","diamond","hex"];
 const LV=()=>daily||bonus||LEVELS[lv]; // the level on the board: a chapter level, today's Daily River or a challenge river
 function startLevel(n,keep,cut,extra){
   if(n==="bonus")daily=null;else{bonus=null;if(n!=="daily"){daily=null;lv=n;}}
-  store.set("onDaily",daily?daily.day:null);
+  store.set("onDaily",daily?daily.day:null);store.set("onChal",bonus?bonus.id:null); // a reload comes back to the Daily or challenge river being played
   const L=LV();G=parseLevel(L);bed=null;toolFx=null; // fresh riverbed picture: a sawn dam must come back on Restart
   if(keep&&cut!=null&&useTool(G,cut)){G.cutAt=cut;bed=null;}
   const fits=keep&&keep.length===G.starts.length&&keep.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length));
@@ -917,7 +917,8 @@ let lastCrossColors="";
 // the draft also keeps the last strokes' Undo history and the lesson step, so a reload picks up exactly where you were
 function saveDraft(clear){
   // the Daily keeps its own draft, so a reload mid-Daily (a phone call) comes back to it and the level draft stays (Nikola, v0.57)
-  if(bonus)return; // a challenge river keeps no draft: a reload goes back to the chapter level
+  // a challenge river keeps its own draft, like the Daily, so a reload mid-challenge keeps the drawing (Cooper, v0.64)
+  if(bonus){store.set("cdraw",clear||won?null:{id:bonus.id,paths,undo:undoStack.slice(-20)});return;}
   if(daily){store.set("ddraw",clear||won?null:{day:daily.day,paths,undo:undoStack.slice(-20)});return;}
   store.set("draw",clear||won?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null,
   undo:undoStack.slice(-20),ls:lesson&&!lesson.note?lesson.i:null});}
@@ -977,7 +978,7 @@ function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":bonus?bonus.id:lv+1,stars:s,ink,hints:hintsUsed});
-  if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg(); // challenge stars stay out of the total and the chapter gates
+  if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg();store.set("onChal",null); // challenge stars stay out of the total and the chapter gates
     setTimeout(()=>{if(bonus===at&&won)showBonusWin(s,ink,first);},800);return;}
   if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
   const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id],ending=lv===LEVELS.length-1&&!prog.stars[id];
@@ -1102,10 +1103,10 @@ function updateDailyBtn(){const b=$("dailyBtn");if(!b)return;b.hidden=!dailyOpen
 function startDaily(keep,extra){if(keep===undefined){const dd=store.get("ddraw",null);if(dd&&dd.day===dayNum()){keep=dd.paths;extra=dd;}}
   daily=dailyFor(dayNum());const k=streakNow();daily.tip+=k?` 🔥 ${k}-day streak: keep it going!`:" Play every day to grow a 🔥 streak.";startLevel("daily",keep,null,extra);}
 // back to a chapter level with its saved drawing, if there is one
-function startBonus(k){bonus=CHALLENGES[k];startLevel("bonus");}
+function startBonus(k){bonus=CHALLENGES[k];const cd=store.get("cdraw",null),mine=cd&&cd.id===bonus.id;startLevel("bonus",mine?cd.paths:undefined,null,mine?cd:null);}
 function showBonusWin(s,ink,first){
-  const k=CHALLENGES.indexOf(bonus),over=ink-G.par,next=CHALLENGES.find((c,j)=>j!==k&&chalOpen(c)&&!prog.stars[c.id]);
-  const note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close: just ${over} ink over. Three stars at ${G.par}.`:`Solved! Three stars at ${G.par} ink.`;
+  const k=CHALLENGES.indexOf(bonus),over=ink-G.par,next=CHALLENGES.map((c,j)=>CHALLENGES[(k+1+j)%CHALLENGES.length]).find(c=>c!==bonus&&chalOpen(c)&&!prog.stars[c.id]); // the next one after this, wrapping round (Cooper, v0.64)
+  const note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close: just ${over} ink over. Three stars at ${G.par}.`:`Solved in ${ink} ink. Reach ${G.par} for three stars.`;
   openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Challenge cleared!":"Cleared again!"}</h3><p>${note}</p>
    <button class="big" id="goBack">Back to Level ${lv+1}</button>${next?`<button class="ghost" id="goChal">Next challenge: ${next.name}</button>`:""}
    <button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
@@ -1142,7 +1143,7 @@ function showLevels(){
     <svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" class="bank"/><path d="${d}" class="water"/><path d="${d}" class="shine"/></svg>${stops}</div></div>
     ${CHALLENGES.length?`<div class="chap"><b>✦ Challenge rivers</b><span>★ ${CHALLENGES.reduce((a,c)=>a+(prog.stars[c.id]||0),0)}/${CHALLENGES.length*3}</span></div>
     <p class="chnote">Optional extra-hard rivers. One opens after each of these chapters; skip any you like.</p>
-    <div class="grid five">${CHALLENGES.map((c,k)=>{const o=chalOpen(c);return `<button class="lv chal" data-chal="${k}" ${o?"":"disabled"} aria-label="Challenge river ${k+1}${o?`: ${c.name}`:`, opens after Chapter ${chNo(c.after)}`}">${o?"✦":"🔒"}<small>${o?("★".repeat(prog.stars[c.id]||0)||"&nbsp;"):`Ch ${chNo(c.after)}`}</small></button>`;}).join("")}</div>`:""}
+    <div class="grid five">${CHALLENGES.map((c,k)=>{const o=chalOpen(c);return `<button class="lv chal${o&&!prog.stars[c.id]?" new":""}" data-chal="${k}" ${o?`title="${c.name}"`:"disabled"} aria-label="Challenge river ${k+1}${o?`: ${c.name}`:`, opens after Chapter ${chNo(c.after)}`}">${o?`✦${k+1}`:"🔒"}<small>${o?(prog.stars[c.id]?"★".repeat(prog.stars[c.id]):"New"):`Ch ${chNo(c.after)}`}</small></button>`;}).join("")}</div>${(()=>{const open=CHALLENGES.map((c,k)=>chalOpen(c)?`<span style="white-space:nowrap">${k+1} ${c.name}</span>`:null).filter(Boolean);return open.length?`<p class="chalNames">${open.join(" · ")}</p>`:"";})()}`:""}
     <button class="ghost" id="close">Close</button>`);
   document.querySelectorAll("[data-chal]").forEach(b=>b.onclick=()=>{closeSheet();startBonus(+b.dataset.chal);});
   document.querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>showChapter(+b.dataset.ch));
@@ -1905,9 +1906,11 @@ function boot(data){
   const cur=store.get("cur",null);let ci=typeof cur==="string"?IDX(cur):Number.isInteger(cur)?cur:-1; // older saves stored the position
   if(ci<0&&cur!=null)ci=prog.highest||0; // that level was retired: pick up after the furthest level played, not at Level 1 (Nikola, v0.57)
   const start=Math.max(0,data&&Number.isInteger(data.lv)?data.lv:Math.min(ci>=0?ci:0,openCount()-1)),dr=store.get("draw",null),mine=dr&&dr.id===ID(start)&&!(data&&data.paths);
+  const oc=store.get("onChal",null),onChal=!(data&&Number.isInteger(data.lv))&&oc?CHALLENGES.findIndex(c=>c.id===oc&&chalOpen(c)):-1;
   const dd=store.get("ddraw",null),onDaily=!(data&&Number.isInteger(data.lv))&&store.get("onDaily",null)===dayNum()&&dailyOpen(); // not on a live-update snapshot
   if(data&&data.daily&&dailyOpen()){daily=dailyFor(dayNum());startLevel("daily",data.paths);}
   else if(onDaily){lv=start;startDaily(dd&&dd.day===dayNum()?dd.paths:null,dd);} // reloaded mid-Daily: back to it, drawing and all
+  else if(onChal>=0){lv=start;startBonus(onChal);} // reloaded mid-challenge: back to it, drawing and all
   else startLevel(start,mine?dr.paths:data&&data.paths,mine?dr.cut:null,mine?dr:null);
   requestAnimationFrame(loop);
 }
