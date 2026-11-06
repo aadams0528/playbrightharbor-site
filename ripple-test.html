@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.6.6 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.6.7 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -148,6 +148,12 @@ body:not(.playing) #scene{display:none}
 #winCard .card{padding:14px 14px 14px}
 #winCard .wtop{display:flex;gap:12px;align-items:center;text-align:left;margin-bottom:10px} /* v0.6.4: compact win card, visitor beside the words */
 #winCard .wtext{flex:1;min-width:0}
+#winCard.side{align-items:center;justify-content:flex-end} /* v0.6.7: room beside the pond, so the card never covers it */
+#winCard.side .card{max-width:var(--sideW,380px)}
+#winCard.compact #winTip,#winCard.compact .visitor .vsub{display:none}
+#winCard.compact .visitor svg{width:56px;height:56px}
+#winCard.compact .visitor{width:72px}
+.boardWrap.lift{transition:transform .35s ease-out;pointer-events:none} /* a lifted pond never blocks the menu buttons */
 #winCard .wtext h2{margin:0 0 2px;font-size:21px}
 #winCard .wtext .stars{justify-content:flex-start;margin:2px 0 4px}
 #winCard .wtext p{margin:2px 0;font-size:14px;line-height:1.3}
@@ -227,7 +233,7 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.6.6 prototype</div>
+    <div class="ver" id="ver">Ripple v0.6.7 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -977,6 +983,7 @@ function drawScene(T) {
 var sceneTimer = null;
 function sceneSoon() { clearTimeout(sceneTimer); sceneTimer = setTimeout(function () { if (G.level && document.body.classList.contains('playing')) drawScene(THEMES[G.theme] || THEMES.spring); }, 60); }
 window.addEventListener('resize', sceneSoon);
+window.addEventListener('resize', function () { if (!$('winCard').classList.contains('hidden')) setTimeout(placeWinCard, 120); });
 try { new ResizeObserver(sceneSoon).observe(document.querySelector('.boardWrap')); } catch (e) {} // the lesson card and stone bar change the board's room
 var LOOK_ICON = { // tiny corner marks on the pond tiles (svg, 16x16)
   spring: '<svg viewBox="-8 -8 16 16"><g fill="#f4a6c3"><circle cx="0" cy="-4" r="3.2"/><circle cx="3.8" cy="-1.2" r="3.2"/><circle cx="2.4" cy="3.3" r="3.2"/><circle cx="-2.4" cy="3.3" r="3.2"/><circle cx="-3.8" cy="-1.2" r="3.2"/></g><circle r="2.2" fill="#f6c945"/></svg>',
@@ -1265,6 +1272,17 @@ function hlCell(idx, strong) {
     el('rect', { x: p.x - 48, y: p.y - 48, width: 96, height: 96, rx: 28, fill: 'none', stroke: '#fff3a0', 'stroke-width': 6, class: 'hl' }, layers.hl);
   }
 }
+function reachCells(idx) { // the + a splash reaches: up to 2 cells in each straight line
+  var w = G.level.w, r0 = (idx / w) | 0, c0 = idx % w, out = [];
+  L.DIRS.forEach(function (d) { for (var k = 1; k <= 2; k++) { var r = r0 + d[0] * k, c = c0 + d[1] * k; if (r < 0 || r >= G.level.h || c < 0 || c >= w) break; out.push(r * w + c); } });
+  return out;
+}
+function reachMarks(idx, layer) {
+  var g = el('g', { class: 'reachmarks' }, layer);
+  reachCells(idx).forEach(function (i) { var p = cellXY(i); el('rect', { x: p.x - 40, y: p.y - 40, width: 80, height: 80, rx: 22, fill: '#bff3ff', 'fill-opacity': 0.16, stroke: '#e8fbff', 'stroke-width': 4, 'stroke-dasharray': '10 8' }, g); });
+  var c = cellXY(idx); el('circle', { cx: c.x, cy: c.y, r: 12, fill: '#e8fbff' }, g);
+  return g;
+}
 function hlReed(e) {
   var w = G.level.w, a = e[0] * w + e[1], b = e[2] === 'E' ? a + 1 : a + w, pa = cellXY(a), pb = cellXY(b);
   el('rect', { x: Math.min(pa.x, pb.x) - 48, y: Math.min(pa.y, pb.y) - 48, width: Math.abs(pa.x - pb.x) + 96, height: Math.abs(pa.y - pb.y) + 96, rx: 28, fill: 'none', stroke: '#fff3a0', 'stroke-width': 6, class: 'hl' }, layers.hl);
@@ -1279,8 +1297,8 @@ function buildCoach(lv) {
   if (lv.intro === 'tutorial') return { kind: 'tutorial', i: 0, steps: [
     { text: 'Help the frog reach its green pad.', cells: [startPos('frog')].concat(pads) },
     { text: 'Tap the glowing water (not the frog) to drop a pebble.', tap: true },
-    { text: 'The ripple pushed the leaf one step away from the splash.', cells: [] },
-    { text: 'Ripples reach two cells. Tap the glowing spot again.', tap: true }
+    { text: 'The ripple pushed the leaf one step away. A splash reaches 2 cells up, down, left and right: the dashed +.', reach: true },
+    { text: 'Only leaves inside that + get pushed. Tap the glowing spot again.', tap: true }
   ] };
   if (lv.intro === 'two') return { kind: 'intro', i: 0, steps: [
     { text: 'Two critters, two pads: match the shape and colour. One splash can push both leaves.', cells: pads.concat(leaves), next: 'Play' }
@@ -1417,6 +1435,7 @@ function showCoach() {
   $('coachNext').classList.toggle('primary', !s.tap && !s.hold); // Skip is a quiet button
   $('coachNext').textContent = s.next || (s.tap ? 'Skip' : c.i === c.steps.length - 1 ? 'Play' : 'Next');
   (s.cells || []).forEach(function (i) { hlCell(i, false); });
+  if (s.reach && G.lastTap != null) reachMarks(G.lastTap, layers.hl); // v0.6.7 (Muse r7): show the 2-cell reach
   if (s.reed) hlReed(s.reed);
   if (s.logCell) G.level.leaves.forEach(function (l, i) { if (l.k === 'log') hlCell(G.st.pos[i], false); });
   if (s.btn) $(s.btn).classList.add('glow');
@@ -1507,6 +1526,7 @@ function enterPond(level, title, sub) {
   hideHold();
   $('screenSelect').classList.add('hidden'); $('screenPlay').classList.remove('hidden');
   ['winCard', 'howCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); });
+  clearWinPlace();
   setPlaying(true);
   $('lvName').innerHTML = '';
   $('lvName').appendChild(document.createTextNode(title));
@@ -1563,6 +1583,7 @@ function tap(idx, fromSolver) {
   if (!fromSolver && coachBlocks(idx)) return false;
   var useBig = G.useBig && G.st.big > 0;
   var res = L.applyMove(G.board, G.st, idx, useBig);
+  if (res) G.lastTap = idx;
   if (res) [].forEach.call(document.querySelectorAll('.toast.clue'), function (x) { x.remove(); });
   if (!res) {
     // first-time reminder: you tap the water, not the animal
@@ -1575,7 +1596,10 @@ function tap(idx, fromSolver) {
     if (rs && rs.rev && (idx === rs.target || isGateStop(idx))) { afterDemo(rs); return false; }
     // v0.6.1 (Cooper r6): the rock and reed lessons' demo taps move nothing by design; tapping the glow still moves the lesson on
     if (rs && rs.tap && G.coach.kind !== 'tutorial' && idx === rs.target) { afterDemo(rs); return false; }
-    toast('Nothing can move from there, so that tap is free.', 2200);
+    if (!res.moves.length) { // v0.6.7 (Muse r7): no leaf inside the reach at all, so show the + and say why
+      var rm = reachMarks(idx, layers.fx); setTimeout(function () { rm.remove(); }, 1600);
+      toast('Too far: a splash reaches only 2 cells up, down, left and right. That tap is free.', 2600);
+    } else toast('Nothing can move from there, so that tap is free.', 2200);
     return false;
   }
   var coachStep = G.coach ? G.coach.steps[G.coach.i] : null;
@@ -1657,6 +1681,7 @@ function win() {
     }
     $('winCard').classList.remove('hidden');
     fitVisitor();
+    placeWinCard();
   }, RM ? 600 : 1700); // v0.6.4: the solved pond shows a moment longer before the card rises
 }
 function showVisitor(nv) { // the visitor's own picture, big, with its name in real text
@@ -1667,6 +1692,22 @@ function showVisitor(nv) { // the visitor's own picture, big, with its name in r
   $('winVisitor').setAttribute('aria-label', name + ' came to visit your pond.');
   if (mile) { var sub = $('winVisitor').querySelector('.vsub'); sub.style.display = ''; sub.textContent = nv.total + ' visitors, a milestone!' + (feat ? ' New in your pond: ' + feat.name + '.' : ''); }
   $('winVisitor').classList.remove('hidden');
+}
+function clearWinPlace() { var wc = $('winCard'), bw = document.querySelector('.boardWrap'); wc.classList.remove('side', 'compact'); wc.style.removeProperty('--sideW'); if (bw) { bw.style.transform = ''; bw.classList.remove('lift'); } }
+function placeWinCard() { // v0.6.7 (Cooper r7): the win card must not cover the solved pond, on tall boards too
+  var wc = $('winCard'), card = wc.querySelector('.card'), bd = $('board'), bw = document.querySelector('.boardWrap');
+  clearWinPlace(); if (!card || !bd || !bw) return;
+  var b = { top: 1e9, left: 1e9, bottom: -1e9, right: -1e9 }, W = window.innerWidth, need = 300; // the pond's real cells, not the whole svg box
+  bd.querySelectorAll('rect[data-cell]').forEach(function (r) { var q = r.getBoundingClientRect(); b.top = Math.min(b.top, q.top); b.left = Math.min(b.left, q.left); b.bottom = Math.max(b.bottom, q.bottom); b.right = Math.max(b.right, q.right); });
+  if (b.top > b.bottom) return;
+  function hit() { var c = card.getBoundingClientRect(); return c.top - 30 < b.bottom - 2 && c.bottom > b.top + 2 && c.left < b.right - 2 && c.right > b.left + 2; }
+  if (!hit()) return;
+  // the card may still be rising 30px, so measure where it will rest
+  var room = W - b.right - 24;
+  if (room >= need) { wc.style.setProperty('--sideW', Math.min(380, room) + 'px'); wc.classList.add('side'); if (!hit()) return; wc.classList.remove('side'); }
+  wc.classList.add('compact'); if (!hit()) return;
+  var c = card.getBoundingClientRect(), over = b.bottom - (c.top - 30) + 8, up = Math.max(0, b.top - 4);
+  bw.classList.add('lift'); bw.style.transform = 'translateY(' + (-Math.min(over, up)) + 'px)';
 }
 function fitVisitor() { // zoom the picture onto the visitor (it is drawn at its place in the habitat scene)
   var sv = $('winVisitor').querySelector('svg'), g = sv && sv.querySelector('.vg'); if (!g || $('winVisitor').classList.contains('hidden')) return;
@@ -1690,7 +1731,7 @@ function undo() {
 }
 function resetPond() {
   G.st = L.initialState(G.level); G.hist = []; G.stuckSaid = false; G.taps = 0; G.won = false; G.useBig = false; G.hint = -1; G.hintStage = 0;
-  $('winCard').classList.add('hidden'); $('btnHelp').classList.remove('hidden'); clearHL();
+  $('winCard').classList.add('hidden'); clearWinPlace(); $('btnHelp').classList.remove('hidden'); clearHL();
   placeLeaves(true, 260);
 }
 function restart() {
@@ -2022,7 +2063,7 @@ function showSelect() {
   if (G.busy) return;
   hideHold(); setPlaying(false); applyTheme(null);
   $('screenPlay').classList.add('hidden'); $('screenSelect').classList.remove('hidden');
-  ['winCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); });
+  ['winCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); }); clearWinPlace();
   // habitat
   var hc = habitatCounts(), vis = hc.chapter + hc.daily;
   $('habitatArt').innerHTML = habitatSVG(false);
@@ -2083,7 +2124,7 @@ function showSelect() {
   setPreviewSetting(settings.preview, true);
 }
 function showChapterDone() {
-  $('winCard').classList.add('hidden');
+  $('winCard').classList.add('hidden'); clearWinPlace();
   var ch = chapterOf(G.li), more = G.li < LEVELS.length - 1;
   $('chTitle').textContent = ch === 1 ? 'Chapter 1 complete' : ch === 2 ? 'Reed Garden sample complete' : 'Autumn Creek sample complete';
   $('chLine').textContent = ch === 1 ? 'Your pond is full of life. Thank you for playing.' : ch === 2 ? 'You have mastered the one-way gate and the floating log. Thank you for playing.' : 'You know just when to snap a cracked reed. Thank you for playing.';
