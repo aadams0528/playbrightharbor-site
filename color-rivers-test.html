@@ -135,7 +135,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 .stop.r .lab i{left:auto;right:0}
 .back{margin:0 0 6px;align-self:flex-start;width:auto}
 .chnote{font-size:12px;opacity:.7;margin:-4px 2px 0;text-align:left}
-.grid.five{grid-template-columns:repeat(5,1fr)}.lv.chal{border-color:rgba(255,210,122,.45);color:var(--lantern)}.lv.chal.new{box-shadow:0 0 0 2px var(--lantern);}.lv.chal.new small{color:var(--lantern);font-weight:700}.chalNames{font-size:12px;opacity:.8;margin:6px 2px 0;line-height:1.5}
+.grid.five{grid-template-columns:repeat(5,1fr)}.peek{display:grid;gap:3px;width:min(168px,60%);margin:6px 0 2px}.peek i{aspect-ratio:1;border-radius:5px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;color:#cfe0ee}.peek i.nest{border:3px solid;border-radius:50%;background:none}.peek i.in{border:2px dashed rgba(207,224,238,.6);border-radius:50%}#longPeek small{opacity:.8}.lv.chal{border-color:rgba(255,210,122,.45);color:var(--lantern)}.lv.chal.new{box-shadow:0 0 0 2px var(--lantern);}.lv.chal.new small{color:var(--lantern);font-weight:700}.chalNames{font-size:12px;opacity:.8;margin:6px 2px 0;line-height:1.5}
 .adbox{display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 12px;border-radius:14px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 12px,rgba(255,255,255,.02) 12px 24px);border:1.5px dashed rgba(255,255,255,.2)}
 .adbox small{opacity:.7;font-size:12px}.adcount{font-family:var(--display);font-size:30px;color:var(--lantern)}
 .big:disabled{opacity:.45}
@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.68 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.69 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -186,7 +186,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 <script id="engine">
 // ---------- Engine (no DOM). Rules live here so tests can run them headless. ----------
 // Colors are sets of paint primaries: red=1, yellow=2, blue=4. Mixing is set union. All three = mud.
-const MASK={R:1,Y:2,B:4};
+const MASK={R:1,Y:2,B:4,O:3,G:6,P:5}; // O/G/P: mixed-colour dens, only on a Long River's downstream board (fed by the outlets above)
 const NEST={r:1,y:2,b:4,o:3,g:6,p:5};
 const COLORS={0:"#cfe0ee",1:"#ff5d6c",2:"#ffd23f",4:"#4da3ff",3:"#ff9a3c",6:"#3fd68a",5:"#b678ff",7:"#9a7454"};
 const DELTA={v:"D","^":"U","<":"L",">":"R"};
@@ -271,6 +271,7 @@ function parseLevel(L){
     else if(DELTA[ch])cells.push(deltaCell(DELTA[ch],w));
     else if(MASK[ch]){cells.push({t:"src",id:sources.length,mask:MASK[ch]});sources.push({x,y,i,mask:MASK[ch]});}
     else if(NEST[ch]){cells.push({t:"nest",id:nests.length,mask:NEST[ch]});nests.push({x,y,i,mask:NEST[ch]});}
+    else if(ch==="@"){cells.push({t:"nest",id:nests.length,mask:0,out:true});nests.push({x,y,i,mask:0,out:true});} // a Long River outlet: takes any clean colour down to the next board
     else cells.push({t:"empty"});
   }
   // pair tunnel mouths in reading order
@@ -372,7 +373,7 @@ function nestStatus(G,paths,col){
     if(p<0)return {p:-1,ok:false,color:0};
     const color=col[p][col[p].length-1];
     const denOk=n.den==null||n.den===ownerOf(G,paths,p);
-    return {p,ok:color===n.mask&&denOk,color,denOk};
+    return {p,ok:n.out?color>0&&color!==7:color===n.mask&&denOk,color,denOk};
   });
 }
 function isWin(G,paths,col){return nestStatus(G,paths,col).every(s=>s.ok);}
@@ -512,6 +513,12 @@ const CHALLENGES=[/*CHAL-START*/
  {id:"x-marsh-fork",name:"Marsh fork",after:12,tip:"Feed the delta red, and watch which stream takes the pool.",map:["....#...","...T#T.o","...Y#...",".#.^..o.","..b.#...","o...#...","..RB#...","....#..#"],sol:["LLLDDD","URUU","DLLUUUR","LUURRDD","RRURRU"]},
  {id:"x-last-light",name:"Last light",after:14,tip:"Make two purples, a yellow and a blue. Two of the streams take a pool to get there.",map:[".y#..#.p","..R..#.b","...T.#.T","....T#.T",".....#..","....p...","..#.B#.B","..Y..#.."],sol:["RRDDDDLLL","LUUUUU","LUUUUUUR","LUUUUUUU"]},
 /*CHAL-END*/].map(c=>Object.assign({mix:true},c));
+// Long Rivers (Alan's idea, Nov 5; sample Nov 6): two boards, one river. Upstream, every stream ends at an outlet (@)
+// on the bottom edge; whatever colour reaches an outlet becomes the critter at the matching inflow (*) on the
+// downstream board, left to right. Stars stay out of the total, like the challenge rivers.
+const LONGS=[/*LONG-START*/
+ {id:"l-otter-falls",name:"Otter falls",after:2,up:{map:["...#B.",".#..Y.","R..#..","#.....",".@@@.."],sol:["RDDDLLLD","DDDL","RDD"],tip:"Look below: it needs two greens and a red. You can mix up here or down there, but only one way is cheapest."},down:{map:[".***..","......","#.....","#.g.#.","r.g..."],sol:["DDDDL","DDD","DDDDL"],tip:"These critters came down from above. Take each one home. Wrong colours? Go back upstream."},stats:{par:28,parA:15,parB:13,plain:32}},
+/*LONG-END*/];
 const chalOpen=c=>{if(prog.all)return true;const last=LEVELS.map(L=>L.ch).lastIndexOf(c.after);return last>=0&&(prog.highest||0)>=last+1;};
 // Cloud save merge (studio rule: progress must survive updates and a new phone). When a player signs in on a phone
 // that already has progress, the two saves are merged so nothing earned is ever lost: best stars per level and per
@@ -533,7 +540,7 @@ function mergeProg(here,cloud){
 }
 // Daily River bank (tools/generate.js --daily N): slot k is weekday k % 7, Monday first. Append only.
 const DAILY=/*DAILY-START*/[{id:"d001",map:["Yr....","...#R.",".....B","g.#...","....#.","g.#..."],sol:["DRDDDLD","ULLL","LLLLLD"],mix:true,stats:{lb:15,par:17,ways:2,bend:2}},{id:"d002",map:[".......","B......","....#R.",".Y.....",".b.o...","......o","....#.."],sol:["DDDR","DDLL","RRRRRDD"],mix:true,stats:{lb:11,par:15,ways:2,bend:4}},{id:"d003",map:[".......","..=..B.","R......","o=....Y","#.o..#.",".......","#b.#.#."],sol:["LLLLDDDDD","UURRDDDD","LLLLLL"],mix:true,stats:{lb:15,par:23,ways:1,bend:8}},{id:"d004",map:["...R...",".B#....","......B","..o#.#.","...o...",".Y....b","b...#.."],sol:["DDLLDDRR","LDDDDD","DDD","RUU"],mix:true,stats:{lb:14,par:20,ways:1,bend:8}},{id:"d005",map:[".R#.g..","....Y#.","..B....","...r.g.","#......",".......","...#..."],sol:["DDDRR","DDR","RRRRUULL"],mix:true,mud:true,stats:{lb:10,par:16,ways:1,bend:8}},{id:"d006",map:["......y.","..#.....","r.g.B...","g...#...",".=......","R..#..Y.","....Y..#",".....#.."],sol:["LDDLLLU","RUUUL","UUUUU","LLUUUU"],mix:true,stats:{lb:17,par:23,ways:1,bend:6}},{id:"d007",map:["...#..B.","....R..y","Y...=.=.",".#......",".....#..","....p..p",".....#..","#B...b.."],sol:["DDDDDLL","DDRRRDD","RRRRRRRU","RRRR"],mix:true,mud:true,stats:{lb:20,par:26,ways:1,bend:6}},{id:"d008",map:["..#.B.","R.....","......",".p..Y.","p.#..#",".....y"],sol:["LDLDLLDD","RDD","DDR"],mix:true,stats:{lb:12,par:14,ways:5,bend:2}},{id:"d009",map:["#......","......g",".B...#.","..#g...",".....YR","#......",".....r#"],sol:["DDRRRUUURR","ULL","DLD"],mix:true,stats:{lb:8,par:16,ways:1,bend:8}},{id:"d010",map:["#..#...","..p..p.","#...y..",".B...=.","....#..","..Y...R","......."],sol:["URRURR","RRRUUUL","UULLLLUU"],mix:true,stats:{lb:13,par:21,ways:1,bend:8}},{id:"d011",map:["...RB.Y","......#",".#..#..",".Rr....",".......",".gr.g..","......."],sol:["LDDD","DLDDRDD","LDDDDLLDDLLU","DRD"],mix:true,stats:{lb:20,par:26,ways:1,bend:6}},{id:"d012",map:["...Y...","...#...","p#.B...","......#",".#y....","......R","#p..#.."],sol:["LDDDD","DDDDLL","LLLLLLUUU"],mix:true,mud:true,stats:{lb:14,par:20,ways:1,bend:6}},{id:"d013",map:[".R....#b","y....=..","...#....","........","....B..#","..#....p","....Bp..","Y......."],sol:["RRRRDDDDDD","UUURRRU","URRR","UUUUUU"],mix:true,stats:{lb:19,par:27,ways:1,bend:10}},{id:"d014",map:["R.......",".r.#...R",".#......",".....pY.","....B.=.",".#.....#","....#p..",".y......"],sol:["RD","LLDD","DDDDLLLLL","UURRRDDLLDD"],mix:true,mud:true,stats:{lb:16,par:26,ways:2,bend:10}},{id:"d015",map:["y.pR.B",".....#","......",".#....",".Y..#.","....p."],sol:["DDDDDR","LDLLU","LUUUU"],mix:true,stats:{lb:12,par:16,ways:1,bend:6}},{id:"d016",map:["Y#b....","..R....",".#.o.#.",".....B.",".......","..#....",".o...#."],sol:["DDDRRRU","DDDLDD","LUULUL"],mix:true,stats:{lb:11,par:19,ways:2,bend:8}},{id:"d017",map:["..#.#..",".......","y.p#...","#...B..",".=.....","...p...","RY....."],sol:["DDDLLUUUU","UURRRD","UUUUL"],mix:true,stats:{lb:12,par:20,ways:1,bend:10}},{id:"d018",map:["..r....","g..BR..","#.Y....","....g..","...Y...","#......","..g.#.."],sol:["DDLDDD","ULL","RRD","LLUUUL"],mix:true,stats:{lb:10,par:18,ways:1,bend:8}},{id:"d019",map:["R..g...","...#Y..",".B.....",".....r.",".......",".......","......g"],sol:["DDDRRRRR","RRDDDDD","RRRRUULL"],mix:true,mud:true,stats:{lb:15,par:23,ways:1,bend:8}},{id:"d020",map:[".R..#...",".B.....#","..#.....","....p..r","........",".Y....#.",".pR..=..",".......y"],sol:["LDDDRRRR","DDDLDDR","RRRRDDRR","RRRRRUUU"],mix:true,stats:{lb:21,par:31,ways:1,bend:10}},{id:"d021",map:["..y#R..B","....=.Y.","y...=.Y.",".p......","......#p","#.......","....#...","#.....#."],sol:["DDDDRDRRU","DDDLLLLLL","LLLLU","LLLLLL"],mix:true,mud:true,stats:{lb:21,par:29,ways:2,bend:10}},{id:"d022",map:["#..Yp.","y.#...","......","..#...",".....R","...pB#"],sol:["LLDL","LLD","UUUUU"],mix:true,stats:{lb:10,par:12,ways:1,bend:2}},{id:"d023",map:["#......","...#...","......y","...#..#","...B.Yp",".....R.","p#....."],sol:["RDDRRUU","UUR","LLLLLD"],mix:true,stats:{lb:10,par:16,ways:2,bend:6}},{id:"d024",map:[".#....o",".B...#.",".......",".....#.",".=...o.","...b...","R...Y.."],sol:["DDDDRR","UURRRRR","UUUURRUU"],mix:true,stats:{lb:13,par:21,ways:2,bend:8}},{id:"d025",map:["...Y...","..R#.#.",".y.....",".p.....","..B....","..p...B","#...#.b"],sol:["LLDD","DRDDDL","RRULLL","D"],mix:true,stats:{lb:9,par:17,ways:1,bend:8}},{id:"d026",map:[".B.....","..#..#.","#...Y..",".....bo","R......","......o",".#....."],sol:["RRRRRDDLD","DDDRR","RRRRRRU"],mix:true,mud:true,stats:{lb:17,par:21,ways:1,bend:4}},{id:"d027",map:["........","Y....B..","....#...",".....=.r","....=..g","y..Y.=..",".#....R.","......g."],sol:["DDDD","DDDDDDR","URRRR","ULLUURRR"],mix:true,stats:{lb:14,par:24,ways:1,bend:10}},{id:"d028",map:["....o...",".#...#..","........",".......o","..B...Y.","#.R.=.#b","........","..B.b..#"],sol:["RRDDRRRU","UULLUU","RRRUURR","RR"],mix:true,mud:true,stats:{lb:17,par:23,ways:2,bend:8}},{id:"d029",map:["..Y.#B","g.....",".R....",".#....",".....#","#.rg.."],sol:["RDDDDD","DLLLLL","RDDD"],mix:true,stats:{lb:14,par:16,ways:1,bend:2}},{id:"d030",map:[".b..B..","..R....","...#..#","....Y..","....#..",".#.....",".o..o.."],sol:["LLL","DDDDRRD","LDDDLL"],mix:true,stats:{lb:14,par:16,ways:1,bend:4}},{id:"d031",map:["..#...R","......g",".......","...Y.=.","..B..r.","..#...g","......."],sol:["LDDDD","DDRRR","RRURRUU"],mix:true,stats:{lb:9,par:17,ways:1,bend:8}},{id:"d032",map:[".......",".....#R","RY..p..","#.r..p.","y......",".......",".....B."],sol:["DDDLLUU","URRDD","DDL","UUU"],mix:true,stats:{lb:14,par:18,ways:1,bend:8}},{id:"d033",map:["..r....",".Y...#.",".#.B..g","...g...",".......",".#.....","R......"],sol:["RRRDDL","RRR","UUUUUURR"],mix:true,mud:true,stats:{lb:11,par:17,ways:1,bend:6}},{id:"d034",map:["#.....R#","...b.g..","#...=B..","........","...#.#..","B.....=.","#......g","....Y..r"],sol:["DDDDDDDR","LLU","RRRRRRRD","UUUUUUR"],mix:true,stats:{lb:16,par:26,ways:1,bend:10}},{id:"d035",map:["..r...#b","....R...","...#..=Y",".......#","..#....o","R.....=.","......B.",".#...o.."],sol:["LLU","LLDDDDD","RRRRRRRU","UUUUURU"],mix:true,mud:true,stats:{lb:15,par:25,ways:3,bend:10}},{id:"d036",map:[".....#",".B.Y.b","......","...R..","....oo","......"],sol:["RURRDR","DRDD","RRD"],mix:true,stats:{lb:11,par:13,ways:2,bend:2}},{id:"d037",map:["...B...","y......","..#.#..","..p..R.",".p.....","..Y....","...#..#"],sol:["DDDDLL","LLL","LLUUUU"],mix:true,stats:{lb:9,par:15,ways:1,bend:6}},{id:"d038",map:["RB.#p..",".#.p..#","..=...y",".......",".......",".#....Y","....#.."],sol:["DDRRRRUU","RDDDRUU","UUU"],mix:true,stats:{lb:14,par:18,ways:1,bend:8}},{id:"d039",map:[".#.....",".r....R","..#.B..","....Y#g",".......","..gY...",".y....."],sol:["LLLLL","LDDRRRU","LLDD","DLL"],mix:true,stats:{lb:13,par:19,ways:1,bend:6}},{id:"d040",map:[".R.....","....g#.","...#.g.","......r",".......","#.#.B.Y","......."],sol:["RRRRRDDD","RUUU","ULLUUU"],mix:true,mud:true,stats:{lb:10,par:18,ways:1,bend:8}},{id:"d041",map:[".B..y...","p..=....","..R..Y.#","..R.....","..#.....","#.......","r.#p.#..","........"],sol:["RRDDDDDD","RRULLLL","UUL","LDDDL"],mix:true,stats:{lb:15,par:23,ways:1,bend:8}},{id:"d042",map:["..y.....","#.....#.","..Y.....","..#...yB",".R..=...","..Y...#.","...p....","..#..p.."],sol:["UU","DDDLLLL","RRRRDDD","RRUURR"],mix:true,mud:true,stats:{lb:12,par:22,ways:1,bend:10}},{id:"d043",map:["....r.","..Y...",".R..#.","......","g....B",".g..#."],sol:["DDLDD","UURRR","LLLLL"],mix:true,stats:{lb:11,par:15,ways:2,bend:4}},{id:"d044",map:[".......","B...gg.","r#.Y...","...R...",".....#.",".......","#..#..."],sol:["RRRR","UURRD","LLLU"],mix:true,stats:{lb:7,par:13,ways:1,bend:6}},{id:"d045",map:[".......","...R...","Y...=..","..g.rB#","..g.#..","......#","......."],sol:["RDD","DRR","ULLLLDDR"],mix:true,stats:{lb:8,par:14,ways:1,bend:6}},{id:"d046",map:[".#Y....",".....gg","....#..",".B.B...",".#..g..","..r#...",".....R."],sol:["DDDDRR","UURRRR","UUURRRD","LLLU"],mix:true,stats:{lb:15,par:23,ways:1,bend:8}},{id:"d047",map:["#..R...","...g.#.",".g.....","..r....","#.....Y",".B.....","...#..."],sol:["LDDD","LLLLLUU","RRUUUU"],mix:true,mud:true,stats:{lb:9,par:17,ways:1,bend:8}},{id:"d048",map:["#.......",".r.g....",".y.#...#",".....g..","..=.=Y..",".B=.....","........","..R.Y#.."],sol:["LLLLUU","RRRRRUUL","UUUUUUL","UUUUUUL"],mix:true,stats:{lb:18,par:28,ways:1,bend:10}},{id:"d049",map:[".g.g#B..","#.......",".R....#B",".#b=....","...=r...",".....#..","........","...Y...."],sol:["DLLLLU","LDDRRRR","DLLLLL","UUUUUUU"],mix:true,mud:true,stats:{lb:16,par:26,ways:2,bend:12}},{id:"d050",map:["R.#...","#.....","....p.",".Y.B..","..#...","#...yp"],sol:["RDRDRR","DDRRR","UURRDDDD"],mix:true,stats:{lb:15,par:19,ways:2,bend:4}},{id:"d051",map:[".......","..Y.g..","r......","#.#B#..",".......","#R.....",".....g."],sol:["DRRRDDDD","UUR","UUUL"],mix:true,stats:{lb:11,par:15,ways:1,bend:4}},{id:"d052",map:["...g#..","#.....#",".......","Y..=...",".#g..r.","R..=..#","#...B.."],sol:["RRRRDLL","RRRRRU","LUUUUUU"],mix:true,stats:{lb:12,par:20,ways:1,bend:8}},{id:"d053",map:[".#.....",".......","..YR.B.","....#..","o.....#","....#.b","oR...o#"],sol:["DDDDRRR","DDDLLLD","DDDR","UUL"],mix:true,stats:{lb:15,par:21,ways:1,bend:6}},{id:"d054",map:["......#","...R...","....#.#","Y...p..",".p.....","..y....","...#B.."],sol:["RRDDDLLLL","DDRR","UUU"],mix:true,mud:true,stats:{lb:8,par:16,ways:1,bend:8}},{id:"d055",map:[".....R#.",".Y...=B.","g.......","#.#.g#..",".b......","..#.#B..","........",".#...#r."],sol:["DDRDDDDD","RRDDR","LLDLLLL","ULLLL"],mix:true,stats:{lb:17,par:25,ways:1,bend:8}},{id:"d056",map:[".#R....p",".....p..","........","Y#.#....","....=..y","........","........",".B.#Rp.."],sol:["RDRR","DRRRRRRR","RURRRD","UUUUUUURRR"],mix:true,mud:true,stats:{lb:22,par:28,ways:4,bend:6}},{id:"d057",map:["..p..p","...#..","..B...","...R.#","..#.Y.","#.y..."],sol:["RRRUU","RUUULL","LDL"],mix:true,stats:{lb:10,par:14,ways:2,bend:4}},{id:"d058",map:["..#...y","B...pR.",".....#.",".......","....#..",".......","...p.#Y"],sol:["RRRR","ULLDDDDDD","UUUUUU"],mix:true,stats:{lb:11,par:19,ways:1,bend:10}},{id:"d059",map:[".....#.","......r","..Y#...","B==....",".....#g","#R...g.","..#...."],sol:["DDRRURRD","RRRDDRR","UUUURRRRR"],mix:true,stats:{lb:16,par:24,ways:1,bend:8}},{id:"d060",map:["#..#...","R..Y...","..Y.#..",".#B..y.","..r....","...#.g.","g......"],sol:["DDDRR","RRDD","RDDRRD","RRDDDLLLL"],mix:true,stats:{lb:16,par:24,ways:1,bend:8}},{id:"d061",map:[".....BR","....y..",".p.....",".......","Y......",".......","..#..p."],sol:["DDDDDD","DDLLLLL","UUURRRR"],mix:true,mud:true,stats:{lb:12,par:20,ways:1,bend:8}},{id:"d062",map:[".#...B..","p...=...","...R..Y.",".R..#...","y=...=..","r...#p.#","........","........"],sol:["DLLLLL","UURDDRDDD","DDLLLLLL","DDL"],mix:true,stats:{lb:18,par:26,ways:1,bend:8}},{id:"d063",map:["o.R..B..","o.==...Y","#..=.Y..","........","........","........","b.=.....","o......."],sol:["DDDDDDDLL","LLDDDDDDLLL","LLLLLLL","LLLLUUL"],mix:true,mud:true,stats:{lb:30,par:34,ways:1,bend:4}},{id:"d064",map:[".#....",".g.#R.","......","..r...",".....B","g...Y."],sol:["DLLD","LLLLLD","LLLUUUU"],mix:true,stats:{lb:13,par:17,ways:3,bend:6}},{id:"d065",map:["......#","...R...","....B..","....o..",".....b.","#....oY","...#..."],sol:["DDDDRR","RDD","DLLUUU"],mix:true,stats:{lb:7,par:15,ways:1,bend:8}},{id:"d066",map:[".....#.","..#....","..Y....","o...o..","...=...","B#.R.#.",".....b."],sol:["DDRRU","DRRRRR","UULLL"],mix:true,stats:{lb:8,par:16,ways:1,bend:8}},{id:"d067",map:["..p....","..#.#..","...y..Y","......B",".R.....",".b.#..#",".p....B"],sol:["LLL","LLLLLLDDDR","UUUUR","LLLLUL"],mix:true,stats:{lb:16,par:24,ways:1,bend:8}},{id:"d068",map:["...Y...","..o..#.","....B..",".....R.",".#.#...","o......","#.....b"],sol:["DDLLLDDD","RRDDDD","LLLUU"],mix:true,mud:true,stats:{lb:13,par:19,ways:2,bend:6}},{id:"d069",map:["...#....",".R=.....","Y#...o..",".Byo....","..Y.#...","........",".b..#...",".......#"],sol:["RRDD","UURRDDRRR","DDD","U"],mix:true,stats:{lb:13,par:17,ways:1,bend:4}},{id:"d070",map:["...b....",".....#..","p.#yB...","....#R.#","..B..=..",".p......","......Y.","#......."],sol:["ULU","DDLLLL","DDLLUUUU","UULLLUU"],mix:true,mud:true,stats:{lb:18,par:24,ways:2,bend:8}},{id:"d071",map:["..o..#","...#..","o....Y","R.B#.#","......","..#b.."],sol:["LLLLL","RUURU","DRD"],mix:true,stats:{lb:9,par:13,ways:2,bend:4}},{id:"d072",map:["...Y...",".......",".#p.#..",".......","...y...","......p",".R..B.."],sol:["DDDD","URRRRR","LLUUUU"],mix:true,stats:{lb:10,par:16,ways:1,bend:6}},{id:"d073",map:["#.....#",".B.....","...#Y.#","......o","...o.b.","...=...","..R...."],sol:["RRRRDDD","DDDDLUU","URRRRUU"],mix:true,stats:{lb:13,par:21,ways:1,bend:8}},{id:"d074",map:["....g..","...#r#.","...Y...",".B..g..",".....R.","....#r.","..R...."],sol:["DDLUUUURR","RRR","UULU","RRRU"],mix:true,stats:{lb:14,par:20,ways:1,bend:6}},{id:"d075",map:[".......","R......","...#...",".g.....",".B....g","..r....","#.Y.#.."],sol:["DDDDRR","RRRRR","RUUULL"],mix:true,mud:true,stats:{lb:9,par:17,ways:1,bend:8}},{id:"d076",map:[".......Y","y#...p..","p.......","....#.B.","#....=.B","..#.....",".bR.#...","........"],sol:["LLLLLLLD","ULLLLLL","LLLLLLDD","RURRUUUU"],mix:true,stats:{lb:21,par:31,ways:1,bend:10}},{id:"d077",map:[".....R..",".y......","..B.=...",".#..Yp..","........",".#.rR...","......p.","........"],sol:["DDD","RRRRDDDD","UULLL","L"],mix:true,mud:true,stats:{lb:11,par:17,ways:1,bend:6}},{id:"d078",map:["......","....r.",".RB.gg","......","...#.Y","......"],sol:["URRR","RDRRU","LUU"],mix:true,stats:{lb:8,par:12,ways:2,bend:4}},{id:"d079",map:["...Y...","#...R..",".......",".b.#...",".#.B...","....o..","....o.#"],sol:["DDRRDDDDL","DDDD","LUL"],mix:true,stats:{lb:12,par:16,ways:1,bend:4}},{id:"d080",map:[".#.....",".......",".......",".p.B#.Y","y.=..=.","..p.#..",".....R."],sol:["LL","DLLLLLL","UUUULLLDDD"],mix:true,stats:{lb:13,par:19,ways:1,bend:6}},{id:"d081",map:["....Y..",".Y..#R.",".#.....",".......","y...gr.","..#....","..B..g."],sol:["LDDDDDRRD","LDDD","DDD","RRUU"],mix:true,stats:{lb:16,par:20,ways:1,bend:6}},{id:"d082",map:["..Yg...",".......","r...R.g","..#...#","......B","....#..","......."],sol:["DRRRRD","LLLL","LUUUULL"],mix:true,mud:true,stats:{lb:9,par:17,ways:1,bend:10}},{id:"d083",map:["p....r..","#R..=...","...#....","#..p....","...#B...",".Y...=.y","#.#.....",".....R.#"],sol:["RRRRU","UUUULLLL","RRRRRR","UUUULL"],mix:true,stats:{lb:15,par:25,ways:1,bend:10}},{id:"d084",map:["..y..#..","..#....#","g..r....",".......#",".Y..Y..g","...=..B.","......R.","........"],sol:["UUUUR","RRR","UULDDLLLLLUUU","LLLUUUU"],mix:true,mud:true,stats:{lb:18,par:28,ways:1,bend:10}}]/*DAILY-END*/;
-if(typeof module!=="undefined")module.exports={CHAPTERS,HAND,LEVELS,CHALLENGES,DAILY,DELTA,deltaCell,TOOLS,rockGroupsOf,useTool,mergeProg,parseLevel,feederOf,ownerOf,isBranch,tryStep,settle,computeColors,nestStatus,isWin,inkOf,starsFor,solPath};
+if(typeof module!=="undefined")module.exports={CHAPTERS,HAND,LEVELS,CHALLENGES,LONGS,DAILY,DELTA,deltaCell,TOOLS,rockGroupsOf,useTool,mergeProg,parseLevel,feederOf,ownerOf,isBranch,tryStep,settle,computeColors,nestStatus,isWin,inkOf,starsFor,solPath};
 </script>
 
 <script>
@@ -602,7 +609,7 @@ function startLevel(n,keep,cut,extra){
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
   const fin=!daily&&!bonus&&L.gen&&L.ch&&(n===LEVELS.length-1||LEVELS[n+1].ch!==L.ch); // a chapter's hardest board, mixing its idea with older ones
-  $("lvTitle").textContent=daily?`Daily River · ${dayLabel(daily.day)}`:bonus?`Challenge river · ${L.name}`:`Level ${n+1} · ${L.name}${fin?" · Finale":""}`;
+  $("lvTitle").textContent=daily?`Daily River · ${dayLabel(daily.day)}`:L.long?`Long River · ${L.name} · ${L.long.stage?"2 of 2: downstream":"1 of 2: upstream"}`:bonus?`Challenge river · ${L.name}`:`Level ${n+1} · ${L.name}${fin?" · Finale":""}`;
   $("lvTip").textContent=L.tip;
   renderLegend();
   const hasBridge=L.map.some(r=>r.includes("=")),hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
@@ -926,13 +933,14 @@ let lastCrossColors="";
 function saveDraft(clear){
   // the Daily keeps its own draft, so a reload mid-Daily (a phone call) comes back to it and the level draft stays (Nikola, v0.57)
   // a challenge river keeps its own draft, like the Daily, so a reload mid-challenge keeps the drawing (Cooper, v0.64)
+  if(bonus&&bonus.long)return; // the Long River sample keeps no draft
   if(bonus){store.set("cdraw",clear||won?null:{id:bonus.id,paths,undo:undoStack.slice(-20)});return;}
   if(daily){store.set("ddraw",clear||won?null:{day:daily.day,paths,undo:undoStack.slice(-20)});return;}
   store.set("draw",clear||won?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null,
   undo:undoStack.slice(-20),ls:lesson&&!lesson.note?lesson.i:null});}
 function afterChange(released){
   const before=JSON.stringify(col.map(c=>c[c.length-1]));
-  recolor();updateInk();
+  recolor();updateInk();if(bonus&&bonus.long)updatePeek();
   if(hints.length){pruneHints();updateHintBtn();}
   // feedback for new mixes
   const crosses=crossings();const sig=crosses.map(x=>x.cell+":"+x.color).join(",");
@@ -986,6 +994,7 @@ function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":bonus?bonus.id:lv+1,stars:s,ink,hints:hintsUsed});
+  if(bonus&&bonus.long){longWon(ink);return;}
   if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg();store.set("onChal",null); // challenge stars stay out of the total and the chapter gates
     setTimeout(()=>{if(bonus===at&&won)showBonusWin(s,ink,first);},800);return;}
   if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
@@ -1121,6 +1130,41 @@ function showBonusWin(s,ink,first){
   $("goBack").onclick=()=>{closeSheet();resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();startBonus(k);};
   if(next)$("goChal").onclick=()=>{closeSheet();startBonus(CHALLENGES.indexOf(next));};
 }
+// ---------- Long River ----------
+// longRun keeps the upstream drawing (and what it sent down) while the downstream board is played
+let longRun=null;const DEN_CH={1:"R",2:"Y",4:"B",3:"O",6:"G",5:"P"};
+function longLevel(k,stage,colors){const R=LONGS[k],part=stage?R.down:R.up;let i=0;
+  const map=stage?part.map.map(r=>r.replace(/\*/g,()=>DEN_CH[colors[i++]])):part.map;
+  return {id:R.id,name:R.name,tip:part.tip,map,sol:part.sol,mix:true,long:{k,stage}};}
+const longOpen=R=>chalOpen({after:R.after});
+const longPar=k=>{const R=LONGS[k];return parseLevel({map:R.up.map,sol:R.up.sol}).par+parseLevel({map:R.down.map.map(r=>r.replace(/\*/g,"Y")),sol:R.down.sol}).par;};
+function startLong(k,stage=0){
+  if(!longRun||longRun.k!==k)longRun={k,up:null,colors:null,down:null,upInk:0};
+  if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined);}
+  else{bonus=longLevel(k,0);startLevel("bonus",longRun.up||undefined);}
+  if(!stage&&!prog.seen.long){prog.seen.long=1;saveProg();teachOnce("long","Long River: send every stream to an outlet at the bottom. The colours you send down become the critters on the board below.");}
+}
+function longWon(ink){const L=bonus.long,k=L.k;
+  if(!L.stage){const colors=nestStatus(G,paths,col).map(s=>s.color),same=longRun.colors&&longRun.colors.join()===colors.join();
+    longRun.up=paths.map(p=>p.slice());longRun.upInk=ink;if(!same)longRun.down=null;longRun.colors=colors;
+    toast("The colours flow downstream…");const at=bonus;setTimeout(()=>{if(bonus===at&&won)startLong(k,1);},900);return;}
+  const total=longRun.upInk+ink,par=longPar(k),s=starsFor(total,par),R=LONGS[k],first=!prog.stars[R.id];
+  prog.stars[R.id]=Math.max(prog.stars[R.id]||0,s);saveProg();store.set("onChal",null);
+  const at=bonus;setTimeout(()=>{if(bonus!==at||!won)return;const over=total-par;
+    const note=s===3?`Perfect river! ${total} ink across both boards.`:over<=2?`So close: just ${over} ink over. Three stars at ${par}.`:`Solved in ${total} ink across both boards. Reach ${par} for three stars.`;
+    openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>
+     <button class="big" id="goBack">Back to Level ${lv+1}</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
+    $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
+}
+// the other board, small, under the tip: upstream shows what is flowing down right now; downstream offers the way back up
+function updatePeek(){const el=$("longPeek"),L=bonus&&bonus.long;if(!el||!L)return;const R=LONGS[L.k];
+  if(L.stage){el.innerHTML=`<button class="showme" id="goUp">↑ Back upstream</button> <small>Change what flows down.</small>`;$("goUp").onclick=()=>{longRun.down=paths.map(p=>p.slice());startLong(L.k,0);};return;}
+  const st=nestStatus(G,paths,col),w=R.down.map[0].length;let i=0;
+  const cell=ch=>{if(ch==="#")return `<i style="background:#5d6b78"></i>`;
+    if(ch==="*"){const c=st[i++].color,ok=c>0&&c!==7;return `<i class="in" style="${ok?`background:${COLORS[c]}`:""}">${ok?"":"?"}</i>`;}
+    if(MASK[ch])return `<i style="background:${COLORS[MASK[ch]]}"></i>`;if(NEST[ch])return `<i class="nest" style="border-color:${COLORS[NEST[ch]]}"></i>`;return `<i></i>`;};
+  el.innerHTML=`<small>Downstream needs:</small><div class="peek" style="grid-template-columns:repeat(${w},1fr)">${R.down.map.join("").split("").map(cell).join("")}</div>`;
+}
 function resumeLevel(i){const dr=store.get("draw",null);if(dr&&dr.id===ID(i))startLevel(i,dr.paths,dr.cut,dr);else startLevel(i);}
 function showDailyWin(s,ink){
   const st=prog.streak||{n:0,best:0},over=ink-G.par;
@@ -1152,8 +1196,12 @@ function showLevels(){
     ${CHALLENGES.length?`<div class="chap"><b>✦ Challenge rivers</b><span>★ ${CHALLENGES.reduce((a,c)=>a+(prog.stars[c.id]||0),0)}/${CHALLENGES.length*3}</span></div>
     <p class="chnote">Optional extra-hard rivers. One opens after each of these chapters; skip any you like.</p>
     <div class="grid five">${CHALLENGES.map((c,k)=>{const o=chalOpen(c);return `<button class="lv chal${o&&!prog.stars[c.id]?" new":""}" data-chal="${k}" ${o?`title="${c.name}"`:"disabled"} aria-label="Challenge river ${k+1}${o?`: ${c.name}`:`, opens after Chapter ${chNo(c.after)}`}">${o?`✦${k+1}`:"🔒"}<small>${o?(prog.stars[c.id]?"★".repeat(prog.stars[c.id]):"New"):`Ch ${chNo(c.after)}`}</small></button>`;}).join("")}</div>${(()=>{const open=CHALLENGES.map((c,k)=>chalOpen(c)?`<span style="white-space:nowrap">${k+1} ${c.name}</span>`:null).filter(Boolean);return open.length?`<p class="chalNames">${open.join(" · ")}</p>`:"";})()}`:""}
+    ${LONGS.length?`<div class="chap"><b>〰 Long River</b><span>★ ${LONGS.reduce((a,R)=>a+(prog.stars[R.id]||0),0)}/${LONGS.length*3}</span></div>
+    <p class="chnote">New: two boards, one river. The colours you send down become the critters on the board below.</p>
+    <div class="grid five">${LONGS.map((R,k)=>{const o=longOpen(R);return `<button class="lv chal${o&&!prog.stars[R.id]?" new":""}" data-long="${k}" ${o?`title="${R.name}"`:"disabled"} aria-label="Long River ${k+1}${o?`: ${R.name}`:`, opens after Chapter ${chNo(R.after)}`}">${o?`〰${k+1}`:"🔒"}<small>${o?(prog.stars[R.id]?"★".repeat(prog.stars[R.id]):"New"):`Ch ${chNo(R.after)}`}</small></button>`;}).join("")}</div>`:""}
     <button class="ghost" id="close">Close</button>`);
   document.querySelectorAll("[data-chal]").forEach(b=>b.onclick=()=>{closeSheet();startBonus(+b.dataset.chal);});
+  document.querySelectorAll("[data-long]").forEach(b=>b.onclick=()=>{closeSheet();longRun=null;startLong(+b.dataset.long);});
   document.querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>showChapter(+b.dataset.ch));
   if($("goDaily"))$("goDaily").onclick=()=>{closeSheet();startDaily();};
   $("close").onclick=closeSheet;
@@ -1322,7 +1370,7 @@ function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();i
 function renderCoach(){
   const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!daily&&!!LESSONS[LV().name];
   document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));$("crewBtn").classList.toggle("glow-ink",!!(st&&st.dom==="crew"));$("undoBtn").classList.toggle("glow-ink",!!(st&&st.dom==="undo"));
-  if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LV().tip;
+  if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LV().tip;if(LV().long){const p=document.createElement("div");p.id="longPeek";tip.append(p);updatePeek();}
     if(has){const b=document.createElement("button");b.className="showme";b.textContent="Replay lesson";b.onclick=()=>{startLevel(lv);startLesson();saveDraft();};tip.append(document.createElement("br"),b);}return;}
   // a lesson takes the tip's place; a note floats over the tip instead, so the board never moves when one appears
   tip.hidden=!lesson.note;el.hidden=false;el.classList.toggle("float",!!lesson.note);
@@ -1821,7 +1869,7 @@ function draw(now){if(!(cs>=4))return; // no zero-size riverbed picture (drawIma
   // nests
   const st=nestStatus(G,paths,col);
   G.nests.forEach((n,k)=>{
-    const [cx0,cy]=C(n.i),s=st[k],color=COLORS[n.mask],cx=cx0;
+    const [cx0,cy]=C(n.i),s=st[k],color=n.out?(s.color>0&&s.color!==7?COLORS[s.color]:"#cfe0ee"):COLORS[n.mask],cx=cx0; // an outlet takes the colour of whatever flows into it
     bloom[k]+=((s.ok?1:0)-bloom[k])*.12;
     // reactive: a little bounce every time a critter arrives
     let pulse=0;if(s.ok){const L=paths[s.p].length-1,fr=((((now/1000)*1.7-L)%.85)+.85)%.85/.85;pulse=Math.pow(1-fr,4);}
@@ -1833,6 +1881,7 @@ function draw(now){if(!(cs>=4))return; // no zero-size riverbed picture (drawIma
     if(!s.ok){ctx.setLineDash([cs*.1,cs*.07]);ctx.lineDashOffset=now/60;}
     ctx.beginPath();ctx.arc(cx,cy,cs*.3,0,Math.PI*2);ctx.stroke();ctx.restore();
     ctx.fillStyle=hexA(color,.22);ctx.beginPath();ctx.arc(cx,cy,cs*.26,0,Math.PI*2);ctx.fill();
+    if(n.out&&!s.ok){ctx.save();ctx.strokeStyle="#cfe0ee";ctx.lineWidth=cs*.06;ctx.lineCap="round";ctx.lineJoin="round";const d=Math.sin(now/300)*cs*.03;ctx.beginPath();ctx.moveTo(cx,cy-cs*.13+d);ctx.lineTo(cx,cy+cs*.12+d);ctx.moveTo(cx-cs*.1,cy+cs*.03+d);ctx.lineTo(cx,cy+cs*.13+d);ctx.lineTo(cx+cs*.1,cy+cs*.03+d);ctx.stroke();ctx.restore();} // outlet: a bobbing down arrow until something flows in
     const b=bloom[k];
     if(b>.02){ // flower bloom
       ctx.save();ctx.translate(cx,cy);ctx.rotate(now/3000);ctx.shadowColor=color;ctx.shadowBlur=cs*.4*b;
