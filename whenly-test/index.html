@@ -9,6 +9,7 @@
 </head>
 <body>
 <title>Whenly</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%23f3a43b%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2738%27 font-family=%27sans-serif%27 font-weight=%27800%27 text-anchor=%27middle%27 fill=%27%23fff%27%3EW%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=Spline+Sans+Mono:wght@500;700&display=swap">
@@ -723,11 +724,18 @@ function dailyOk(ids,g){
   const y=ids.map(yr).sort((a,b)=>a-b);
   return y.slice(1).some((v,i)=>v-y[i]<=Math.max(2*g,g+6));
 }
-function scramble(ids,r){
+// Moves needed = cards minus the longest set already in the right relative order.
+// Every deal needs at least minMoves of them, so a "Hard" day is never one drag from solved.
+function movesNeeded(o){const y=o.map(yr),L=y.map(()=>1);
+  for(let i=0;i<y.length;i++)for(let j=0;j<i;j++)if(y[j]<y[i])L[i]=Math.max(L[i],L[j]+1);
+  return o.length-Math.max(...L)}
+function scramble(ids,r,minMoves=2){
   const t=sortIds(ids);let o;
-  do{o=shuffle(ids,r)}while(o.filter((x,i)=>x===t[i]).length>1);
+  do{o=shuffle(ids,r)}while(o.filter((x,i)=>x===t[i]).length>1||movesNeeded(o)<minMoves);
   return o;
 }
+// Monday to Wednesday need 2 moves; Thursday to Sunday need 3.
+const DAY_MOVES=[3,2,2,2,3,3,3];
 const sortIds=ids=>ids.slice().sort((a,b)=>yr(a)-yr(b));
 
 // ---------- scoring ----------
@@ -772,7 +780,7 @@ function dealFor(n){
   // A hand-picked puzzle for this day wins; otherwise the dealer picks one by the rules above.
   const hand=SCHEDULE[n]&&SCHEDULE[n][1].map(t=>EVENTS.findIndex(e=>e[2]===t));
   const ids=hand&&hand.every(i=>i>=0)?hand:pick(5,DAY_GAP[wd],r,true);
-  return {ids,order:scramble(ids,r),wd};
+  return {ids,order:scramble(ids,r,DAY_MOVES[wd]),wd};
 }
 function newDaily(){
   const n=dayNum(),wd=today().getDay();
@@ -791,7 +799,7 @@ function newArchive(n){
   const d=dealFor(n);G=fresh("archive",d.ids,d.order);G.n=n;G.wd=d.wd;
   track("puzzle_start",{mode:"archive",puzzle:n});
 }
-function newPractice(){const r=rng((Math.random()*1e9)|0),ids=pick(5,practiceGap,r,false);G=fresh("practice",ids,scramble(ids,r));track("puzzle_start",{mode:"practice",gap:practiceGap})}
+function newPractice(){const r=rng((Math.random()*1e9)|0),ids=pick(5,practiceGap,r,false);G=fresh("practice",ids,scramble(ids,r,practiceGap<=12?3:2));track("puzzle_start",{mode:"practice",gap:practiceGap})}
 function newTutorial(){
   const find=t=>EVENTS.findIndex(e=>e[2].startsWith(t));
   const ids=[find("First moon"),find("Gutenberg"),find("First iPhone")];
@@ -866,6 +874,8 @@ function move(id,d){if(G.done)return;if(isPlaced(id)){toast("📌 That card is p
 function announce(id){$("#sr").textContent=`${EVENTS[id][2]} moved to position ${G.order.indexOf(id)+1} of ${G.order.length}.`}
 // What the last check found, kept apart from the live ✓/× tags on the cards as they sit now.
 function feedbackLine(){
+  // Lesson: the first check shows a red ×, then the player fixes that pair (Nikola and Cooper, round 3).
+  if(G.kind==="tutorial"&&!G.done&&G.attempt>1){$("#bLock").disabled=sameAsChecked();$("#hintLine").innerHTML=`<b>The red × means those two are reversed.</b> The Gutenberg Bible is older than the Moon landing, so drag it to the top, then check again.`;showCoach();return}
   if(G.done||G.kind==="tutorial"||picking)return;
   const h=$("#hintLine");
   if(G.attempt<2){h.textContent="Drag the cards, or use the arrows.";return}
@@ -947,7 +957,7 @@ function check(){
   if(G.done||sameAsChecked())return;stopPicking();hideCoach();
   const t=sortIds(G.order),perfect=G.order.every((id,i)=>yr(id)===yr(t[i]));
   if(G.kind!=="tutorial")track("check",{mode:G.kind,try:G.attempt,solved:perfect?1:0});
-  if(perfect||G.attempt>=TRIES||G.kind==="tutorial"){finish();return}
+  if(perfect||G.attempt>=TRIES||(G.kind==="tutorial"&&G.attempt>1)){finish();return}
   // record what this check tells you about each neighboring pair
   for(let i=0;i<G.order.length-1;i++){const a=G.order[i],b=G.order[i+1];G.known[a+">"+b]=yr(a)<yr(b)}
   G.lastChecked=G.order.join();
@@ -1094,7 +1104,7 @@ function tick(){clearInterval(cdTimer);const f=()=>{const el=$("#cd");if(!el)ret
 function render(){
   $("#sr").textContent="";$("#result").hidden=true;$("#stories").hidden=true;$("#board").after($("#stories"));$("#play").hidden=false;stopPicking();
   if(!G.done)hideBanner();
-  $("#hintLine").textContent=G.kind==="tutorial"?"The Gutenberg Bible is the oldest. Drag it to the top, then check.":"Drag the cards, or use the arrows.";
+  $("#hintLine").textContent=G.kind==="tutorial"?"Tap Check my order to see your first clue.":"Drag the cards, or use the arrows.";
   $("#diff").hidden=G.kind!=="practice";$("#pill").hidden=G.kind==="practice";
   if(G.kind==="daily"||G.kind==="archive"||G.kind==="replay"){$("#title").textContent="Oldest at the top";$("#pill").textContent=`#${G.n} · ${DAY_NAME[G.wd].slice(0,3)} · ${DAY_FEEL[G.wd]}${G.kind==="archive"?" · Archive":G.kind==="replay"?" · Replay":""}`;if(themeOf(G.n))$("#title").textContent=themeOf(G.n)}
   if(G.kind==="practice")$("#title").textContent="Oldest at the top";
@@ -1107,7 +1117,7 @@ function render(){
     G.order=t;build();t.forEach(id=>cardEls[id].classList.add("done",col[id]));
     $("#play").hidden=true;showResult();
   }
-  if(G.kind==="tutorial")showCoach();
+  if(G.kind==="tutorial"&&G.attempt>1)showCoach();
 }
 // keep the order the player locked in, for the near-miss line and reloads
 const _finish=finish;finish=function(){G.finalOrder=G.order.slice();_finish()};
