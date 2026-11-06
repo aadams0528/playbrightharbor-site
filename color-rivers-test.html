@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.75 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.76 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -805,7 +805,9 @@ cv.addEventListener("pointerdown",e=>{
   else{
     const owners=paths.map((p,k)=>p.indexOf(c)>0?k:-1).filter(k=>k>=0);
     // pressing a cell two streams share: a stream whose tip is here carries on, otherwise cut the top one
-    if(owners.length){active=owners.find(k=>paths[k][paths[k].length-1]===c)??owners[owners.length-1];pressed=paths[active].slice();paths[active].length=cutPoint(paths[active],c)+1;}
+    if(owners.length){active=owners.find(k=>paths[k][paths[k].length-1]===c)??owners[owners.length-1];pressed=paths[active].slice();paths[active].length=cutPoint(paths[active],c)+1;
+      // say which stream a press on a shared cell picked up (Muse, v0.74 and v0.75: it trimmed red without a word)
+      if(owners.length>1&&pressed.length-paths[active].length>1){const m=G.sources[active]&&NAMES[G.sources[active].mask];if(m)toast(`Redrawing the ${m} stream from here. Undo puts it back.`);}}
     // a press on a pool is not a stream (Muse, v0.64: pressing a pool next to a den started that den's stream)
     else if(cell.t==="tunnel"){undoStack.pop();teachOnce("poolpress","Pools aren't streams. Start from a critter, then draw into the pool.");return;}
     else{active=nearTip(e);if(active<0){undoStack.pop();return;}pressed=paths[active].slice();lastCell=-1;cv.setPointerCapture(e.pointerId);follow(e);return;}
@@ -872,12 +874,14 @@ function walkTo(c){
     const own=x=>paths[active].indexOf(x)>=0;
     if(own(step)||!tryStep(G,paths,active,step)){
       const alt=Math.abs(dx)>=Math.abs(dy)?(dy?tip+Math.sign(dy)*G.w:-1):(dx?tip+Math.sign(dx):-1);
-      if(alt<0||own(alt)||!tryStep(G,paths,active,alt)){
+      // a blocked step only turns aside when the finger is really as far that way (an exact diagonal); otherwise the stream
+      // stops at the wall and says why, instead of quietly bending somewhere else (Muse, v0.74 and v0.75: "silent reroutes")
+      if(alt<0||Math.abs(dx)!==Math.abs(dy)||own(alt)||!tryStep(G,paths,active,alt)){
         // tell them once why a turn on a crossing doesn't work
         if(!turnTold&&before>1&&paths.some((q,k)=>k!==active&&q.indexOf(tip)>0)){turnTold=true;teachOnce("turn","Streams cross straight over each other. No turning on a crossing.");}
         // a delta only takes water from behind (Nikola, v0.32: nothing said which sides are blocked)
         if(G.cells[step]&&G.cells[step].t==="delta"&&step-tip!==G.cells[step].flow&&!isBranch(G,paths[active]))teachOnce("deltaside","A delta only lets water in from behind, the way its arrow points. Its sides are where the new streams come out.");
-        const hit=[step,alt].find(x=>x>=0&&G.cells[x].t==="rock");
+        const hit=[step,...(Math.abs(dx)===Math.abs(dy)?[alt]:[])].find(x=>x>=0&&G.cells[x].t==="rock");
         // say why a step is refused (Muse, v0.69: a taken pool or a den in the way just stopped the stream)
         const blk=G.cells[step],why=!blk?null:blk.t==="src"?"Dens block the water. Lead the stream around it.":blk.t==="tunnel"&&paths.some((q,k)=>k!==active&&q.indexOf(step)>=0)?"That pool is already taken by another stream.":null;
         if(why&&(why!==lastRefuse.t||performance.now()-lastRefuse.at>2500)){lastRefuse={t:why,at:performance.now()};toast(why);}
@@ -1201,10 +1205,12 @@ function longWon(ink){const L=bonus.long,k=L.k;
   const total=longRun.upInk+ink,par=longPar(k),s=starsFor(total,par),R=LONGS[k],first=!prog.stars[R.id];
   prog.stars[R.id]=Math.max(prog.stars[R.id]||0,s);saveProg();store.set("onChal",null);store.set("ldraw",null);{const all=store.get("ldraws",{})||{};delete all[R.id];store.set("ldraws",all);}
   const at=bonus;setTimeout(()=>{if(bonus!==at||!won)return;const over=total-par;
+    // Continue goes to the first level after this one still to clear (Nikola, v0.75: "Continue Level 16" pointed at a cleared level)
+    let to=lv;if(prog.stars[ID(lv)]){const j=LEVELS.findIndex((L,i)=>i>lv&&!prog.stars[L.id]);if(j>0&&(prog.all||gateOK(j)))to=j;}
     const note=s===3?`Perfect river! ${total} ink across both boards.`:over<=2?`So close: just ${over} ink over. Three stars at ${par}.`:`Solved in ${total} ink across both boards. Reach ${par} for three stars.`;
     openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>
-     <button class="big" id="goBack">Continue Level ${lv+1}</button><button class="ghost" id="goMap">River map</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
-    $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);};$("goMap").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);showLevels();}; /* Muse, v0.69: "Back to Level 13" read as a step back */$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
+     <button class="big" id="goBack">Continue: Level ${to+1}</button><button class="ghost" id="goMap">River map</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
+    $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(to);};$("goMap").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);showLevels();}; /* Muse, v0.69: "Back to Level 13" read as a step back */$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
 }
 // the other board, small, under the tip: upstream shows what is flowing down right now; downstream offers the way back up
 function updatePeek(){const el=$("longPeek"),L=bonus&&bonus.long;if(!el||!L)return;const R=LONGS[L.k];
@@ -1324,7 +1330,7 @@ $("hintBtn").onclick=()=>{
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
   // a den the player just tapped picks the stream, so they can ask about the route they're stuck on (Alan, Oct 20)
   // the pick-a-stream note comes before the first automatic hint is spent (Cooper, Oct 20), so the player can still choose
-  if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Stuck on one stream? Tap its den, then tap Hint, and the hint shows that stream's route. Or tap Hint again for an automatic hint.");return;}
+  if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Next time you're stuck on one stream, tap its den first, then Hint, and the hint shows that stream's route.");} // the first tap still gives a hint (Nikola, v0.75: it showed only the note)
   const mine=picked>=0&&!onRoute(picked)&&!hints.includes(picked),s=mine?picked:nextHint();
   // a picked stream that's already right (or already hinted) can't be the hint: say so instead of quietly picking another
   if(picked>=0&&!mine&&s>=0){const m=G.sources[picked]?NAMES[G.sources[picked].mask]:null;
@@ -1359,7 +1365,7 @@ const LESSONS={
   "Cross and split":[
     {say:"Two purple nests again, but on opposite sides this time.",cells:["all:nest"]},
     {say:"Where two streams cross, both turn purple, and each keeps going its own way."},
-    {say:"Take red straight down through blue's row. Streams can't turn where they cross, so turn only after it.",demo:0,wait:"route:0",quiet:true},
+    {say:"Take red straight down through blue's row. Streams can't turn where they cross, so turn only after it.",demo:0,wait:"cross:0",quiet:true},
     {say:"Now blue straight over red's stream, then turn to the other nest.",demo:1,wait:"win",quiet:true}],
   "Odd one out":[
     {say:"Streams cross straight over each other. They can't turn on a crossing."},
@@ -1450,9 +1456,17 @@ function lessonCheck(released){const st=lessonStep();if(!st||!st.wait)return;
   if(st.wait.startsWith("reach:")){const k=+st.wait.slice(6),p=paths[k],end=routeOf(k);if(p[p.length-1]===end[end.length-1])lessonNext();}
   // "route:k" only moves on when stream k follows the dotted route the next step needs (Cooper, Oct 20: blue reached
   // green by another way, then yellow couldn't cross it). Reaching the nest some other way says how to fix it.
+  // "cross:k": stream k may take any way to a nest, as long as it runs straight through the crossing the next stream needs
+  // (Cooper, v0.75: red down four and left is just as good as the dotted line, and blue still wins at par)
+  if(st.wait.startsWith("cross:")){const k=+st.wait.slice(6),p=paths[k],home=G.nests.some(n=>n.i===p[p.length-1]);
+    const ok=crossCells().every(c=>{const i=p.indexOf(c);return i>0&&i<p.length-1&&p[i+1]-p[i]===p[i]-p[i-1];});
+    if(home&&ok)return lessonNext();
+    if(released&&home)toast("Nearly! Blue needs to cross red where the dotted line goes. Tap Undo, or draw over it.");return;}
   if(st.wait.startsWith("route:")){const k=+st.wait.slice(6),p=paths[k],end=routeOf(k);
     if(onRoute(k))return lessonNext();
-    if(released&&G.nests.some(n=>n.i===p[p.length-1]))toast("Nearly! The next stream has to cross this one where the dotted line goes. Tap Undo, or draw over it along the line.");}}
+    // name both streams and the reason (Muse, v0.75: "Nearly!" never said why the other way fails)
+    if(released&&G.nests.some(n=>n.i===p[p.length-1])){const nx=(lesson.steps[lesson.i+1]||{}).demo,nm=i=>G.sources[i]?NAMES[G.sources[i].mask]:"the next";
+      toast(nx!=null?`Nearly! This way, ${nm(nx)} can't reach ${nm(k)} to cross it. Follow the dotted line: Tap Undo, or draw over it.`:"Nearly! Follow the dotted line. Tap Undo, or draw over it.");}}}
 function lessonCells(st){
   const out=[];(st.cells||[]).forEach(t=>{const [a,b]=t.split(":");
     if(a==="den")out.push(G.sources[+b].i);else if(a==="nest")out.push(G.nests[+b].i);
@@ -1546,7 +1560,9 @@ try{const q=TEST_BUILD?location.search+location.hash:"";
 // Repeats are dropped and at most two wait their turn (the newest win).
 let toastQ=[],toastOn="";
 function toast(t,ms=1900){if(t===toastOn||toastQ.some(q=>q.t===t))return;toastQ.push({t,ms:Math.max(ms,1900)});if(toastQ.length>2)toastQ.shift();if(!toastOn)nextToast();}
-function nextToast(){const el=$("toast"),q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;el.textContent=q.t;el.classList.add("show");
+function nextToast(){const el=$("toast"),q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;el.textContent=q.t;
+  // sit just above the Ink / par line, never on it (Nikola, v0.75: the "Nearly!" toast covered the par line on a phone)
+  const ink=document.querySelector(".ink"),r=ink&&ink.getBoundingClientRect();el.style.bottom=r&&r.height?Math.max(8,innerHeight-r.top+6)+"px":"";el.classList.add("show");
   toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";nextToast();},300);},q.ms);}
 function clearToast(){clearTimeout(toastTimer);toastQ=[];toastOn="";const el=$("toast");el.classList.remove("show");el.textContent="";}
 function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at&&!lesson)showNote(t);},400);} // a lesson says it better
