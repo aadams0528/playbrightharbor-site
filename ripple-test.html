@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.6.8 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.7.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -234,7 +234,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.6.8 prototype</div>
+    <div class="ver" id="ver">Ripple v0.7.0 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -1340,7 +1340,7 @@ function buildCoach(lv) {
     { text: 'Big stone: its ripple pushes leaves two steps. You get ' + (lv.big === 1 ? 'one' : lv.big) + ' here. Tap the big stone, then the glow.', btn: 'btnBig', tap: true, big: true, demo: demo, after: 'Two steps with one splash!' }
   ] };
   if (lv.tip === 'preview' && settings.preview && !seen.preview) return { kind: 'tip', i: 0, steps: [
-    { text: 'Tip: press and hold the glowing water to preview where the leaves will go. Let go to cancel.', hold: true, next: 'Skip' }
+    { text: 'Tip: press and hold the glowing water to preview a splash: where the leaves go, who gets home, and whether it leaves no way home. Let go to cancel.', hold: true, next: 'Skip' }
   ] };
   return null;
 }
@@ -1926,6 +1926,25 @@ function showHold(idx) {
     el('path', { d: 'M' + sx + ',' + sy + 'L' + ex + ',' + ey, stroke: '#ffffff', 'stroke-width': 7, 'stroke-linecap': 'round', class: 'pv-arrow' }, pv);
     el('path', { d: 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 14 - d[0] * 12) + ',' + (-d[0] * 14 - d[1] * 12) + 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 14 + d[0] * 12) + ',' + (-d[0] * 14 + d[1] * 12), stroke: '#ffffff', 'stroke-width': 7, 'stroke-linecap': 'round', fill: 'none' }, pv);
   });
+  // v0.7.0 (round 8, all reviewers): say what the splash does to critters, not just where leaves go
+  function badge(cx, cy, text, col, cls) {
+    var tw = 26 + text.length * 11.5, bp = pillPos(cx, cy, tw), g = el('g', { class: cls }, pv);
+    el('rect', { x: bp.x - tw / 2, y: bp.y - 17, width: tw, height: 32, rx: 16, fill: col, stroke: '#ffffff', 'stroke-width': 3 }, g);
+    var bt = el('text', { x: bp.x, y: bp.y + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, g); bt.textContent = text;
+  }
+  res.moves.forEach(function (mv) {
+    if (!mv.steps) return;
+    var k = lv.leaves[mv.i] && lv.leaves[mv.i].k, pad = k != null ? b.pads[k] : null; if (pad == null) return;
+    var t = cellXY(mv.to);
+    if (mv.from === pad && mv.to !== pad) badge(t.x, t.y, 'off its pad!', '#d9822b', 'pv-off');
+    else if (mv.to === pad) badge(t.x, t.y, 'home!', '#2f9e6b', 'pv-home');
+  });
+  if (res.moves.some(function (mv) { return mv.steps; }) && w * lv.h <= 25 && !L.isWin(b, res.state)) { // small ponds: would this splash leave no way home?
+    var key = L.key(b, res.state); if (!(key in G.solCache)) G.solCache[key] = L.solve(lv, res.state);
+    if (!G.solCache[key]) { var dt = 'No way home after this splash', dw = 26 + dt.length * 11.5, g2 = el('g', { class: 'pv-dead' }, pv), dx = w * 50, dy = lv.h * 100 - 4;
+      el('rect', { x: dx - dw / 2, y: dy - 19, width: dw, height: 36, rx: 18, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3 }, g2);
+      var dtx = el('text', { x: dx, y: dy + 7, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 22, 'font-weight': 800, 'font-family': 'inherit' }, g2); dtx.textContent = dt; }
+  }
   document.body.dataset.preview = '1';
   if (G.coach && G.coach.steps[G.coach.i] && G.coach.steps[G.coach.i].hold) { finishCoach(); toast('Let go to cancel. A quick tap plays.', 2200); }
   return true;
