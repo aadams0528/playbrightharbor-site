@@ -96,9 +96,9 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card.hinted::after{content:"💡";position:absolute;top:4px;left:calc(var(--plate-w,var(--card-h)) - 22px);font-size:15px}
 /* The reveal tilts each card but never turns it edge-on, so no card seems to vanish (Muse, round 3). */
 .card.flip{animation:flip .6s ease}
-.card.flip .year{animation:yearIn .6s ease}
-@keyframes yearIn{0%,50%{opacity:0}100%{opacity:1}}
-@keyframes flip{0%{transform:perspective(700px) rotateX(0)}45%{transform:perspective(700px) rotateX(35deg) scale(1.03)}100%{transform:perspective(700px) rotateX(0)}}
+.card.flip .year{animation:yearIn .35s ease-out}
+@keyframes yearIn{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@keyframes flip{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
 .card.shake{animation:shake .45s ease}
 @keyframes shake{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
 .assemble .card{transition:top .6s cubic-bezier(.3,.7,.2,1)}
@@ -181,7 +181,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
 .chip.ok{background:var(--good);color:#fff}
 .chip.no{background:var(--miss);color:#fff}
 .tag{display:inline-block;margin-top:4px;font-family:var(--mono);font-size:12px;font-weight:700;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 28%,var(--paper));color:var(--ink)}
-.card.sel{outline:3px solid var(--accent);outline-offset:2px;transform:scale(1.02)}
+.card.sel{outline:3px solid var(--accent);outline-offset:2px;transform:translateY(-4px) scale(1.04);box-shadow:0 10px 22px rgba(0,0,0,.22);z-index:5}
 .card.picking{outline:2px dashed var(--accent);outline-offset:2px}
 .tries{display:flex;gap:6px;align-items:center;justify-content:center;font-size:13px;color:var(--muted)}
 .tries i{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
@@ -471,7 +471,7 @@ const EVENTS = [
 [1968, "hamburger", "Big Mac goes nationwide", "A Pittsburgh-area franchise owner, Jim Delligatti, created it the year before. Its name was suggested by a young secretary at McDonald's headquarters.", "f", "Big_Mac"],
 [1969, "x-moonflag", "First moon landing", "Neil Armstrong and Buzz Aldrin walked on the moon on July 20. About 600 million people around the world watched on TV.", "s", "Apollo_11"],
 [1969, "peace", "Woodstock music festival", "About 400,000 people came to a dairy farm in New York. It was actually held in Bethel, about 40 miles from the town of Woodstock.", "f", "Woodstock"],
-[1969, "bird", "Sesame Street premieres", "Big Bird is over 8 feet tall. Caroll Spinney played him for almost 50 years, holding one arm up inside the costume to work the head.", "f", "Sesame_Street"],
+[1969, "bird", "Sesame Street premieres", "Big Bird is over 8 feet tall. Carroll Spinney played him for almost 50 years, holding one arm up inside the costume to work the head.", "f", "Sesame_Street"],
 [1970, "globe-hemisphere-west", "First Earth Day", "About 20 million Americans took part, roughly 1 in 10 people. Later the same year, the US Environmental Protection Agency was created.", "h", "Earth_Day"],
 [1971, "envelope", "First email between computers", "Ray Tomlinson chose the @ sign to separate the user from the computer. He later said the first message was forgettable, probably something like QWERTYUIOP.", "i", "Email"],
 [1972, "ping-pong", "Pong arcade game", "The first Pong machine, in a California bar, stopped working because its coin box was full. The bar was Andy Capp's Tavern in Sunnyvale.", "f", "Pong"],
@@ -749,6 +749,8 @@ const $=s=>document.querySelector(s);
 const KEY="whenly-v2";
 let S;try{S=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){S={}}
 S.days=S.days||{};S.tiers=S.tiers||{};S.streak=S.streak||0;S.best=S.best||0;S.played=S.played||0;S.total=S.total||0;S.freezes=S.freezes||0;S.offset=S.offset||0;S.reports=S.reports||[];
+// Saves from before history points: credit past daily scores once (Muse, round 4). Max, not add, so nothing counts twice.
+if(!S.hpBack){S.hp=Math.max(S.hp||0,S.total||0);S.hpBack=1}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(!cloudApplying)window.BHCloud?.changed?.()}
 let cloudApplying=false;
 
@@ -879,6 +881,90 @@ function fresh(kind,ids,order){return{kind,ids,order,attempt:1,known:{},hints:{}
 // The puzzle for day n is the same for everyone, so the archive can rebuild any past day.
 function dateOf(n){const d=new Date(EPOCH);d.setDate(d.getDate()+n-1);return d}
 const themeOf=n=>SCHEDULE[n]?SCHEDULE[n][0]:"";
+// A spoiler-free question for tomorrow's theme (Cooper, round 4).
+const TEASERS={
+"A little of everything":"A grab bag from across the centuries. Which came first?",
+"Snack time":"Which treat came first: the fizz, the chocolate or the cake?",
+"Planets and telescopes":"Which came first: finding a planet or sending a telescope into space?",
+"Toy box":"Which toy was under the tree first?",
+"Game on":"From arcade beeps to building blocks: which game came first?",
+"At the movies":"Which blockbuster sold tickets first?",
+"The personal-tech boom":"Which gadget did people carry first?",
+"American firsts":"From a ship's landing to a 50th star: which American first came first?",
+"Big builds":"Copper, concrete or glass: which giant was built first?",
+"Turn it up":"From a radio show to free downloads: which music moment came first?",
+"Game day":"Which sports first happened first?",
+"Online":"Which came first: the first email or the first search engine giant?",
+"The space race":"Which step into space came first?",
+"The '60s":"Five moments from one busy decade. Which came first?",
+"Inventions":"Which invention changed the world first?",
+"Turning points":"Which words changed history first?",
+"Kitchen cupboard":"Which pantry staple hit the shelves first?",
+"Funny pages":"Which cartoon star appeared first?",
+"Can you hear me now?":"How fast did the phone change? Which call came first?",
+"From Jaws to the Berlin Wall":"Sharks, arcades and a falling wall: which came first?",
+"A new nation":"How did America begin? Which step came first?",
+"Landmarks":"Which famous landmark was started first?",
+"Big ideas in science":"Which big idea in science came first?",
+"Presidents":"Which White House moment came first?",
+"Women who led the way":"Which women's first came first?",
+"Must-see TV":"Which show did families gather to watch first?",
+"Computers":"Which tech giant got started first?",
+"The war years and after":"War and what came after: which moment came first?",
+"Getting around":"Ship, canal, train or plane: which journey came first?",
+"Movie magic":"From the first film show to a frozen princess: which came first?",
+"Sports legends":"Which legendary win came first?",
+"Toys and games":"Which game hit the toy shelves first?",
+"Eyes on the sky":"Which look into space came first?",
+"Pixels and joysticks":"Which video game classic came first?",
+"Gadgets and apps":"Which app or gadget showed up first?",
+"Great journeys":"Which great journey set off first?",
+"Science breakthroughs":"Which medical or science breakthrough came first?",
+"Movie nights":"Which movie was a hit first?",
+"Fast food and fizz":"Which fast-food first came first?",
+"On the air":"Which broadcast hit the airwaves first?",
+"From war to Cold War":"Which Cold War moment came first?",
+"Computer firsts":"Which computer first came first?",
+"The American story":"Which moment in America's story came first?",
+"Bridges, towers and tunnels":"Which engineering wonder came first?",
+"Music through time":"How have we listened to music? Which came first?",
+"Childhood favorites":"Which childhood favorite came first?",
+"Ask the internet":"Which way of asking the internet came first?",
+"Heading west":"Which moment on the road west came first?",
+"Road to the moon":"Which step on the way to the moon came first?",
+"Art, words and song":"Which work of art, words or song came first?",
+"Everyday inventions":"Which everyday invention came first?",
+"Sports firsts":"Which sport held its first big game first?",
+"Snack attack":"Which sweet treat came first?",
+"Robots and telescopes":"Which robot or telescope reached space first?",
+"Tune in":"Which TV moment had everyone talking first?",
+"From the Titanic to King Tut":"A sinking ship, a war and a tomb: which came first?",
+"Big deals":"Which famous deal was made first?",
+"How the universe works":"Which idea about the universe came first?",
+"Equal rights":"Which step toward equal rights came first?",
+"Pictures and screens":"Camera, TV or streaming: which came first?",
+"Inside the Body":"Which discovery about the human body came first?",
+"Stargazers":"Which discovery in the night sky came first?",
+"The Mongol Storm":"Which moment of the Mongol age came first?",
+"Kings, Khans and Shoguns":"Which ruler's moment came first?",
+"Faith and Fortresses":"Which medieval moment came first?",
+"Sparks and Engines":"Which spark of the machine age came first?",
+"Gold and Glory in Africa":"Which moment in Africa's story came first?",
+"Revolution!":"Which revolution broke out first?",
+"Big Ideas in Science":"From numbers to planets: which big idea came first?",
+"Germs and Cures":"Which step in fighting germs came first?",
+"Empires of the East":"Which great empire in Asia began first?",
+"Great Builders":"Which great building project came first?",
+"Fall of the Great Cities":"Which great city fell first?",
+"Ships Across the World":"Which voyage set sail first?",
+"Firsts for Freedom":"Which win for freedom came first?",
+"Words and Numbers":"Which leap in words or numbers came first?",
+"Time and the Heavens":"Which discovery about time and the sky came first?",
+"Rise of the Americas":"Which moment in the Americas came first?",
+"Medieval World Tour":"Which moment of the medieval world came first?",
+"Japan Through Time":"Which moment in Japan's history came first?"
+};
+const teaserOf=n=>TEASERS[themeOf(n)]||"Five new moments to put in order. Can you keep your streak?";
 function dealFor(n){
   const wd=dateOf(n).getDay(),r=rng(n*7919+13);
   // A hand-picked puzzle for this day wins; otherwise the dealer picks one by the rules above.
@@ -934,7 +1020,7 @@ function build(){sel=null;
 }
 // Hint steps: century, decade, part of a decade, exact year. A puzzle starts at the first step that
 // tells its cards apart, so close-together puzzles (all 1900s) open on the decade instead of a wasted century.
-const HINT_STEPS=[["its century",y=>`${Math.floor(y/100)}00s`],["its decade",y=>`${Math.floor(y/10)}0s`],
+const HINT_STEPS=[["its century",y=>y>=2000?"21st century":`${Math.floor(y/100)}00s`],["its decade",y=>`${Math.floor(y/10)}0s`],
   ["whether it was early, mid or late in its decade",y=>{const d=y%10,b=y-d;return d<=3?`early ${b}s`:d<=6?`mid-${b}s`:`late ${b}s`}],["its exact year",y=>String(y)]];
 function hintStart(){const ys=G.ids.map(yr);
   for(let i=0;i<HINT_STEPS.length-1;i++)if(new Set(ys.map(HINT_STEPS[i][1])).size>1)return i;return HINT_STEPS.length-1}
@@ -979,7 +1065,7 @@ function announce(id){$("#sr").textContent=`${EVENTS[id][2]} moved to position $
 // What the last check found, kept apart from the live ✓/× tags on the cards as they sit now.
 function feedbackLine(){
   // Lesson: the first check shows a red ×, then the player fixes that pair (Nikola and Cooper, round 3).
-  if(G.kind==="tutorial"&&!G.done&&G.attempt>1){$("#bLock").disabled=sameAsChecked();$("#hintLine").innerHTML=`<b>The red × means those two are reversed.</b> The Gutenberg Bible is older than the Moon landing, so drag it to the top, then check again.`;showCoach();return}
+  if(G.kind==="tutorial"&&!G.done&&G.attempt>1){$("#bLock").disabled=sameAsChecked();$("#hintLine").innerHTML=`<b>The red × means those two are reversed.</b> The Gutenberg Bible is older than the Moon landing, so move it to the top: tap it, then tap the top card (or drag it). Then check again.`;showCoach();return}
   if(G.done||G.kind==="tutorial"||picking)return;
   const h=$("#hintLine");
   if(G.attempt<2){h.textContent="Drag a card, or tap it and then tap its new spot.";return}
@@ -1134,7 +1220,7 @@ function nearMiss(){
   const swapped=G.finalOrder&&G.finalOrder.indexOf(best.a)>G.finalOrder.indexOf(best.b);
   const A=EVENTS[best.a][2],B=EVENTS[best.b][2],yrs=best.gap===1?"1 year":best.gap+" years";
   // Say "only" just when the gap really is small; otherwise keep it plain.
-  const line=best.gap<=3?`<b>${A}</b> and <b>${B}</b> were just ${yrs} apart!`:best.gap<=10?`<b>${A}</b> and <b>${B}</b> were only ${yrs} apart!`:`Closest pair today: <b>${A}</b> came ${yrs} before <b>${B}</b>.`;
+  const line=best.gap<=3?`<b>${A}</b> and <b>${B}</b> were just ${yrs} apart!`:best.gap<=10?`<b>${A}</b> and <b>${B}</b> were only ${yrs} apart!`:`${G.kind==="daily"?"Closest pair today":"Closest pair"}: <b>${A}</b> came ${yrs} before <b>${B}</b>.`;
   return `🔗 ${line}${swapped?" You had them the wrong way round.":""}`;
 }
 // Today's years on a line to scale. Cards closer than 9% of the span get nudged apart and
@@ -1175,11 +1261,11 @@ function showResult(){
     </div>
     ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
     ${G.kind==="daily"&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:G.kind==="daily"||G.kind==="archive"?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
-    ${G.kind==="daily"?`<p class="next">${G.note?G.note+"<br>":""}Come back tomorrow for puzzle #${G.n+1} to keep your streak going. Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Next puzzle in <b id="cd"></b></p>${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b><br>Five new moments to put in order. Can you keep your streak?</p>`:""}`:""}
+    ${G.kind==="daily"?`<p class="next">${G.note?G.note+"<br>":""}Come back tomorrow for puzzle #${G.n+1} to keep your streak going. Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Next puzzle in <b id="cd"></b></p>${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b><br>${teaserOf(G.n+1)}</p>`:""}`:""}
     ${G.kind==="daily"&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
     ${NATIVE&&adsAllowed()&&G.kind!=="tutorial"?`<button class="linkbtn noads" id="noads">Remove ads · ${removePrice}</button>`:""}
     <textarea class="copy" id="copybox" rows="4" readonly hidden>${share}</textarea>`;
-  r.hidden=false;showStories(surpriseCard());$("#sr").textContent=`Puzzle finished. ${G.score} out of 100, ${tier(G.score)}. ${how}.`;
+  r.hidden=false;if(G.gain&&!G.gain.shown){G.gain.shown=true;persist()}showStories(surpriseCard());$("#sr").textContent=`Puzzle finished. ${G.score} out of 100, ${tier(G.score)}. ${how}.`;
   r.querySelectorAll(".tl button").forEach(b=>b.onclick=()=>showFact(+b.dataset.id));
   if($("#bReplay"))$("#bReplay").onclick=replayPuzzle;
   if($("#bWeek"))$("#bWeek").onclick=weekStories;
@@ -1345,7 +1431,7 @@ function help(){sheet(`<h2>How to play</h2>
   <p style="color:var(--muted);font-size:14px">Card photos are public domain or CC0, from Wikimedia Commons.</p>`)}
 // History points: every finished puzzle (daily, archive, Practice, Expert) adds its score, so
 // play after the daily still counts. Weekly total resets each Monday; ranks use the lifetime total.
-const RANKS=[[0,"Curious"],[500,"Explorer"],[2000,"Scholar"],[5000,"Chronicler"],[10000,"Archivist"],[20000,"Legend"]];
+const RANKS=[[0,"Curious"],[250,"Explorer"],[1000,"Scholar"],[3000,"Chronicler"],[7500,"Archivist"],[15000,"Legend"]];
 const weekNo=()=>Math.floor((dayNum()-1)/7);
 function rankOf(p){let r=0;RANKS.forEach((x,i)=>{if(p>=x[0])r=i});return r}
 function addPoints(n){
@@ -1358,7 +1444,8 @@ function addPoints(n){
 function pointsLine(g){
   if(!g)return "";
   const r=rankOf(S.hp||0),nx=RANKS[r+1];
-  return `<p class="points">${g.up?`🏅 New rank: <b>${g.up}</b>! `:""}+${g.n} history points · This week: <b>${S.wk&&S.wk.w===weekNo()?S.wk.pts:0}</b> · ${RANKS[r][1]}${nx?` (${nx[0]-S.hp} to ${nx[1]})`:""}</p>`;
+  const fresh=!g.shown;
+  return `<p class="points">${fresh&&g.up?`🏅 New rank: <b>${g.up}</b>! `:""}${fresh?`+${g.n} history points`:`${g.n} history points earned`} · This week: <b>${S.wk&&S.wk.w===weekNo()?S.wk.pts:0}</b> · ${RANKS[r][1]}${nx?` (${nx[0]-S.hp} to ${nx[1]})`:""}</p>`;
 }
 function stats(){
   const max=Math.max(1,...TIERS.map(t=>S.tiers[t[1]]||0)),td=S.days[dayNum()],mine=td&&td.g&&td.g.done?tier(td.g.score):"";
