@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.66 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.67 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -508,7 +508,7 @@ const CHALLENGES=[/*CHAL-START*/
  {id:"x-cuckoo-nest",name:"Cuckoo nest",after:8,tip:"Four purple homes, and each one wants a different den. Check every shape.",map:["..p.p...",".#..pp#.","R.......","....B..#","........","....#...",".#..B...","R......."],homes:{"5,1":"0,2","4,0":"4,3","2,0":"0,7","4,1":"4,6"},sol:["DDRRRRRUUU","LUUUR","LULLUUURRRU","RRUUUUUUU"]},
  {id:"x-long-portage",name:"Long portage",after:9,tip:"The blue stream can't go straight home. Which way round the blockers costs the least ink?",map:["..o....","....YR.","..Bo...",".r...#.","..#.b#.",".###.#.",".....#R"],sol:["LLU","ULLDD","LLDDDDRRRRUU","UUUULLDLLL"]},
  {id:"x-glass-weir",name:"Glass weir",after:10,tip:"The red filter takes red out: purple goes in, blue comes out.",map:["....#..","..Y....",".B..ry.","......R","..b#.#.","p......",".1.#R.."],sol:["RRRD","DDDDRUU","LLLLLLDD","UUUU"]},
- {id:"x-split-decision",name:"Split decision",after:11,tip:"Both branches leave the delta red, but one has to turn orange on the way home.",map:["b#......","..R.....","..r.....","........","B#....#.","..<.....","o.....Yo",".#......"],sol:["RDDDDL","UUUU","LLLLLL","UUU","DDRRRRRU"]},
+ {id:"x-split-decision",name:"Split decision",after:11,tip:"Both branches leave the delta red. One stays red all the way home; the other has to turn orange.",map:["b#......","..R.....","..r.....","........","B#....#.","..<.....","o.....Yo",".#......"],sol:["RDDDDL","UUUU","LLLLLL","UUU","DDRRRRRU"]},
  {id:"x-marsh-fork",name:"Marsh fork",after:12,tip:"Feed the delta red, and watch which stream takes the pool.",map:["....#...","...T#T.o","...Y#...",".#.^..o.","..b.#...","o...#...","..RB#...","....#..#"],sol:["LLLDDD","URUU","DLLUUUR","LUURRDD","RRURRU"]},
  {id:"x-last-light",name:"Last light",after:14,tip:"Make two purples, a yellow and a blue. Two of the streams take a pool to get there.",map:[".y#..#.p","..R..#.b","...T.#.T","....T#.T",".....#..","....p...","..#.B#.B","..Y..#.."],sol:["RRDDDDLLL","LUUUUU","LUUUUUUR","LUUUUUUU"]},
 /*CHAL-END*/].map(c=>Object.assign({mix:true},c));
@@ -782,7 +782,9 @@ cv.addEventListener("pointerdown",e=>{
     const owners=paths.map((p,k)=>p.indexOf(c)>0?k:-1).filter(k=>k>=0);
     // pressing a cell two streams share: a stream whose tip is here carries on, otherwise cut the top one
     if(owners.length){active=owners.find(k=>paths[k][paths[k].length-1]===c)??owners[owners.length-1];pressed=paths[active].slice();paths[active].length=cutPoint(paths[active],c)+1;}
-    else{active=nearTip(e);if(active<0)return;pressed=paths[active].slice();lastCell=-1;cv.setPointerCapture(e.pointerId);follow(e);return;}
+    // a press on a pool is not a stream (Muse, v0.64: pressing a pool next to a den started that den's stream)
+    else if(cell.t==="tunnel"){undoStack.pop();teachOnce("poolpress","Pools aren't streams. Start from a critter, then draw into the pool.");return;}
+    else{active=nearTip(e);if(active<0){undoStack.pop();return;}pressed=paths[active].slice();lastCell=-1;cv.setPointerCapture(e.pointerId);follow(e);return;}
   }
   if(cell.t==="src"||cell.t==="delta")pressed=null;lastCell=c;cv.setPointerCapture(e.pointerId);afterChange(false);
 });
@@ -831,7 +833,7 @@ function walkTo(c){
   // a feeder that just reached a delta hands over first, even when its branch heads back across the feeder
   const t0=paths[active][paths[active].length-1];
   if(G.cells[t0].t==="delta"&&paths[active][0]!==t0&&G.cells[t0].outs.some(o=>t0+o===c))deltaHandoff(t0,c);
-  if(paths[active].indexOf(c)>0){paths[active].length=cutPoint(paths[active],c)+1;return "cut";}
+  if(paths[active].indexOf(c)>=0){paths[active].length=cutPoint(paths[active],c)+1;return "cut";} // the den too: back to the start
   let guard=0;
   while(guard++<20){
     const tip=paths[active][paths[active].length-1];if(tip===c)break;
@@ -840,9 +842,12 @@ function walkTo(c){
     const step=Math.abs(dx)>=Math.abs(dy)?tip+Math.sign(dx):tip+Math.sign(dy)*G.w;
     const before=paths[active].length;
     if(G.cells[tip].t==="delta"&&deltaHandoff(tip,step))continue;
-    if(!tryStep(G,paths,active,step)){
+    // the stream only pulls back when the finger is back on it (above). Walking toward a finger that is past a wall
+    // never eats the stream back along itself (Muse, v0.64: the river "re-routed" west when the finger went past a dam)
+    const own=x=>paths[active].indexOf(x)>=0;
+    if(own(step)||!tryStep(G,paths,active,step)){
       const alt=Math.abs(dx)>=Math.abs(dy)?(dy?tip+Math.sign(dy)*G.w:-1):(dx?tip+Math.sign(dx):-1);
-      if(alt<0||!tryStep(G,paths,active,alt)){
+      if(alt<0||own(alt)||!tryStep(G,paths,active,alt)){
         // tell them once why a turn on a crossing doesn't work
         if(!turnTold&&before>1&&paths.some((q,k)=>k!==active&&q.indexOf(tip)>0)){turnTold=true;teachOnce("turn","Streams cross straight over each other. No turning on a crossing.");}
         // a delta only takes water from behind (Nikola, v0.32: nothing said which sides are blocked)
@@ -900,7 +905,10 @@ const fedDeltas=()=>G.cells.map((d,i)=>d.t==="delta"&&paths.some(q=>q.length>1&&
 function unfeed(){const now=fedDeltas();fedAtDown.forEach(i=>{if(!now.includes(i))paths.forEach((q,k)=>{if(q[0]===i)paths[k]=[i];});});fedAtDown=[];}
 function sprout(){G.cells.forEach((d,i)=>{if(d.t!=="delta"||!paths.some(q=>q.length>1&&q[0]!==i&&q[q.length-1]===i))return;
   paths.forEach((q,k)=>{if(q[0]!==i||q.length!==1)return;const j=branchNo(paths,k);tryStep(G,paths,k,i+d.outs[j]);});});}
-function endDrag(){if(active<0)return;if(!(pressed&&pressed.join()===paths[active].join()))settle(paths,active,G);pressed=null;unfeed();sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
+function endDrag(){if(active<0)return;
+  // say why a stream stopped short: it can't end on a crossing (Muse, v0.64: the rule was never explained)
+  const tp=paths[active][paths[active].length-1],onCross=paths[active].length>1&&others(paths,tp,active).length>0;
+  if(!(pressed&&pressed.join()===paths[active].join())){settle(paths,active,G);if(onCross)teachOnce("crossend","A stream can't stop on a crossing. Carry it on past, or stop before it.");}pressed=null;unfeed();sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
   judgeRetrace(active);lastDrawn=active;active=-1;afterChange(true);lastDrawn=-1;if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
 // A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
 // Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
