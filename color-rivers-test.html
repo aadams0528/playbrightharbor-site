@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px}
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small>Prototype v0.72 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small>Prototype v0.73 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -564,6 +564,9 @@ let prog=(()=>{
   p.total=starSum(p.stars);return p;
 })();
 function saveProg(){store.set("prog3",prog);if(window.CR_CLOUD)window.CR_CLOUD.changed(prog);}
+// two tabs of the test page share one save: when the other tab writes, fold its stars in, so this tab's next save
+// can't wipe them (Muse, v0.69: 87 stars fell to 35 after a reload). mergeProg keeps the best of both.
+addEventListener("storage",e=>{if(e.key!=="cr-prog3"||!e.newValue)return;try{const other=JSON.parse(e.newValue);if(other&&other.v===3){prog=mergeProg(prog,other);store.set("prog3",prog);if(typeof updateStars==="function")updateStars();}}catch(_){}});
 // Hook for the shared studio cloud save (native wrapper: Firebase sign-in with Apple/Google). It calls
 // CR_SAVE.merge(cloudCopy) after sign-in, uploads CR_SAVE.get(), and sets window.CR_CLOUD={changed(p)} to hear of saves.
 // In the phone app, src/native.js sets window.CR_NATIVE={track(name,params),settings(box)} for analytics and the sign-in row.
@@ -839,6 +842,7 @@ function deltaHandoff(tip,step){const d=G.cells[tip],br=paths.map((q,k)=>k).filt
   else if(paths[active].length===1){const was=undoStack[undoStack.length-1];if(was&&was[active])paths[active]=was[active].slice();} // wrong branch picked on the press
   else return false;
   active=to;paths[to]=[tip];pressed=null;return true;}
+let lastRefuse={t:"",at:0};
 function walkTo(c){
   // finger back on the stream: pull it back to there
   // a feeder that just reached a delta hands over first, even when its branch heads back across the feeder
@@ -864,6 +868,9 @@ function walkTo(c){
         // a delta only takes water from behind (Nikola, v0.32: nothing said which sides are blocked)
         if(G.cells[step]&&G.cells[step].t==="delta"&&step-tip!==G.cells[step].flow&&!isBranch(G,paths[active]))teachOnce("deltaside","A delta only lets water in from behind, the way its arrow points. Its sides are where the new streams come out.");
         const hit=[step,alt].find(x=>x>=0&&G.cells[x].t==="rock");
+        // say why a step is refused (Muse, v0.69: a taken pool or a den in the way just stopped the stream)
+        const blk=G.cells[step],why=!blk?null:blk.t==="src"?"Dens block the water. Lead the stream around it.":blk.t==="tunnel"&&paths.some((q,k)=>k!==active&&q.indexOf(step)>=0)?"That pool is already taken by another stream.":null;
+        if(why&&(why!==lastRefuse.t||performance.now()-lastRefuse.at>2500)){lastRefuse={t:why,at:performance.now()};toast(why);}
         if(hit!==undefined){splash(tip,hit);if(!prog.seen["note:dam"])teachOnce("dam","Water can't go through rocks or a dam. Lead the stream around them.");} // Nikola, v0.69: a splash alone said nothing
         break;}
     }
@@ -1161,6 +1168,8 @@ function startLong(k,stage=0){
 }
 function longWon(ink){const L=bonus.long,k=L.k;
   if(!L.stage){const colors=nestStatus(G,paths,col).map(s=>s.color),same=longRun.colors&&longRun.colors.join()===colors.join();
+    // came back up and the same colours still flow: stay here and keep drawing; ↓ goes down when ready (Muse, v0.69: "redraw deadlock")
+    if(same&&longRun.down){won=false;longRun.upInk=ink;updateInk();updatePeek();updateUndo();toast("Same colours as before. Tap ↓ Back downstream when you're ready.");return;}
     longRun.up=paths.map(p=>p.slice());longRun.upUndo=undoStack.slice(-20);longRun.upInk=ink;if(!same){longRun.down=null;longRun.downUndo=null;}longRun.colors=colors;
     toast("The colours flow downstream…");const at=bonus;setTimeout(()=>{if(bonus===at&&won)startLong(k,1);},900);return;}
   const total=longRun.upInk+ink,par=longPar(k),s=starsFor(total,par),R=LONGS[k],first=!prog.stars[R.id];
@@ -1168,8 +1177,8 @@ function longWon(ink){const L=bonus.long,k=L.k;
   const at=bonus;setTimeout(()=>{if(bonus!==at||!won)return;const over=total-par;
     const note=s===3?`Perfect river! ${total} ink across both boards.`:over<=2?`So close: just ${over} ink over. Three stars at ${par}.`:`Solved in ${total} ink across both boards. Reach ${par} for three stars.`;
     openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>
-     <button class="big" id="goBack">Back to Level ${lv+1}</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
-    $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
+     <button class="big" id="goBack">Continue Level ${lv+1}</button><button class="ghost" id="goMap">River map</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
+    $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);};$("goMap").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);showLevels();}; /* Muse, v0.69: "Back to Level 13" read as a step back */$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
 }
 // the other board, small, under the tip: upstream shows what is flowing down right now; downstream offers the way back up
 function updatePeek(){const el=$("longPeek"),L=bonus&&bonus.long;if(!el||!L)return;const R=LONGS[L.k];
@@ -1262,7 +1271,8 @@ $("sheet").addEventListener("keydown",e=>{if(e.key!=="Tab")return;const f=[...$(
   const i=f.indexOf(document.activeElement),j=e.shiftKey?(i<=0?f.length-1:i-1):(i<0||i===f.length-1?0:i+1);e.preventDefault();f[j].focus();}); // Tab wraps around inside the card
 $("sheet").addEventListener("click",e=>{if(e.target.id==="sheet"&&!won&&!$("adDone"))closeSheet();}); // an ad only closes by its own buttons
 $("levelsBtn").onclick=showLevels;$("setBtn").onclick=showSettings;
-$("resetBtn").onclick=()=>startLevel(daily?"daily":bonus?"bonus":lv);
+$("resetBtn").onclick=()=>{startLevel(daily?"daily":bonus?"bonus":lv);
+  if(bonus&&bonus.long){longSave();toast(bonus.long.stage?"This board starts over. Upstream is kept.":"This board starts over. Downstream is kept until the colours change.");}}; // Muse, v0.69
 // Undo: takes back the last stroke (each press-and-drag is one step). Playtesters didn't find tap-the-den or drag-back.
 let undoStack=[];
 function updateUndo(){$("undoBtn").disabled=won||!undoStack.some(s=>JSON.stringify(s)!==JSON.stringify(paths));}
