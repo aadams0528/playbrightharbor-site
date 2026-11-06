@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.6.7 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.6.8 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -186,6 +186,7 @@ body[data-theme="moon"] .overlay{background:rgba(6,14,28,.3)}
 body[data-theme="moon"] #winCard.overlay{background:radial-gradient(ellipse at 50% 40%,rgba(6,14,28,0) 45%,rgba(6,14,28,.35) 100%)}
 body[data-theme="moon"] #winCard .card{--card:#203656;--ink:#eef4ff;color:#eef4ff;border:2px solid #4b6a92}
 body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
+body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#203656} /* v0.6.8: "Play again" was pale text on white at Moon Pond */
 .toast.nudge{top:auto;bottom:calc(112px + env(safe-area-inset-bottom))}
 /* svg bits */
 .leaf{transition:transform 240ms cubic-bezier(.25,.8,.35,1)}
@@ -233,7 +234,7 @@ body[data-theme="moon"] #winCard .card p{color:#cfdcf0}
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.6.7 prototype</div>
+    <div class="ver" id="ver">Ripple v0.6.8 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -1053,7 +1054,8 @@ function homeSet() {
 function afterTapNotes(before) { // v0.6.4 (Muse r6): say when a home critter gets knocked off, and when the pond can't be finished from here
   var now = homeSet(), off = Object.keys(before).filter(function (k) { return !(k in now); });
   var stuck = !G.stuckSaid && G.level.w * G.level.h <= 25 && !solveNow(); // small ponds only, so the check stays instant
-  if (stuck) { G.stuckSaid = true; $('btnUndo').classList.add('glow'); }
+  if (stuck) G.stuckSaid = true;
+  if (G.stuckSaid) $('btnUndo').classList.add('glow'); // v0.6.8 (Muse r8): the gold Undo ring stays on every tap until Undo or Restart, not just the first
   if (off.length && !seen.knockOff) { seen.knockOff = true; store.set('seen', seen); toast('Ripples can push a critter back off its pad.' + (stuck ? ' No way home from here now: try Undo.' : ' Plan the order.'), 3200); return; }
   if (stuck) toast('No way home from here. Try Undo.', 2800);
 }
@@ -1301,7 +1303,8 @@ function buildCoach(lv) {
     { text: 'Only leaves inside that + get pushed. Tap the glowing spot again.', tap: true }
   ] };
   if (lv.intro === 'two') return { kind: 'intro', i: 0, steps: [
-    { text: 'Two critters, two pads: match the shape and colour. One splash can push both leaves.', cells: pads.concat(leaves), next: 'Play' }
+    { text: 'Two critters, two pads: match the shape and colour. One splash can push both leaves.', cells: pads.concat(leaves), next: 'Next' },
+    { text: 'Careful: a splash also pushes a critter that is already home, right off its pad. Plan the order. If Undo glows gold, there is no way home from here.', cells: pads, next: 'Play' } // v0.6.8 (Muse r8): teach knock-off and dead ends up front
   ] };
   // element intros: one short card + a guided "tap here and watch" demo tap
   if (lv.intro === 'rock') return { kind: 'intro', i: 0, steps: [
@@ -1837,7 +1840,7 @@ function showHint() {
   G.hintStage = 2; G.hint = sol[0].idx;
   hlCell(sol[0].idx, true);
   var w = G.level.w, where = 'Tap row ' + (((sol[0].idx / w) | 0) + 1) + ', column ' + (sol[0].idx % w + 1) + '.';
-  if (sol[0].big && !G.useBig) { $('btnBig').classList.add('glow'); where += ' Use the big stone.'; }
+  if (sol[0].big && !G.useBig) { G.useBig = true; where += ' The big stone is ready: it pushes 2 steps.'; } // v0.6.8 (Muse r8): Show me arms the big stone itself, so the shown tap really moves 2 cells
   else if (!sol[0].big && G.useBig) { G.useBig = false; where += ' A pebble works here.'; }
   toast(where, 3000);
   hud();
