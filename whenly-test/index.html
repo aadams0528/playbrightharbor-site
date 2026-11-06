@@ -109,6 +109,9 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 @keyframes bump{50%{transform:scale(1.04)}}
 
 .actions{display:grid;grid-template-columns:auto 1fr;gap:10px}
+/* Short screens: Hint and Check stay pinned to the bottom so they're never below the fold (Nikola, round 4). */
+@media (max-height:780px){#play:not([hidden]) .actions{position:fixed;z-index:7;bottom:0;left:50%;transform:translateX(-50%);width:min(460px,100%);box-sizing:border-box;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:var(--bg);box-shadow:0 -8px 16px -12px rgba(0,0,0,.35)}
+  .app:has(#play:not([hidden])){padding-bottom:96px}}
 .btn{border:0;border-radius:14px;padding:15px 18px;font-weight:700;font-size:17px}
 .btn.primary{background:var(--accent);color:var(--accent-ink)}
 .btn.ghost{background:var(--paper);border:1px solid var(--line)}
@@ -650,7 +653,21 @@ const NAME="Whenly";
 const EPOCH=new Date(2026,9,12); // puzzle #1
 const DAY_GAP=[2,30,20,12,8,5,3]; // Sun..Sat: fewest years between any two cards
 const DAY_NAME=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const DAY_FEEL=["Hardest","Easiest","Easy","Medium","Medium","Tricky","Hard"];
+// ---------- difficulty (round 4: Muse + Nikola asked for honest labels and Hard days with teeth) ----------
+// FAME[i]: how well a typical adult can place card i in time: 1 within ~10 years, 2 the era, 3 not within 30 years.
+// Card order matches EVENTS, so new cards append a digit at the end.
+const FAME="232321222223221232222111123111322212222231221112233221321232232223332323313322231133213112233333232313333212222222323123133211323133333232112213211123211221222212121312212211213131223333121112311222313121111231121211212121211121221111121111121122111212111111112121111121111212211111111111111121111111111333333333333333332333233332333333333333233333333333323232333".split("").map(Number);
+// Difficulty = close neighbors (within 12 years: +1, within 4: +2) plus how little-known the cards are.
+function hardness(ids){const y=ids.map(yr).sort((a,b)=>a-b);let v=0;
+  for(let i=1;i<y.length;i++){const g=y[i]-y[i-1];if(g<=12)v++;if(g<=4)v++}
+  return v+ids.reduce((a,i)=>a+(FAME[i]||2)-1,0)}
+const LEVELS=["Easy","Medium","Tricky","Hard"],LEVEL_MULT=[1,1.15,1.3,1.5];
+const levelOf=ids=>{const d=hardness(ids);return d>=8?3:d>=6?2:d>=4?1:0};
+// The week ramps up: Mon-Tue easy, Wed-Thu medium, Fri tricky, Sat-Sun hard. Hand-picked days keep their honest level.
+const DAY_LEVEL=[3,0,0,1,1,2,3];
+// Hard puzzles hide which pairs are reversed: a check only says how many neighbors are in order (Alan, round 4).
+const dayLevelCache={},dayLevel=n=>dayLevelCache[n]??=levelOf((S.days[n]&&S.days[n].g&&S.days[n].g.ids)||dealFor(n).ids);
+const hideTags=()=>G&&G.kind!=="tutorial"&&levelOf(G.ids)===3;
 // Hand-picked daily puzzles: puzzle number -> [theme, five card titles]. Days without an entry are dealt by the rules.
 // Written for puzzle #1 on a Monday (each day's cards fit that weekday's level), so keep EPOCH on a Monday.
 // Card photos (public domain / CC0, see docs/art-credits.md), keyed by Wikipedia article. Written by scripts/fetch-art.mjs.
@@ -716,26 +733,26 @@ const SCHEDULE={
  58:["How the universe works", ["Copernicus puts the Sun at the center", "Newton's laws of motion", "Mendeleev's periodic table", "Einstein's E = mc²", "First photo of a black hole"]],
  59:["Equal rights", ["Lincoln's Gettysburg Address", "US women win the right to vote", "Brown v. Board of Education", "First woman on the Supreme Court", "Barack Obama is elected"]],
  60:["Pictures and screens", ["Kodak's first camera", "First electronic TV picture", "Polaroid instant camera goes on sale", "First live TV across the Atlantic", "Netflix starts streaming"]],
- 61:["Inside the Body", ["Harvey shows how blood circulates","Hooke names the cell","Pasteur's rabies vaccine saves a boy","DNA's double helix is revealed","Dolly the sheep is born"]],
- 64:["Stargazers", ["Chinese astronomers spot a 'guest star'","Kepler shows planets move in ellipses","Halley's Comet returns as predicted","Hubble shows the universe is expanding","Jocelyn Bell discovers pulsars"]],
- 67:["The Mongol Storm", ["Temujin is named Genghis Khan","Mongols sack Baghdad","Typhoon wrecks the Mongol fleet at Japan","Black Death arrives in Europe","Ming dynasty begins in China"]],
- 70:["Kings, Khans and Shoguns", ["Yoritomo becomes shogun of Japan","Vijayanagara Empire is founded in India","Peter the Great founds St. Petersburg","German Empire is proclaimed","King Sejong publishes the Korean alphabet"]],
- 73:["Faith and Fortresses", ["Pope Urban II calls the First Crusade","Work begins on Notre-Dame de Paris","Mamluks halt the Mongols at Ain Jalut","Joan of Arc frees Orleans","Luther posts his 95 Theses"]],
- 76:["Sparks and Engines", ["Volta builds the first battery","Faraday makes electricity with a magnet","Japan's first railway opens","Wright brothers' first flight","Benz patents the first true car"]],
- 79:["Gold and Glory in Africa", ["Mansa Musa's gold dazzles Cairo","Dias sails around Africa's southern tip","Suez Canal opens","King Tut's tomb is found","Nelson Mandela is freed"]],
- 82:["Revolution!", ["Declaration of Independence","Parisians storm the Bastille","Haiti declares independence","Brazil declares independence","Russia frees its serfs"]],
- 85:["Big Ideas in Science", ["Fibonacci's book spreads Arabic numerals","Hooke names the cell","Darwin's Origin of Species","Hubble shows the universe is expanding","First planet found around a Sun-like star"]],
- 88:["Germs and Cures", ["Leeuwenhoek reports tiny 'animalcules'","Semmelweis tells doctors to wash hands","Koch finds the tuberculosis germ","Fleming discovers penicillin","Smallpox is declared eradicated"]],
- 91:["Empires of the East", ["Ming dynasty begins in China","Tokugawa Ieyasu becomes shogun","Babur founds the Mughal Empire","Temujin is named Genghis Khan","Meiji Restoration begins in Japan"]],
- 94:["Great Builders", ["Work begins on Notre-Dame de Paris","Beijing's Forbidden City is completed","Peter the Great founds St. Petersburg","Eiffel Tower opens","Panama Canal opens"]],
- 97:["Fall of the Great Cities", ["Saladin captures Jerusalem","Mongols sack Baghdad","Ottomans conquer Constantinople","Spanish conquer Tenochtitlan","Berlin Wall falls"]],
- 100:["Ships Across the World", ["Zheng He's treasure fleet sets sail","Dias sails around Africa's southern tip","Magellan sets off around the world","Suez Canal opens","Ibn Battuta sets out from Tangier"]],
- 103:["Firsts for Freedom", ["Magna Carta is sealed","Parisians storm the Bastille","Russia frees its serfs","New Zealand women win the vote","Nelson Mandela is freed"]],
- 106:["Words and Numbers", ["University of Bologna is founded","Fibonacci's book spreads Arabic numerals","King Sejong publishes the Korean alphabet","Linnaeus publishes Systema Naturae","Morse sends 'What hath God wrought'"]],
- 109:["Time and the Heavens", ["Gregorian calendar is introduced","Kepler shows planets move in ellipses","Newton's laws of motion","First planet found around a Sun-like star","Uranus is discovered"]],
- 112:["Rise of the Americas", ["The Aztecs found Tenochtitlan","Treaty of Tordesillas splits new lands","Pizarro captures the Inca emperor","Brazil declares independence","Haiti declares independence"]],
- 115:["Medieval World Tour", ["Domesday Book survey of England","Song dynasty ends at the Battle of Yamen","Black Death arrives in Europe","Beijing's Forbidden City is completed","Vasco da Gama reaches India by sea"]],
- 118:["Japan Through Time", ["Yoritomo becomes shogun of Japan","Typhoon wrecks the Mongol fleet at Japan","Tokugawa Ieyasu becomes shogun","Japan's first railway opens","Pokémon Go comes out"]]
+ 61:["Great Builders", ["Work begins on Notre-Dame de Paris", "Beijing's Forbidden City is completed", "Peter the Great founds St. Petersburg", "Eiffel Tower opens", "Panama Canal opens"]],
+ 63:["Words and Numbers", ["University of Bologna is founded", "Fibonacci's book spreads Arabic numerals", "King Sejong publishes the Korean alphabet", "Linnaeus publishes Systema Naturae", "Morse sends 'What hath God wrought'"]],
+ 68:["Firsts for Freedom", ["Magna Carta is sealed", "Parisians storm the Bastille", "Russia frees its serfs", "New Zealand women win the vote", "Nelson Mandela is freed"]],
+ 70:["The Mongol Storm", ["Temujin is named Genghis Khan", "Mongols sack Baghdad", "Typhoon wrecks the Mongol fleet at Japan", "Black Death arrives in Europe", "Ming dynasty begins in China"]],
+ 75:["Sparks and Engines", ["Volta builds the first battery", "Faraday makes electricity with a magnet", "Japan's first railway opens", "Wright brothers' first flight", "Benz patents the first true car"]],
+ 77:["Rise of the Americas", ["The Aztecs found Tenochtitlan", "Treaty of Tordesillas splits new lands", "Pizarro captures the Inca emperor", "Brazil declares independence", "Haiti declares independence"]],
+ 82:["Inside the Body", ["Harvey shows how blood circulates", "Hooke names the cell", "Pasteur's rabies vaccine saves a boy", "DNA's double helix is revealed", "Dolly the sheep is born"]],
+ 84:["Stargazers", ["Chinese astronomers spot a 'guest star'", "Kepler shows planets move in ellipses", "Halley's Comet returns as predicted", "Hubble shows the universe is expanding", "Jocelyn Bell discovers pulsars"]],
+ 89:["Faith and Fortresses", ["Pope Urban II calls the First Crusade", "Work begins on Notre-Dame de Paris", "Mamluks halt the Mongols at Ain Jalut", "Joan of Arc frees Orleans", "Luther posts his 95 Theses"]],
+ 91:["Kings, Khans and Shoguns", ["Yoritomo becomes shogun of Japan", "Vijayanagara Empire is founded in India", "Peter the Great founds St. Petersburg", "German Empire is proclaimed", "King Sejong publishes the Korean alphabet"]],
+ 96:["Gold and Glory in Africa", ["Mansa Musa's gold dazzles Cairo", "Dias sails around Africa's southern tip", "Suez Canal opens", "King Tut's tomb is found", "Nelson Mandela is freed"]],
+ 98:["Empires of the East", ["Ming dynasty begins in China", "Tokugawa Ieyasu becomes shogun", "Babur founds the Mughal Empire", "Temujin is named Genghis Khan", "Meiji Restoration begins in Japan"]],
+ 103:["Fall of the Great Cities", ["Saladin captures Jerusalem", "Mongols sack Baghdad", "Ottomans conquer Constantinople", "Spanish conquer Tenochtitlan", "Berlin Wall falls"]],
+ 105:["Big Ideas in Science", ["Fibonacci's book spreads Arabic numerals", "Hooke names the cell", "Darwin's Origin of Species", "Hubble shows the universe is expanding", "First planet found around a Sun-like star"]],
+ 110:["Revolution!", ["Declaration of Independence", "Parisians storm the Bastille", "Haiti declares independence", "Brazil declares independence", "Russia frees its serfs"]],
+ 112:["Germs and Cures", ["Leeuwenhoek reports tiny 'animalcules'", "Semmelweis tells doctors to wash hands", "Koch finds the tuberculosis germ", "Fleming discovers penicillin", "Smallpox is declared eradicated"]],
+ 117:["Medieval World Tour", ["Domesday Book survey of England", "Song dynasty ends at the Battle of Yamen", "Black Death arrives in Europe", "Beijing's Forbidden City is completed", "Vasco da Gama reaches India by sea"]],
+ 119:["Ships Across the World", ["Zheng He's treasure fleet sets sail", "Dias sails around Africa's southern tip", "Magellan sets off around the world", "Suez Canal opens", "Ibn Battuta sets out from Tangier"]],
+ 124:["Japan Through Time", ["Yoritomo becomes shogun of Japan", "Typhoon wrecks the Mongol fleet at Japan", "Tokugawa Ieyasu becomes shogun", "Japan's first railway opens", "Pokémon Go comes out"]],
+ 126:["Time and the Heavens", ["Gregorian calendar is introduced", "Kepler shows planets move in ellipses", "Newton's laws of motion", "First planet found around a Sun-like star", "Uranus is discovered"]],
 };
 const TRIES=3, MAX_HINTS=3, MILESTONES=[7,30,100,365];
 // Cards most adults will recognize. Every daily puzzle has at least two.
@@ -798,10 +815,13 @@ function swapsOf(order){const t=sortIds(G.ids);return t.slice(0,-1).map((a,i)=>o
 async function showCrowd(){
   const el=$("#crowd");if(!el)return;
   const c=await crowdGet(G.n);if(!c||c.plays<CROWD.min||$("#crowd")!==el)return;
-  const t=sortIds(G.ids);let i=c.s.indexOf(Math.max(...c.s));const pct=Math.round(100*c.s[i]/c.plays);
-  if(pct<10){el.innerHTML=`Most players got every pair right today.`;el.hidden=false;return}
-  const mine=swapsOf(G.finalOrder||G.order)[i];
-  el.innerHTML=`<b>${pct}%</b> of players swapped <b>${EVENTS[t[i]][2]}</b> and <b>${EVENTS[t[i+1]][2]}</b>. ${mine?"You did too.":"You beat the crowd on this one."}`;
+  const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=G.slips||end,pct=i=>Math.round(100*c.s[i]/c.plays);
+  // Talk about your own slip when there is one (the one most players also got wrong), otherwise the crowd's most common one.
+  const mine=[0,1,2,3].filter(i=>slips[i]).sort((a,b)=>c.s[b]-c.s[a]);
+  const i=mine.length?mine[0]:c.s.indexOf(Math.max(...c.s)),A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];
+  if(!mine.length&&pct(i)<10){el.innerHTML=`Most players got every pair right today.`;el.hidden=false;return}
+  el.innerHTML=mine.length?(end[i]?`You finished with <b>${A}</b> and <b>${B}</b> swapped, and so did <b>${pct(i)}%</b> of players.`:`You had <b>${A}</b> and <b>${B}</b> swapped at first. <b>${pct(i)}%</b> of players finished with them still swapped, but you fixed it.`)
+    :`<b>${pct(i)}%</b> of players finished with <b>${A}</b> and <b>${B}</b> swapped. You got them right.`;
   el.hidden=false;
 }
 
@@ -861,6 +881,12 @@ const noHelp=()=>G.hintsUsed===0&&!(G.placed||[]).length&&!G.gaveUp;
 function finalScore(){
   const {q}=quality(G.order),f=[1,.85,.7][Math.min(G.attempt,TRIES)-1];
   return Math.round(90*q*f)+(noHelp()?10:0);
+}
+// "Why 77": the score broken into its parts, in words (Cooper, round 4).
+function whyLine(){
+  const w=G.why;if(!w)return helpLine();
+  if(G.gaveUp)return `Why ${G.score}: showing the answer gives half of what your order had earned.`;
+  return `Why ${G.score}: your order earned ${w.base} of 90${w.f<1?`, and try ${Math.min(G.attempt,TRIES)} keeps ${Math.round(w.f*100)}% of that (${w.got})`:""}${w.bonus?`. No help adds ⭐ 10.`:`. ${helpLine()}.`}`;
 }
 function helpLine(){
   if(noHelp())return "⭐ No help, +10 bonus";
@@ -969,7 +995,9 @@ function dealFor(n){
   const wd=dateOf(n).getDay(),r=rng(n*7919+13);
   // A hand-picked puzzle for this day wins; otherwise the dealer picks one by the rules above.
   const hand=SCHEDULE[n]&&SCHEDULE[n][1].map(t=>EVENTS.findIndex(e=>e[2]===t));
-  const ids=hand&&hand.every(i=>i>=0)?hand:pick(5,DAY_GAP[wd],r,true);
+  let ids=hand&&hand.every(i=>i>=0)?hand:null;
+  // Deal until the puzzle's real difficulty matches the day (closest one wins if none match).
+  if(!ids){let best=null,bd=99;for(let k=0;k<300&&bd>0;k++){const c=pick(5,DAY_GAP[wd],r,true),dd=Math.abs(levelOf(c)-DAY_LEVEL[wd]);if(dd<bd){bd=dd;best=c}}ids=best}
   return {ids,order:scramble(ids,r,DAY_MOVES[wd]),wd};
 }
 function newDaily(){
@@ -1045,7 +1073,7 @@ function layout(){
 // that order is right and × if we know it's wrong. Nothing is shown for pairs you haven't checked.
 function drawChips(){
   list.querySelectorAll(".chip").forEach(c=>c.remove());
-  if(G.done||drag)return;
+  if(G.done||drag||hideTags())return;
   for(let i=0;i<G.order.length-1;i++){
     const a=G.order[i],b=G.order[i+1],k=a+">"+b,rk=b+">"+a;
     let v=null;if(G.known[k]!==undefined)v=G.known[k];else if(G.known[rk]!==undefined)v=!G.known[rk];
@@ -1068,7 +1096,8 @@ function feedbackLine(){
   if(G.kind==="tutorial"&&!G.done&&G.attempt>1){$("#bLock").disabled=sameAsChecked();$("#hintLine").innerHTML=`<b>The red × means those two are reversed.</b> The Gutenberg Bible is older than the Moon landing, so move it to the top: tap it, then tap the top card (or drag it). Then check again.`;showCoach();return}
   if(G.done||G.kind==="tutorial"||picking)return;
   const h=$("#hintLine");
-  if(G.attempt<2){h.textContent="Drag a card, or tap it and then tap its new spot.";return}
+  if(G.attempt<2){h.innerHTML=hideTags()?"<b>Hard puzzle:</b> a check only tells you how many neighbors are in order, not which ones. Drag a card, or tap it and then tap its new spot.":"Drag a card, or tap it and then tap its new spot.";return}
+  if(hideTags()){$("#bLock").disabled=sameAsChecked();h.innerHTML=`${sameAsChecked()?"<b>Move a card to check again.</b> ":""}<b>Try ${G.attempt-1} result:</b> ${G.lastOk} of ${G.order.length-1} neighbors were in order. On a Hard puzzle the cards don't say which ones. Moving cards doesn't use a try.`;return}
   let ok=0,no=0,un=0;
   for(let i=0;i<G.order.length-1;i++){const a=G.order[i],b=G.order[i+1];let v=G.known[a+">"+b];if(v===undefined&&G.known[b+">"+a]!==undefined)v=!G.known[b+">"+a];v===undefined?un++:v?ok++:no++}
   $("#bLock").disabled=sameAsChecked();
@@ -1162,6 +1191,8 @@ function check(){
   const t=sortIds(G.order),perfect=G.order.every((id,i)=>yr(id)===yr(t[i]));
   if(G.kind!=="tutorial")track("check",{mode:G.kind,try:G.attempt,solved:perfect?1:0});
   // One share row per try: 🟩 a neighbor pair in order, 🟥 reversed, as the check showed it.
+  // Which true neighbor pairs you had reversed at any check, so the crowd line can talk about your own slip (Nikola, round 4).
+  const sw=swapsOf(G.order);G.slips=(G.slips||sw.map(()=>false)).map((v,i)=>v||sw[i]);
   G.rows=(G.rows||[]).concat(G.order.slice(0,-1).map((a,i)=>yr(a)<yr(G.order[i+1])?"🟩":"🟥").join(""));
   if(perfect||G.attempt>=TRIES||(G.kind==="tutorial"&&G.attempt>1)){finish();return}
   // record what this check tells you about each neighboring pair
@@ -1169,7 +1200,7 @@ function check(){
   G.lastChecked=G.order.join();
   const ok=G.order.slice(0,-1).filter((a,i)=>yr(a)<yr(G.order[i+1])).length;
   G.lastOk=ok;G.attempt++;layout();updateButtons();persist();feedbackLine();
-  G.order.slice(0,-1).forEach((a,i)=>{const b=G.order[i+1];if(yr(a)>yr(b))[a,b].forEach(id=>{const el=cardEls[id];el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");setTimeout(()=>el.classList.remove("shake"),500)})});
+  if(!hideTags())G.order.slice(0,-1).forEach((a,i)=>{const b=G.order[i+1];if(yr(a)>yr(b))[a,b].forEach(id=>{const el=cardEls[id];el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");setTimeout(()=>el.classList.remove("shake"),500)})});
   $("#sr").textContent=`${ok} of ${G.order.length-1} neighbors are in order. Try ${G.attempt} of ${TRIES}.`;
   buzz(20);
 }
@@ -1184,11 +1215,12 @@ function finish(){
   G.done=true;stopPicking();$("#sr").textContent="";
   const t=sortIds(G.order),pos=G.order.map((id,i)=>{const d=Math.abs(t.indexOf(id)-i);return d===0?"g":d===1?"n":"m"});
   G.score=G.gaveUp?Math.round(90*quality(G.order).q*[1,.85,.7][Math.min(G.attempt,TRIES)-1]*.5):finalScore();
+  {const q=quality(G.order).q,f=[1,.85,.7][Math.min(G.attempt,TRIES)-1];G.why={base:Math.round(90*q),f,got:Math.round(90*q*f),bonus:noHelp()?10:0}}
   G.tiles=pairTiles();G.marks=pos;
   if(G.kind==="daily"){recordDaily();crowdSend(G.n,swapsOf(G.order));remindSync()}
   if(G.kind==="tutorial"){S.tutorialDone=true;save();track("tutorial_done")}
   else track("puzzle_done",{mode:G.kind,puzzle:G.n||0,score:G.score,tries:Math.min(G.attempt,TRIES),hints:G.hintsUsed,placed:G.placed.length,gave_up:G.gaveUp?1:0});
-  G.gain=G.kind==="tutorial"||G.kind==="replay"?null:addPoints(G.score);
+  G.gain=G.kind==="tutorial"||G.kind==="replay"?null:earnPoints(G.score,G.ids,G.kind);
   list.querySelectorAll(".chip").forEach(c=>c.remove());
   // Show the answer: the cards slide into place one by one, then flip (Muse, round 3).
   let lead=0;const mark={};G.order.forEach((id,i)=>mark[id]=pos[i]);
@@ -1229,6 +1261,7 @@ function timeline(){
   const t=sortIds(G.ids),y=t.map(yr),lo=y[0],span=Math.max(1,y[y.length-1]-lo),x=y.map(v=>(v-lo)/span*100);
   for(let i=1;i<x.length;i++)x[i]=Math.max(x[i],x[i-1]+9);
   const over=x[x.length-1]-100;if(over>0)for(let i=x.length-1;i>=0;i--){x[i]-=over;if(i<x.length-1)x[i]=Math.min(x[i],x[i+1]-9)}
+  for(let i=0;i<x.length;i++)x[i]=5+x[i]*.9; // keep the end dots and their years inside the card
   let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
   return `<div class="tl" role="group" aria-label="Today's years on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%;animation-delay:${.15+i*.12}s" aria-label="${y[i]}: ${EVENTS[id][2]}"><span>${y[i]}</span></button>`).join("")}</div>`;
 }
@@ -1246,23 +1279,26 @@ function showResult(){
     r.hidden=false;showStories(sortIds(G.ids)[0]);$("#go").onclick=()=>{tutorial=false;setMode("daily")};return;
   }
   const replay=G.kind==="replay",share=replay?"":shareText(),how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)} of ${TRIES}`:`Not solved in ${TRIES} tries`;
+  const daily=G.kind==="daily",dorA=daily||G.kind==="archive";
   r.innerHTML=`${G.milestone?`<div class="milestone">🎉 ${G.milestone}-day streak!</div>`:""}
     <div class="scoreline"><span class="score">${G.score}<small>/100</small></span><span class="tier">${tier(G.score)}</span></div>
     ${G.rows&&G.rows.length?`<div class="pairs rows" aria-label="Your tries, one row per try">${G.rows.map(r=>`<span>${r}</span>`).join("")}</div>`:`<div class="pairs" aria-label="Your result">${G.tiles}</div>`}
-    <p class="star" style="margin:0">${how} · ${helpLine()}</p>
-    ${pointsLine(G.gain)}
+    <p class="star why" style="margin:0">${how}. ${whyLine()}</p>
     ${timeline()}
     <p class="connect">${nearMiss()}</p>
-    <details class="how"><summary>How your score works</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 reversed.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Score: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%), less for later tries. Finishing with no help adds the ⭐ and 10 points.</p></details>
-    ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
-    ${G.kind==="daily"||G.kind==="archive"?`<p class="crowd" id="crowd" hidden></p>`:""}
     <div class="row">
-      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:G.kind==="daily"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">Practice</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
+      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">Practice</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
-    ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
-    ${G.kind==="daily"&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:G.kind==="daily"||G.kind==="archive"?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
-    ${G.kind==="daily"?`<p class="next">${G.note?G.note+"<br>":""}Come back tomorrow for puzzle #${G.n+1} to keep your streak going. Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Next puzzle in <b id="cd"></b></p>${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b><br>${teaserOf(G.n+1)}</p>`:""}`:""}
-    ${G.kind==="daily"&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
+    ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
+    ${pointsLine(G.gain)}
+    ${dorA?`<p class="crowd" id="crowd" hidden></p>`:""}
+    ${daily&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:""}
+    ${daily?`${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b><br>${teaserOf(G.n+1)}</p>`:""}<p class="next">${G.note?G.note+"<br>":""}Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Puzzle #${G.n+1} in <b id="cd"></b></p>`:""}
+    ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
+    <details class="how"><summary>More: how scoring works${dorA?", this week's stories":""}</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 reversed.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty.</p>
+      ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
+      ${dorA&&!(daily&&S.streak%7===0)?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
+    </details>
     ${NATIVE&&adsAllowed()&&G.kind!=="tutorial"?`<button class="linkbtn noads" id="noads">Remove ads · ${removePrice}</button>`:""}
     <textarea class="copy" id="copybox" rows="4" readonly hidden>${share}</textarea>`;
   r.hidden=false;if(G.gain&&!G.gain.shown){G.gain.shown=true;persist()}showStories(surpriseCard());$("#sr").textContent=`Puzzle finished. ${G.score} out of 100, ${tier(G.score)}. ${how}.`;
@@ -1280,7 +1316,7 @@ function showResult(){
 }
 function shareText(){
   const how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)}/${TRIES}`:`Not solved in ${TRIES}`;
-  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${DAY_FEEL[G.wd]}${themeOf(G.n)&&G.kind!=="practice"?" · "+themeOf(G.n):""}\nhttps://playwhenly.com`;
+  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${LEVELS[levelOf(G.ids)]}${themeOf(G.n)&&G.kind!=="practice"?" · "+themeOf(G.n):""}\nhttps://playwhenly.com`;
 }
 function copy(t){
   const ok=()=>toast("Result copied. Paste it in a text to friends and family.");
@@ -1334,9 +1370,9 @@ function tick(){clearInterval(cdTimer);const f=()=>{const el=$("#cd");if(!el)ret
 function render(){
   $("#sr").textContent="";$("#result").hidden=true;$("#stories").hidden=true;$("#board").after($("#stories"));$("#play").hidden=false;stopPicking();
   if(!G.done)hideBanner();
-  $("#hintLine").textContent=G.kind==="tutorial"?"Tap Check my order to see your first clue.":"Drag a card, or tap it and then tap its new spot.";
+  $("#hintLine").innerHTML=G.kind==="tutorial"?"Tap Check my order to see your first clue.":hideTags()?"<b>Hard puzzle:</b> a check only tells you how many neighbors are in order, not which ones. Drag a card, or tap it and then tap its new spot.":"Drag a card, or tap it and then tap its new spot.";
   $("#diff").hidden=G.kind!=="practice";$("#pill").hidden=G.kind==="practice";
-  if(G.kind==="daily"||G.kind==="archive"||G.kind==="replay"){$("#title").textContent="Oldest at the top";$("#pill").textContent=`#${G.n} · ${DAY_NAME[G.wd].slice(0,3)} · ${DAY_FEEL[G.wd]}${G.kind==="archive"?" · Archive":G.kind==="replay"?" · Replay":""}`;if(themeOf(G.n))$("#title").textContent=themeOf(G.n)}
+  if(G.kind==="daily"||G.kind==="archive"||G.kind==="replay"){$("#title").textContent="Oldest at the top";$("#pill").textContent=`#${G.n} · ${DAY_NAME[G.wd].slice(0,3)} · ${LEVELS[levelOf(G.ids)]}${G.kind==="archive"?" · Archive":G.kind==="replay"?" · Replay":""}`;if(themeOf(G.n))$("#title").textContent=themeOf(G.n)}
   if(G.kind==="practice")$("#title").textContent="Oldest at the top";
   {const th=(G.kind==="daily"||G.kind==="archive"||G.kind==="replay")&&themeOf(G.n),root=document.documentElement;
    $("#title").classList.toggle("themed",!!th);document.querySelector(".rail").classList.toggle("themed",!!th);
@@ -1375,7 +1411,7 @@ function showArchive(){
   for(let n=now-1;n>=1;n--){
     const d=dateOf(n),g=S.days[n]&&S.days[n].g,wd=d.getDay();
     const res=g&&g.done?`<span class="res done">${g.score} · ${tier(g.score)}</span>`:g?`<span class="res">Started</span>`:`<span class="res">Play</span>`;
-    rows.push(`<button class="arow" data-n="${n}"><b>#${n}</b><span>${d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}<small>${DAY_FEEL[wd]}${themeOf(n)?" · "+themeOf(n):""}</small></span>${res}</button>`);
+    rows.push(`<button class="arow" data-n="${n}"><b>#${n}</b><span>${d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}<small>${LEVELS[dayLevel(n)]}${themeOf(n)?" · "+themeOf(n):""}</small></span>${res}</button>`);
   }
   a.innerHTML=`<h2>Past puzzles</h2><p class="star" style="margin:0">Play any day you missed. Open one you've finished to see its stories or replay it for fun. Past puzzles don't change your streak.</p>`+
     (rows.length?rows.join(""):`<p class="fact">Puzzle #1 is today's. From tomorrow, every past puzzle shows up here.</p>`);
@@ -1388,7 +1424,8 @@ let E=null;
 const xPts=d=>Math.max(0,20-Math.floor(d/2));
 const xMark=d=>d===0?"🎯":d<=5?"🟩":d<=20?"🟨":"🟥";
 function newExpert(){
-  const r=rng((Math.random()*1e9)|0),ids=pick(5,3,r,false);
+  // Expert leans on lesser-known cards with near-year neighbors, so knowing the famous dates isn't enough (Nikola, round 4).
+  const r=rng((Math.random()*1e9)|0);let ids;for(let k=0;k<200;k++){ids=pick(5,3,r,false);if(levelOf(ids)===3)break}
   E={ids:shuffle(ids,r),guess:{},done:false};track("puzzle_start",{mode:"expert"});drawExpert();
 }
 function drawExpert(){
@@ -1408,7 +1445,7 @@ function drawExpert(){
 function lockExpert(){
   if(E.ids.some(id=>!(E.guess[id]>=0))){toast("Enter a year for every card");return}
   E.done=true;E.score=E.ids.reduce((s,id)=>s+xPts(Math.abs(E.guess[id]-yr(id))),0);E.marks=E.ids.map(id=>xMark(Math.abs(E.guess[id]-yr(id)))).join("");
-  S.xPlayed=(S.xPlayed||0)+1;S.xBest=Math.max(S.xBest||0,E.score);save();E.gain=addPoints(E.score);
+  S.xPlayed=(S.xPlayed||0)+1;S.xBest=Math.max(S.xBest||0,E.score);save();E.gain=earnPoints(E.score,E.ids,"expert");
   track("puzzle_done",{mode:"expert",score:E.score});buzz(20);if(E.score>=90)fireworks();drawExpert();
 }
 let coachEl;
@@ -1427,13 +1464,26 @@ function help(){sheet(`<h2>How to play</h2>
   <p><b>Score:</b> up to 100, for pairs in the right order and cards close to their spots. Solving on your first try scores highest.</p>
   <p><b>Streaks:</b> play every day to build a streak. Earn 1 ❄️ freeze every 7 days in a row, up to 2. Each one covers 1 missed day automatically. If you miss more days than you have freezes, your streak starts over.</p>
   <p><b>Archive:</b> play any past day's puzzle. <b>Expert:</b> type the exact year of each card, scored by how close you get.</p>
-  <p>A new puzzle comes every day at midnight. Monday is the easiest and the week gets harder, up to Sunday (the label at the top shows today's level). There's no timer.</p>
+  <p>A new puzzle comes every day at midnight. Monday and Tuesday are easy and the week gets harder, up to Hard puzzles at the weekend (the label at the top shows each puzzle's real level). On a Hard puzzle, a check only says how many neighbors are in order, not which ones, and history points are worth 1.5 times as much. There's no timer.</p>
   <p style="color:var(--muted);font-size:14px">Card photos are public domain or CC0, from Wikimedia Commons.</p>`)}
 // History points: every finished puzzle (daily, archive, Practice, Expert) adds its score, so
 // play after the daily still counts. Weekly total resets each Monday; ranks use the lifetime total.
 const RANKS=[[0,"Curious"],[250,"Explorer"],[1000,"Scholar"],[3000,"Chronicler"],[7500,"Archivist"],[15000,"Legend"]];
 const weekNo=()=>Math.floor((dayNum()-1)/7);
 function rankOf(p){let r=0;RANKS.forEach((x,i)=>{if(p>=x[0])r=i});return r}
+// History points (Nikola + Muse, round 4): your score times the puzzle's difficulty, so a hard 100 beats an easy one.
+// Daily puzzles drive your rank. Archive, Practice and Expert earn half, and Practice and Expert only for the first 3 a day.
+const EXTRA_A_DAY=3;
+function earnPoints(score,ids,kind){
+  if(!(score>0))return null;
+  let p=score*LEVEL_MULT[levelOf(ids)];
+  if(kind!=="daily"){
+    p/=2;
+    if(kind==="practice"||kind==="expert"){const d=dayNum();if(!S.pday||S.pday.d!==d)S.pday={d};
+      if((S.pday[kind]||0)>=EXTRA_A_DAY)return {n:0,capped:true};S.pday[kind]=(S.pday[kind]||0)+1}
+  }
+  return addPoints(Math.round(p));
+}
 function addPoints(n){
   if(!(n>0))return null;
   const before=rankOf(S.hp||0),w=weekNo();
@@ -1443,6 +1493,7 @@ function addPoints(n){
 }
 function pointsLine(g){
   if(!g)return "";
+  if(g.capped)return `<p class="points">Extra puzzles earn history points ${EXTRA_A_DAY} times a day, and you've had today's. Play on for fun. The daily puzzle always counts.</p>`;
   const r=rankOf(S.hp||0),nx=RANKS[r+1];
   const fresh=!g.shown;
   return `<p class="points">${fresh&&g.up?`🏅 New rank: <b>${g.up}</b>! `:""}${fresh?`+${g.n} history points`:`${g.n} history points earned`} · This week: <b>${S.wk&&S.wk.w===weekNo()?S.wk.pts:0}</b> · ${RANKS[r][1]}${nx?` (${nx[0]-S.hp} to ${nx[1]})`:""}</p>`;
