@@ -67,6 +67,8 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 .mk{display:inline-block;vertical-align:middle;margin-left:3px}
 
 .stage{position:relative}
+/* an empty strip under the board where messages appear, so they never cover the bottom rows (Cooper, Nikola, v0.77) */
+.fb{height:44px;flex:none}
 canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .crew{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.18);border-radius:999px;padding:4px 12px;font-weight:800;font-size:13px;color:inherit;margin-top:-4px}
 .crew.aim{background:var(--lantern);color:#2b1a00;border-color:var(--lantern)}
@@ -118,6 +120,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
   #app>.stage{grid-column:1;grid-row:2/6;align-self:center}
   #app>.ink{grid-column:2;grid-row:3}
   #app>.tools{grid-column:2;grid-row:5}
+  #app>.fb{display:none}
 }
 /* tablets held upright (iPad portrait): the phone column left the board at a third of the screen, so let it grow */
 @media (min-width:700px) and (orientation:portrait){#app{max-width:860px;padding-inline:32px}}
@@ -152,7 +155,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.77 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.78 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -168,6 +171,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
   <div class="stage">
     <canvas id="board" aria-label="Game board. Drag from a den to a nest."></canvas>
   </div>
+  <div class="fb" aria-hidden="true"></div>
   <div class="ink"><span id="inkNow">Ink 0</span><button class="crew" id="crewBtn" hidden></button><span id="inkPar">★★★ at 0 ink</span></div>
 
   <div class="tools">
@@ -605,7 +609,7 @@ function fireworks(cell,mask){if(calm())return;
     for(let k=0;k<34;k++){const a=Math.random()*Math.PI*2,v=cs*(1.2+Math.random()*2.2);parts.push({x:bx,y:by,vx:Math.cos(a)*v,vy:Math.sin(a)*v,t0,life:900+Math.random()*600,c:cols[k%4]});}}
 }
 let opts=store.get("opts",{shapes:true,sound:true,marks:false});
-let lv=0,daily=null,bonus=null,G,paths,col,active=-1,won=false,wonAt=0,hints=[],picked=-1,cs=60,dpr=1,lastStatus=[],bloom=[],sparks=[];
+let lv=0,daily=null,bonus=null,G,paths,col,active=-1,won=false,wonAt=0,hints=[],picked=-1,cs=60,dpr=1,lastStatus=[],lastNear="",bloom=[],sparks=[];
 const SHAPES=["round","square","drop","star","diamond","hex"];
 
 const LV=()=>daily||bonus||LEVELS[lv]; // the level on the board: a chapter level, today's Daily River or a challenge river
@@ -887,7 +891,7 @@ function walkTo(c){
           :paths.some((q,k)=>{const i=q.indexOf(step);return k!==active&&i>0&&(i===q.length-1||q[i+1]-q[i]!==q[i]-q[i-1]);})?"Another stream turns there. Streams can only cross where both go straight.":null; // Muse, v0.76: a stall at another stream's turn said nothing
         if(why&&(why!==lastRefuse.t||performance.now()-lastRefuse.at>2500)){lastRefuse={t:why,at:performance.now()};toast(why);}
         if(hit!==undefined){splash(tip,hit);if(!prog.seen["note:dam"])teachOnce("dam","Water can't go through rocks or a dam. Lead the stream around them.");
-          else{const t="Rocks block the water. Go around them.";if(t!==lastRefuse.t||performance.now()-lastRefuse.at>2500){lastRefuse={t,at:performance.now()};toast(t);}}} // Cooper, v0.76: later hits stopped silently // Nikola, v0.69: a splash alone said nothing
+          else{const {comp,groups}=rockGroupsOf(G),t=groups[comp[hit]].kind==="dam"?"Dams block the water. Go around the end.":"Rocks block the water. Go around them.";if(t!==lastRefuse.t||performance.now()-lastRefuse.at>2500){lastRefuse={t,at:performance.now()};toast(t);}}} // Cooper, v0.76: later hits stopped silently; all three, v0.77: dams said "Rocks" // Nikola, v0.69: a splash alone said nothing
         break;}
     }
     sfx.step();
@@ -1008,16 +1012,27 @@ function afterChange(released){
   // "Waiting for…" once every stream has reached somewhere, so it never talks over a board still being drawn (Nikola, v0.32),
   // or right away when the stream just drawn is the one waiting (Alan, Oct 16: blue into purple said nothing)
   const settled=paths.every((q,k)=>done(k));let toldWait=false; // one "waiting" message at a time
-  st.forEach((s,k)=>{
+  // every nest has a stream but the board isn't solved: one "Nearly!" that names what's wrong, instead of a silent board
+  // (Muse, Nikola, Cooper, v0.77: outside the lessons an all-home wrong board said nothing useful)
+  const near=released&&!lesson&&st.length>0&&st.every(s=>s.p>=0&&(s.color||!isBranch(G,paths[s.p])))&&!st.every(s=>s.ok);
+  st.forEach((s,k)=>{if(near)return;
     if(s.p>=0&&!lastStatus[k]&&s.ok){sfx.home();buzz(15);}
     if(s.p>=0&&!s.ok&&!s.color&&isBranch(G,paths[s.p])){if(released)teachOnce("dry","This stream has no water yet. Lead a stream into the delta first.");}
     else if(waiting(s,k)){if(released&&(settled||s.p===lastDrawn)&&!toldWait&&lastStatus[k]!=="wait"&&!(lessonStep()&&lessonStep().quiet))(toldWait=true,teachOnce)("wait",`Waiting for ${NAMES[G.nests[k].mask]}: cross a ${NAMES[G.nests[k].mask&~s.color]} stream on the way to mix it.`);}
     else if(s.p>=0&&!s.ok&&released&&lastStatus[k]!=="bad"&&!(lessonStep()&&lessonStep().quiet)){sfx.wrong();buzz([20,40,20]);teachOnce(s.denOk===false?"home":"nest",s.denOk===false?`This home is for the ${SHAPES[G.nests[k].den]} critters`:`This nest only takes ${NAMES[G.nests[k].mask]}, not ${NAMES[s.color]}`);}
   });
+  if(near){const why=st.map((s,k)=>s.ok?null:nearWhy(s,k)).filter(Boolean),t=`Nearly! Every nest has a stream, but ${why.slice(0,2).join(", and ")}.`;
+    if(t!==lastNear){lastNear=t;sfx.wrong();buzz([20,40,20]);toast(t,3600);}}else if(released)lastNear="";
   lastStatus=st.map((s,k)=>s.ok?true:waiting(s,k)?(released&&(settled||s.p===lastDrawn)||lastStatus[k]==="wait"?"wait":false):(s.p>=0&&(released||lastStatus[k]==="bad")?"bad":false)); // "bad" only counts once the finger lifts, so the refusal is announced
   if(released&&isWin(G,paths,col)){if(lesson)endLesson(true);win();}else if(released)lessonCheck(true);
   if(released){saveDraft();updateUndo();}
 }
+// what is wrong at one nest, for the "Nearly!" note
+function nearWhy(s,k){const n=G.nests[k],m=NAMES[n.mask];
+  if(n.out)return s.color===7?"mud can't leave the river":`the ${NAMES[s.color]||"empty"} stream can't leave the river`;
+  if(s.denOk===false)return `the ${SHAPES[n.den]} home got the wrong critters`;
+  if(waiting(s,k))return `the ${m} nest is still waiting: cross a ${NAMES[n.mask&~s.color]} stream on the way`;
+  return `the ${m} nest got ${NAMES[s.color]}`;}
 // A stream that reached its nest early, still missing a color the nest wants (red in a purple nest before blue
 // crosses it), is a fine half-built route: say "waiting", never "wrong".
 function waiting(s,k){const n=G.nests[k];return s.p>=0&&!s.ok&&s.denOk!==false&&s.color>0&&s.color!==n.mask&&(n.mask&s.color)===s.color;}
@@ -1190,7 +1205,7 @@ function longSave(){longSync();const L=bonus.long,id=LONGS[L.k].id,v=won&&L.stag
 function resumeLong(k){let ld=store.get("ldraw",null);if(!ld||ld.id!==LONGS[k].id)ld=(store.get("ldraws",{})||{})[LONGS[k].id]||null;
   if(ld&&ld.id===LONGS[k].id){longRun={k,up:ld.up||null,colors:Array.isArray(ld.colors)?ld.colors:null,down:ld.down||null,upInk:ld.upInk||0,upUndo:ld.upUndo,downUndo:ld.downUndo};
     startLong(k,ld.stage&&longRun.colors?1:0);}
-  else{longRun=null;startLong(k);const st=prog.stars[LONGS[k].id];if(st)toast(`Your best here: ${"★".repeat(st)}. This is a fresh run; your stars are kept.`,2600);}} // Nikola, v0.76: a cleared river reopened blank with no word why
+  else{longRun=null;startLong(k);const st=prog.stars[LONGS[k].id];if(st)toast(`Your best ${"★".repeat(st)} is saved. This is a new run, and it can't lower your best.`,2600);}} // Nikola, v0.76: a cleared river reopened blank with no word why; v0.77: "stars are kept" was unclear
 function startLong(k,stage=0){
   if(!longRun||longRun.k!==k)longRun={k,up:null,colors:null,down:null,upInk:0};
   if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined,null,{undo:longRun.downUndo});}
@@ -1326,7 +1341,7 @@ function nextHint(){let best=-1,top=-1;
     const score=meets*100+r.length;if(score>top){top=score;best=s;}}
   return best;}
 function updateHintBtn(){const more=won||nextHint()>=0||!hints.length;refillHints();const n=hintsLeft();
-  $("hintBtn").innerHTML=more?(n?`<span>💡</span>Hint · ${n}`:"<span>📺</span>Hint"):"<span>🙈</span>Hide hints";}
+  $("hintBtn").innerHTML=more?(n?`<span>💡</span>Hint · ${n}`:"<span>📺</span>More hints"):"<span>🙈</span>Hide hints";}
 $("hintBtn").onclick=()=>{
   if(won)return;pruneHints();
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
