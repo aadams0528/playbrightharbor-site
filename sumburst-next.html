@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 15d74f2) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
+<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 6e7fe52) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
 <title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
@@ -400,6 +400,8 @@ function canBlast(){
   return tray.some(p=>{if(!p)return false;for(let r=0;r<N;r++)for(let c=0;c<N;c++){
     if(!fitsAt(p,r,c))continue;const b=board.slice();p.cells.forEach(x=>b[(r+x.r)*N+c+x.c]=x.t);if(findRuns(b).length)return true}return false});
 }
+// A shuffle only helps when there's an empty square for a new piece (it refuses on a full board).
+const shuffleHelps=()=>shuffles>0&&board.some(x=>!x);
 function canFit(p){for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(fitsAt(p,r,c))return true;return false}
 // A quarter turn clockwise: a row of blocks becomes a column. Each number stays with its block.
 function turned(p){const h=pieceSize(p).rows;return {...p,cells:p.cells.map(x=>({r:x.c,c:h-1-x.r,t:x.t}))}}
@@ -728,7 +730,7 @@ function setHint(){
   const h=$('hint');h.classList.toggle('tut',!!tut);
   // Stuck: nothing in the tray can make the target on a crowded board. Say so, and point at the Eraser (or Shuffle).
   const stuck=!tut&&!over&&board.filter(Boolean).length>=24&&tray.some(p=>p&&canFit(p))&&!canBlast();
-  const tool=stuck?(erasers?'eraser':shuffles?'shuffle':null):null;
+  const tool=stuck?(erasers?'eraser':shuffleHelps()?'shuffle':null):null;
   $('eraser').classList.toggle('nudge',tool==='eraser');$('shuffle').classList.toggle('nudge',tool==='shuffle');
   if(tut){h.innerHTML=LESSONS[tut.step].hint+' <button type="button" class="tut-skip" id="tut-skip">Skip tutorial</button>';return}
   if(justTutored)h.innerHTML=`Your turn! Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.`;
@@ -937,7 +939,7 @@ function finishTurn(){
   saveGame();
   if(!tray.some(p=>p&&canFit(p))){
     if(rotates&&tray.some(p=>p&&fitsTurned(p))){rotating=true;rotPaid=null;erasing=false;lockMovable();renderAll();setHint();toast('No room!\nTry a rotate',false,READ_MS)}
-    else if(shuffles||erasers){erasing=!shuffles;if(erasing)lockMovable();renderAll();toast(shuffles?'No room!\nTry a shuffle':'No room!\nUse an eraser',false,READ_MS)}
+    else if(shuffleHelps()||erasers){const sh=shuffleHelps();erasing=!sh;if(erasing)lockMovable();renderAll();toast(sh?'No room!\nTry a shuffle':'No room!\nUse an eraser',false,READ_MS)}
     else gameOver();
   }
 }
@@ -1489,7 +1491,7 @@ function clearHint(){
 $('hintbtn').onclick=()=>{
   if(tut||busy||over||erasing)return;clearHint();
   const m=bestMove();track('hint_used',{level,found:!!m});
-  if(!m){const fill=board.filter(Boolean).length;toast(`No ${T} to make right now.\n`+(fill<3?'Drop a piece to set up a sum.':erasers?'Try the Eraser.':shuffles?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
+  if(!m){const fill=board.filter(Boolean).length;toast(`No ${T} to make right now.\n`+(fill<3?'Drop a piece to set up a sum.':erasers?'Try the Eraser.':shuffleHelps()?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
   const ghost=new Set(),tiles=new Map(),glow=new Set();
   tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
   m.runs.forEach(run=>run.cells.forEach(k=>glow.add(k)));
