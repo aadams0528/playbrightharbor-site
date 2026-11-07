@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit e134a7f) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
+<!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
+<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 7af4df5) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
 <title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
@@ -78,7 +79,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 @media (max-height:700px){.foot{display:none}.brand small{display:none}}
 .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:4px;padding:6px;background:var(--board);border-radius:14px;touch-action:none;aspect-ratio:1/1;width:100%}
 .cell{min-width:0;min-height:0;border-radius:7px;background:var(--slot);position:relative;display:flex;align-items:center;justify-content:center}
-.cell.ghost{background:var(--slot-hi);outline:2px dashed rgba(255,255,255,.35);outline-offset:-3px}
+/* Where the piece will land: its own tiles with a bright white frame, clear even under the dragged piece. */
+.cell.ghost{background:var(--slot-hi);outline:3px solid #fff;outline-offset:-1px;box-shadow:0 0 10px rgba(255,255,255,.7)}
 .cell.target-cell{animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{50%{background:var(--slot-hi);box-shadow:0 0 0 3px var(--gold) inset}}
 .tile{width:100%;height:100%;border-radius:7px;display:flex;align-items:center;justify-content:center;
@@ -88,10 +90,11 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 @keyframes land{0%{transform:scale(1.15)}100%{transform:scale(1)}}
 .tile.glow{outline:3px solid var(--gold);outline-offset:-1px;box-shadow:0 0 14px var(--gold)}
 .tile.toomuch{outline:3px solid var(--over);outline-offset:-1px}
+.tile.toomuch::after{content:'';position:absolute;inset:0;border-radius:inherit;background:var(--over);opacity:.45}
 .tile.pop{animation:pop .3s ease-in forwards}
 @keyframes pop{40%{transform:scale(1.25)}100%{transform:scale(0);opacity:0}}
 .tile.star{background:conic-gradient(var(--n1),var(--n3),var(--n4),var(--n5),var(--n7),var(--n1))}
-.tile .bomb{position:absolute;top:1px;right:2px;font-size:.5em}
+.tile .bomb{position:absolute;top:0;right:1px;font-size:.65em}
 .cell.erasable .tile{animation:wob .5s ease-in-out infinite}
 .cell.movable .tile{outline:2px dashed rgba(255,255,255,.9);outline-offset:-4px;cursor:grab}
 @keyframes wob{25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
@@ -115,7 +118,12 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .toast.hold{animation-name:toastHold}
 @keyframes toast{0%{opacity:0}10%{opacity:1}80%{opacity:1}100%{opacity:0}}
 
-.over{position:absolute;inset:0;z-index:7;background:rgba(10,20,16,.82);border-radius:14px;display:flex;align-items:center;justify-content:center;overflow-y:auto;text-align:center;color:#fff;padding:14px}
+/* The result fills the screen above the menu bar (sheets opened from the menu still show on top), so the score
+   and the next step are never squeezed into the board on a short phone. */
+.over{position:fixed;inset:0;z-index:34;background:rgba(10,20,16,.95);display:flex;align-items:center;justify-content:center;overflow-y:auto;text-align:center;color:#fff;padding:16px 16px calc(76px + env(safe-area-inset-bottom,0px))}
+.over>div{max-width:420px}
+.over .keep{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.18)}
+.over .keep p{font-size:.85rem;opacity:.85}
 .over[hidden]{display:none}
 .over h2{font-family:var(--display);font-weight:800;font-size:2rem;margin:0;line-height:1}
 .over p{margin:6px 0}
@@ -141,6 +149,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .piece{display:grid;gap:3px}
 .piece .tile{font-size:1.05rem;border-radius:6px}
 .float{position:fixed;left:0;top:0;pointer-events:none;z-index:50;display:grid;gap:4px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.3))}
+.float.over-spot{opacity:.55}  /* see-through over a landing spot, so the frame and colours under it show */
 .float .tile{font-size:clamp(1rem,5.6vw,1.7rem)}
 
 .tools{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
@@ -469,16 +478,17 @@ function newGoal(exclude){
 function resetGoals(){goalCount=0;goals=['len3','down','five'].map(id=>{const g=GOALS.find(x=>x.id===id);return {...g,prog:0,need:g.need||1,reward:REWARDS[goalCount++%REWARDS.length]}})}
 function checkGoals(e){
   const done=[];
-  goals=goals.map(g=>{
-    if(!g.test(e))return g;
+  // One quest at a time, so two quests finished by the same drop never get the same replacement.
+  goals.forEach((g,i)=>{
+    if(!g.test(e))return;
     const prog=g.prog+1;
-    if(prog<g.need)return {...g,prog};
+    if(prog<g.need){goals[i]={...g,prog};return}
     done.push(g);
     if(g.reward==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);
     else if(g.reward==='shuffle')shuffles=Math.min(MAX_SHUFFLES,shuffles+1);
     else if(g.reward==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);
     else addCoins(15);
-    return newGoal(goals.map(x=>x.id));
+    goals[i]=newGoal(goals.map(x=>x.id));
   });
   return done;
 }
@@ -618,11 +628,14 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){endSession
 const READ_MS=3200, CASH_MS=2400;
 // News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
 // The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
-let newsQ=[],newsTimer=null;
+let newsQ=[],newsTimer=null,newsWait=0;
 function news(text,big=false){newsQ.push([text,big]);if(!newsTimer)nextNews()}
 function nextNews(){
   newsTimer=null;if(!newsQ.length)return;
   if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
+  // Let a blast message finish first so both don't squeeze into the box (but never wait more than ~2s).
+  if($('lane-main').firstChild&&newsWait++<8){newsTimer=setTimeout(nextNews,250);return}
+  newsWait=0;
   const [text,big]=newsQ.shift();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
 }
 function clearPending(keepNews){
@@ -694,6 +707,7 @@ function renderHUD(){
   $('eraser').classList.toggle('on',erasing);$('eraser').setAttribute('aria-pressed',erasing);
   $('eraser').classList.toggle('empty',!erasers&&!erasing);$('shuffle').classList.toggle('empty',!shuffles);
   if(!rotates&&rotPaid===null)rotating=false;
+  $('rotate').firstChild.textContent=rotating?'✓ ':'↻ ';$('rotate').setAttribute('aria-label',rotating?'Done rotating':'Rotate');
   $('rotateN').textContent=rotates;$('rotate').classList.toggle('on',rotating);$('rotate').setAttribute('aria-pressed',rotating);
   $('rotate').classList.toggle('empty',!rotates&&!rotating);trayEl.classList.toggle('rotating',rotating);
   $('eraser').disabled=$('shuffle').disabled=$('rotate').disabled=!!tut;
@@ -714,7 +728,7 @@ function setHint(){
     h.innerHTML='Special blocks! A <b>★ star</b> counts as whatever number finishes the sum. A <b>💣 bomb</b> also blasts the blocks around it.';
     specialSeen=true;store.set('nb-special-seen',true);
   }
-  else if(rotating)h.innerHTML='<b>Tap a piece below</b> to turn it. Tap it again to keep turning, then tap <b>↻</b> when it\'s right.';
+  else if(rotating)h.innerHTML='<b>Tap a piece below</b> to turn it. Tap it again to keep turning, then tap <b>✓</b> when it\'s right.';
   else if(rotateHintNow)h.innerHTML='New: <b>↻ Rotate</b>! Tap <b>↻</b>, then tap a piece below to turn it, so a row becomes a column.';
   else if(stuck)h.innerHTML=`No piece can make <b>${T}</b> right now. Drop one in any empty spot`+
     (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
@@ -756,7 +770,7 @@ function moveDrag(e){
   let pos=fitsAt(drag.p,a.r,a.c)?a:null;
   if(pos&&tut&&(pos.r+drag.p.cells[0].r)*N+pos.c+drag.p.cells[0].c!==tutCell())pos=null;
   if(JSON.stringify(pos)===JSON.stringify(drag.pos))return;
-  drag.pos=pos;
+  drag.pos=pos;drag.fl.classList.toggle('over-spot',!!pos);  // fade the dragged piece so the landing spot shows
   if(!pos)return renderBoard();
   const b=board.slice(),ghost=new Set(),tiles=new Map();
   drag.p.cells.forEach(x=>{const k=(pos.r+x.r)*N+pos.c+x.c;b[k]=x.t;ghost.add(k);tiles.set(k,x.t)});
@@ -999,12 +1013,12 @@ function gameOver(){
   $('over').innerHTML=`<div>
     <h2>${newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):close?'So close!':'Board full'}</h2>
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
-    ${!continued?`<div class="row"><button class="btn ad" id="cont-ad">Keep playing: watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Keep playing: ${CONTINUE_COST} 🪙</button></div>`:''}
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
     ${mode==='daily'?`<p>New Daily Board in ${nextDaily}</p>`:''}
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
       ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily Board</button>'}</div>
+    ${!continued?`<div class="keep"><p>Or keep this board going (optional):</p><div class="row"><button class="btn ghost" id="cont-ad">Watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Use ${CONTINUE_COST} 🪙</button></div></div>`:''}
     ${promoForGameOver(!continued)?promoCard('over'):''}</div>`;
   $('over').hidden=false;
   $('again').onclick=()=>newGame(mode);
@@ -1174,7 +1188,7 @@ function openShop(){
   const rows=PRODUCTS.filter(p=>!(p.id===REMOVE_ADS&&store.get('nb-noads',false))).map(p=>{
     const name=bonus&&p.coins?`<s>${p.name}</s> ${(p.coins*2).toLocaleString()} coins`:p.name;
     return `<div class="shop-row"><div class="what">${name}${p.note?`<small>${p.note}</small>`:''}</div><button class="btn" data-buy="${p.id}">${p.price}</button></div>`}).join('');
-  openSheet(`<h3>Shop</h3>${bonus?'<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>':''}<p>You have ${coins.toLocaleString()} 🪙. Spend coins on erasers, shuffles, rotates and second chances.</p>${rows}
+  openSheet(`<h3>Shop</h3>${bonus?'<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>':''}<p>You have ${coins.toLocaleString()} 🪙. When you run out of erasers, shuffles or rotates, or need a second chance, coins buy more.</p>${rows}
     <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>
     <p class="restore"><button class="linkbtn" id="shop-restore">Restore purchases</button></p>`);
   document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy));
@@ -1466,7 +1480,7 @@ function clearHint(){
 $('hintbtn').onclick=()=>{
   if(tut||busy||over||erasing)return;clearHint();
   const m=bestMove();track('hint_used',{level,found:!!m});
-  if(!m){toast(`No ${T} to make right now.\n`+(erasers?'Try the Eraser.':shuffles?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
+  if(!m){const fill=board.filter(Boolean).length;toast(`No ${T} to make right now.\n`+(fill<3?'Drop a piece to set up a sum.':erasers?'Try the Eraser.':shuffles?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
   const ghost=new Set(),tiles=new Map(),glow=new Set();
   tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
   m.runs.forEach(run=>run.cells.forEach(k=>glow.add(k)));
@@ -1477,7 +1491,12 @@ $('hintbtn').onclick=()=>{
 $('shuffle').onclick=()=>{
   if(tut||busy||over)return;
   if(!shuffles)return offerPowerup('shuffle');
-  shuffles--;erasing=false;rotating=false;rotPaid=null;lockMovable();newTray();SFX.shuffle();finishTurn();
+  // A full board has no room for any new piece, so the shuffle would be wasted.
+  if(board.every(Boolean)){toast(erasers?'The board is full.\nUse an eraser first.':'The board is full.\nNo piece can fit.',false,READ_MS);buzz(15);return}
+  shuffles--;erasing=false;rotating=false;rotPaid=null;lockMovable();
+  // New pieces, at least one of which fits (a few tries; a nearly full board can still beat them).
+  for(let k=0;k<12;k++){newTray();if(tray.some(canFit))break}
+  SFX.shuffle();finishTurn();
 };
 function renderSound(){$('sound').textContent=muted?'🔇':'🔊';$('sound').setAttribute('aria-pressed',!muted);$('sound').setAttribute('aria-label',muted?'Sound off':'Sound on')}
 $('sound').onclick=()=>{muted=!muted;store.set('nb-muted',muted);renderSound()};
@@ -1505,7 +1524,7 @@ if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
 })();
 </script>
 
