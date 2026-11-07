@@ -152,7 +152,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.76 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.77 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -876,16 +876,18 @@ function walkTo(c){
       const alt=Math.abs(dx)>=Math.abs(dy)?(dy?tip+Math.sign(dy)*G.w:-1):(dx?tip+Math.sign(dx):-1);
       // a blocked step only turns aside when the finger is really as far that way (an exact diagonal); otherwise the stream
       // stops at the wall and says why, instead of quietly bending somewhere else (Muse, v0.74 and v0.75: "silent reroutes")
-      if(alt<0||Math.abs(dx)!==Math.abs(dy)||own(alt)||!tryStep(G,paths,active,alt)){
+      if(alt<0||Math.abs(dx)!==Math.abs(dy)||G.cells[step]&&["src","rock"].includes(G.cells[step].t)||own(alt)||!tryStep(G,paths,active,alt)){ // never bend round a den or rock (Muse, v0.76)
         // tell them once why a turn on a crossing doesn't work
         if(!turnTold&&before>1&&paths.some((q,k)=>k!==active&&q.indexOf(tip)>0)){turnTold=true;teachOnce("turn","Streams cross straight over each other. No turning on a crossing.");}
         // a delta only takes water from behind (Nikola, v0.32: nothing said which sides are blocked)
         if(G.cells[step]&&G.cells[step].t==="delta"&&step-tip!==G.cells[step].flow&&!isBranch(G,paths[active]))teachOnce("deltaside","A delta only lets water in from behind, the way its arrow points. Its sides are where the new streams come out.");
         const hit=[step,...(Math.abs(dx)===Math.abs(dy)?[alt]:[])].find(x=>x>=0&&G.cells[x].t==="rock");
         // say why a step is refused (Muse, v0.69: a taken pool or a den in the way just stopped the stream)
-        const blk=G.cells[step],why=!blk?null:blk.t==="src"?"Dens block the water. Lead the stream around it.":blk.t==="tunnel"&&paths.some((q,k)=>k!==active&&q.indexOf(step)>=0)?"That pool is already taken by another stream.":null;
+        const blk=G.cells[step],why=!blk?null:blk.t==="src"?"Dens block the water. Lead the stream around it.":blk.t==="tunnel"&&paths.some((q,k)=>k!==active&&q.indexOf(step)>=0)?"That pool is already taken by another stream."
+          :paths.some((q,k)=>{const i=q.indexOf(step);return k!==active&&i>0&&(i===q.length-1||q[i+1]-q[i]!==q[i]-q[i-1]);})?"Another stream turns there. Streams can only cross where both go straight.":null; // Muse, v0.76: a stall at another stream's turn said nothing
         if(why&&(why!==lastRefuse.t||performance.now()-lastRefuse.at>2500)){lastRefuse={t:why,at:performance.now()};toast(why);}
-        if(hit!==undefined){splash(tip,hit);if(!prog.seen["note:dam"])teachOnce("dam","Water can't go through rocks or a dam. Lead the stream around them.");} // Nikola, v0.69: a splash alone said nothing
+        if(hit!==undefined){splash(tip,hit);if(!prog.seen["note:dam"])teachOnce("dam","Water can't go through rocks or a dam. Lead the stream around them.");
+          else{const t="Rocks block the water. Go around them.";if(t!==lastRefuse.t||performance.now()-lastRefuse.at>2500){lastRefuse={t,at:performance.now()};toast(t);}}} // Cooper, v0.76: later hits stopped silently // Nikola, v0.69: a splash alone said nothing
         break;}
     }
     sfx.step();
@@ -1188,7 +1190,7 @@ function longSave(){longSync();const L=bonus.long,id=LONGS[L.k].id,v=won&&L.stag
 function resumeLong(k){let ld=store.get("ldraw",null);if(!ld||ld.id!==LONGS[k].id)ld=(store.get("ldraws",{})||{})[LONGS[k].id]||null;
   if(ld&&ld.id===LONGS[k].id){longRun={k,up:ld.up||null,colors:Array.isArray(ld.colors)?ld.colors:null,down:ld.down||null,upInk:ld.upInk||0,upUndo:ld.upUndo,downUndo:ld.downUndo};
     startLong(k,ld.stage&&longRun.colors?1:0);}
-  else{longRun=null;startLong(k);}}
+  else{longRun=null;startLong(k);const st=prog.stars[LONGS[k].id];if(st)toast(`Your best here: ${"★".repeat(st)}. This is a fresh run; your stars are kept.`,2600);}} // Nikola, v0.76: a cleared river reopened blank with no word why
 function startLong(k,stage=0){
   if(!longRun||longRun.k!==k)longRun={k,up:null,colors:null,down:null,upInk:0};
   if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined,null,{undo:longRun.downUndo});}
