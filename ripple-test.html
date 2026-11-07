@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.8.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.9.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -48,6 +48,7 @@ h1#title svg{width:30px;height:30px}
 .tile[data-look="golden"]{--lk:#d6a648;--lkbg:#fbf0d6}
 .tile[data-look="marsh"]{--lk:#7d9a5a;--lkbg:#eef1dc}
 .tile[data-look="autumn"]{--lk:#d9783a;--lkbg:#fbeedd}
+.tile[data-look="winter"]{--lk:#5f9fc4;--lkbg:#e8f3fa}
 .snapreed.snapped{display:none}
 .tile[data-look="moon"]{--lk:#4b6a92;--lkbg:#2a4165;background:linear-gradient(180deg,#2a4165,#1b2d4a)}
 .tile[data-look="moon"] .num{color:#fff1b0}.tile[data-look="moon"] .nm{color:#cfdcf0}
@@ -82,6 +83,9 @@ body:not(.playing) #scene{display:none}
 #board:has(.hl) .glint,#board:has(.clue-arrow) .glint{animation:none;opacity:0}
 #scene .sway{transform-box:fill-box;transform-origin:bottom center;animation:sway 5s ease-in-out infinite}
 #scene .fly{animation:fly 3.2s ease-in-out infinite}
+@keyframes curflow{0%{transform:translateY(-12px);opacity:0}30%,70%{opacity:1}100%{transform:translateY(12px);opacity:0}}
+#board .cur-flow{animation:curflow 1.5s linear infinite}
+@media (prefers-reduced-motion:reduce){#board .cur-flow{animation:none}}
 @media (prefers-reduced-motion:reduce){#board .glint,#board .caustic,#scene .sway,#scene .fly{animation:none}#board .glint{opacity:.25}}
 #board .hit:focus{outline:none}
 #board .hit:focus-visible{stroke:#fff3a0;stroke-width:6;fill:rgba(255,246,176,.15)}
@@ -241,7 +245,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.8.0 prototype</div>
+    <div class="ver" id="ver">Ripple v0.9.0 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -349,6 +353,16 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
  *   Leaves on different lines move in different directions away from the splash and can
  *   never meet, so ties at the same distance are processed in fixed order up, down,
  *   left, right; the order cannot change the result.
+ * - Current (v0.9, Chapter 4): a water cell with an arrow ('N','S','E','W'). Currents come in
+ *   strips. AFTER all of a tap's pushes are done, every leaf that moved this tap and stopped on a
+ *   current is carried along the arrows, one cell at a time, following each cell's own arrow,
+ *   until it reaches a cell that is not a current or its next step is blocked (same blocks as a
+ *   push: bank, rock, tied lily, reed, gate against its arrow, unbroken cracked reed (which then
+ *   snaps), another leaf). Leaves are carried in the same order they were pushed. A leaf that did
+ *   not move this tap is never carried, so a leaf held on a current stays put until pushed.
+ *   Currents never stop a ripple and can be tapped like any water. Pads never sit on a current.
+ *   A move's 'mid' is where the push left the leaf; 'drift' lists the cells the current carried it
+ *   through; 'to' is where it ends.
  * - Win: every critter leaf sits on the pad of its own kind. Plain leaves and logs don't matter.
  *   Pads can be left again, so order matters.
  */
@@ -388,10 +402,12 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       var b = e[2] === 'E' ? a + 1 : a + w;
       snaps[edgeKey(a, b)] = j;
     });
+    var cur = new Int8Array(n); // 0 = no current, else 1 + index into DIRS (up, down, left, right)
+    (level.currents || []).forEach(function (e) { cur[e[0] * w + e[1]] = 1 + 'NSWE'.indexOf(e[2]); });
     var kinds = level.leaves.map(function (l) { return l.k; });
     var pads = {};
     (level.pads || []).forEach(function (p) { pads[p.k] = p.r * w + p.c; });
-    return { w: w, h: h, n: n, cell: cell, reeds: reeds, gates: gates, snaps: snaps, kinds: kinds, pads: pads };
+    return { w: w, h: h, n: n, cell: cell, reeds: reeds, gates: gates, snaps: snaps, cur: cur, hasCur: (level.currents || []).length > 0, kinds: kinds, pads: pads };
   }
 
   function initialState(level) {
@@ -442,24 +458,39 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     var hits = reached(board, state, idx);
     var push = useBig ? 2 : 1;
     var moves = [], snap = state.snap || 0, broke = 0;
+    // one step of leaf i from cell cur in direction d; returns the new cell or -1 if blocked
+    function step(i, cur, d) {
+      var r = ((cur / w) | 0) + DIRS[d][0], c = (cur % w) + DIRS[d][1];
+      if (r < 0 || r >= board.h || c < 0 || c >= w) return -1;   // bank
+      var nx = r * w + c;
+      if (board.cell[nx] !== 0) return -1;                         // rock / anchored lily
+      if (board.reeds[edgeKey(cur, nx)]) return -1;                // reed
+      var gt = board.gates[edgeKey(cur, nx)];
+      if (gt && gt !== (nx > cur ? 1 : -1)) return -1;             // one-way gate, against its arrow
+      var sj = board.snaps[edgeKey(cur, nx)];
+      if (sj !== undefined && !(snap & (1 << sj))) { broke |= 1 << sj; return -1; } // snap reed: blocks, then snaps
+      if (occ[nx] !== undefined) return -1;                        // another leaf
+      delete occ[cur]; occ[nx] = i; return nx;
+    }
     hits.forEach(function (hit) {
       var cur = pos[hit.i], from = cur, steps = 0;
-      var dr = DIRS[hit.dir][0], dc = DIRS[hit.dir][1];
       for (var s = 0; s < push; s++) {
-        var r = ((cur / w) | 0) + dr, c = (cur % w) + dc;
-        if (r < 0 || r >= board.h || c < 0 || c >= w) break;      // bank
-        var nx = r * w + c;
-        if (board.cell[nx] !== 0) break;                           // rock / anchored lily
-        if (board.reeds[edgeKey(cur, nx)]) break;                  // reed
-        var gt = board.gates[edgeKey(cur, nx)];
-        if (gt && gt !== (nx > cur ? 1 : -1)) break;               // one-way gate, against its arrow
-        var sj = board.snaps[edgeKey(cur, nx)];
-        if (sj !== undefined && !(snap & (1 << sj))) { broke |= 1 << sj; break; } // snap reed: blocks, then snaps
-        if (occ[nx] !== undefined) break;                          // another leaf
-        delete occ[cur]; occ[nx] = hit.i; cur = nx; steps++;
+        var nx = step(hit.i, cur, hit.dir);
+        if (nx < 0) break;
+        cur = nx; steps++;
       }
       pos[hit.i] = cur;
-      moves.push({ i: hit.i, from: from, to: cur, steps: steps, dir: hit.dir });
+      moves.push({ i: hit.i, from: from, mid: cur, to: cur, steps: steps, dir: hit.dir, drift: [] });
+    });
+    if (board.hasCur) moves.forEach(function (mv) { // currents carry the leaves that moved, in push order
+      if (!mv.steps) return;
+      var cur = mv.to;
+      for (var g = 0; g < board.n && board.cur[cur]; g++) {
+        var nx = step(mv.i, cur, board.cur[cur] - 1);
+        if (nx < 0) break;
+        cur = nx; mv.drift.push(nx);
+      }
+      pos[mv.i] = cur; mv.to = cur;
     });
     var snapped = [];
     for (var b = 0; broke >> b; b++) if (broke & (1 << b)) snapped.push(b);
@@ -542,7 +573,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
 
 </script>
 <script>
-var LEVELS = [{"id":1,"name":"First Splash","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":2}],"intro":"tutorial","par":2,"line":[[2],[2]]},{"id":2,"name":"Two Friends","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":2}],"intro":"two","par":2,"line":[[10],[22]]},{"id":33,"name":"Who Goes First","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":4}],"intro":"order","trap":[2,2],"par":3,"line":[[10],[11],[3]]},{"id":3,"name":"Side by Side","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":4,"c":2},{"k":"duck","r":0,"c":2}],"par":3,"tip":"preview","line":[[21],[5],[12]]},{"id":4,"name":"Stepping Stones","w":5,"h":5,"rocks":[[1,4],[2,1]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":4},{"k":"duck","r":3,"c":2}],"intro":"rock","par":3,"demo":[1,2],"line":[[3],[12],[19]]},{"id":5,"name":"Rocky Cove","w":6,"h":6,"rocks":[[4,4],[3,0],[0,2]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":4},{"k":"turtle","r":1,"c":0}],"par":4,"line":[[16],[34],[14],[24]]},{"id":6,"name":"Reed Bed","w":6,"h":6,"rocks":[[2,2]],"reeds":[[2,3,"S"],[4,2,"S"],[4,1,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":4,"c":3}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":3,"c":3}],"intro":"reed","par":4,"demo":[1,3],"line":[[33],[27],[15],[33]]},{"id":7,"name":"Whispering Reeds","w":6,"h":6,"rocks":[[0,2],[5,1]],"reeds":[[4,4,"S"],[2,3,"S"],[1,3,"E"],[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":4,"c":4},{"k":"duck","r":0,"c":0},{"k":"turtle","r":2,"c":2}],"par":5,"line":[[25],[25],[13],[3],[16]]},{"id":8,"name":"Tied Lily","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[[0,2]],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":0,"c":1}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":0,"c":1}],"intro":"shield","demo":[0,3],"par":3,"needs":"shield","line":[[3],[14],[13]]},{"id":9,"name":"Still Corner","w":6,"h":6,"rocks":[[5,0],[2,1]],"reeds":[[1,1,"E"]],"anchors":[[2,4],[2,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":2},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":3,"c":5},{"k":"turtle","r":1,"c":0}],"par":5,"needs":"shield","hintTip":"Tip: a tied lily soaks up ripples. Splash next to it to move one leaf and keep the leaf behind it still.","line":[[8],[19],[20],[29],[20]]},{"id":10,"name":"Big Stone","w":6,"h":6,"rocks":[[4,2],[2,3]],"reeds":[[3,4,"E"]],"anchors":[],"big":1,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":2}],"pads":[{"k":"frog","r":3,"c":4},{"k":"duck","r":4,"c":5}],"intro":"big","par":4,"demo":[3,1],"demoBig":true,"line":[[33],[19],[9],[25,1]]},{"id":11,"name":"Deep Ripples","w":7,"h":7,"rocks":[[2,2],[6,6]],"reeds":[[4,1,"E"],[5,3,"E"]],"anchors":[[3,4]],"big":1,"leaves":[{"k":"frog","r":1,"c":5},{"k":"duck","r":2,"c":5},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":2},{"k":"turtle","r":1,"c":4}],"par":6,"line":[[20],[3],[20],[31,1],[5],[8]]},{"id":34,"name":"Two Stones","w":6,"h":6,"rocks":[[5,4],[3,1]],"reeds":[[4,2,"E"]],"anchors":[],"big":2,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":5,"c":0},{"k":"duck","r":5,"c":1}],"intro":"twobig","par":5,"line":[[9,1],[35,1],[15],[35],[33]]},{"id":12,"name":"Moon Pond","w":7,"h":7,"rocks":[[2,1],[1,4],[6,5]],"reeds":[[2,3,"S"],[1,3,"S"],[4,2,"S"]],"anchors":[[3,5]],"big":2,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":2,"c":2},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":2,"c":6},{"k":"duck","r":4,"c":0},{"k":"turtle","r":5,"c":0}],"par":7,"theme":"moon","intro":"planMoon","stages":[{"rem":7,"text":"Line the frog, the duck and the turtle up in row 5. One big stone drops the duck 2 cells; keep the other for the end."},{"rem":4,"text":"Splash between them so the duck and the turtle slide left, then drop the turtle onto its pad."},{"rem":2,"text":"Slide the duck home on the left."},{"rem":1,"text":"The last big stone lifts the frog 2 cells up onto its pad."}],"line":[[29],[2,1],[8],[31],[14],[31],[41,1]]},{"id":13,"chapter":2,"name":"One Way","w":5,"h":5,"rocks":[[1,2]],"reeds":[],"gates":[[2,3,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":0}],"intro":"gate","par":3,"demo":[4,3],"line":[[23],[14],[13]]},{"id":14,"chapter":2,"name":"Gatekeeper","w":6,"h":6,"rocks":[[5,5]],"reeds":[],"gates":[[1,3,"E","E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":2},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":0},{"k":"turtle","r":1,"c":5}],"par":5,"line":[[7],[11],[9],[1],[15]]},{"id":15,"chapter":2,"name":"Reed Garden","w":6,"h":6,"rocks":[[2,4]],"reeds":[[2,2,"E"],[1,1,"S"],[3,2,"E"]],"gates":[[4,2,"S","S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":3,"c":3},{"k":"turtle","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":5,"c":1},{"k":"turtle","r":2,"c":3}],"par":6,"intro":"offpad","line":[[7],[3],[9],[28],[14],[33]]},{"id":16,"chapter":2,"name":"Driftwood","w":4,"h":4,"rocks":[[2,0]],"reeds":[],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":1},{"k":"turtle","r":2,"c":2},{"k":"log","r":1,"c":1}],"pads":[{"k":"frog","r":0,"c":2},{"k":"duck","r":1,"c":3},{"k":"turtle","r":2,"c":3}],"intro":"log","par":5,"demo":[3,1],"demo2":[2,1],"line":[[13],[9],[10],[4],[4]]},{"id":17,"chapter":2,"name":"Log Jam","w":5,"h":5,"rocks":[[3,0],[3,1]],"reeds":[[1,3,"S"],[1,4,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":0,"c":1},{"k":"duck","r":1,"c":2},{"k":"log","r":0,"c":2}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":4,"c":3}],"par":6,"line":[[0],[1],[2],[2],[7],[20]]},{"id":18,"chapter":2,"name":"Corner Log","w":5,"h":5,"rocks":[[3,4],[0,1]],"reeds":[],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":1,"c":0},{"k":"log","r":3,"c":2}],"pads":[{"k":"frog","r":0,"c":0},{"k":"duck","r":3,"c":0}],"par":6,"line":[[0],[0],[7],[23],[22],[10]]},{"id":19,"chapter":2,"name":"Hold Fast","w":5,"h":5,"rocks":[[3,2],[3,1]],"reeds":[[1,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":0},{"k":"duck","r":2,"c":1},{"k":"log","r":2,"c":0}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":4,"c":3}],"par":6,"line":[[0],[5],[10],[10],[3],[8]]},{"id":20,"chapter":2,"name":"Upstream","w":4,"h":4,"rocks":[[3,2]],"reeds":[],"gates":[[1,3,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":2,"c":0},{"k":"log","r":1,"c":2}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":1,"c":0}],"par":7,"line":[[1],[7],[6],[12],[8],[8],[15]]},{"id":21,"chapter":3,"name":"Cracked Reed","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[2,0,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":0},{"k":"duck","r":1,"c":1}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":2,"c":3}],"intro":"snap","par":3,"demo":[1,0],"line":[[4],[4],[3]]},{"id":29,"chapter":3,"name":"First Crack","w":4,"h":4,"rocks":[[3,2]],"reeds":[],"snaps":[[2,3,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":0}],"par":4,"line":[[7],[7],[0],[0]]},{"id":22,"chapter":3,"name":"Wait for It","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[3,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":1,"c":3}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":3}],"par":5,"line":[[3],[15],[3],[15],[3]]},{"id":23,"chapter":3,"name":"Three Friends","w":4,"h":4,"rocks":[[0,1]],"reeds":[[2,1,"E"]],"snaps":[[0,2,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":1,"c":2},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":0,"c":2},{"k":"turtle","r":3,"c":0}],"par":6,"line":[[15],[14],[7],[0],[4],[10]]},{"id":30,"chapter":3,"name":"Autumn Gate","w":4,"h":4,"rocks":[[3,1],[3,3]],"reeds":[[1,1,"S"]],"snaps":[[1,2,"S"]],"gates":[[0,0,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":0},{"k":"turtle","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":0,"c":0},{"k":"turtle","r":3,"c":2}],"par":6,"line":[[14],[14],[8],[2],[11],[10]]},{"id":26,"chapter":3,"name":"Turtle Turn","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[3,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":0},{"k":"duck","r":1,"c":1},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":0,"c":3},{"k":"turtle","r":3,"c":3}],"par":7,"line":[[0],[12],[0],[12],[13],[0],[0]]},{"id":27,"chapter":3,"name":"Leaf Fall","w":4,"h":4,"rocks":[[0,3]],"reeds":[[2,1,"E"],[2,1,"S"]],"snaps":[[2,3,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":1,"c":0},{"k":"turtle","r":3,"c":3}],"par":8,"line":[[2],[4],[13],[2],[15],[8],[7],[7]]},{"id":32,"chapter":3,"name":"Creek Bend","w":5,"h":5,"rocks":[[2,2]],"reeds":[[1,2,"S"],[2,1,"E"],[2,2,"E"]],"snaps":[[1,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":2}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":2,"c":4},{"k":"turtle","r":4,"c":3}],"par":9,"intro":"plan","stages":[{"rem":9,"snap":true,"text":"Snap the cracked reed by the turtle."},{"rem":8,"text":"Walk the duck and the turtle down, then right along the row above the turtle's pad."},{"rem":2,"text":"Lift the duck up onto its pad."},{"rem":1,"text":"One last splash sends the frog and the turtle home together."}],"line":[[9],[9],[1],[15],[6],[15],[16],[24],[13]]}];
+var LEVELS = [{"id":1,"name":"First Splash","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":2}],"intro":"tutorial","par":2,"line":[[2],[2]]},{"id":2,"name":"Two Friends","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":2}],"intro":"two","par":2,"line":[[10],[22]]},{"id":33,"name":"Who Goes First","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":4}],"intro":"order","trap":[2,2],"par":3,"line":[[10],[11],[3]]},{"id":3,"name":"Side by Side","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":4,"c":2},{"k":"duck","r":0,"c":2}],"par":3,"tip":"preview","line":[[21],[5],[12]]},{"id":4,"name":"Stepping Stones","w":5,"h":5,"rocks":[[1,4],[2,1]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":4},{"k":"duck","r":3,"c":2}],"intro":"rock","par":3,"demo":[1,2],"line":[[3],[12],[19]]},{"id":5,"name":"Rocky Cove","w":6,"h":6,"rocks":[[4,4],[3,0],[0,2]],"reeds":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":4},{"k":"turtle","r":1,"c":0}],"par":4,"line":[[16],[34],[14],[24]]},{"id":6,"name":"Reed Bed","w":6,"h":6,"rocks":[[2,2]],"reeds":[[2,3,"S"],[4,2,"S"],[4,1,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":4,"c":3}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":3,"c":3}],"intro":"reed","par":4,"demo":[1,3],"line":[[33],[27],[15],[33]]},{"id":7,"name":"Whispering Reeds","w":6,"h":6,"rocks":[[0,2],[5,1]],"reeds":[[4,4,"S"],[2,3,"S"],[1,3,"E"],[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":4,"c":4},{"k":"duck","r":0,"c":0},{"k":"turtle","r":2,"c":2}],"par":5,"line":[[25],[25],[13],[3],[16]]},{"id":8,"name":"Tied Lily","w":5,"h":5,"rocks":[],"reeds":[],"anchors":[[0,2]],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":0,"c":1}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":0,"c":1}],"intro":"shield","demo":[0,3],"par":3,"needs":"shield","line":[[3],[14],[13]]},{"id":9,"name":"Still Corner","w":6,"h":6,"rocks":[[5,0],[2,1]],"reeds":[[1,1,"E"]],"anchors":[[2,4],[2,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":2},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":3,"c":5},{"k":"turtle","r":1,"c":0}],"par":5,"needs":"shield","hintTip":"Tip: a tied lily soaks up ripples. Splash next to it to move one leaf and keep the leaf behind it still.","line":[[8],[19],[20],[29],[20]]},{"id":10,"name":"Big Stone","w":6,"h":6,"rocks":[[4,2],[2,3]],"reeds":[[3,4,"E"]],"anchors":[],"big":1,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":2}],"pads":[{"k":"frog","r":3,"c":4},{"k":"duck","r":4,"c":5}],"intro":"big","par":4,"demo":[3,1],"demoBig":true,"line":[[33],[19],[9],[25,1]]},{"id":11,"name":"Deep Ripples","w":7,"h":7,"rocks":[[2,2],[6,6]],"reeds":[[4,1,"E"],[5,3,"E"]],"anchors":[[3,4]],"big":1,"leaves":[{"k":"frog","r":1,"c":5},{"k":"duck","r":2,"c":5},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":2},{"k":"turtle","r":1,"c":4}],"par":6,"line":[[20],[3],[20],[31,1],[5],[8]]},{"id":34,"name":"Two Stones","w":6,"h":6,"rocks":[[5,4],[3,1]],"reeds":[[4,2,"E"]],"anchors":[],"big":2,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":5,"c":0},{"k":"duck","r":5,"c":1}],"intro":"twobig","par":5,"line":[[9,1],[35,1],[15],[35],[33]]},{"id":12,"name":"Moon Pond","w":7,"h":7,"rocks":[[2,1],[1,4],[6,5]],"reeds":[[2,3,"S"],[1,3,"S"],[4,2,"S"]],"anchors":[[3,5]],"big":2,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":2,"c":2},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":2,"c":6},{"k":"duck","r":4,"c":0},{"k":"turtle","r":5,"c":0}],"par":7,"theme":"moon","intro":"planMoon","stages":[{"rem":7,"text":"Line the frog, the duck and the turtle up in row 5. One big stone drops the duck 2 cells; keep the other for the end."},{"rem":4,"text":"Splash between them so the duck and the turtle slide left, then drop the turtle onto its pad."},{"rem":2,"text":"Slide the duck home on the left."},{"rem":1,"text":"The last big stone lifts the frog 2 cells up onto its pad."}],"line":[[29],[2,1],[8],[31],[14],[31],[41,1]]},{"id":13,"chapter":2,"name":"One Way","w":5,"h":5,"rocks":[[1,2]],"reeds":[],"gates":[[2,3,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":2}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":0}],"intro":"gate","par":3,"demo":[4,3],"line":[[23],[14],[13]]},{"id":14,"chapter":2,"name":"Gatekeeper","w":6,"h":6,"rocks":[[5,5]],"reeds":[],"gates":[[1,3,"E","E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":2},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":2,"c":0},{"k":"turtle","r":1,"c":5}],"par":5,"line":[[7],[11],[9],[1],[15]]},{"id":15,"chapter":2,"name":"Reed Garden","w":6,"h":6,"rocks":[[2,4]],"reeds":[[2,2,"E"],[1,1,"S"],[3,2,"E"]],"gates":[[4,2,"S","S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":3,"c":3},{"k":"turtle","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":5,"c":1},{"k":"turtle","r":2,"c":3}],"par":6,"intro":"offpad","line":[[7],[3],[9],[28],[14],[33]]},{"id":16,"chapter":2,"name":"Driftwood","w":4,"h":4,"rocks":[[2,0]],"reeds":[],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":1},{"k":"turtle","r":2,"c":2},{"k":"log","r":1,"c":1}],"pads":[{"k":"frog","r":0,"c":2},{"k":"duck","r":1,"c":3},{"k":"turtle","r":2,"c":3}],"intro":"log","par":5,"demo":[3,1],"demo2":[2,1],"line":[[13],[9],[10],[4],[4]]},{"id":17,"chapter":2,"name":"Log Jam","w":5,"h":5,"rocks":[[3,0],[3,1]],"reeds":[[1,3,"S"],[1,4,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":0,"c":1},{"k":"duck","r":1,"c":2},{"k":"log","r":0,"c":2}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":4,"c":3}],"par":6,"line":[[0],[1],[2],[2],[7],[20]]},{"id":18,"chapter":2,"name":"Corner Log","w":5,"h":5,"rocks":[[3,4],[0,1]],"reeds":[],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":1,"c":0},{"k":"log","r":3,"c":2}],"pads":[{"k":"frog","r":0,"c":0},{"k":"duck","r":3,"c":0}],"par":6,"line":[[0],[0],[7],[23],[22],[10]]},{"id":19,"chapter":2,"name":"Hold Fast","w":5,"h":5,"rocks":[[3,2],[3,1]],"reeds":[[1,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":0},{"k":"duck","r":2,"c":1},{"k":"log","r":2,"c":0}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":4,"c":3}],"par":6,"line":[[0],[5],[10],[10],[3],[8]]},{"id":20,"chapter":2,"name":"Upstream","w":4,"h":4,"rocks":[[3,2]],"reeds":[],"gates":[[1,3,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":2,"c":0},{"k":"log","r":1,"c":2}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":1,"c":0}],"par":7,"line":[[1],[7],[6],[12],[8],[8],[15]]},{"id":21,"chapter":3,"name":"Cracked Reed","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[2,0,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":0},{"k":"duck","r":1,"c":1}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":2,"c":3}],"intro":"snap","par":3,"demo":[1,0],"line":[[4],[4],[3]]},{"id":29,"chapter":3,"name":"First Crack","w":4,"h":4,"rocks":[[3,2]],"reeds":[],"snaps":[[2,3,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":1,"c":2}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":0}],"par":4,"line":[[7],[7],[0],[0]]},{"id":22,"chapter":3,"name":"Wait for It","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[3,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":1,"c":3}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":3}],"par":5,"line":[[3],[15],[3],[15],[3]]},{"id":23,"chapter":3,"name":"Three Friends","w":4,"h":4,"rocks":[[0,1]],"reeds":[[2,1,"E"]],"snaps":[[0,2,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":1,"c":2},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":0,"c":2},{"k":"turtle","r":3,"c":0}],"par":6,"line":[[15],[14],[7],[0],[4],[10]]},{"id":30,"chapter":3,"name":"Autumn Gate","w":4,"h":4,"rocks":[[3,1],[3,3]],"reeds":[[1,1,"S"]],"snaps":[[1,2,"S"]],"gates":[[0,0,"S","N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":0},{"k":"turtle","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":0,"c":0},{"k":"turtle","r":3,"c":2}],"par":6,"line":[[14],[14],[8],[2],[11],[10]]},{"id":26,"chapter":3,"name":"Turtle Turn","w":4,"h":4,"rocks":[],"reeds":[],"snaps":[[3,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":0},{"k":"duck","r":1,"c":1},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":3,"c":0},{"k":"duck","r":0,"c":3},{"k":"turtle","r":3,"c":3}],"par":7,"line":[[0],[12],[0],[12],[13],[0],[0]]},{"id":27,"chapter":3,"name":"Leaf Fall","w":4,"h":4,"rocks":[[0,3]],"reeds":[[2,1,"E"],[2,1,"S"]],"snaps":[[2,3,"S"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":1,"c":0},{"k":"turtle","r":3,"c":3}],"par":8,"line":[[2],[4],[13],[2],[15],[8],[7],[7]]},{"id":32,"chapter":3,"name":"Creek Bend","w":5,"h":5,"rocks":[[2,2]],"reeds":[[1,2,"S"],[2,1,"E"],[2,2,"E"]],"snaps":[[1,1,"E"]],"gates":[],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":2}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":2,"c":4},{"k":"turtle","r":4,"c":3}],"par":9,"intro":"plan","stages":[{"rem":9,"snap":true,"text":"Snap the cracked reed by the turtle."},{"rem":8,"text":"Walk the duck and the turtle down, then right along the row above the turtle's pad."},{"rem":2,"text":"Lift the duck up onto its pad."},{"rem":1,"text":"One last splash sends the frog and the turtle home together."}],"line":[[9],[9],[1],[15],[6],[15],[16],[24],[13]]},{"id":35,"chapter":4,"name":"First Current","w":4,"h":4,"rocks":[],"reeds":[],"currents":[[2,0,"E"],[2,1,"E"],[2,2,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":0},{"k":"duck","r":1,"c":1}],"pads":[{"k":"frog","r":2,"c":3},{"k":"duck","r":3,"c":2}],"intro":"current","demo":[0,0],"par":3,"line":[[0],[1],[2]]},{"id":36,"chapter":4,"name":"Downstream","w":4,"h":4,"rocks":[[1,0]],"reeds":[],"currents":[[1,3,"W"],[1,2,"W"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":0,"c":1}],"par":4,"line":[[15],[1],[5],[9]]},{"id":37,"chapter":4,"name":"Snow Bend","w":5,"h":5,"rocks":[[0,3],[0,1]],"reeds":[[1,2,"E"]],"currents":[[4,2,"E"],[4,3,"N"],[3,3,"N"],[2,3,"N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":4,"c":1}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":2}],"par":5,"line":[[5],[2],[10],[20],[14]]},{"id":38,"chapter":4,"name":"Meltwater","w":4,"h":4,"rocks":[[0,3]],"reeds":[],"currents":[[3,0,"N"],[2,0,"E"],[2,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":1,"c":0},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":1,"c":1},{"k":"turtle","r":0,"c":1}],"par":6,"line":[[15],[15],[13],[0],[2],[13]]},{"id":39,"chapter":4,"name":"Log Flume","w":4,"h":4,"rocks":[],"reeds":[],"currents":[[1,3,"W"],[1,2,"S"],[2,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":3,"c":1},{"k":"log","r":1,"c":1}],"pads":[{"k":"frog","r":0,"c":0},{"k":"duck","r":3,"c":2}],"par":6,"line":[[12],[4],[15],[7],[6],[12]]},{"id":40,"chapter":4,"name":"Brook Run","w":5,"h":5,"rocks":[[0,1]],"reeds":[[1,3,"S"],[1,2,"S"]],"currents":[[4,0,"E"],[4,1,"N"],[3,1,"N"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":0},{"k":"duck","r":3,"c":3},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":0,"c":4},{"k":"duck","r":3,"c":2},{"k":"turtle","r":2,"c":3}],"par":8,"line":[[7],[0],[5],[10],[10],[11],[24],[19]]}];
 var DAILY = [{"id":1000,"name":"Misty Inlet","w":6,"h":6,"rocks":[[3,0],[3,3]],"reeds":[[4,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":1},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":5,"c":2},{"k":"duck","r":4,"c":0},{"k":"turtle","r":0,"c":4}],"par":5,"day":0},{"id":1001,"name":"Quiet Marsh","w":6,"h":6,"rocks":[[1,1]],"reeds":[[4,1,"S"],[1,1,"E"]],"anchors":[[2,4]],"big":0,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":4,"c":4}],"pads":[{"k":"frog","r":2,"c":3},{"k":"duck","r":0,"c":5}],"par":6,"day":1},{"id":1002,"name":"Sunny Pool","w":6,"h":6,"rocks":[[2,0]],"reeds":[[4,4,"E"],[3,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":4},{"k":"turtle","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":3,"c":2},{"k":"turtle","r":3,"c":0}],"par":5,"day":2},{"id":1003,"name":"Willow Shallows","w":6,"h":6,"rocks":[[3,4],[0,4]],"reeds":[],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":4,"c":3},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":0,"c":1},{"k":"duck","r":1,"c":4},{"k":"turtle","r":1,"c":3}],"par":6,"day":3},{"id":1004,"name":"Mossy Basin","w":6,"h":6,"rocks":[[5,2],[3,1]],"reeds":[[3,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":3,"c":3},{"k":"turtle","r":4,"c":3}],"pads":[{"k":"frog","r":2,"c":1},{"k":"duck","r":1,"c":5},{"k":"turtle","r":3,"c":2}],"par":5,"day":4},{"id":1005,"name":"Golden Hollow","w":6,"h":6,"rocks":[[0,1]],"reeds":[[1,1,"E"],[3,3,"E"]],"anchors":[[4,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":4,"c":1}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":1,"c":0}],"par":4,"day":5},{"id":1006,"name":"Hidden Cove","w":6,"h":6,"rocks":[[1,1]],"reeds":[[2,2,"S"],[2,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":4},{"k":"duck","r":1,"c":4},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":3,"c":5},{"k":"duck","r":0,"c":5},{"k":"turtle","r":1,"c":5}],"par":5,"day":6},{"id":1007,"name":"Breezy Glade","w":6,"h":6,"rocks":[[3,0],[3,2]],"reeds":[],"anchors":[[4,4]],"big":0,"leaves":[{"k":"frog","r":1,"c":4},{"k":"duck","r":3,"c":3},{"k":"turtle","r":4,"c":2}],"pads":[{"k":"frog","r":0,"c":4},{"k":"duck","r":0,"c":2},{"k":"turtle","r":4,"c":3}],"par":5,"day":7},{"id":1008,"name":"Dewy Brook","w":6,"h":6,"rocks":[[1,4],[0,1]],"reeds":[[4,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":1,"c":2},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":0,"c":3},{"k":"duck","r":3,"c":0},{"k":"turtle","r":4,"c":3}],"par":5,"day":8},{"id":1009,"name":"Amber Bend","w":6,"h":6,"rocks":[[3,1]],"reeds":[[1,4,"E"],[3,3,"S"]],"anchors":[[3,2]],"big":0,"leaves":[{"k":"frog","r":4,"c":4},{"k":"duck","r":3,"c":4}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":0,"c":4}],"par":4,"day":9},{"id":1010,"name":"Silver Inlet","w":6,"h":6,"rocks":[[4,1]],"reeds":[[1,2,"S"],[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":4,"c":2},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":2,"c":3},{"k":"turtle","r":0,"c":0}],"par":5,"day":10},{"id":1011,"name":"Lazy Marsh","w":6,"h":6,"rocks":[[3,5],[0,0]],"reeds":[],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":4,"c":3},{"k":"turtle","r":1,"c":4}],"pads":[{"k":"frog","r":1,"c":5},{"k":"duck","r":2,"c":3},{"k":"turtle","r":0,"c":5}],"par":5,"day":11},{"id":1012,"name":"Misty Pool","w":6,"h":6,"rocks":[[3,5],[1,2]],"reeds":[[1,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":4,"c":3},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":4,"c":1},{"k":"duck","r":4,"c":5},{"k":"turtle","r":3,"c":2}],"par":4,"day":12},{"id":1013,"name":"Quiet Shallows","w":6,"h":6,"rocks":[[1,0]],"reeds":[[3,4,"S"],[1,4,"S"]],"anchors":[[2,4]],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4}],"pads":[{"k":"frog","r":1,"c":5},{"k":"duck","r":0,"c":2}],"par":5,"day":13},{"id":1014,"name":"Sunny Basin","w":6,"h":6,"rocks":[[5,1]],"reeds":[[1,2,"E"],[4,3,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":4,"c":4},{"k":"turtle","r":2,"c":2}],"pads":[{"k":"frog","r":4,"c":2},{"k":"duck","r":4,"c":3},{"k":"turtle","r":0,"c":3}],"par":5,"day":14},{"id":1015,"name":"Willow Hollow","w":6,"h":6,"rocks":[[0,2],[3,0]],"reeds":[],"anchors":[[2,1]],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":1,"c":1},{"k":"turtle","r":1,"c":4}],"pads":[{"k":"frog","r":1,"c":3},{"k":"duck","r":0,"c":0},{"k":"turtle","r":1,"c":2}],"par":6,"day":15},{"id":1016,"name":"Mossy Cove","w":6,"h":6,"rocks":[[2,1],[3,4]],"reeds":[[3,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":2,"c":3},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":0,"c":1},{"k":"duck","r":5,"c":3},{"k":"turtle","r":4,"c":4}],"par":5,"day":16},{"id":1017,"name":"Golden Glade","w":6,"h":6,"rocks":[[2,0]],"reeds":[[3,1,"E"],[1,2,"S"]],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":3},{"k":"duck","r":0,"c":1}],"par":5,"day":17},{"id":1018,"name":"Hidden Brook","w":6,"h":6,"rocks":[[1,5]],"reeds":[[1,3,"S"],[4,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":4,"c":4},{"k":"turtle","r":3,"c":4}],"pads":[{"k":"frog","r":5,"c":0},{"k":"duck","r":5,"c":5},{"k":"turtle","r":0,"c":4}],"par":6,"day":18},{"id":1019,"name":"Breezy Bend","w":6,"h":6,"rocks":[[2,0],[0,1]],"reeds":[],"anchors":[[3,2]],"big":0,"leaves":[{"k":"frog","r":2,"c":4},{"k":"duck","r":3,"c":3},{"k":"turtle","r":4,"c":2}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":2},{"k":"turtle","r":4,"c":0}],"par":6,"day":19},{"id":1020,"name":"Dewy Inlet","w":6,"h":6,"rocks":[[4,1],[5,2]],"reeds":[[2,1,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":2,"c":4},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":4,"c":5},{"k":"duck","r":3,"c":3},{"k":"turtle","r":4,"c":2}],"par":4,"day":20},{"id":1021,"name":"Amber Marsh","w":6,"h":6,"rocks":[[5,3]],"reeds":[[4,4,"E"],[1,3,"E"]],"anchors":[[2,3]],"big":0,"leaves":[{"k":"frog","r":4,"c":4},{"k":"duck","r":3,"c":4}],"pads":[{"k":"frog","r":5,"c":0},{"k":"duck","r":2,"c":4}],"par":5,"day":21},{"id":1022,"name":"Silver Pool","w":6,"h":6,"rocks":[[5,1]],"reeds":[[4,3,"E"],[3,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":1},{"k":"turtle","r":4,"c":2}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":5,"c":0},{"k":"turtle","r":4,"c":3}],"par":5,"day":22},{"id":1023,"name":"Lazy Shallows","w":6,"h":6,"rocks":[[1,0],[5,4]],"reeds":[],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":3,"c":4},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":3},{"k":"duck","r":3,"c":2},{"k":"turtle","r":5,"c":1}],"par":5,"day":23},{"id":1024,"name":"Misty Basin","w":6,"h":6,"rocks":[[1,2],[2,1]],"reeds":[[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":4,"c":1},{"k":"turtle","r":4,"c":2}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":2},{"k":"turtle","r":5,"c":3}],"par":4,"day":24},{"id":1025,"name":"Quiet Hollow","w":6,"h":6,"rocks":[[5,1]],"reeds":[[1,1,"S"],[3,1,"S"]],"anchors":[[1,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":1}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":3,"c":0}],"par":4,"day":25},{"id":1026,"name":"Sunny Cove","w":6,"h":6,"rocks":[[0,4]],"reeds":[[2,2,"S"],[2,1,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":3},{"k":"duck","r":4,"c":2},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":3,"c":2},{"k":"duck","r":4,"c":3},{"k":"turtle","r":5,"c":5}],"par":5,"day":26},{"id":1027,"name":"Willow Glade","w":6,"h":6,"rocks":[[0,1],[2,2]],"reeds":[],"anchors":[[3,2]],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":3,"c":3},{"k":"turtle","r":2,"c":1}],"pads":[{"k":"frog","r":4,"c":1},{"k":"duck","r":4,"c":2},{"k":"turtle","r":0,"c":2}],"par":6,"day":27},{"id":1028,"name":"Mossy Brook","w":6,"h":6,"rocks":[[2,3],[5,2]],"reeds":[[1,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":2},{"k":"turtle","r":4,"c":1}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":4,"c":0},{"k":"turtle","r":5,"c":1}],"par":4,"day":28},{"id":1029,"name":"Golden Bend","w":6,"h":6,"rocks":[[3,5]],"reeds":[[1,3,"E"],[2,2,"S"]],"anchors":[[2,3]],"big":0,"leaves":[{"k":"frog","r":1,"c":1},{"k":"duck","r":1,"c":2}],"pads":[{"k":"frog","r":2,"c":2},{"k":"duck","r":0,"c":1}],"par":4,"day":29},{"id":1030,"name":"Hidden Inlet","w":6,"h":6,"rocks":[[5,5]],"reeds":[[3,4,"E"],[2,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":4,"c":3},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":1,"c":2},{"k":"duck","r":3,"c":4},{"k":"turtle","r":0,"c":3}],"par":5,"day":30},{"id":1031,"name":"Breezy Marsh","w":6,"h":6,"rocks":[[4,2],[3,0]],"reeds":[],"anchors":[[4,1]],"big":0,"leaves":[{"k":"frog","r":1,"c":4},{"k":"duck","r":4,"c":3},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":3,"c":5},{"k":"duck","r":5,"c":5},{"k":"turtle","r":3,"c":1}],"par":5,"day":31},{"id":1032,"name":"Dewy Pool","w":6,"h":6,"rocks":[[0,2],[5,4]],"reeds":[[1,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":3},{"k":"turtle","r":4,"c":4}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":4,"c":1},{"k":"turtle","r":5,"c":3}],"par":5,"day":32},{"id":1033,"name":"Amber Shallows","w":6,"h":6,"rocks":[[5,0]],"reeds":[[4,4,"E"],[3,1,"S"]],"anchors":[[3,3]],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":2,"c":4}],"pads":[{"k":"frog","r":1,"c":1},{"k":"duck","r":3,"c":2}],"par":4,"day":33},{"id":1034,"name":"Silver Basin","w":6,"h":6,"rocks":[[2,2]],"reeds":[[2,1,"E"],[4,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":4,"c":2},{"k":"turtle","r":1,"c":4}],"pads":[{"k":"frog","r":1,"c":4},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":5}],"par":6,"day":34},{"id":1035,"name":"Lazy Hollow","w":6,"h":6,"rocks":[[1,0],[2,5]],"reeds":[],"anchors":[[2,3]],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":1,"c":4},{"k":"turtle","r":3,"c":3}],"pads":[{"k":"frog","r":4,"c":0},{"k":"duck","r":1,"c":5},{"k":"turtle","r":3,"c":0}],"par":5,"day":35},{"id":1036,"name":"Misty Cove","w":6,"h":6,"rocks":[[4,4],[3,2]],"reeds":[[4,4,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4},{"k":"turtle","r":4,"c":3}],"pads":[{"k":"frog","r":2,"c":4},{"k":"duck","r":0,"c":3},{"k":"turtle","r":2,"c":2}],"par":5,"day":36},{"id":1037,"name":"Quiet Glade","w":6,"h":6,"rocks":[[1,5]],"reeds":[[2,1,"S"],[4,1,"S"]],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":2,"c":3},{"k":"duck","r":4,"c":3}],"pads":[{"k":"frog","r":0,"c":5},{"k":"duck","r":3,"c":3}],"par":5,"day":37},{"id":1038,"name":"Sunny Brook","w":6,"h":6,"rocks":[[4,0]],"reeds":[[2,3,"S"],[3,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":4},{"k":"duck","r":1,"c":2},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":4,"c":5},{"k":"duck","r":1,"c":1},{"k":"turtle","r":0,"c":5}],"par":6,"day":38},{"id":1039,"name":"Willow Bend","w":6,"h":6,"rocks":[[1,2],[4,2]],"reeds":[],"anchors":[[1,1]],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":3,"c":1},{"k":"turtle","r":3,"c":3}],"pads":[{"k":"frog","r":3,"c":4},{"k":"duck","r":2,"c":1},{"k":"turtle","r":5,"c":4}],"par":5,"day":39},{"id":1040,"name":"Mossy Inlet","w":6,"h":6,"rocks":[[0,2],[1,4]],"reeds":[[3,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":2,"c":4},{"k":"turtle","r":3,"c":2}],"pads":[{"k":"frog","r":5,"c":2},{"k":"duck","r":1,"c":3},{"k":"turtle","r":4,"c":1}],"par":5,"day":40},{"id":1041,"name":"Golden Marsh","w":6,"h":6,"rocks":[[3,3]],"reeds":[[3,3,"S"],[2,1,"E"]],"anchors":[[4,1]],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":4,"c":2}],"pads":[{"k":"frog","r":3,"c":2},{"k":"duck","r":0,"c":1}],"par":6,"day":41},{"id":1042,"name":"Hidden Pool","w":6,"h":6,"rocks":[[0,1]],"reeds":[[2,4,"E"],[3,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":4,"c":2},{"k":"duck","r":5,"c":0},{"k":"turtle","r":1,"c":3}],"par":5,"day":42},{"id":1043,"name":"Breezy Shallows","w":6,"h":6,"rocks":[[1,1],[1,4]],"reeds":[],"anchors":[[4,1]],"big":0,"leaves":[{"k":"frog","r":4,"c":4},{"k":"duck","r":1,"c":2},{"k":"turtle","r":4,"c":3}],"pads":[{"k":"frog","r":4,"c":3},{"k":"duck","r":3,"c":1},{"k":"turtle","r":5,"c":4}],"par":5,"day":43},{"id":1044,"name":"Dewy Basin","w":6,"h":6,"rocks":[[2,4],[5,0]],"reeds":[[3,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":1,"c":1},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":4,"c":0},{"k":"duck","r":0,"c":1},{"k":"turtle","r":1,"c":1}],"par":4,"day":44},{"id":1045,"name":"Amber Hollow","w":6,"h":6,"rocks":[[1,5]],"reeds":[[4,4,"E"],[4,1,"E"]],"anchors":[[1,2]],"big":0,"leaves":[{"k":"frog","r":2,"c":4},{"k":"duck","r":1,"c":4}],"pads":[{"k":"frog","r":1,"c":1},{"k":"duck","r":0,"c":5}],"par":5,"day":45},{"id":1046,"name":"Silver Cove","w":6,"h":6,"rocks":[[0,2]],"reeds":[[2,1,"S"],[2,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":2},{"k":"duck","r":2,"c":1},{"k":"turtle","r":1,"c":3}],"pads":[{"k":"frog","r":0,"c":4},{"k":"duck","r":1,"c":0},{"k":"turtle","r":2,"c":5}],"par":5,"day":46},{"id":1047,"name":"Lazy Glade","w":6,"h":6,"rocks":[[1,2],[2,5]],"reeds":[],"anchors":[[1,4]],"big":0,"leaves":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":3},{"k":"turtle","r":3,"c":4}],"pads":[{"k":"frog","r":5,"c":0},{"k":"duck","r":2,"c":4},{"k":"turtle","r":5,"c":5}],"par":5,"day":47},{"id":1048,"name":"Misty Brook","w":6,"h":6,"rocks":[[4,3],[3,4]],"reeds":[[3,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":4},{"k":"duck","r":2,"c":2},{"k":"turtle","r":2,"c":4}],"pads":[{"k":"frog","r":4,"c":5},{"k":"duck","r":2,"c":1},{"k":"turtle","r":3,"c":3}],"par":4,"day":48},{"id":1049,"name":"Quiet Bend","w":6,"h":6,"rocks":[[3,1]],"reeds":[[3,3,"E"],[1,1,"E"]],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":2},{"k":"duck","r":4,"c":4}],"pads":[{"k":"frog","r":3,"c":3},{"k":"duck","r":5,"c":0}],"par":5,"day":49},{"id":1050,"name":"Sunny Inlet","w":6,"h":6,"rocks":[[3,3]],"reeds":[[4,2,"E"],[2,3,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":4,"c":4},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":0,"c":5},{"k":"turtle","r":1,"c":2}],"par":6,"day":50},{"id":1051,"name":"Willow Marsh","w":6,"h":6,"rocks":[[1,3],[5,1]],"reeds":[],"anchors":[[4,4]],"big":0,"leaves":[{"k":"frog","r":2,"c":1},{"k":"duck","r":4,"c":3},{"k":"turtle","r":4,"c":2}],"pads":[{"k":"frog","r":2,"c":0},{"k":"duck","r":5,"c":3},{"k":"turtle","r":1,"c":0}],"par":5,"day":51},{"id":1052,"name":"Mossy Pool","w":6,"h":6,"rocks":[[0,5],[3,5]],"reeds":[[2,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":4},{"k":"duck","r":1,"c":3},{"k":"turtle","r":2,"c":3}],"pads":[{"k":"frog","r":4,"c":3},{"k":"duck","r":1,"c":1},{"k":"turtle","r":1,"c":2}],"par":4,"day":52},{"id":1053,"name":"Golden Shallows","w":6,"h":6,"rocks":[[0,3]],"reeds":[[2,1,"E"],[1,4,"S"]],"anchors":[[4,4]],"big":0,"leaves":[{"k":"frog","r":3,"c":4},{"k":"duck","r":1,"c":4}],"pads":[{"k":"frog","r":2,"c":5},{"k":"duck","r":0,"c":2}],"par":4,"day":53},{"id":1054,"name":"Hidden Basin","w":6,"h":6,"rocks":[[1,5]],"reeds":[[4,2,"S"],[2,1,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":2,"c":2},{"k":"duck","r":2,"c":4},{"k":"turtle","r":1,"c":2}],"pads":[{"k":"frog","r":1,"c":4},{"k":"duck","r":2,"c":5},{"k":"turtle","r":2,"c":0}],"par":5,"day":54},{"id":1055,"name":"Breezy Hollow","w":6,"h":6,"rocks":[[4,5],[2,3]],"reeds":[],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":3,"c":3},{"k":"duck","r":3,"c":1},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":4,"c":4},{"k":"duck","r":3,"c":4},{"k":"turtle","r":1,"c":0}],"par":5,"day":55},{"id":1056,"name":"Dewy Cove","w":6,"h":6,"rocks":[[3,2],[5,0]],"reeds":[[1,2,"S"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":4,"c":1},{"k":"duck","r":1,"c":4},{"k":"turtle","r":3,"c":1}],"pads":[{"k":"frog","r":3,"c":1},{"k":"duck","r":2,"c":4},{"k":"turtle","r":1,"c":0}],"par":4,"day":56},{"id":1057,"name":"Amber Glade","w":6,"h":6,"rocks":[[2,1]],"reeds":[[1,4,"E"],[3,3,"E"]],"anchors":[[2,3]],"big":0,"leaves":[{"k":"frog","r":4,"c":2},{"k":"duck","r":3,"c":3}],"pads":[{"k":"frog","r":1,"c":1},{"k":"duck","r":3,"c":2}],"par":5,"day":57},{"id":1058,"name":"Silver Brook","w":6,"h":6,"rocks":[[2,5]],"reeds":[[1,4,"S"],[4,2,"E"]],"anchors":[],"big":0,"leaves":[{"k":"frog","r":1,"c":4},{"k":"duck","r":2,"c":4},{"k":"turtle","r":1,"c":1}],"pads":[{"k":"frog","r":1,"c":5},{"k":"duck","r":5,"c":3},{"k":"turtle","r":0,"c":0}],"par":5,"day":58},{"id":1059,"name":"Lazy Bend","w":6,"h":6,"rocks":[[0,4],[4,0]],"reeds":[],"anchors":[[2,2]],"big":0,"leaves":[{"k":"frog","r":4,"c":4},{"k":"duck","r":1,"c":3},{"k":"turtle","r":3,"c":4}],"pads":[{"k":"frog","r":5,"c":2},{"k":"duck","r":1,"c":2},{"k":"turtle","r":4,"c":2}],"par":5,"day":59}];
 </script>
 <script>
@@ -670,6 +701,16 @@ function plop(big) {
     o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.3);
   } catch (e) {}
 }
+function swish() { // v0.9 (Chapter 4): a soft rising whoosh when the current carries a leaf
+  var a = audio(); if (!a) return;
+  try {
+    var t = a.currentTime, n = Math.floor(a.sampleRate * 0.35), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / n);
+    var src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = buf; f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(1500, t + 0.32);
+    g.gain.value = 0.07; src.connect(f); f.connect(g); g.connect(a.destination); src.start(t);
+  } catch (e) {}
+}
 function chime() {
   var a = audio(); if (!a) return;
   try {
@@ -735,6 +776,19 @@ function drawBoard() {
   // v0.5.3: faint ticks where four cells meet, so the edges (reeds, gates) read on big boards
   var tk = el('g', { 'pointer-events': 'none', opacity: moon ? 0.22 : 0.3 }, svg);
   for (var tr = 1; tr < h; tr++) for (var tc = 1; tc < w; tc++) el('path', { d: 'M' + (tc * 100 - 7) + ',' + (tr * 100) + 'h14M' + (tc * 100) + ',' + (tr * 100 - 7) + 'v14', stroke: '#ffffff', 'stroke-width': 2.5, 'stroke-linecap': 'round' }, tk);
+  // v0.9 (Chapter 4): currents, a pale band of moving water with arrows that drift along it
+  if ((lv.currents || []).length) {
+    var gcur = el('g', { class: 'currents', 'pointer-events': 'none' }, svg), CUR_ANG = { S: 0, N: 180, E: -90, W: 90 };
+    lv.currents.forEach(function (e) {
+      var cx = e[1] * 100 + 50, cy = e[0] * 100 + 50, d = L.DIRS['NSWE'.indexOf(e[2])];
+      el('path', { d: 'M' + (cx - d[1] * 34) + ',' + (cy - d[0] * 34) + 'L' + (cx + d[1] * 50) + ',' + (cy + d[0] * 50), stroke: '#e6fbff', 'stroke-width': 74, 'stroke-linecap': 'round', opacity: 0.3 }, gcur);
+    });
+    lv.currents.forEach(function (e) {
+      var cx = e[1] * 100 + 50, cy = e[0] * 100 + 50;
+      var rot = el('g', { transform: 'translate(' + cx + ',' + cy + ') rotate(' + CUR_ANG[e[2]] + ')' }, gcur), fl = el('g', { class: 'cur-flow' }, rot);
+      [-16, 14].forEach(function (y) { el('path', { d: 'M-15,' + (y - 9) + 'L0,' + (y + 5) + 'L15,' + (y - 9), stroke: '#ffffff', 'stroke-width': 7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none', opacity: 0.85 }, fl); });
+    });
+  }
   // pads
   layers.pads = el('g', {}, svg);
   G.padEls = {};
@@ -887,12 +941,14 @@ var THEMES = {
   golden: { water: ['#a3cba4', '#6fa58f', '#4f8580'], wc: [62, 28], under: '#3b7480', bank: ['#d2d58c', '#adb868'], lip: '#efd9a0', bush: ['#9aa84e', '#76863a'], page: ['#f8efd5', '#e8d2a0'], decor: 'cattail', label: 'golden hour' },
   moon:   { water: ['#5b8fae', '#3a6889', '#25496a'], wc: [70, 25], under: '#1d3a55', bank: ['#6f9a7a', '#4c7160'], lip: '#9fae9a', bush: ['#3f6a55', '#2c5042'], page: ['#2c4260', '#13223a'], decor: 'stars', night: true, label: 'moonlight' },
   marsh:  { water: ['#98c0a0', '#6c9b85', '#4b7b6b'], wc: [40, 34], under: '#376f70', bank: ['#c6c97c', '#9aa85c'], lip: '#e3d9a6', bush: ['#86a24f', '#61803a'], page: ['#eef1d8', '#cbd8a9'], decor: 'cattail', label: 'reed marsh' },
-  autumn: { water: ['#8fbcb4', '#5f978f', '#447a78'], wc: [55, 32], under: '#365f66', bank: ['#d9b874', '#b99550'], lip: '#efd9a8', bush: ['#d9783a', '#b0532a'], page: ['#f6ead6', '#e4c79a'], decor: 'maple', label: 'autumn creek' }
+  autumn: { water: ['#8fbcb4', '#5f978f', '#447a78'], wc: [55, 32], under: '#365f66', bank: ['#d9b874', '#b99550'], lip: '#efd9a8', bush: ['#d9783a', '#b0532a'], page: ['#f6ead6', '#e4c79a'], decor: 'maple', label: 'autumn creek' },
+  winter: { water: ['#a9d8e6', '#79b6cf', '#548fb0'], wc: [48, 30], under: '#3f6f8c', bank: ['#eef4f6', '#cfdde3'], lip: '#f7fbfc', bush: ['#6f9a8a', '#4e7a6c'], page: ['#eef5f8', '#cfe2ec'], decor: 'snow', label: 'snowmelt brook' }
 };
 function themeFor(lv) {
   if (lv.theme) return lv.theme;
   if ((lv.chapter || 1) === 2) return 'marsh';
   if ((lv.chapter || 1) === 3) return 'autumn';
+  if ((lv.chapter || 1) === 4) return 'winter';
   if (G.mode === 'daily') return ['spring', 'day', 'golden'][(lv.seed || 0) % 3];
   return G.li < 5 ? 'spring' : G.li < 9 ? 'day' : 'golden'; // chapter 1 moves from morning to golden hour, then Moon Pond
 }
@@ -983,6 +1039,11 @@ function drawScene(T) {
       el('path', { d: 'M' + f(p[0]) + ',' + f(p[1]) + 'q' + f(cell * 0.12) + ',' + f(-hgt * 0.3) + ' ' + f(cell * 0.16) + ',' + f(-hgt * 0.6), stroke: '#7fa346', 'stroke-width': f(Math.max(1.3, cell * 0.018)), fill: 'none', 'stroke-linecap': 'round' }, rg);
       continue;
     }
+    if (T.decor === 'snow') { // v0.9 (Chapter 4): snow drifts and snowdrops instead of flowers
+      el('ellipse', { cx: f(p[0]), cy: f(p[1] + fs2), rx: f(fs2 * 3.2), ry: f(fs2 * 1.2), fill: '#ffffff', opacity: 0.9 }, g);
+      if (n % 2) { el('path', { d: 'M' + f(p[0]) + ',' + f(p[1] + fs2) + 'q0,' + f(-fs2 * 2.2) + ' ' + f(fs2 * 0.8) + ',' + f(-fs2 * 2.8), stroke: '#5f8a33', 'stroke-width': 1.3, fill: 'none' }, g); el('ellipse', { cx: f(p[0] + fs2 * 0.8), cy: f(p[1] - fs2 * 1.2), rx: f(fs2 * 0.5), ry: f(fs2 * 0.9), fill: '#ffffff', stroke: '#9cb7c4', 'stroke-width': 0.8 }, g); }
+      continue;
+    }
     var col = T.decor === 'blossom' ? (n % 2 ? '#f7b7cf' : '#fde2a6') : T.decor === 'maple' ? ['#e8743b', '#d94f30', '#f2a93b'][n % 3] : (n % 3 ? '#ffffff' : '#ffd36b');
     el('path', { d: 'M' + f(p[0]) + ',' + f(p[1] + fs2 * 2.4) + 'L' + f(p[0]) + ',' + f(p[1]), stroke: T.bush[1], 'stroke-width': 1.3 }, g);
     for (var q = 0; q < 5; q++) el('circle', { cx: f(p[0] + Math.cos(q * 1.257) * fs2), cy: f(p[1] + Math.sin(q * 1.257) * fs2), r: f(fs2 * 0.75), fill: col }, g);
@@ -1000,6 +1061,7 @@ var LOOK_ICON = { // tiny corner marks on the pond tiles (svg, 16x16)
   golden: '<svg viewBox="-8 -8 16 16"><circle r="4.2" fill="#f2b84b"/><g stroke="#f2b84b" stroke-width="1.6" stroke-linecap="round"><path d="M0,-7.2v1.6M0,5.6v1.6M-7.2,0h1.6M5.6,0h1.6M-5,-5l1.1,1.1M3.9,3.9l1.1,1.1M-5,5l1.1,-1.1M3.9,-3.9l1.1,-1.1"/></g></svg>',
   moon: '<svg viewBox="-8 -8 16 16"><path d="M1.5,-6.5a6.5,6.5 0 1 0 5,10.5a5.2,5.2 0 1 1 -5,-10.5z" fill="#fff1b0"/></svg>',
   autumn: '<svg viewBox="-8 -8 16 16"><path d="M0,-7l2.4,4.6 4.6,-1.2 -2.2,4.4 3.2,2.2 -5.6,1 0,4.6 -2.4,-3.4 -2.4,3.4 0,-4.6 -5.6,-1 3.2,-2.2 -2.2,-4.4 4.6,1.2z" fill="#e8743b" stroke="#a5461f" stroke-width=".7"/></svg>',
+  winter: '<svg viewBox="-8 -8 16 16"><g stroke="#5f9fc4" stroke-width="1.6" stroke-linecap="round"><path d="M0,-7v14M-6,-3.5l12,7M-6,3.5l12,-7"/><path d="M-2,-6l2,2 2,-2M-2,6l2,-2 2,2" fill="none"/></g></svg>',
   marsh: '<svg viewBox="-8 -8 16 16"><path d="M-1,7.5v-9" stroke="#6b8f3a" stroke-width="1.5"/><rect x="-2.6" y="-7.5" width="3.2" height="7" rx="1.6" fill="#8a5a2e"/><path d="M1,7.5q3,-4 4.5,-8" stroke="#7fa346" stroke-width="1.4" fill="none"/></svg>'
 };
 function rimDecor(kind, W, H, R, svg) { // small touches on the bank only, never over a cell
@@ -1015,6 +1077,7 @@ function rimDecor(kind, W, H, R, svg) { // small touches on the bank only, never
     if (kind === 'daisy') { for (var q2 = 0; q2 < 6; q2++) el('ellipse', { cx: f(x + Math.cos(q2 * 1.047) * 4), cy: f(y + Math.sin(q2 * 1.047) * 4), rx: 2.6, ry: 1.7, fill: '#ffffff', transform: 'rotate(' + (q2 * 60) + ' ' + f(x + Math.cos(q2 * 1.047) * 4) + ' ' + f(y + Math.sin(q2 * 1.047) * 4) + ')' }, g); el('circle', { cx: x, cy: y, r: 2.3, fill: '#f6c945' }, g); }
     if (kind === 'cattail') { el('rect', { x: x - 2.6, y: y - 6, width: 5.2, height: 11, rx: 2.6, fill: '#8a5a2e' }, g); el('path', { d: 'M' + (x + 4) + ',' + (y + 6) + 'q2,-6 6,-9', stroke: '#5f8a33', 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round' }, g); }
     if (kind === 'maple') { var mc = ['#e8743b', '#d94f30', '#f2a93b'][j % 3]; el('path', { d: 'M' + x + ',' + (y - 6) + 'l2,4 4,-1 -2,4 3,2 -5,1 0,4 -2,-3 -2,3 0,-4 -5,-1 3,-2 -2,-4 4,1z', fill: mc, stroke: '#8a3a1a', 'stroke-width': 0.6, transform: 'rotate(' + ((j * 37) % 60 - 30) + ' ' + x + ' ' + y + ')' }, g); }
+    if (kind === 'snow') { el('ellipse', { cx: x, cy: f(y + 2), rx: 7, ry: 3.2, fill: '#ffffff', opacity: 0.9 }, g); if (j % 3 === 0) { el('path', { d: 'M' + x + ',' + f(y - 7) + 'v8M' + f(x - 4) + ',' + f(y - 5) + 'l8,4M' + f(x + 4) + ',' + f(y - 5) + 'l-8,4', stroke: '#9cc7dc', 'stroke-width': 1.4, 'stroke-linecap': 'round' }, g); } } // v0.9: snow patches and a few snowdrops on the bank
     if (kind === 'stars' && j % 2) el('circle', { cx: x, cy: y, r: 2, fill: '#fff6c9', opacity: 0.8 }, g);
   });
 }
@@ -1030,6 +1093,7 @@ function cellLabel(idx) {
     var j = r2 * w + c2; if (G.board.reeds[idx < j ? idx + ':' + j : j + ':' + idx]) sides.push(e[0]);
   });
   if (sides.length) s += ', reed on the ' + sides.join(' and ') + ' edge';
+  if (G.board.cur && G.board.cur[idx]) s += ', current flowing ' + DIRWORD[G.board.cur[idx] - 1] + ': a leaf that lands here rides it'; // v0.9
   var cracks = [];
   [['top', -1, 0], ['bottom', 1, 0], ['left', 0, -1], ['right', 0, 1]].forEach(function (e) {
     var r2 = rr + e[1], c2 = cc + e[2]; if (r2 < 0 || r2 >= G.level.h || c2 < 0 || c2 >= w) return;
@@ -1366,6 +1430,10 @@ function buildCoach(lv) {
   if (lv.intro === 'big') return { kind: 'intro', i: 0, steps: [
     { text: 'Big stone: its ripple pushes leaves two steps. You get ' + (lv.big === 1 ? 'one' : lv.big) + ' here. Tap the big stone, then the glow.', btn: 'btnBig', tap: true, big: true, demo: demo, after: 'Two steps with one splash!' }
   ] };
+  if (lv.intro === 'current') return { kind: 'intro', i: 0, steps: [ // v0.9 (Chapter 4): show a ride, then let them play
+    { text: 'New: a current. A leaf that lands on it rides the arrows to the end. Tap the glow and watch the frog.', cells: (lv.currents || []).map(idxOf), tap: true, demo: demo, then: true },
+    { text: 'The current carried the frog home! A leaf in the way ends a ride early, and press and hold shows every ride. Bring the duck home too.', cells: pads, next: 'Play' }
+  ] };
   if (lv.intro === 'twobig') return { kind: 'intro', i: 0, steps: [ // v0.8.0 (round 9, Nikola): a gentle step up to Moon Pond's two big stones
     { text: 'Two big stones this time, and you need both. Each one pushes leaves two steps. Plan where each one goes, and press and hold to check first.', btn: 'btnBig', next: 'Play' }
   ] };
@@ -1390,7 +1458,7 @@ function logLessonText(lv) { // v0.6.3 (Nikola): name who the log held and who s
     if (r2) r2.moves.forEach(function (mv) {
       var k = lv.leaves[mv.i].k; if (k === 'log' || k === 'leaf') return;
       if (mv.steps > 0) { slid.push('the ' + k); return; }
-      var d = L.DIRS[mv.dir], rr = ((mv.to / w) | 0) + d[0], cc = (mv.to % w) + d[1];
+      var d = L.DIRS[mv.dir], rr = ((mv.mid / w) | 0) + d[0], cc = (mv.mid % w) + d[1];
       if (r2.state.pos[li] === rr * w + cc) held = 'the ' + k;
     });
   }
@@ -1434,7 +1502,7 @@ function logHeld(res) {
   if (li < 0 || !res) return out;
   res.moves.forEach(function (mv) {
     var k = G.level.leaves[mv.i].k; if (k === 'log' || k === 'leaf' || mv.steps >= (res.state.big < G.st.big ? 2 : 1)) return;
-    var d = L.DIRS[mv.dir], r = ((mv.to / w) | 0) + d[0], c = (mv.to % w) + d[1];
+    var d = L.DIRS[mv.dir], r = ((mv.mid / w) | 0) + d[0], c = (mv.mid % w) + d[1];
     if (r >= 0 && r < G.level.h && c >= 0 && c < w && res.state.pos[li] === r * w + c) out.push('the ' + k);
   });
   return out;
@@ -1444,10 +1512,10 @@ function demoReed(lv, demo) {
   if (demo == null) return lv.reeds[0];
   var b = L.makeBoard(lv), st = L.initialState(lv), res = L.applyMove(b, st, demo, false), w = lv.w, found = null;
   (res ? res.moves : []).forEach(function (mv) {
-    var d = L.DIRS[mv.dir], r = ((mv.to / w) | 0) + d[0], c = (mv.to % w) + d[1];
+    var d = L.DIRS[mv.dir], r = ((mv.mid / w) | 0) + d[0], c = (mv.mid % w) + d[1];
     if (r < 0 || r >= lv.h || c < 0 || c >= w) return;
     var nx = r * w + c;
-    lv.reeds.forEach(function (e) { var a = e[0] * w + e[1], bb = e[2] === 'E' ? a + 1 : a + w; if ((a === mv.to && bb === nx) || (bb === mv.to && a === nx)) found = e; });
+    lv.reeds.forEach(function (e) { var a = e[0] * w + e[1], bb = e[2] === 'E' ? a + 1 : a + w; if ((a === mv.mid && bb === nx) || (bb === mv.mid && a === nx)) found = e; });
   });
   return found || lv.reeds[0];
 }
@@ -1662,6 +1730,15 @@ function tap(idx, fromSolver) {
     if (mv.steps === 0) { bump(mv.i, mv.dir); return; }
     var dur = 170 + mv.steps * 90, p = cellXY(mv.to), wait = RM ? 0 : 40 + (reachDist[mv.i] || 1) * 90;
     longest = Math.max(longest, dur + wait - 70);
+    if (mv.drift && mv.drift.length && !RM) { // v0.9 (Chapter 4): push, then the current carries it along, cell by cell
+      var pts = [mv.from, mv.mid].concat(mv.drift).map(cellXY), ride = mv.drift.length * 170, tot = dur + ride, fr = [];
+      pts.forEach(function (q, n) { fr.push({ transform: 'translate(' + q.x + 'px,' + q.y + 'px)', offset: n === 0 ? 0 : Math.min(1, (dur + (n - 1) * 170) / tot), easing: n === 0 ? 'cubic-bezier(.25,.8,.35,1)' : 'linear' }); });
+      e.style.transition = 'none'; e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+      anim(e, fr, { duration: tot, delay: wait, fill: 'backwards' });
+      setTimeout(function () { swish(); }, wait + dur);
+      longest = Math.max(longest, tot + wait - 70);
+      return;
+    }
     e.style.transition = 'transform ' + dur + 'ms cubic-bezier(.25,.8,.35,1) ' + wait + 'ms';
     if (!RM) { var sx = d1(mv.dir) ? 0.84 : 1.1, sy = d1(mv.dir) ? 1.1 : 0.84; anim(e.firstChild, [{ transform: 'scale(1,1)' }, { transform: 'scale(' + sx + ',' + sy + ')', offset: 0.25 }, { transform: 'scale(1.04,.97)', offset: 0.7 }, { transform: 'scale(1,1)' }], { duration: dur + 60, delay: wait, easing: 'ease-out' }); }
     e.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
@@ -1790,7 +1867,7 @@ function names(list) { return list.length < 2 ? list[0] : list.slice(0, -1).join
 function effectSig(st, m) {
   var r = L.applyMove(G.board, st, m.idx, !!m.big); if (!r) return null;
   return r.moves.filter(function (mv) { return mv.steps && G.level.leaves[mv.i].k !== 'leaf'; })
-    .map(function (mv) { return G.level.leaves[mv.i].k + ':' + mv.dir + ':' + mv.steps; })
+    .map(function (mv) { return G.level.leaves[mv.i].k + ':' + mv.dir + ':' + mv.steps + (mv.drift && mv.drift.length ? ':c' + mv.to : ''); })
     .concat((r.snapped || []).map(function (j) { return 'snap:' + j; })).sort(); // a snapped reed is part of what the clue says
 }
 // does splash c fit the words of a clue written for splash m? (same movers in the same directions; steps and
@@ -1811,18 +1888,19 @@ function clueOpts(m) { // add steps / "nothing else moves" only when another spl
   return o;
 }
 function hintClue(m) {
-  var lv = G.level, w = lv.w, res = L.applyMove(G.board, G.st, m.idx, !!m.big), byDir = {}, home = [], plain = false, snapped = !!(res.snapped && res.snapped.length);
+  var lv = G.level, w = lv.w, res = L.applyMove(G.board, G.st, m.idx, !!m.big), byDir = {}, home = [], plain = false, snapped = !!(res.snapped && res.snapped.length), rode = [];
   res.moves.forEach(function (mv) {
     if (!mv.steps) return;
     var k = lv.leaves[mv.i].k;
     if (k === 'leaf') { plain = true; return; }
     (byDir[mv.dir] = byDir[mv.dir] || []).push('the ' + k);
+    if (mv.drift && mv.drift.length) rode.push('the ' + k); // v0.9 (Chapter 4): the current carries it on
     if (k === 'log') return;
     if (mv.to === G.board.pads[k]) home.push('the ' + k);
   });
   var snapper = '', snapDir = -1; // v0.6.4 (Muse r6): name the leaf whose blocked push snaps the cracked reed
   if (snapped) res.moves.forEach(function (mv) {
-    var d = L.DIRS[mv.dir], cur = mv.to, r = ((cur / w) | 0) + d[0], c = (cur % w) + d[1]; if (r < 0 || r >= lv.h || c < 0 || c >= w) return;
+    var d = L.DIRS[mv.dir], cur = mv.mid, r = ((cur / w) | 0) + d[0], c = (cur % w) + d[1]; if (r < 0 || r >= lv.h || c < 0 || c >= w) return;
     var sj = G.board.snaps[Math.min(cur, r * w + c) + ':' + Math.max(cur, r * w + c)];
     if (sj !== undefined && res.snapped.indexOf(sj) !== -1 && !snapper) { var k = lv.leaves[mv.i].k; snapper = k === 'leaf' ? 'the plain leaf' : 'the ' + k; snapDir = mv.dir; }
   });
@@ -1843,7 +1921,8 @@ function hintClue(m) {
     var li = L.leafAt(G.st, r2 * w + c2); if (li !== -1 && lv.leaves[li].k !== 'leaf' && lv.leaves[li].k !== 'log') { kept.push('the ' + lv.leaves[li].k); keptDir[d[0] + ',' + d[1]] = 1; }
   });
   // at most 2 short sentences: what moves, then the shield or the payoff
-  if (kept.length) { var kd = Object.keys(keptDir), where = kd.length === 1 ? { '-1,0': ' above', '1,0': ' below', '0,-1': ' left of', '0,1': ' right of' }[kd[0]] + ' your splash' : ''; s += ' The tied lily' + where + ' keeps ' + names(kept) + ' still.'; }
+  if (rode.length) s += ' The current carries ' + names(rode) + (home.length ? ' on, and that brings ' + names(home) + ' home.' : ' along.');
+  else if (kept.length) { var kd = Object.keys(keptDir), where = kd.length === 1 ? { '-1,0': ' above', '1,0': ' below', '0,-1': ' left of', '0,1': ' right of' }[kd[0]] + ' your splash' : ''; s += ' The tied lily' + where + ' keeps ' + names(kept) + ' still.'; }
   else if (home.length) s += snapped && dirs.length ? ' That brings ' + names(home) + ' home, and ' + snapper + ' snaps the cracked reed.' : ' That brings ' + names(home) + ' home.'; // v0.6.2 (Nikola): two sentences at most
   else if (snapped && dirs.length) s += ' ' + snapper.charAt(0).toUpperCase() + snapper.slice(1) + ' snaps the cracked reed.';
   else { var held = logHeld(res); if (held.length) s += ' The log holds ' + names(held) + ' still.'; }
@@ -1871,9 +1950,10 @@ function clueArrows(m) {
   var res = L.applyMove(G.board, G.st, m.idx, !!m.big);
   res.moves.forEach(function (mv) {
     if (!mv.steps) return;
-    var a = cellXY(mv.from), t = cellXY(mv.to), d = L.DIRS[mv.dir];
+    var a = cellXY(mv.from), t = cellXY(mv.mid), d = L.DIRS[mv.dir];
     var sx = a.x + d[1] * 26, sy = a.y + d[0] * 26, ex = t.x - d[1] * 14, ey = t.y - d[0] * 14;
     var g = el('g', { class: 'clue-arrow' }, layers.hl);
+    if (mv.drift && mv.drift.length) rideArrow(g, mv, '#fff3a0', 'clue-ride');
     [['#1f3d37', 13], ['#fff3a0', 8]].forEach(function (c) {
       el('path', { d: 'M' + sx + ',' + sy + 'L' + ex + ',' + ey, stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
       el('path', { d: 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 - d[0] * 13) + ',' + (-d[0] * 16 - d[1] * 13) + 'M' + (ex + d[1] * 12) + ',' + (ey + d[0] * 12) + 'l' + (-d[1] * 16 + d[0] * 13) + ',' + (-d[0] * 16 + d[1] * 13), stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', fill: 'none', opacity: c[0] === '#1f3d37' ? 0.35 : 1 }, g);
@@ -1931,6 +2011,17 @@ function blockerName(from, dir) {
   var li = L.leafAt(G.st, nx); if (li !== -1 && G.level.leaves[li].k === 'log') return 'log';
   return 'leaf';
 }
+// v0.9 (Chapter 4): a dashed path from where the push ends, through the current, to where the leaf stops
+function rideArrow(parent, mv, col, cls) {
+  var pts = [mv.mid].concat(mv.drift).map(cellXY), g = el('g', { class: cls }, parent), n = pts.length;
+  var last = pts[n - 1], prev = pts[n - 2], dx = Math.sign(last.x - prev.x), dy = Math.sign(last.y - prev.y), ex = last.x - dx * 18, ey = last.y - dy * 18;
+  var d = 'M' + pts[0].x + ',' + pts[0].y; for (var i = 1; i < n - 1; i++) d += 'L' + pts[i].x + ',' + pts[i].y; d += 'L' + ex + ',' + ey;
+  [['#1f3d37', 12, 0.3], [col, 7, 1]].forEach(function (c) {
+    el('path', { d: d, stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': c[2] < 1 ? null : '14 10', fill: 'none', opacity: c[2] }, g);
+    el('path', { d: 'M' + (ex + dx * 12) + ',' + (ey + dy * 12) + 'l' + (-dx * 14 - dy * 12) + ',' + (-dy * 14 - dx * 12) + 'M' + (ex + dx * 12) + ',' + (ey + dy * 12) + 'l' + (-dx * 14 + dy * 12) + ',' + (-dy * 14 + dx * 12), stroke: c[0], 'stroke-width': c[1], 'stroke-linecap': 'round', fill: 'none', opacity: c[2] }, g);
+  });
+  return g;
+}
 function hideHold() { if (layers.pv) layers.pv.innerHTML = ''; document.body.dataset.preview = '0'; }
 function showHold(idx) {
   var lv = G.level, w = lv.w, b = G.board, useBig = G.useBig && G.st.big > 0;
@@ -1981,11 +2072,12 @@ function showHold(idx) {
       return;
     }
     el('circle', { cx: t.x, cy: t.y, r: 38, fill: 'none', stroke: '#ffffff', 'stroke-width': 4, 'stroke-dasharray': '9 7', class: 'pv-ghost' }, pv);
+    if (mv.drift && mv.drift.length) { rideArrow(pv, mv, '#bff3ff', 'pv-ride'); t = cellXY(mv.mid); } // v0.9: the current carries it on
     if (useBig && mv.steps < 2) { // big stone: this leaf stops after 1 of its 2 steps; say what stops it
       var px = t.x + d[1] * 44, py = t.y + d[0] * 44, qx = d[0] * 24, qy = d[1] * 24, gp = el('g', { class: 'pv-blocked pv-partial' }, pv);
       el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#ffffff', 'stroke-width': 14, 'stroke-linecap': 'round' }, gp);
       el('path', { d: 'M' + (px - qx) + ',' + (py - qy) + 'L' + (px + qx) + ',' + (py + qy), stroke: '#e5484d', 'stroke-width': 8, 'stroke-linecap': 'round' }, gp);
-      var pw = blockerName(mv.to, mv.dir) === 'cracked reed' ? 'snaps: cracked reed' : 'stops: ' + blockerName(mv.to, mv.dir), pwW = 26 + pw.length * 11.5, pp = pillPos(t.x, t.y, pwW), plx = pp.x, ply = pp.y;
+      var pw = blockerName(mv.mid, mv.dir) === 'cracked reed' ? 'snaps: cracked reed' : 'stops: ' + blockerName(mv.mid, mv.dir), pwW = 26 + pw.length * 11.5, pp = pillPos(t.x, t.y, pwW), plx = pp.x, ply = pp.y;
       el('rect', { x: plx - pwW / 2, y: ply - 17, width: pwW, height: 32, rx: 16, fill: '#e5484d', stroke: '#ffffff', 'stroke-width': 3 }, gp);
       var pt = el('text', { x: plx, y: ply + 6, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 21, 'font-weight': 800, 'font-family': 'inherit' }, gp); pt.textContent = pw;
     }
@@ -2097,7 +2189,19 @@ var HAB = [
   // 27 fallen leaves drifting on the water
   '<g transform="translate(136,64)"><path d="M0,0q5,-5 10,0q-5,5 -10,0z" fill="#f2a93b" stroke="#a8641a" stroke-width=".8" transform="rotate(20)"/><path d="M14,6q4,-4 8,0q-4,4 -8,0z" fill="#e8743b" stroke="#a5461f" stroke-width=".8" transform="rotate(-25 18 6)"/><path d="M-10,8q4,-4 8,0q-4,4 -8,0z" fill="#c9a23a" stroke="#7f6418" stroke-width=".8"/></g>',
   // 28 a pumpkin by the dock
-  '<g transform="translate(298,104)"><ellipse rx="8" ry="6" fill="#ec8a2c" stroke="#9a4e10" stroke-width="1"/><path d="M-3,-5q-2,5 0,11M3,-5q2,5 0,11" stroke="#9a4e10" stroke-width=".9" fill="none"/><path d="M0,-6q1,-4 3,-5" stroke="#5f7a2e" stroke-width="2" stroke-linecap="round" fill="none"/></g>'
+  '<g transform="translate(298,104)"><ellipse rx="8" ry="6" fill="#ec8a2c" stroke="#9a4e10" stroke-width="1"/><path d="M-3,-5q-2,5 0,11M3,-5q2,5 0,11" stroke="#9a4e10" stroke-width=".9" fill="none"/><path d="M0,-6q1,-4 3,-5" stroke="#5f7a2e" stroke-width="2" stroke-linecap="round" fill="none"/></g>',
+  // 31 a robin on the bank (v0.9, Chapter 4: Snowmelt Brook)
+  '<g transform="translate(58,30)"><path d="M-6,6l-3,5M-2,6l-1,5" stroke="#6a4a2a" stroke-width="1.3" stroke-linecap="round"/><ellipse rx="9" ry="7" fill="#7a5a3e" stroke="#4a3320" stroke-width="1"/><path d="M-8,0q4,7 10,4q2,-4 -2,-8z" fill="#e2573a"/><circle cx="-6" cy="-6" r="5" fill="#7a5a3e" stroke="#4a3320" stroke-width="1"/><circle cx="-7.5" cy="-7" r="1" fill="#1f2a22"/><path d="M-11,-6l-4,1 4,1z" fill="#e8a83a"/><path d="M8,-1l8,-4 -2,6z" fill="#5a3e28"/></g>',
+  // 32 snowdrops in a patch of snow
+  '<g transform="translate(112,134)"><ellipse rx="13" ry="3.5" fill="#ffffff" opacity=".95"/><g stroke="#5f8a33" stroke-width="1.4" fill="none" stroke-linecap="round"><path d="M-6,0q0,-8 3,-11"/><path d="M1,0q0,-10 3,-13"/><path d="M7,0q0,-7 2,-9"/></g><g fill="#ffffff" stroke="#9cb7c4" stroke-width=".7"><path d="M-3,-11q-3,2 -1,6q2,-2 1,-6z"/><path d="M4,-13q-3,2 -1,6q2,-2 1,-6z"/><path d="M9,-9q-3,2 -1,6q2,-2 1,-6z"/></g></g>',
+  // 33 a snowy owl on a stump
+  '<g transform="translate(268,32)"><rect x="-7" y="8" width="14" height="8" rx="2" fill="#8a6a48" stroke="#4a3320" stroke-width="1"/><ellipse cy="0" rx="9" ry="10" fill="#fbfbf6" stroke="#9aa5a6" stroke-width="1.1"/><circle cx="-3.5" cy="-3" r="2.6" fill="#f2c94c"/><circle cx="3.5" cy="-3" r="2.6" fill="#f2c94c"/><circle cx="-3.5" cy="-3" r="1.1" fill="#1f2a22"/><circle cx="3.5" cy="-3" r="1.1" fill="#1f2a22"/><path d="M-1,0l1,2 1,-2z" fill="#5a5a4a"/><path d="M-4,4h1M2,6h1M-2,7h1" stroke="#6a7476" stroke-width="1" stroke-linecap="round"/></g>',
+  // 34 a deer at the far bank
+  '<g transform="translate(40,58)"><g stroke="#6a4428" stroke-width="1.6" stroke-linecap="round"><path d="M-6,4v9M-2,4v9M6,4v9M9,4v9"/></g><ellipse cx="2" cy="2" rx="10" ry="5" fill="#b77a48" stroke="#6a4428" stroke-width="1"/><path d="M9,0l4,-8" stroke="#b77a48" stroke-width="4" stroke-linecap="round"/><ellipse cx="15" cy="-9" rx="4" ry="2.8" fill="#b77a48" stroke="#6a4428" stroke-width="1"/><path d="M13,-11l-2,-6M15,-11l2,-6M12,-15l-2,-1M16,-15l2,-1" stroke="#6a4428" stroke-width="1.2" stroke-linecap="round"/><circle cx="16" cy="-9.5" r=".8" fill="#1f2a22"/><path d="M-4,0h1M0,-1h1M4,0h1" stroke="#f6efe0" stroke-width="1.4" stroke-linecap="round"/></g>',
+  // 35 a little snowman
+  '<g transform="translate(246,134)"><circle cy="-4" r="7" fill="#ffffff" stroke="#9cb7c4" stroke-width="1"/><circle cy="-14" r="4.8" fill="#ffffff" stroke="#9cb7c4" stroke-width="1"/><path d="M-4,-10h8" stroke="#d9483a" stroke-width="2" stroke-linecap="round"/><path d="M0,-14l5,1 -5,1z" fill="#ec8a2c"/><circle cx="-1.6" cy="-16" r=".8" fill="#1f2a22"/><circle cx="1.6" cy="-16" r=".8" fill="#1f2a22"/><path d="M-4,-18h8v-2h-1.5v-4h-5v4h-1.5z" fill="#2f3a3d"/></g>',
+  // 36 a red sled by the brook
+  '<g transform="translate(140,140)"><path d="M-14,-2h24q6,0 6,-5" fill="none" stroke="#6a4a2a" stroke-width="1.6" stroke-linecap="round"/><rect x="-12" y="-9" width="22" height="5" rx="2" fill="#d9483a" stroke="#7a1d17" stroke-width="1"/><path d="M-8,-4v2M6,-4v2" stroke="#6a4a2a" stroke-width="1.4"/></g>'
 ];
 function dailyItem(n) {
   var R = rnd(n * 7907 + 3), t = n % 4, s = '';
@@ -2118,7 +2222,7 @@ var HAB_FEATS = [ // drawn under the visitors
   { at: 30, name: 'a willow tree', art: '<g><path d="M18,130v-50" stroke="#7a5430" stroke-width="5" stroke-linecap="round"/><ellipse cx="22" cy="66" rx="24" ry="20" fill="#7fb35a"/><path d="M6,66q-2,24 2,40M16,70q0,26 2,38M30,70q2,24 0,36M40,64q4,20 2,32" stroke="#5f9445" stroke-width="2" fill="none" stroke-linecap="round"/></g>' },
   { at: 50, name: 'a little waterfall', art: '<g><path d="M150,0h26v12q-13,8 -26,0z" fill="#8d999b" stroke="#5b6668" stroke-width="1.2"/><path d="M155,10v26M163,11v30M171,10v24" stroke="#e6f7ff" stroke-width="3" stroke-linecap="round" opacity=".85"/></g>' }
 ];
-var HAB_NAMES = ['a white water flower', 'a dragonfly', 'a ladybug on a clover', 'a reed clump', 'a jumping fish', 'a snail', 'cattails', 'a butterfly', 'a pink water lily', 'a heron', 'a sunning turtle', 'fireflies', 'a frog on two stones', 'the moon', 'a kingfisher', 'an otter', 'water striders', 'a beaver', 'ducklings', 'tadpoles', 'a mayfly', 'a water vole', 'a maple leaf', 'a squirrel', 'geese flying south', 'mushrooms', 'a fox', 'a hedgehog', 'drifting leaves', 'a pumpkin'];
+var HAB_NAMES = ['a white water flower', 'a dragonfly', 'a ladybug on a clover', 'a reed clump', 'a jumping fish', 'a snail', 'cattails', 'a butterfly', 'a pink water lily', 'a heron', 'a sunning turtle', 'fireflies', 'a frog on two stones', 'the moon', 'a kingfisher', 'an otter', 'water striders', 'a beaver', 'ducklings', 'tadpoles', 'a mayfly', 'a water vole', 'a maple leaf', 'a squirrel', 'geese flying south', 'mushrooms', 'a fox', 'a hedgehog', 'drifting leaves', 'a pumpkin', 'a robin', 'snowdrops', 'a snowy owl', 'a deer', 'a little snowman', 'a red sled'];
 var DAILY_NAMES = ['a wildflower', 'a floating leaf', 'a little fish', 'a ladybug'];
 var MILESTONES = [5, 10, 20, 30, 50];
 var newVisitor = null; // { kind: 'ch' | 'daily', i, name, total } until the home screen has shown it
@@ -2212,7 +2316,7 @@ function showSelect() {
   // chapter grid
   var grid = $('levelGrid'); grid.innerHTML = '';
   var total = 0;
-  var CH_NAME = { 2: 'Reed Garden', 3: 'Autumn Creek' };
+  var CH_NAME = { 2: 'Reed Garden', 3: 'Autumn Creek', 4: 'Snowmelt Brook' };
   LEVELS.forEach(function (lv, i) {
     var st = progress.stars[lv.id] || 0; if (chapterOf(i) === 1) total += st;
     if (i > 0 && chapterOf(i) !== chapterOf(i - 1)) { // a heading row for the next chapter
@@ -2222,14 +2326,14 @@ function showSelect() {
       grid.appendChild(hd2);
     }
     var b = document.createElement('button'); b.className = 'tile'; b.dataset.level = String(i + 1);
-    var look = lv.theme || (chapterOf(i) === 3 ? 'autumn' : chapterOf(i) === 2 ? 'marsh' : i < 5 ? 'spring' : i < 9 ? 'day' : 'golden'); // each stretch of ponds wears its own look
+    var look = lv.theme || (chapterOf(i) === 4 ? 'winter' : chapterOf(i) === 3 ? 'autumn' : chapterOf(i) === 2 ? 'marsh' : i < 5 ? 'spring' : i < 9 ? 'day' : 'golden'); // each stretch of ponds wears its own look
     b.dataset.look = look; b.title = THEMES[look].label;
     var open = unlocked(i);
     if (!open) { b.classList.add('locked'); b.disabled = true; b.setAttribute('aria-label', 'Pond ' + (i + 1) + ', locked'); }
     else b.setAttribute('aria-label', 'Pond ' + (i + 1) + ', ' + lv.name + ', ' + st + ' of 3 stars');
     b.innerHTML = '<span class="look" aria-hidden="true">' + LOOK_ICON[look] + '</span><span class="num">' + (i + 1) + '</span><span class="nm"></span>';
     b.querySelector('.nm').textContent = lv.name;
-    var badge = { rock: 'New', reed: 'New', shield: 'New', big: 'New', gate: 'New', log: 'New', snap: 'New' }[lv.intro];
+    var badge = { rock: 'New', reed: 'New', shield: 'New', big: 'New', gate: 'New', log: 'New', snap: 'New', current: 'New' }[lv.intro];
     if (badge && open && !seen[lv.intro]) { var bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = badge; b.appendChild(bd); }
     if (open) { var row = document.createElement('span'); row.className = 'st'; for (var k = 0; k < 3; k++) row.appendChild(starSVG(k < st)); b.appendChild(row); }
     else { var lk = document.createElementNS(NS, 'svg'); lk.setAttribute('viewBox', '0 0 24 24'); lk.setAttribute('class', 'lock'); lk.innerHTML = '<rect x="5" y="10" width="14" height="10" rx="3" fill="#8aa197"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="#8aa197" stroke-width="2.4"/>'; b.appendChild(lk); }
@@ -2243,9 +2347,10 @@ function showSelect() {
 function showChapterDone() {
   $('winCard').classList.add('hidden'); clearWinPlace();
   var ch = chapterOf(G.li), more = G.li < LEVELS.length - 1;
-  $('chTitle').textContent = ch === 1 ? 'Chapter 1 complete' : ch === 2 ? 'Reed Garden sample complete' : 'Autumn Creek sample complete';
-  $('chLine').textContent = ch === 1 ? 'Your pond is full of life. Thank you for playing.' : ch === 2 ? 'You have mastered the one-way gate and the floating log. Thank you for playing.' : 'You know just when to snap a cracked reed. Thank you for playing.';
-  $('chNext').textContent = !more ? 'More Autumn Creek ponds coming soon.' : ch === 1 ? 'Chapter 2 is open: the Reed Garden.' : 'Chapter 3 is open: Autumn Creek.';
+  var CHN = { 2: 'Reed Garden', 3: 'Autumn Creek', 4: 'Snowmelt Brook' };
+  $('chTitle').textContent = ch === 1 ? 'Chapter 1 complete' : CHN[ch] + ' sample complete';
+  $('chLine').textContent = ch === 1 ? 'Your pond is full of life. Thank you for playing.' : ch === 2 ? 'You have mastered the one-way gate and the floating log. Thank you for playing.' : ch === 3 ? 'You know just when to snap a cracked reed. Thank you for playing.' : 'You can read the current and ride it home. Thank you for playing.';
+  $('chNext').textContent = !more ? 'More ' + CHN[ch] + ' ponds coming soon.' : 'Chapter ' + (ch + 1) + ' is open: ' + (ch === 1 ? 'the ' : '') + CHN[ch + 1] + '.'; // v0.9: one line for every chapter
   $('chapterScene').innerHTML = habitatSVG(ch); // v0.5.6 (Cooper): no peeking at later chapters' visitors
   $('chapterCard').classList.remove('hidden');
 }
