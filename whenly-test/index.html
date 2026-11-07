@@ -132,7 +132,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 /* Reveal timeline: today's five years spaced to scale, so close calls look close (round 3). */
 .tl{position:relative;height:74px;margin:4px 14px 0}
 .tl::before{content:"";position:absolute;left:0;right:0;top:36px;height:3px;border-radius:2px;background:var(--line)}
-.tl button{position:absolute;top:26px;width:22px;height:22px;margin-left:-11px;border-radius:50%;border:3px solid var(--paper);background:var(--cat,var(--accent));padding:0;cursor:pointer;box-shadow:0 1px 3px #0003;animation:tlIn .45s ease backwards}
+.tl button{position:absolute;top:26px;width:22px;height:22px;margin-left:-11px;border-radius:50%;border:3px solid var(--paper);background:var(--cat,var(--accent));padding:0;cursor:pointer;box-shadow:0 1px 3px #0003;animation:tlIn .25s ease backwards}
 .tl button::after{content:"";position:absolute;inset:-11px;border-radius:50%}
 .tl .tlpair{position:absolute;top:34px;height:7px;border-radius:4px;background:var(--accent)}
 .tl button.on{outline:3px solid var(--accent);outline-offset:2px}
@@ -668,7 +668,7 @@ const levelOf=ids=>{const d=hardness(ids);return d>=8?3:d>=6?2:d>=4?1:0};
 // The week ramps up: Mon-Tue easy, Wed-Thu medium, Fri tricky, Sat-Sun hard. Hand-picked days keep their honest level.
 const DAY_LEVEL=[3,0,0,1,1,2,3];
 // Hard puzzles hide which pairs are reversed: a check only says how many neighbors are in order (Alan, round 4).
-const dayLevelCache={},dayLevel=n=>dayLevelCache[n]??=levelOf((S.days[n]&&S.days[n].g&&S.days[n].g.ids)||dealFor(n).ids);
+const dayLevelCache={},dayLevel=n=>{const ids=(S.days[n]&&S.days[n].g&&S.days[n].g.ids)||dealFor(n).ids;return dayLevelCache[ids.join()]??=levelOf(ids)};
 const hideTags=()=>G&&G.kind!=="tutorial"&&levelOf(G.ids)===3;
 // Hand-picked daily puzzles: puzzle number -> [theme, five card titles]. Days without an entry are dealt by the rules.
 // Written for puzzle #1 on a Monday (each day's cards fit that weekday's level), so keep EPOCH on a Monday.
@@ -820,7 +820,7 @@ async function showCrowd(){
   const el=$("#crowd");if(!el)return;
   // With too few players (or offline), still name your own slip, just without the crowd's numbers (Nikola, round 5).
   const ownLine=()=>{const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=G.slips||end,i=[0,1,2,3].find(k=>slips[k]);if(i==null)return;
-    const A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];el.innerHTML=end[i]?`You finished with <b>${A}</b> and <b>${B}</b> swapped. <b>${A}</b> came first.`:`You had <b>${A}</b> and <b>${B}</b> swapped at first, but you fixed it.`;el.hidden=false};
+    const A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];el.innerHTML=end[i]?`You finished with <b>${B}</b> above <b>${A}</b>, but <b>${A}</b> came first.`:`At first you had <b>${B}</b> above <b>${A}</b>, but you fixed it.`;el.hidden=false};
   if(G.kind==="practice")return ownLine();
   // Name your own slip right away; the crowd's numbers replace it only if they arrive (Nikola, round 7).
   ownLine();let c=null;try{c=await Promise.race([crowdGet(G.n),new Promise(r=>setTimeout(()=>r(null),4000))])}catch(e){}
@@ -830,7 +830,7 @@ async function showCrowd(){
   const mine=[0,1,2,3].filter(i=>slips[i]).sort((a,b)=>c.s[b]-c.s[a]);
   const i=mine.length?mine[0]:c.s.indexOf(Math.max(...c.s)),A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];
   if(!mine.length&&pct(i)<10){el.innerHTML=`Most players got every pair right today.`;el.hidden=false;return}
-  el.innerHTML=mine.length?(end[i]?`You finished with <b>${A}</b> and <b>${B}</b> swapped, and so did <b>${pct(i)}%</b> of players.`:`You had <b>${A}</b> and <b>${B}</b> swapped at first. <b>${pct(i)}%</b> of players finished with them still swapped, but you fixed it.`)
+  el.innerHTML=mine.length?(end[i]?`You finished with <b>${B}</b> above <b>${A}</b>, and so did <b>${pct(i)}%</b> of players. <b>${A}</b> came first.`:`At first you had <b>${B}</b> above <b>${A}</b>. <b>${pct(i)}%</b> of players finished that way, but you fixed it.`)
     :`<b>${pct(i)}%</b> of players finished with <b>${A}</b> and <b>${B}</b> swapped. You got them right.`;
   el.hidden=false;
 }
@@ -930,7 +930,7 @@ const earlierSet=(n,ids=savedIds(n))=>!!(Array.isArray(ids)&&SCHEDULE[n]&&!sameS
 // Titles of sets that earlier versions dealt, so an earlier save keeps the title it was played under (Muse, round 7).
 // Keyed by the five card titles, sorted and joined with |.
 const OLD_THEMES={"First successful Mars landing|Hubble Space Telescope launches|James Webb Space Telescope launches|Neptune is discovered|Pluto is discovered":"Planets and telescopes","Barbie doll debuts|Furby craze|Monopoly goes on sale|Rubik's Cube is invented|Slinky goes on sale":"Toy box","First Pokémon games|Minecraft's first public version|Pong arcade game|Space Invaders arcade game|Super Mario Bros. is released":"Game on","Back to the Future|E.T. the Extra-Terrestrial|Jurassic Park hits theaters|Star Wars hits theaters|Titanic the movie":"At the movies","Burj Khalifa opens in Dubai|Gateway Arch is finished|Hoover Dam is finished|Panama Canal opens|Statue of Liberty is dedicated":"Big builds","Elvis on The Ed Sullivan Show|Grand Ole Opry's first broadcast|MTV launches|Napster lets people share songs|Woodstock music festival":"Turn it up","Facebook starts|First email between computers|Google is founded|Instagram launches|World Wide Web goes public":"Online","\"I Have a Dream\" speech|Declaration of Independence|Lincoln's Gettysburg Address|Magna Carta is sealed|Nelson Mandela is freed":"Turning points","Cheerios go on sale|Gatorade is invented|Jell-O goes on sale|Oreo cookie is introduced|Sliced bread goes on sale":"Kitchen cupboard","Garfield comic strip begins|Mickey Mouse stars in Steamboat Willie|Peanuts comic strip begins|Superman's first comic|Toy Story comes out":"Funny pages","Berlin Wall falls|Jaws hits theaters|Michael Jackson's first moonwalk|Pac-Man arcade game|Top Gun hits theaters":"From Jaws to the Berlin Wall","Boston Tea Party|British surrender at Yorktown|Paul Revere's midnight ride|US Constitution is signed|Washington becomes president":"A new nation","Darwin's Origin of Species|Einstein's E = mc²|First moon landing|Galileo spots moons around Jupiter|Newton's laws of motion":"Big ideas in science","Barack Obama is elected|First president moves into the White House|John F. Kennedy is elected|Lincoln's Gettysburg Address|Nixon resigns":"Presidents","Billie Jean King's \"Battle of the Sexes\"|Rosa Parks keeps her bus seat|Sally Ride flies in space|US women win the right to vote|Women first compete at the modern Olympics":"Women who led the way","First electronic TV picture|Friends premieres|I Love Lucy premieres|Saturday Night Live premieres|Sesame Street premieres":"Must-see TV","Amazon opens as an online bookstore|Apple is founded|IBM Personal Computer|Windows 1.0 comes out|YouTube starts":"Computers","Coast-to-coast railroad done|Concorde starts passenger flights|Erie Canal opens|Magellan sets off around the world|Wright brothers' first flight":"Getting around","Disneyland opens|Frozen hits theaters|Jurassic Park hits theaters|Lumière brothers' first film show|Mickey Mouse stars in Steamboat Willie":"Movie magic","Edison's long-lasting light bulb|First iPhone goes on sale|First microwave oven is sold, to restaurants|Ford Model T goes on sale|Post-it notes go on sale nationwide":"Everyday inventions","Big Mac goes nationwide|Coca-Cola is invented|First In-N-Out Burger|First Pizza Hut opens|Ray Kroc opens his first McDonald's":"Fast food and fizz","Boston Tea Party|British surrender at Yorktown|First president moves into the White House|Louisiana Purchase|Washington becomes president":"A new nation","First electronic TV picture|Instagram launches|Kodak's first camera|Netflix starts streaming|Polaroid instant camera goes on sale":"Pictures and screens","Coca-Cola is invented|Gatorade is invented|Oreo cookie is introduced|Ray Kroc opens his first McDonald's|Sliced bread goes on sale":"Food and drink","Coast-to-coast railroad done|Gold is found in California|Golden Gate Bridge opens|Pony Express starts|Yellowstone becomes the first national park":"The American West","Coca-Cola is invented|Hershey's Kisses are made|M&M's are made|Ray Kroc opens his first McDonald's|Twinkies are invented":"Snacks and fast food"};
-const oldTheme=ids=>OLD_THEMES[ids.map(i=>EVENTS[i][2]).sort().join("|")]||"";
+const oldTheme=ids=>OLD_THEMES[ids.map(i=>EVENTS[i][2]).sort().join("|")]||"Mixed history";
 const themeOf=(n,ids=savedIds(n))=>!SCHEDULE[n]?"":earlierSet(n,ids)?oldTheme(ids):SCHEDULE[n][0];
 // A spoiler-free question for tomorrow's theme (Cooper, round 4).
 const TEASERS={
@@ -1292,7 +1292,7 @@ function timeline(){
   const over=x[x.length-1]-100;if(over>0)for(let i=x.length-1;i>=0;i--){x[i]-=over;if(i<x.length-1)x[i]=Math.min(x[i],x[i+1]-11)}
   for(let i=0;i<x.length;i++)x[i]=5+x[i]*.9; // keep the end dots and their years inside the card
   let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
-  return `<div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%;animation-delay:${.1+i*.06}s" aria-label="${y[i]}: ${EVENTS[id][2]}"><span>${y[i]}</span></button>`).join("")}</div>`;
+  return `<div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%;animation-delay:${.05+i*.02}s" aria-label="${y[i]}: ${EVENTS[id][2]}"><span>${y[i]}</span></button>`).join("")}</div>`;
 }
 function surpriseCard(){ // the card you had furthest from its spot (or the oldest card if you were perfect)
   const t=sortIds(G.ids);let id=t[0],far=0;
@@ -1324,7 +1324,7 @@ function showResult(){
     ${daily&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:""}
     ${daily?`${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b> · ${LEVELS[dayLevel(G.n+1)]}<br>${teaserOf(G.n+1)}</p>`:""}<p class="next">${G.note?G.note+"<br>":""}Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Puzzle #${G.n+1} in <b id="cd"></b></p>`:""}
     ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
-    <details class="how"><summary>More: how scoring works${dorA?", this week's stories":""}</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 reversed.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty (Easy ×1, Medium ×1.15, Tricky ×1.3, Hard ×1.5), rounded to the nearest point. Archive, Practice and Expert earn at half rate, and Practice and Expert earn points 3 times a day each.</p>
+    <details class="how"><summary>More: how scoring works${dorA?", this week's stories":""}</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 reversed.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty (Easy ×1, Medium ×1.15, Tricky ×1.3, Hard ×1.5), rounded to the nearest point. Archive, Practice and Expert earn at half rate, and Practice and Expert each earn points for your first 3 games a day.</p>
       ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
       ${dorA&&!(daily&&S.streak%7===0)?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
     </details>
@@ -1442,7 +1442,7 @@ function showArchive(){
     const res=g&&g.done?`<span class="res done">${g.score} · ${tier(g.score)}</span>`:g?`<span class="res">Started</span>`:`<span class="res">Play</span>`;
     rows.push(`<button class="arow" data-n="${n}"><b>#${n}</b><span>${d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}<small>${LEVELS[dayLevel(n)]}${themeOf(n)?" · "+themeOf(n):""}${earlierSet(n)?" · earlier set":""}${g&&g.done&&g.kind==="archive"&&!g.live?" · played from the Archive":""}</small></span>${res}</button>`);
   }
-  a.innerHTML=`<h2>Past puzzles</h2><p class="star" style="margin:0">Play any day you missed. Open one you've finished to see its stories or replay it for fun. Past puzzles don't change your streak.</p>${rows.some(r=>r.includes(" · earlier set"))?`<p class="star" style="margin:4px 0 0">"Earlier set" marks a day you played before its cards were changed. It keeps the cards and title you played.</p>`:""}`+
+  a.innerHTML=`<h2>Past puzzles</h2><p class="star" style="margin:0">Play any day you missed. Open one you've finished to see its stories or replay it for fun. Past puzzles don't change your streak.</p>${rows.some(r=>r.includes(" · earlier set"))?`<p class="star" style="margin:4px 0 0">"Earlier set" marks a day you played before its cards were changed. It keeps the cards, title and level you played, so an earlier weekend can show Medium or Tricky.</p>`:""}`+
     (rows.length?rows.join(""):`<p class="fact">Puzzle #1 is today's. From tomorrow, every past puzzle shows up here.</p>`);
   a.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>playArchive(+b.dataset.n));
 }
@@ -1493,7 +1493,7 @@ function help(){sheet(`<h2>How to play</h2>
   <p><b>Score:</b> up to 100, for pairs in the right order and cards close to their spots. Solving on your first try scores highest.</p>
   <p><b>Streaks:</b> play every day to build a streak. Earn 1 ❄️ freeze every 7 days in a row, up to 2. Each one covers 1 missed day automatically. If you miss more days than you have freezes, your streak starts over.</p>
   <p><b>Archive:</b> play any past day's puzzle. <b>Expert:</b> type the exact year of each card, scored by how close you get.</p>
-  <p>A new puzzle comes every day at midnight. The week gets harder as it goes: Monday and Tuesday Easy, Wednesday and Thursday Medium, Friday Tricky, and Saturday and Sunday Hard. The label at the top shows each puzzle's level. On a Hard puzzle, a check only says how many neighbors are in order, not which ones, and history points are worth 1.5 times as much. The daily earns full points; Archive, Practice and Expert earn half, and Practice and Expert earn points 3 times a day each. There's no timer.</p>
+  <p>A new puzzle comes every day at midnight. The week gets harder as it goes: Monday and Tuesday Easy, Wednesday and Thursday Medium, Friday Tricky, and Saturday and Sunday Hard. The label at the top shows each puzzle's level. On a Hard puzzle, a check only says how many neighbors are in order, not which ones, and history points are worth 1.5 times as much. The daily earns full points; Archive, Practice and Expert earn half, and Practice and Expert each earn points for your first 3 games a day. There's no timer.</p>
   <p style="color:var(--muted);font-size:14px">Card photos are public domain or CC0, from Wikimedia Commons.</p>`)}
 // History points: every finished puzzle (daily, archive, Practice, Expert) adds its score, so
 // play after the daily still counts. Weekly total resets each Monday; ranks use the lifetime total.
@@ -1535,7 +1535,7 @@ function stats(){
   const max=Math.max(1,...TIERS.map(t=>S.tiers[t[1]]||0)),td=S.days[dayNum()],mine=td&&td.g&&td.g.done?tier(td.g.score):"";
   sheet(`<h2>Your stats</h2>
   <div class="stats"><div><b>${S.played}</b><span>Played on the day</span></div><div><b>${S.played?Math.round(S.total/S.played):0}</b><span>Avg score</span></div><div><b>${S.streak}</b><span>Streak</span></div><div><b>${S.best}</b><span>Best streak</span></div></div>
-  <p>🏅 <b>${RANKS[rankOf(S.hp||0)][1]}</b> · ${S.hp||0} history points${S.wk&&S.wk.w===weekNo()?` · ${S.wk.pts} this week`:""}. Each puzzle adds its score times its difficulty. The daily earns full rate; Archive, Practice and Expert earn half, and Practice and Expert count 3 times a day each.${RANKS[rankOf(S.hp||0)+1]?` ${RANKS[rankOf(S.hp||0)+1][0]-(S.hp||0)} more to reach ${RANKS[rankOf(S.hp||0)+1][1]}.`:""}</p>
+  <p>🏅 <b>${RANKS[rankOf(S.hp||0)][1]}</b> · ${S.hp||0} history points${S.wk&&S.wk.w===weekNo()?` · ${S.wk.pts} this week`:""}. Each puzzle adds its score times its difficulty. The daily earns full rate; Archive, Practice and Expert earn half, and Practice and Expert each count your first 3 games a day.${RANKS[rankOf(S.hp||0)+1]?` ${RANKS[rankOf(S.hp||0)+1][0]-(S.hp||0)} more to reach ${RANKS[rankOf(S.hp||0)+1][1]}.`:""}</p>
   <p style="font-weight:700;margin-bottom:6px">Streak badges</p><div class="badges">${MILESTONES.map(m=>`<span class="${S.best>=m?"got":""}">${S.best>=m?"🏆":"🔒"} ${m} days</span>`).join("")}</div>
   <p>❄️ Streak freezes: <b>${S.freezes}</b> of 2. Earn 1 every 7 days in a row. Each one covers 1 missed day automatically.</p>
   ${S.played?"":`<p style="color:var(--muted)">Your stats start with your first daily puzzle. The lesson and Practice don't count.</p>`}
@@ -1769,8 +1769,9 @@ try{if(sessionStorage.getItem("whenly-restored")){sessionStorage.removeItem("whe
 
 // ---------- wire up ----------
 $("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
-$("#tDaily").onclick=()=>{if(!tutorial)setMode("daily")};$("#tPractice").onclick=()=>{if(!tutorial)setMode("practice")};
-$("#tArchive").onclick=()=>{if(!tutorial)setMode("archive")};$("#tExpert").onclick=()=>{if(!tutorial)setMode("expert")};
+// Tabs open after the first lesson; say so instead of ignoring the tap (Nikola, round 9).
+const tabGo=m=>()=>{if(tutorial){toast("Finish this short lesson first. Then every tab opens.");return}setMode(m)};
+$("#tDaily").onclick=tabGo("daily");$("#tPractice").onclick=tabGo("practice");$("#tArchive").onclick=tabGo("archive");$("#tExpert").onclick=tabGo("expert");
 $("#diff").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;practiceGap=+b.dataset.g;$("#diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));newPractice();render()});
 if(!S.tutorialDone){tutorial=true;newTutorial();render()}else setMode("daily");
 initAds().then(loadPrice);remindSync();document.addEventListener("visibilitychange",()=>{if(!document.hidden)remindSync()});
