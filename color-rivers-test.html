@@ -155,7 +155,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.78 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.79 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -622,7 +622,7 @@ function startLevel(n,keep,cut,extra){
   paths=fits?keep:G.starts.map(i=>[i]);if(!keep)saveDraft(true);undoStack=[];
   if(fits&&extra&&Array.isArray(extra.undo))undoStack=extra.undo.filter(st=>Array.isArray(st)&&st.length===G.starts.length&&st.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length)));
   active=-1;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];retraces=0;hintsUsed=0;turnTold=false;
-  drawn=paths.map(p=>p.slice());legendMix=!!L.mix;clearToast();
+  drawn=paths.map(p=>p.slice());legendMix=!!L.mix||[3,5,6].some(c=>prog.seen&&prog.seen[c]);/* Alan, Nov 7: once you have mixed, the chart is on every board */clearToast();
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
   const fin=!daily&&!bonus&&L.gen&&L.ch&&(n===LEVELS.length-1||LEVELS[n+1].ch!==L.ch); // a chapter's hardest board, mixing its idea with older ones
@@ -794,9 +794,9 @@ function nearTip(e){
   paths.forEach((p,k)=>{if(done(k))return;const t=p[p.length-1],tx=t%G.w+.5,ty=Math.floor(t/G.w)+.5,d=Math.hypot(fx-tx,fy-ty);if(d<bd){bd=d;best=k;}});
   return best;
 }
-let lastCell=-1,popAt={},pressed=null;
+let lastCell=-1,popAt={},pressed=null,downCell=-1,leftDown=false;
 cv.addEventListener("pointerdown",e=>{
-  if(won)return;warps=[];const c=cellAt(e);if(c<0)return;fedAtDown=fedDeltas();
+  if(won)return;warps=[];const c=cellAt(e);if(c<0)return;fedAtDown=fedDeltas();downCell=c;leftDown=false;
   if(aiming){const cut=useTool(G,c);aiming=false;
     if(cut){G.cutAt=c;saveDraft();const fx=toolFx={kind:G.tool,cells:cut,t0:performance.now()};setTimeout(()=>{if(toolFx!==fx)return;toolFx=null;breakFx(cut);bed=null;},TOOL_MS);toolHint=0;if(hints.length)updateHintBtn();lessonCheck();}else toast(CREW[G.tool].no);updateCrew();return;}
   undoStack.push(paths.map(p=>p.slice()));if(undoStack.length>60)undoStack.shift();
@@ -820,7 +820,7 @@ cv.addEventListener("pointerdown",e=>{
 });
 let lastReal=-1;
 cv.addEventListener("pointermove",e=>{if(active<0)return;const c=cellAt(e),[fx,fy]=realFinger(e),rc=Math.floor(fy)*G.w+Math.floor(fx);
-  if(c===lastCell&&rc===lastReal)return;lastReal=rc;if(c>=0||warps.length)follow(e);});
+  if(c!==downCell)leftDown=true;if(c===lastCell&&rc===lastReal)return;lastReal=rc;if(c>=0||warps.length)follow(e);});
 // Move the active stream toward the finger, carrying on through any tunnels it goes into.
 function follow(e){
   const path=paths[active];
@@ -913,8 +913,13 @@ function release(e){
   const c=cellAt(e);if(c>=0&&c!==lastCell)follow(e);
   // a tap on a den (no drag) picks that stream for the next hint and keeps what was drawn (Cooper, Oct 20: tapping
   // yellow's den on Inlet wiped its route); drawing a stream clears the pick
-  const t=G.cells[paths[active][0]].t,tap=paths[active].length===1&&(t==="src"||t==="delta");picked=tap?active:-1;
-  if(tap){const was=undoStack[undoStack.length-1];if(was&&was[active]&&was[active].length>1){paths[active]=was[active].slice();undoStack.pop();afterChange(false);}}
+  // Alan, Nov 7: tapping a critter clears its stream back to the den again (Undo puts it back), and dragging a stream
+  // all the way back onto its den is not a tap, so it no longer springs back to the old route
+  const t=G.cells[paths[active][0]].t,tap=paths[active].length===1&&(t==="src"||t==="delta")&&!leftDown&&downCell===paths[active][0];picked=tap?active:-1;
+  if(tap){const was=undoStack[undoStack.length-1],had=was&&was[active]&&was[active].length>1;
+    if(had&&t==="delta"){paths[active]=was[active].slice();undoStack.pop();afterChange(false);}
+    else if(had){const m=G.sources[active]&&NAMES[G.sources[active].mask];toast(m?`Cleared the ${m} stream. Undo puts it back.`:"Cleared that stream. Undo puts it back.");}
+    else undoStack.pop();}
   snapHome(e);endDrag();warps=[];
 }
 // Lifted one cell short of a nest: let it in if the finger was in the near half of the cell,
