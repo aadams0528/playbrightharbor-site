@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 7af4df5) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
+<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 15d74f2) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
 <title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
@@ -313,11 +313,12 @@ const dailyNo=()=>Math.round((new Date(dayKey()+"T00:00")-new Date("2026-10-11T0
 // ---------- state ----------
 let mode="endless", level=1, levelBase=0, score=0, best=0, T=10, board=Array(N*N).fill(null), tray=[null,null,null],
     erasers=0, shuffles=0, toShuffle=0, rotates=0, rotating=false, rotPaid=null, chain=0, chainMoves=0, continued=false, levelsSinceAd=0,
-    over=false, busy=false, erasing=false, tut=null, rng=mulberry(1), lastV=0, blastsGame=0, bestRun=null;
+    over=false, busy=false, erasing=false, tut=null, rng=mulberry(1), lastV=0, blastsGame=0, bestRun=null, specials=0;
 const MAX_ERASERS=3, MAX_SHUFFLES=3, MAX_ROTATES=3, BLASTS_PER_SHUFFLE=8, CHAIN_MOVES=2, CHAIN_MAX=4;
 const ri=(a,b)=>a+Math.floor(rng()*(b-a+1));
-// Points to clear a level: 60, then 30 more each level.
-const goalFor=l=>60+30*(l-1);
+// Points to clear a level: 60, 90, 120, then 40 more each level up to level 10 (a little more pressure
+// early, Alan 2026-11-07), then 30 more each level after that.
+const goalFor=l=>60+30*(l-1)+10*Math.min(Math.max(0,l-3),7);
 const levelPts=()=>score-levelBase;
 function targetFor(l){ if(l<=3)return 10; if(l<=6)return 12; if(l<=9)return 15; const r=mulberry(l*7919)(); return l<=14?13+Math.floor(r*8):15+Math.floor(r*11); }
 const mult=len=>len>=5?4:len>=4?3:len>=3?2:1;
@@ -361,11 +362,18 @@ function genPiece(){
     const cells=SH[name].map(([r,c])=>({r,c,t:{v:genValue(),star:false,bomb:false}}));
     if(level>=3&&name==='one'&&rng()<0.10) cells[0].t={v:null,star:true,bomb:false};
     else if(level>=3&&rng()<0.06) cells[ri(0,cells.length-1)].t.bomb=true;
-    if(!pieceSelfBlasts(cells)) return {cells};
+    if(!pieceSelfBlasts(cells)){cells.forEach(c=>{if(c.t.star)specials|=1;if(c.t.bomb)specials|=2});return {cells}}
   }
   return {cells:[{r:0,c:0,t:{v:1,star:false,bomb:false}}]};
 }
-const newTray=()=>{tray=[genPiece(),genPiece(),genPiece()];rotating=false;rotPaid=null};
+const newTray=()=>{
+  tray=[genPiece(),genPiece(),genPiece()];rotating=false;rotPaid=null;
+  // Every game meets its first ⭐ star early in level 3 and its first 💣 bomb in the very next tray
+  // (specials: 1 = a star has been dealt, 2 = a bomb has). After that they stay random.
+  if(level<3||specials===3||tut)return;
+  if(!(specials&1)){tray[0]={cells:[{r:0,c:0,t:{v:null,star:true,bomb:false}}]};specials|=1}
+  else{const p=tray.find(p=>p.cells.length>1)||tray[0];p.cells[ri(0,p.cells.length-1)].t.bomb=true;specials|=2}
+};
 
 // ---------- rules ----------
 // A blast happens when a whole group of touching blocks in a row or column
@@ -1362,7 +1370,7 @@ window.BH_SAVE={game:'sumburst',version:1,
 function saveGame(){
   if(tut||over)return;
   const save={v:3,day:dayKey(),mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,rotates,chain,chainMoves,continued,levelsSinceAd,
-    goals:goals.map(g=>({id:g.id,prog:g.prog,need:g.need,reward:g.reward})),goalCount,seed:rng.seed(),lastV,blastsGame,bestRun};
+    goals:goals.map(g=>({id:g.id,prog:g.prog,need:g.need,reward:g.reward})),goalCount,seed:rng.seed(),lastV,blastsGame,bestRun,specials};
   store.set('nb-save',save);store.set('nb-save-'+mode,save);
 }
 function resumeGame(key='nb-save',welcome=true){
@@ -1371,6 +1379,7 @@ function resumeGame(key='nb-save',welcome=true){
   if(g.goals.some(x=>!GOALS.find(d=>d.id===x.id)))return false;
   ({mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,chain,chainMoves,continued,levelsSinceAd,goalCount,lastV,blastsGame,bestRun}=g);
   rotates=g.rotates||0;rotating=false;rotPaid=null;
+  specials=g.specials??(g.level>3?3:0);  // saves from before this change: past level 3 they've had their chance
   goals=g.goals.map(x=>({...GOALS.find(d=>d.id===x.id),...x}));
   rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;movable=null;$('over').hidden=true;
   best=Math.max(store.get(bestKey(),0),score);
@@ -1382,7 +1391,7 @@ function newGame(m){
   mode=m;clearPending();track('game_start',{mode:m});
   rng=mode==='daily'?mulberry(hash('numberblast-'+dayKey())):mulberry(Math.floor(Math.random()*2**31));
   level=1;levelBase=0;score=0;T=targetFor(1);board=Array(N*N).fill(null);erasers=0;shuffles=0;toShuffle=0;rotates=0;rotating=false;rotPaid=null;chain=0;chainMoves=0;
-  continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;movable=null;tut=null;lastV=0;blastsGame=0;bestRun=null;
+  continued=false;levelsSinceAd=0;over=false;busy=false;erasing=false;movable=null;tut=null;lastV=0;blastsGame=0;bestRun=null;specials=0;
   resetGoals();closeSheet();$('over').hidden=true;
   best=store.get(bestKey(),0);
   seedStarters(4);newTray();
@@ -1524,7 +1533,7 @@ if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
 })();
 </script>
 
