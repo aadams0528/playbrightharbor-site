@@ -898,7 +898,7 @@ function scoreParts(){
 function finalScore(){const w=scoreParts();return w.got+w.bonus}
 // "Why 77": the score broken into its parts, in words (Cooper, round 4).
 function whyLine(){
-  const w=G.why;if(!w)return helpLine();
+  const w=G.why;if(!w)return G.done&&G.kind!=="practice"&&G.kind!=="tutorial"&&G.kind!=="replay"?"Earlier result: this puzzle was scored before the game showed how each score adds up.":helpLine();
   if(G.gaveUp)return `Why ${G.score}: showing the answer gives half of what your order had earned.`;
   // Step by step, so the order's 90 can't be mistaken for the final score (Nikola, round 7).
   return `Why ${G.score}: your order earned ${w.base} of 90.${w.f<1?` Try ${Math.min(G.attempt,TRIES)} keeps ${Math.round(w.f*100)}% of that: ${rnd(w.base*w.f*10)/10===w.got?w.got:`${rnd(w.base*w.f*10)/10}, rounded to ${w.got}`}.`:""}${w.bonus?` No help adds ⭐ 10: ${G.score} of 100.`:` ${helpLine()}, so ${G.score} of 100.`}`;
@@ -911,16 +911,16 @@ function helpLine(){
 }
 // Spoiler-free tiles: one per neighboring pair in the TRUE order.
 // 🟩 you had them next to each other, right way round; 🟨 right way round but apart; 🟥 swapped.
-function pairTiles(){
-  const t=sortIds(G.order);
-  return t.slice(0,-1).map((a,i)=>{const b=t[i+1],pa=G.order.indexOf(a),pb=G.order.indexOf(b);return pa>pb?"🟥":pb===pa+1?"🟩":"🟨"}).join("");
+function pairTiles(order=G.order){
+  const t=sortIds(order);
+  return t.slice(0,-1).map((a,i)=>{const b=t[i+1],pa=order.indexOf(a),pb=order.indexOf(b);return pa>pb?"🟥":pb===pa+1?"🟩":"🟨"}).join("");
 }
 
 // ---------- state ----------
 let G=null,practiceGap=30,tutorial=false;
 function fresh(kind,ids,order){return{kind,ids,order,attempt:1,known:{},hints:{},hintsUsed:0,placed:[],done:false}}
 // A save from an older version (or the tester tool) may lack newer fields; fill them in so the board always works (Muse, round 8).
-function filled(g,n){const d=fresh(g.kind,g.ids,g.order||sortIds(g.ids)),o={...d,...g};for(const k in d)if(o[k]==null)o[k]=d[k];if(n){o.n=n;if(o.wd==null)o.wd=dealFor(n).wd}if(o.done){o.finalOrder=o.finalOrder||o.order.slice();o.marks=o.marks||o.order.map(()=>"g")}return o}
+function filled(g,n){const d=fresh(g.kind,g.ids,g.order||sortIds(g.ids)),o={...d,...g};for(const k in d)if(o[k]==null)o[k]=d[k];if(n){o.n=n;if(o.wd==null)o.wd=dealFor(n).wd}if(o.done){o.finalOrder=o.finalOrder||o.order.slice();o.marks=o.marks||o.order.map(()=>"g");if(!o.tiles&&!(o.rows&&o.rows.length))o.tiles=pairTiles(o.finalOrder)}return o}
 // The puzzle for day n is the same for everyone, so the archive can rebuild any past day.
 function dateOf(n){const d=new Date(EPOCH);d.setDate(d.getDate()+n-1);return d}
 // A puzzle saved before its day was re-picked keeps its own cards, so it must not borrow the new day's title (Cooper, round 6).
