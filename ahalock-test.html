@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.11 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
+<!-- Ahalock prototype v0.12 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -202,6 +202,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 @keyframes rpfire{to{filter:none;transform:scale(1.08)}}
 @keyframes rpfade{to{opacity:1}}
 .rp-fire{transform-origin:50% 100%}
+.msg.inb{margin:0 0 10px}
 .ftip{margin-top:8px;font-size:13px;font-weight:700;line-height:1.35;color:var(--ink2);background:#fff8e6;border:2px dashed #e7c66a;border-radius:10px;padding:6px 9px}
 .nw{white-space:nowrap}
 .stop .rep{font-size:10px;font-weight:800;color:#5a3d00;background:#fff3c4;border:1.5px solid #f4c430;border-radius:999px;padding:0 6px;white-space:nowrap}
@@ -229,6 +230,15 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .rp-beam{right:58px;left:auto;top:6px;width:300px;height:44px;transform-origin:100% 50%;animation:rpfade .6s ease forwards,rpsweep 3.2s ease-in-out infinite alternate}
 @keyframes rpsweep{from{transform:rotate(-12deg)}to{transform:rotate(14deg)}}
 @media (prefers-reduced-motion:reduce){.repair *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
+.scbeam{transform-box:view-box;transform-origin:152px 14px;animation:scsweep 3.4s ease-in-out infinite alternate}
+@keyframes scsweep{from{transform:rotate(-7deg)}to{transform:rotate(9deg)}}
+@media (prefers-reduced-motion:reduce){.scbeam{animation:none}}
+.chbig{text-align:center}
+.chbig .lh{width:96px;height:96px;filter:drop-shadow(0 0 18px rgba(255,214,90,.9));animation:chglow 1.6s ease-in-out infinite alternate}
+@keyframes chglow{to{filter:drop-shadow(0 0 30px rgba(255,214,90,1))}}
+.chstats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.chstats span{background:#fff3c4;border:2px solid #f4c430;border-radius:999px;padding:3px 10px;font-weight:800;font-size:13px}
+.chstats .ic{width:16px;height:16px}
 .scpop{transform-box:fill-box;transform-origin:50% 100%;animation:scpop .9s cubic-bezier(.3,1.6,.5,1) .35s both}
 @keyframes scpop{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.scpop{animation:none}}
@@ -834,7 +844,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
     for (let i = 0; i < p.clues.length; i++) {
       const cl = p.clues[i]; const f = feedback(entry, cl.g);
       if (f[0] !== cl.a || f[1] !== cl.b) {
-        return { ok: false, clue: i, msg: 'Clue ' + (i + 1) + ' says "' + fbWords(cl.a, cl.b).toLowerCase() + '". With ' + entry.join(' ') + ' it would be "' + fbWords(f[0], f[1]).toLowerCase() + '".', got: f };
+        return { ok: false, clue: i, msg: 'If the code were ' + entry.join(' ') + ', clue ' + (i + 1) + ' would say "' + fbWords(f[0], f[1]).toLowerCase() + '". But it says "' + fbWords(cl.a, cl.b).toLowerCase() + '".', got: f };
       }
     }
     return { ok: true };
@@ -2384,7 +2394,7 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div class="foot">Ahalock prototype v0.10' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
+    '<div class="foot">Ahalock prototype v0.12' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>';
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
@@ -2437,9 +2447,11 @@ function renderPuzzle() {
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
   const acts = '<div class="actions' + (P.tutorial ? '' : ' stick') + '"><button class="btn ghost" id="hint">💡 Hint</button><button class="btn" id="chk">Lock it in!</button></div>';
-  const msgH = pz.kind === 'order' || SO ? iconize(msg) : msg;
-  const actsH = SO ? iconize(acts) : acts;
-  $app.innerHTML = (SO ? iconize(head) : head) + '<div class="board' + (pz.kind === 'order' ? ' compact' : '') + '">' + (SO ? iconize(body) : body) + (P.tip ? '<div class="ftip">' + esc(P.tip) + '</div>' : '') + '</div>' + (P.tutorial ? msgH + actsH : actsH.replace('<div class="actions stick">', '<div class="actions stick"><div class="actmsg">' + msgH + '</div>')) + (P.tutorial ? '<div class="tutpad"></div>' : '');
+  const inBoard = SO && P.msg && P.msg.k === 'info' && !P.tutorial;
+  const msgH = inBoard ? '' : pz.kind === 'order' || SO || P.tutorial ? iconize(msg) : msg;
+  const IZ = SO || P.tutorial;
+  const actsH = IZ ? iconize(acts) : acts;
+  $app.innerHTML = (IZ ? iconize(head) : head) + '<div class="board' + (pz.kind === 'order' ? ' compact' : '') + '">' + (inBoard ? iconize(msg.replace('class="msg ', 'class="msg inb ')) : '') + (IZ ? iconize(body) : body) + (P.tip ? '<div class="ftip">' + esc(P.tip) + '</div>' : '') + '</div>' + (P.tutorial ? msgH + actsH : actsH.replace('<div class="actions stick">', '<div class="actions stick"><div class="actmsg">' + msgH + '</div>')) + (P.tutorial ? '<div class="tutpad"></div>' : '');
   document.getElementById('bk').onclick = () => { if (P.tutorial) { endTutorial(false); } else if (P.story) renderStop(P.story.s); else renderHome(); };
   document.getElementById('chk').onclick = check;
   document.getElementById('hint').onclick = hint;
@@ -2584,7 +2596,7 @@ function showDaySummary(ds) {
   document.getElementById('stime').onchange = (ev) => { store.set('shareTime', ev.target.checked); showDaySummary(ds); };
 }
 // ----- sheet -----
-function openSheet(html) { closeSheet(); const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov'; ov.innerHTML = '<div class="sheet">' + html + '</div>'; document.body.appendChild(ov); }
+function openSheet(html) { closeSheet(); const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov'; ov.innerHTML = '<div class="sheet">' + iconize(html) + '</div>'; document.body.appendChild(ov); }
 function closeSheet() { const o = document.getElementById('ov'); if (o) o.remove(); }
 
 // =================== TYPE LIBRARY ===================
@@ -2687,7 +2699,7 @@ const ISLECOL = ['#e07a5f', '#3d9a8b', '#7b6bd6', '#e0a23a'];
 const KNF = { K: { e: '🛡️', w: 'Knight' }, N: { e: '🎭', w: 'Knave' } };
 function knightsBoard() {
   const pz = P.pz;
-  let h = '<div class="rulebox"><div class="rule"><span class="kb">🛡️</span>Knights always tell the truth.</div><div class="rule"><span class="kb">🎭</span>Knaves always lie.</div><div class="rule small">“A, or B, or both” is true when at least one part is true. “Of us” counts the speaker too.</div></div>';
+  let h = '<div class="rulebox"><div class="rule"><span class="kb">🛡️</span>Knights always tell the truth.</div><div class="rule"><span class="kb">🎭</span>Knaves always lie.</div>' + (() => { const ts = (pz.stmts || []).map(x => x.t); const r = (ts.indexOf('or') >= 0 ? '“A, or B, or both” is true when at least one part is true. ' : '') + (ts.indexOf('cnt') >= 0 ? '“Of us” counts the speaker too.' : ''); return r ? '<div class="rule small">' + r.trim() + '</div>' : ''; })() + '</div>';
   h += '<div class="isles n' + pz.n + '">' + pz.names.map((nm, i) => {
     const r = P.entry[i];
     return '<div class="cwrap isle' + (P.hl && P.hl.indexOf(i) >= 0 ? ' hl' : '') + (P.bad === i ? ' badc' : '') + '" id="cw' + i + '"><div class="ava' + (r ? ' set' : '') + '" style="background:' + ISLECOL[i % 4] + '" aria-label="' + esc(nm) + ': ' + (r ? KNF[r].w : 'not marked yet') + '" role="img">' + (r ? '<span class="badge">' + KNF[r].e + '</span>' : '') + nm.charAt(0) + '</div><div class="inm">' + esc(nm) + '</div>' +
@@ -2839,7 +2851,7 @@ function sceneSvg(s, fixed, d) {
       '<g transform="translate(' + bx[2] + ' 60)"><path d="M-9 0 H9 L6 5 H-6 Z" fill="#e0a43a"/><rect x="-4" y="-5" width="7" height="5" fill="#5b6273"/></g>';
   } else {
     g += '<rect x="0" y="66" width="200" height="24" fill="#3d6ea3"/><path d="M110 90 L120 50 Q150 40 200 44 V90 Z" fill="#a98f5c"/><path d="M118 58 Q150 48 200 52" stroke="#7aa36d" stroke-width="5" fill="none"/>' +
-      (fixed ? '<path d="M152 14 L0 -6 L0 34 Z" fill="rgba(255,236,150,.6)"/>' : '') +
+      (fixed ? '<path class="scbeam" d="M152 14 L0 -6 L0 34 Z" fill="rgba(255,236,150,.6)"/>' : '') +
       '<g transform="translate(140 6) scale(2.2)">' + LH.replace('<svg class="lh" viewBox="0 0 24 24" aria-hidden="true">', '').replace('</svg>', '').replace('#ffd45a', fixed ? '#ffd45a' : '#8a8f9c') + '</g>' +
       '<g transform="translate(40 40)"><circle r="14" fill="#efe6cf" stroke="#6b4a28" stroke-width="2"/><path d="' + (d[0] ? 'M0 0 V-10 M0 0 L-7 -3' : 'M0 0 V-9 M0 0 L6 4') + '" stroke="#3b2d14" stroke-width="2" stroke-linecap="round"/>' + (d[0] ? '<g' + pp(0) + ' stroke="#c98a12" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M18 -10 q4 4 0 8 M22 -13 q6 7 0 14 M-18 -10 q-4 4 0 8"/></g>' : '') + '</g>' +
       (d[1] ? '<g' + pp(1) + '>' + [['#e07a5f', 119, 56], ['#2a9d8f', 127, 53.5], ['#8e7cc3', 135, 51.5]].map(([c, x, y]) => '<circle cx="' + x + '" cy="' + (y - 10) + '" r="2.6" fill="' + c + '" stroke="#3b2d14" stroke-width=".6"/><rect x="' + (x - 2.6) + '" y="' + (y - 7.2) + '" width="5.2" height="7" rx="2" fill="' + c + '" stroke="#3b2d14" stroke-width=".6"/>').join('') + '<path d="M137.4 43 l2.6 -4" stroke="#8e7cc3" stroke-width="1.5" stroke-linecap="round"/></g>' : '');
@@ -2879,10 +2891,13 @@ const IC_IN = {
   card: '<rect x="4.5" y="3" width="15" height="18" rx="2" fill="#fff8e6" stroke="#3b2d14" stroke-width="1.3"/><path d="M8 8h8M8 11.5h8M8 15h5" stroke="#8a6339" stroke-width="1.3" stroke-linecap="round"/><circle cx="17" cy="17.5" r="2.6" fill="#f4c430" stroke="#3b2d14" stroke-width="1"/>',
   padlock: '<path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="#3b2d14" stroke-width="1.8"/><rect x="5" y="10.5" width="14" height="10.5" rx="2" fill="#f4c430" stroke="#3b2d14" stroke-width="1.3"/><circle cx="12" cy="15" r="1.6" fill="#3b2d14"/><path d="M12 15.5v2.8" stroke="#3b2d14" stroke-width="1.4" stroke-linecap="round"/>',
   village: '<path d="M2 12l5-4.5 5 4.5" fill="#c8453a" stroke="#3b2d14" stroke-width="1.2" stroke-linejoin="round"/><rect x="3.3" y="11.5" width="7.4" height="8.5" fill="#f3ead2" stroke="#3b2d14" stroke-width="1.1"/><path d="M11 10l5.5-5 5.5 5" fill="#3d6ea3" stroke="#3b2d14" stroke-width="1.2" stroke-linejoin="round"/><rect x="12.5" y="9.5" width="8" height="10.5" fill="#fff8e6" stroke="#3b2d14" stroke-width="1.1"/><rect x="15" y="15" width="3" height="5" fill="#8a6339"/><rect x="5.5" y="14" width="3" height="2.6" fill="#ffd45a"/>',
-  sparkle: '<path d="M12 2.5l2 7.5 7.5 2-7.5 2-2 7.5-2-7.5-7.5-2 7.5-2z" fill="#ffd45a" stroke="#c98a12" stroke-width="1" stroke-linejoin="round"/>'
+  sparkle: '<path d="M12 2.5l2 7.5 7.5 2-7.5 2-2 7.5-2-7.5-7.5-2 7.5-2z" fill="#ffd45a" stroke="#c98a12" stroke-width="1" stroke-linejoin="round"/>',
+  pencil: '<path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z" fill="#f4c430" stroke="#3b2d14" stroke-width="1.2" stroke-linejoin="round"/><path d="M14 6.6l3.4 3.4" stroke="#3b2d14" stroke-width="1.1"/><path d="M4 20l1.2-4.6 3.4 3.4z" fill="#f3d9b0" stroke="#3b2d14" stroke-width="1"/>',
+  erase: '<path d="M8.5 5H20a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 20 19H8.5L2.5 12z" fill="#e8ecf2" stroke="#3b2d14" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 9l6 6M17 9l-6 6" stroke="#c8453a" stroke-width="1.8" stroke-linecap="round"/>',
+  xmark: '<path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>'
 };
 // emoji used in the story data -> drawn icon
-const IC_MAP = { '🔋': 'battery', '💡': 'bulb', '🔍': 'lens', '🏮': 'lantern', '📯': 'horn', '🔔': 'bell', '🚩': 'flag', '🔆': 'beacon', '⛴️': 'ferry', '🚤': 'tug', '⛵': 'sail', '🛶': 'canoe', '🛠️': 'workshop', '🛡️': 'shield', '🎭': 'mask', '🏝️': 'island', '🟥': 'crate_r', '🟦': 'crate_b', '🟩': 'crate_g', '🟨': 'crate_y', '🟪': 'crate_p', '🧰': 'toolbox', '🔌': 'plug', '⚖️': 'scales', '🌊': 'wave', '🚢': 'ship', '⚙️': 'gears', '📜': 'scroll', '🧾': 'card', '🔒': 'padlock', '🏘️': 'village', '✨': 'sparkle' };
+const IC_MAP = { '🔋': 'battery', '💡': 'bulb', '🔍': 'lens', '🏮': 'lantern', '📯': 'horn', '🔔': 'bell', '🚩': 'flag', '🔆': 'beacon', '⛴️': 'ferry', '🚤': 'tug', '⛵': 'sail', '🛶': 'canoe', '🛠️': 'workshop', '🛡️': 'shield', '🎭': 'mask', '🏝️': 'island', '🟥': 'crate_r', '🟦': 'crate_b', '🟩': 'crate_g', '🟨': 'crate_y', '🟪': 'crate_p', '🧰': 'toolbox', '🔌': 'plug', '⚖️': 'scales', '🌊': 'wave', '🚢': 'ship', '⚙️': 'gears', '📜': 'scroll', '🧾': 'card', '🔒': 'padlock', '🏘️': 'village', '✨': 'sparkle', '✎': 'pencil', '⌫': 'erase', '✕': 'xmark' };
 const ic = (name, cls) => '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + IC_IN[name] + '</svg>';
 // swap the story emoji inside a finished HTML string for drawn icons
 function iconize(html) { let h = html; for (const k in IC_MAP) if (h.indexOf(k) >= 0) h = h.split(k).join(ic(IC_MAP[k])); return h; }
@@ -2931,7 +2946,7 @@ const STORY = [
     beat: 'Lantern Night starts at dusk. The clockmaker meets you at the door. "The keeper built a signal sequence: the lamp glows, the horn sounds, the flag rises, the bell rings, all in one order. Get it right and the beacon wakes."',
     objs: [
       { e: '⚙️', name: 'Clock gears', type: 'wheels', tier: 'E', seed: 'story|2|0', log: "The clock chimes for the first time in weeks. The clockmaker smiles: \"He always said the bell keeps time for the whole harbor.\"", hint: 'Find the rule in the clock gears.', ev: { how: 'Engraved on the biggest gear: the clock bell rings 4th in the sequence.', tag: '★ Gear note', clue: { t: 'is', a: 'bell', p: 3 } } },
-      { e: '🏝️', name: 'Keeper\'s helpers', type: 'knights', tier: 'E', seed: 'story|2|1', bridge: 'Start with Ivy: “Dev and I are different kinds.” Suppose Dev were a knight. Try Ivy as a knight, then as a knave. Does either one work?', log: "The helpers point up the stairs. \"The keeper left one last page by the signal panel. He knew you'd make it.\"", hint: 'Find out who\'s telling the truth.', ev: { how: 'Ivy, the helper who tells the truth, remembers the keeper never raised the flag 2nd.', tag: '✚ Helper\'s note', clue: { t: 'not', a: 'flag', p: 1 } } },
+      { e: '🏝️', name: 'Keeper\'s helpers', type: 'knights', tier: 'E', seed: 'story|2|1', bridge: 'Start with Ivy: “Dev and I are different kinds.” Suppose Dev were a knight. If Ivy is a knight, her words are false, which can\'t be. If Ivy is a knave, her words are true, which can\'t be either. So Dev is a knave.', log: "The helpers point up the stairs. \"The keeper left one last page by the signal panel. He knew you'd make it.\"", hint: 'Find out who\'s telling the truth.', ev: { how: 'Ivy, the helper who tells the truth, remembers the keeper never raised the flag 2nd.', tag: '✚ Helper\'s note', clue: { t: 'not', a: 'flag', p: 1 } } },
       { e: LH, name: 'Signal panel', fin: true, hint: 'Set the harbor\'s signal sequence.', why: [[[0, 1, 2], 'Start with the simple cards: the bell is 4th, the flag isn\'t 2nd, and the beacon is 1st or 5th.'], [[2, 3, 4], 'Try the beacon 1st. Clues 4 and 5 then give: beacon, flag, horn, lamp, so the flag would come 2nd.'], [[1], 'But the flag can\'t be 2nd. So the beacon is 5th, not 1st.'], [[3, 4], 'With the beacon last, the lamp comes before the horn, and the flag after it: lamp, horn, flag.'], [[0], 'The bell takes 4th, so it\'s lamp 1st, horn 2nd, flag 3rd, bell 4th, beacon 5th.']], pz: () => orderPz('Set the signal sequence, first to last', 'signal', [['lamp', '🏮', 'Workshop lamp'], ['horn', '📯', 'Ferry horn'], ['bell', '🔔', 'Clock bell'], ['flag', '🚩', 'Harbor flag'], ['beacon', '🔆', 'Beacon']], ['lamp', 'horn', 'flag', 'bell', 'beacon'], [{ t: 'between', a: 'flag', b: 'horn', c: 'lamp', ev: '✎ Panel label' }]) }
     ],
     payoff: 'The workshop lamp glows. The ferry horn sounds. The harbor flag rises. The clock bell rings. And at last the great beacon sweeps the sea. Lantern Night is saved!', done: 'The beacon is lit!',
@@ -3026,7 +3041,7 @@ function renderStop(s) {
 function startStory(s, o) {
   const O = STORY[s].objs[o]; const pz = getStoryPz(s, o);
   const tut = store.get('tut', {});
-  if (!O.fin && !tut[pz.type]) { startTutorial(pz.type, () => startStory(s, o)); return; }
+  if (!O.fin && !tut[pz.type]) { startTutorial(pz.type, () => startStory(s, o), true); return; }
   stopTimer();
   P = { ds: null, slot: 0, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false, story: { s, o },
     entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null, ex: TYPES[pz.type].explain(pz) };
@@ -3052,12 +3067,21 @@ function storySolved() {
   }
   const last = s === 2;
   openSheet('<h2>' + esc(STORY[s].done) + '</h2><div class="sub">' + iconize(esc(TL.answerText(P.pz, P.pz.sol))) + '</div>' +
-    repairScene(s, P.pz) +
+    '<div id="rpbox">' + repairScene(s, P.pz) + '</div><div style="text-align:center"><button class="btn ghost small" id="rpl2" style="color:var(--ink);background:var(--panel2);margin:0 auto 4px">▶ Watch it again</button></div>' +
     '<div class="beat" style="margin:10px 0">' + esc(STORY[s].payoff) + (last ? '<br><br>' + esc(STORY_END) : '') + '</div>' +
     (STORY[s].note && !wasDone ? '<div class="ecard big"><div class="et">New: ' + esc(STORY[s].note.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(2, 2), STORY[s].note.clue)) + '</div><div class="en">Saved on the map for the Lighthouse. You can read it there any time.</div></div>' : '') +
     '<div class="col"><button class="btn" id="nx">' + (last ? 'See the harbor' : 'Back to the map') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + iconize(whyList(ex)) + '</div></div>');
   if (STORY[s].sum) { const wb = document.getElementById('whybox'); wb.insertAdjacentHTML('afterbegin', '<div class="wsum">' + esc(STORY[s].sum) + '</div>'); }
   document.getElementById('why').onclick = whyToggle;
+  const fpz = P.pz;
+  document.getElementById('rpl2').onclick = () => { document.getElementById('rpbox').innerHTML = repairScene(s, fpz); };
+  document.getElementById('nx').onclick = last && !wasDone ? chapterDone : renderMap;
+}
+function chapterDone() {
+  openSheet('<div class="chbig">' + LH + '<h2>Chapter 1 complete!</h2><div class="sub">Bright Harbor is lit again, and Lantern Night is saved.</div>' +
+    '<div class="chstats"><span>✨ 3 places repaired</span><span>📜 9 puzzles solved</span></div>' +
+    '<div class="beat" style="margin:12px 0">' + esc(STORY_END) + '</div></div>' +
+    '<div class="col"><button class="btn" id="nx">See the harbor</button></div>');
   document.getElementById('nx').onclick = renderMap;
 }
 
@@ -3191,27 +3215,34 @@ const TUT = {
   }
 };
 let tutState = null;
-function startTutorial(type, after) {
+function crateLesson(def) {
+  const C = { 'fruit:melon': ['🟥', 'Red crate'], 'fruit:apple': ['🟦', 'Blue crate'], 'fruit:lemon': ['🟩', 'Green crate'] };
+  const pz = JSON.parse(JSON.stringify(def.pz));
+  Object.keys(C).forEach(id => { if (pz.items[id]) Object.assign(pz.items[id], { e: C[id][0], name: C[id][1], cat: 'crate' }); });
+  const sw = t => t.replace(/Melon/g, 'Red crate').replace(/Apple/g, 'Blue crate').replace(/Lemon/g, 'Green crate').replace(/the fruit/g, 'the crates');
+  return { pz, steps: def.steps.map(st => Object.assign({}, st, { t: sw(st.t) })) };
+}
+function startTutorial(type, after, story) {
   stopTimer(); closeSheet();
-  const def = TUT[type];
+  const def = story && type === 'balance' ? crateLesson(TUT[type]) : TUT[type];
   P = { ds: null, slot: 0, pz: def.pz, t0: Date.now(), miss: 0, hints: 0, msg: null, bad: null, hl: null, solved: false, tutorial: true,
     entry: TYPES[type].init(def.pz), sel: 0, notes: {}, noteMode: false, sub: null,
     ex: TYPES[type].explain(def.pz) };
-  tutState = { type, i: 0, after };
+  tutState = { type, i: 0, after, def };
   renderPuzzle();
 }
 function removeCoach() { const c = document.getElementById('coach'); if (c) c.remove(); document.querySelectorAll('.pulse').forEach(e => e.classList.remove('pulse')); }
 function tutAfterRender() {
-  const st = TUT[tutState.type].steps[tutState.i];
+  const st = tutState.def.steps[tutState.i];
   if (!st) { removeCoach(); return; }
   // highlight
   if (st.hl) { st.hl.forEach(i => { const e = document.getElementById(TYPES[P.pz.type].hid(i)); if (e) e.classList.add('hl'); }); }
   removeCoach();
   if (st.on) { const e = st.on === 'rules' ? document.querySelector('.rulebox') : document.getElementById(st.on); if (e) e.classList.add('pulse'); }
   const box = document.createElement('div'); box.className = 'coach'; box.id = 'coach';
-  const last = tutState.i === TUT[tutState.type].steps.length - 1;
+  const last = tutState.i === tutState.def.steps.length - 1;
   const needs = st.wait && !st.wait();
-  box.innerHTML = '<div class="cbox"><div class="cstep">How to play · step ' + (tutState.i + 1) + ' of ' + TUT[tutState.type].steps.length + '</div><div class="ctext">' + st.t + '</div><div class="crow"><button class="skip" id="tskip">Skip lesson</button>' +
+  box.innerHTML = '<div class="cbox"><div class="cstep">How to play · step ' + (tutState.i + 1) + ' of ' + tutState.def.steps.length + '</div><div class="ctext">' + iconize(st.t) + '</div><div class="crow"><button class="skip" id="tskip">Skip lesson</button>' +
     (last ? '' : '<button class="btn small" id="tnext"' + (needs ? ' disabled' : '') + '>' + (needs ? 'Try it ↑' : 'Next') + '</button>') + '</div></div>';
   document.body.appendChild(box);
   coachFit(last);
@@ -3219,7 +3250,7 @@ function tutAfterRender() {
   const nb = document.getElementById('tnext');
   if (nb) nb.onclick = () => { if (st.wait && !st.wait()) return; tutState.i++; renderPuzzle(); };
   // auto-advance when an action step is completed
-  if (st.wait && st.wait() && !st.passed) { st.passed = true; setTimeout(() => { if (tutState && TUT[tutState.type].steps[tutState.i] === st) { tutState.i++; renderPuzzle(); } }, 500); }
+  if (st.wait && st.wait() && !st.passed) { st.passed = true; setTimeout(() => { if (tutState && tutState.def.steps[tutState.i] === st) { tutState.i++; renderPuzzle(); } }, 500); }
 }
 // keep the lesson card from covering what the step is about: pad the page to the card's height,
 // then scroll so the target (pulsing control, else the keypad/tray, else Lock it in!) sits above the card
@@ -3237,7 +3268,7 @@ function tutSolved() {
   removeCoach();
   const type = tutState.type;
   const tut = store.get('tut', {}); tut[type] = 1; store.set('tut', tut);
-  TUT[type].steps.forEach(s => delete s.passed);
+  tutState.def.steps.forEach(s => delete s.passed);
   openSheet('<h2>' + SOLVEDHEAD[type] + '</h2><div class="sub">That\'s all there is to it.</div>' +
     '<div class="msg info" style="margin-bottom:14px">' + (type === 'cards' ? 'Stuck? Tap 💡 Hint. If you guess wrong, the game shows which card can\'t be what you said.' : type === 'chests' ? 'Stuck? Tap 💡 Hint. If you pick the wrong chest, the game shows which signs don\'t fit the rule.' : type === 'knights' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows whose words don\'t fit what you said.' : type === 'switches' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows which test your wiring breaks.' : TL.PATTERN.indexOf(type) >= 0 ? 'Stuck? Tap 💡 Hint for the next step. Every puzzle has exactly one answer that fits the pattern.' : 'Stuck in a real puzzle? Tap 💡 Hint for the next step. If you\'re wrong, the game shows which clue your answer breaks.') + '</div>' +
     '<button class="btn wide" id="tdone">' + (tutState.after ? 'Start the puzzle' : 'Done') + '</button>');
@@ -3246,7 +3277,7 @@ function tutSolved() {
 function endTutorial(markSeen) {
   removeCoach();
   if (markSeen) { const tut = store.get('tut', {}); tut[tutState.type] = 1; store.set('tut', tut); }
-  TUT[tutState.type].steps.forEach(s => delete s.passed);
+  tutState.def.steps.forEach(s => delete s.passed);
   const a = markSeen ? tutState.after : null; tutState = null;
   if (a) a(); else renderHome();
 }
