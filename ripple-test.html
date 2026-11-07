@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Ripple prototype v0.7.4 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Ripple prototype v0.7.5 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -86,6 +86,7 @@ body:not(.playing) #scene{display:none}
 #board .hit:focus{outline:none}
 #board .hit:focus-visible{stroke:#fff3a0;stroke-width:6;fill:rgba(255,246,176,.15)}
 .stoneBar{display:flex;gap:10px;justify-content:center;margin:10px 0 0}
+.stagePill{flex:0 0 auto;align-self:center;max-width:520px;margin:8px auto 0;padding:7px 14px;border:0;border-radius:999px;background:#fff6d6;color:var(--ink);font:inherit;font-size:13.5px;font-weight:700;line-height:1.25;box-shadow:var(--shadow);cursor:pointer;text-align:center}
 .stone{flex:1;max-width:200px;min-height:52px;border-radius:16px;border:3px solid transparent;background:var(--btn);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:15px}
 .stone svg{width:26px;height:26px}
 .stone[aria-pressed="true"]{border-color:var(--accent);background:#e8f6f2}
@@ -117,6 +118,7 @@ body:not(.playing) #scene{display:none}
 @keyframes habnew{50%{transform:scale(1.35)}}
 .habitat.fresh .cap{color:var(--accent)}
 .habitat .next{font-size:12.5px;font-weight:700;color:var(--ink-soft);padding:3px 6px 0;opacity:.9}
+.habitat .playNext{display:flex;margin:8px auto 4px;min-height:44px;font-size:14px;padding:0 16px}
 .hab-ghost{opacity:.32;cursor:pointer}.hab-ghost *{fill:#1f3d37 !important;stroke:#1f3d37 !important}
 .hab-q{pointer-events:none;animation:habq 2.4s ease-in-out infinite}@keyframes habq{0%,100%{opacity:.75}50%{opacity:1}}.hab-ghost:focus{outline:none}.hab-ghost:focus-visible{outline:3px solid #f0b429;outline-offset:2px}
 .hab-tap{transform-box:fill-box;transform-origin:50% 100%;animation:habtap .7s ease-out}
@@ -239,7 +241,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
     </div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Ripple v0.7.4 prototype</div>
+    <div class="ver" id="ver">Ripple v0.7.5 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -256,6 +258,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="stone" id="btnPebble" aria-pressed="true"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="17" rx="8" ry="6" fill="#9aa5a6" stroke="#5f6a6c" stroke-width="2"/></svg>Pebble</button>
       <button class="stone" id="btnBig" aria-pressed="false"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="16" rx="12.5" ry="10" fill="#7d8a8c" stroke="#4b5557" stroke-width="2.2"/><ellipse cx="11" cy="12" rx="4" ry="2.5" fill="#b8c2c3"/></svg>Big stone <b id="bigCount">1</b></button>
     </div>
+    <button class="stagePill hidden" id="stagePill" aria-label="Show the stage plan"></button>
     <div id="coach" class="coach hidden" role="status" aria-live="polite">
       <p id="coachText"></p>
       <div class="coachRow"><span id="coachStep"></span><button class="btn primary" id="coachNext">Next</button></div>
@@ -1066,6 +1069,11 @@ function stageNow() {
   if (best === -1) best = sg.findIndex(function (st) { return !st.snap; });
   return best;
 }
+function stagePill() { // v0.7.5 (Muse + Nikola r9): the current stage stays on screen; tap it for the whole plan
+  var p = $('stagePill'), k = G.won || G.coach ? -1 : stageNow();
+  p.classList.toggle('hidden', k < 0);
+  if (k >= 0) p.textContent = stageLabel(k);
+}
 function stageLabel(k) { return 'Stage ' + (k + 1) + ' of ' + G.level.stages.length + ': ' + G.level.stages[k].text; }
 function afterTapNotes(before) { // v0.6.4 (Muse r6): say when a home critter gets knocked off, and when the pond can't be finished from here
   var now = homeSet(), off = Object.keys(before).filter(function (k) { return !(k in now); });
@@ -1481,7 +1489,7 @@ function finishCoach() {
   var c = G.coach; if (!c) return;
   if (c.kind === 'intro') { seen[G.level.intro] = true; store.set('seen', seen); }
   if (c.kind === 'tip') { seen.preview = true; store.set('seen', seen); }
-  G.coach = null; showCoach();
+  G.coach = null; showCoach(); stagePill();
 }
 function coachNext() {
   if (!G.coach) return;
@@ -1526,6 +1534,7 @@ function hud() {
   $('btnUndo').disabled = !G.hist.length;
   var hasBig = (G.level.big || 0) > 0;
   $('stoneBar').classList.toggle('hidden', !hasBig);
+  stagePill();
   if (hasBig) {
     if (G.st.big <= 0) G.useBig = false;
     $('bigCount').textContent = '×' + G.st.big;
@@ -1773,6 +1782,30 @@ function restart() {
    Both come from the solver's best next tap on the CURRENT board. ---------- */
 var DIRWORD = ['up', 'down', 'left', 'right'];
 function names(list) { return list.length < 2 ? list[0] : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]; }
+// v0.7.5 (Muse r9, Moon Pond): what a splash does to the critters and the log, as 'kind:dir:steps' (plain leaves left out)
+function effectSig(st, m) {
+  var r = L.applyMove(G.board, st, m.idx, !!m.big); if (!r) return null;
+  return r.moves.filter(function (mv) { return mv.steps && G.level.leaves[mv.i].k !== 'leaf'; })
+    .map(function (mv) { return G.level.leaves[mv.i].k + ':' + mv.dir + ':' + mv.steps; })
+    .concat((r.snapped || []).map(function (j) { return 'snap:' + j; })).sort(); // a snapped reed is part of what the clue says
+}
+// does splash c fit the words of a clue written for splash m? (same movers in the same directions; steps and
+// "nothing else" only count when the clue says them)
+function clueFits(m, c, opt) {
+  var a = effectSig(G.st, m), b = effectSig(G.st, c); if (!a || !b) return false;
+  var kd = function (x) { return x.split(':').slice(0, 2).join(':'); };
+  if (!a.every(function (x) { return b.map(kd).indexOf(kd(x)) !== -1; })) return false;
+  if (opt && opt.steps && !a.every(function (x) { return b.indexOf(x) !== -1; })) return false;
+  if (opt && opt.only && b.length !== a.length) return false;
+  if ((m.big || (opt && opt.stone)) && !!c.big !== !!m.big) return false; // the clue names the big stone (or says a pebble)
+  return true;
+}
+function clueOpts(m) { // add steps / "nothing else moves" only when another splash would fit the plain words but do something else
+  var a = effectSig(G.st, m); if (!a || !a.length) return {};
+  var o = {}, others = L.legalMoves(G.board, G.st).filter(function (c) { return !(c.idx === m.idx && !!c.big === !!m.big) && clueFits(m, c); });
+  others.forEach(function (c) { var b = effectSig(G.st, c); if (b.join() === a.join()) { if (!!c.big !== !!m.big) o.stone = true; return; } if (b.length !== a.length) o.only = true; if (!a.every(function (x) { return b.indexOf(x) !== -1; })) o.steps = true; });
+  return o;
+}
 function hintClue(m) {
   var lv = G.level, w = lv.w, res = L.applyMove(G.board, G.st, m.idx, !!m.big), byDir = {}, home = [], plain = false, snapped = !!(res.snapped && res.snapped.length);
   res.moves.forEach(function (mv) {
@@ -1794,6 +1827,10 @@ function hintClue(m) {
   else if (!dirs.length) s = plain ? 'Clear a plain leaf out of the way first.' : 'Find a splash that sets things up.';
   else if (dirs.length === 1 && byDir[dirs[0]].length > 1) s = 'Move ' + names(byDir[dirs[0]]) + ' ' + DIRWORD[dirs[0]] + ' together.';
   else s = 'Move ' + names(dirs.map(function (d) { return names(byDir[d]) + ' ' + DIRWORD[d]; })) + '.';
+  var co = clueOpts(m);
+  if (co.steps && dirs.length) s = 'Move ' + names(effectSig(G.st, m).filter(function (x) { return x.indexOf('snap:') !== 0; }).map(function (x) { var p = x.split(':'); return 'the ' + p[0] + ' ' + DIRWORD[+p[1]] + ' ' + (p[2] === '1' ? '1 cell' : p[2] + ' cells'); })) + '.';
+  if (co.only) s += ' Nothing else moves.';
+  if (co.stone && !m.big) s = 'Use a pebble. ' + s;
   // shield: a critter right behind a tied lily on the ripple line stays still
   var r0 = (m.idx / w) | 0, c0 = m.idx % w, kept = [], keptDir = {};
   L.DIRS.forEach(function (d) {
@@ -1972,7 +2009,7 @@ function showHold(idx) {
       var dtx = el('text', { x: dx, y: dy + 7, 'text-anchor': 'middle', fill: '#ffffff', 'font-size': 22, 'font-weight': 800, 'font-family': 'inherit' }, g2); dtx.textContent = dt; }
   }
   document.body.dataset.preview = '1';
-  if (G.coach && G.coach.steps[G.coach.i] && G.coach.steps[G.coach.i].hold) { var ho = G.coach.steps[G.coach.i].holdAt != null; finishCoach(); toast(ho ? 'See? The duck gets home, but the frog is stuck. Let go, and bring the frog over first so the duck goes home last.' : 'Let go to cancel. A quick tap plays.', ho ? 5200 : 2200); }
+  if (G.coach && G.coach.steps[G.coach.i] && G.coach.steps[G.coach.i].hold) { var ho = G.coach.steps[G.coach.i].holdAt != null; finishCoach(); toast(ho ? 'See? The duck gets home, but the frog is stuck. Let go, and move the frog out of the trap before you send the duck home.' : 'Let go to cancel. A quick tap plays.', ho ? 5200 : 2200); }
   return true;
 }
 
@@ -2146,6 +2183,8 @@ function showSelect() {
     newVisitor = null;
   } else $('habitat').classList.remove('fresh');
   $('habitatNext').textContent = nextGoalText(hc);
+  var gi = nextVisitorIndex(hc); // v0.7.5 (Cooper r9): the next goal is one tap away
+  if (gi >= 0 && unlocked(gi)) { var pb = document.createElement('button'); pb.className = 'btn primary playNext'; pb.id = 'btnPlayNext'; pb.textContent = 'Play pond ' + (gi + 1) + ': ' + LEVELS[gi].name; pb.addEventListener('click', function () { startLevel(gi); }); $('habitatNext').appendChild(pb); }
   markGhost($('habitatArt'));
   // daily pond
   var d = $('daily'); d.innerHTML = '';
@@ -2209,7 +2248,7 @@ function showChapterDone() {
 function clueAboveControls(t) {
   if (!t) return;
   var top = Infinity;
-  ['stoneBar'].concat([].slice.call(document.querySelectorAll('.controls'))).forEach(function (x) {
+  ['stoneBar', 'stagePill'].concat([].slice.call(document.querySelectorAll('.controls'))).forEach(function (x) {
     var e = typeof x === 'string' ? $(x) : x; if (!e || e.classList.contains('hidden') || !e.offsetParent) return;
     top = Math.min(top, e.getBoundingClientRect().top);
   });
@@ -2312,12 +2351,16 @@ $('btnHowTutorial').addEventListener('click', function () { $('howCard').classLi
 $('btnPreviewSet').addEventListener('click', function () { setPreviewSetting(!settings.preview); });
 $('btnMute').addEventListener('click', function () { setMute(!muted); });
 function tapVisitor(g) { // v0.7.3: a tapped visitor hops and wiggles, then says who it is
-  if (g.hasAttribute('data-ghost')) { var gi = +g.getAttribute('data-ghost'); toast('A mystery visitor! Solve pond ' + (gi + 1) + ' to bring it here.', 2600); }
+  if (g.hasAttribute('data-ghost')) { var gi = +g.getAttribute('data-ghost'); toast('A mystery visitor! Solve pond ' + (gi + 1) + ', ' + LEVELS[gi].name + ', to bring it here.', 2600); }
   else { var n = g.getAttribute('data-name'); toast(n.charAt(0).toUpperCase() + n.slice(1) + '.', 2200); }
   g.classList.remove('hab-new', 'hab-tap'); void g.getBoundingClientRect(); g.classList.add('hab-tap');
   g.addEventListener('animationend', function f() { g.classList.remove('hab-tap'); g.removeEventListener('animationend', f); });
   plop(false); // the same soft plop as a pebble (silent when muted)
 }
+$('stagePill').addEventListener('click', function () {
+  var sg = G.level && G.level.stages; if (!sg) return;
+  var t = toast('The plan: ' + sg.map(function (st, n) { return (n + 1) + '. ' + st.text; }).join(' '), 600000); t.classList.add('clue'); clueAboveControls(t);
+});
 $('habitatArt').addEventListener('click', function (ev) { // tap a visitor to see who it is
   var g = ev.target.closest && ev.target.closest('[data-name]'); if (!g) return;
   tapVisitor(g);
@@ -2339,7 +2382,8 @@ if (tester) $('btnSolve').classList.remove('hidden');
 // test hook (read-only view of state, used by the Playwright check)
 window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' : G.li + 1, mode: G.mode, taps: G.taps, won: G.won, busy: G.busy, coach: G.coach ? G.coach.i : -1,
     hint: G.hint, hinted: G.hinted, preview: document.body.dataset.preview === '1', par: G.level ? G.level.par : 0, pos: G.st ? G.st.pos.slice() : [], snap: G.st ? G.st.snap || 0 : 0 }; },
-  solution: function () { return L.solve(G.level, G.st); }, clue: function () { var so = solveNow(); return so && so.length ? hintClue(so[0]) : null; }, start: function (i) { startLevel(i); }, startDaily: startDaily,
+  solution: function () { return L.solve(G.level, G.st); }, clue: function () { var so = solveNow(); return so && so.length ? hintClue(so[0]) : null; }, clueFitsOff: function () { var so = solveNow(); if (!so || !so.length) return []; var m = so[0], o = clueOpts(m); return L.legalMoves(G.board, G.st).filter(function (c) { return clueFits(m, c, o); }).map(function (c) { return { idx: c.idx, big: !!c.big }; }); }, clueAll: function () { return L.legalMoves(G.board, G.st).map(function (m) { return { idx: m.idx, big: !!m.big, text: hintClue(m) }; }); }, // testing aid: the clue every legal splash would get
+   start: function (i) { startLevel(i); }, startDaily: startDaily,
   dailyLevel: function () { return dailyLevel(todayKey()); },
   coachTarget: function () { var c = G.coach; return c && c.steps[c.i] && c.steps[c.i].target != null ? c.steps[c.i].target : -1; }, hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
 // first visit: go straight into the tutorial pond
