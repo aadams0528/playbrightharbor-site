@@ -190,6 +190,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   h1 { font-size: 1.25rem; }
   header .pill { padding: 0 10px; height: 28px; }
   .legend { font-size: 0.72rem; }
+  .legend.keep[hidden] { display: flex !important; visibility: hidden; }
   .scores { gap: 10px; }
   .scores .label { font-size: 0.6rem; }
   #score { font-size: 1.35rem; }
@@ -657,10 +658,11 @@ function newGame(m, replay = false) {
   renderModeTab();
   document.getElementById("modelabel").textContent = mode === "daily" ? `Daily Board #${dailyNo()}` : "Score";
   document.getElementById("over").hidden = true;
-  renderAll(); saveGame();
+  renderAll();
   // Today's Daily is already finished: show the result (with Share), unless the player chose to play it again.
+  // Nothing is saved then, so the launch save keeps pointing at the game in progress.
   const done = mode === "daily" && !replay && !tut && store.get(DAILY_KEY(), null);
-  if (done) showDailyResult(done, 0, false);
+  if (done) showDailyResult(done, 0, false); else saveGame();
 }
 
 // ---------- More from Bright Harbor: a card for our other game ----------
@@ -899,7 +901,10 @@ function renderBoard() {
   movableCells().forEach(([r, c]) => cellEl(r, c).classList.add("movable"));
   tutSpot().forEach(([r, c]) => cellEl(r, c).classList.add("tut-spot"));
   // Hidden while the special-blocks intro is the hint above the board: it says the same thing.
-  document.getElementById("legend").hidden = specialIntro || !(board.flat().some(v => v && v.special) || tray.some(p => !p.used && p.specials?.some(Boolean)));
+  const lg = document.getElementById("legend");
+  lg.hidden = specialIntro || !(board.flat().some(v => v && v.special) || tray.some(p => !p.used && p.specials?.some(Boolean)));
+  // Specials can turn up from level 2: on short screens the line keeps its space, so the board never jumps.
+  lg.classList.toggle("keep", !tut && level >= 2);
 }
 function pieceDims(p) { return [Math.max(...p.cells.map(x => x[0])) + 1, Math.max(...p.cells.map(x => x[1])) + 1]; }
 function pieceHTML(p) {
@@ -1816,7 +1821,7 @@ function dailyDone(earned) {
   if (!prev || score > prev.score) store.set(DAILY_KEY(), result);
   // The finished board isn't resumed: opening the Daily again today shows this result.
   store.set(SAVE_KEY + "-daily", null);
-  if (store.get(SAVE_KEY, null)?.mode === "daily") store.set(SAVE_KEY, null);
+  if (store.get(SAVE_KEY, null)?.mode === "daily") store.set(SAVE_KEY, store.get(SAVE_KEY + "-endless", null));
   showDailyResult(result, earned, true);
 }
 function showDailyResult(r, earned, fresh) {
@@ -2063,7 +2068,8 @@ document.getElementById("tab-quests").onclick = () => tabClick("quests", showQue
 document.getElementById("tab-words").onclick = () => tabClick("words", showWords);
 document.getElementById("tab-mode").onclick = () => tabClick("mode", showModeSwitch);
 document.getElementById("tab-help").onclick = () => tabClick("help", showHelp);
-if (!resumeGame()) newGame("endless");
+// The latest game opens on launch; if there is none (a finished Daily clears its own), the Endless game does.
+if (!resumeGame() && !resumeGame(SAVE_KEY + "-endless", false)) newGame("endless");
 renderCoins(); renderStreak(); checkStreakAtRisk();
 // ---------- native app: real ads and in-app purchases ----------
 // In the iPhone and Android apps, Capacitor provides the AdMob and NativePurchases plugins.
