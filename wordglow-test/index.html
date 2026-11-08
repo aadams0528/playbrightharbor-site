@@ -463,7 +463,7 @@ button.pill { cursor: pointer; }
       <li>You get three new pieces once all three are used. The game ends when the board is too full for any piece and you have no erasers, shuffles or rotates left that could help.</li>
       <li><b>Ideas or problems?</b> Tap <b>Send feedback</b> at the top of this page to email us. We read every message.</li>
       <li><b>Want to play our games early?</b> Tap <b>Test our next game</b> at the bottom of this page.</li>
-      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces today. Switching between them keeps your place in each.</li>
+      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces today: clear 3 levels to finish it and share your score. Switching between them keeps your place in each.</li>
     </ul>
     <button type="button" class="tut-replay" id="tut-replay">Replay the tutorial</button>
     <div id="promo-help"></div>
@@ -643,7 +643,7 @@ function seedBoard() {
   }
 }
 
-function newGame(m) {
+function newGame(m, replay = false) {
   mode = m; levelNewWords = [];
   track("game_start", { mode });
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
@@ -658,6 +658,9 @@ function newGame(m) {
   document.getElementById("modelabel").textContent = mode === "daily" ? `Daily Board #${dailyNo()}` : "Score";
   document.getElementById("over").hidden = true;
   renderAll(); saveGame();
+  // Today's Daily is already finished: show the result (with Share), unless the player chose to play it again.
+  const done = mode === "daily" && !replay && !tut && store.get(DAILY_KEY(), null);
+  if (done) showDailyResult(done, 0, false);
 }
 
 // ---------- More from Bright Harbor: a card for our other game ----------
@@ -972,7 +975,7 @@ function renderScores() {
   document.getElementById("best").textContent = best.toLocaleString();
   document.getElementById("wcount").textContent = found.length;
   const pct = Math.min(100, 100 * levelPts() / target());
-  document.getElementById("level").innerHTML = `Level ${level} · ${Math.min(levelPts(), target())} / ${target()}<span class="lvbar"><i style="width:${pct}%"></i></span>`;
+  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""} · ${Math.min(levelPts(), target())} / ${target()}<span class="lvbar"><i style="width:${pct}%"></i></span>`;
 }
 function renderAll() { renderBoard(); renderTray(); renderScores(); sizeCells(); }
 
@@ -1178,7 +1181,7 @@ function showModeSwitch() {
   const toDaily = mode === "endless";
   const saved = store.get(SAVE_KEY + "-endless", null);
   openTabSheet("mode", toDaily
-    ? `<h3>📅 Daily Board #${dailyNo()}</h3><p>Everyone gets the same pieces today. Come back tomorrow for a new one.</p>
+    ? `<h3>📅 Daily Board #${dailyNo()}</h3><p>Everyone gets the same pieces today. Clear 3 levels to finish it, then share your score. A new one comes out tomorrow.</p>
        <p>Your Endless game is saved, so you can come back to it.</p>
        <div class="btns"><button class="btn" id="go-mode">Play today's board</button></div>`
     : `<h3>♾️ Endless</h3><p>${saved ? `Pick up your Endless game at level ${saved.level}.` : "Start an Endless game. It gets a little harder each level."}</p>
@@ -1649,8 +1652,10 @@ function levelUp() {
   left.forEach(([r, c], k) => setTimeout(() => cellEl(r, c).classList.add("pop"), 300 + k * 40));
   const earned = 10 + 2 * level;
   if (invitePending) { invitePending = false; store.set("wb-invite-pending", false); setTimeout(() => { addCoins(INVITE_REWARD); toast(`🎁 Friend bonus!\n+${INVITE_REWARD} 🪙`, false, READ_MS); }, 400); }
+  const dailyEnd = mode === "daily" && level >= DAILY_LEVELS;
   setTimeout(() => {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
+    if (dailyEnd) return dailyDone(earned);
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox" style="background:none;color:inherit;padding:6px"><span class="count">+${earned} 🪙</span></div>
       ${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`, true);
     const go = n => { closeSheet(); addCoins(n); maybeInterstitial(startNextLevel); };
@@ -1795,11 +1800,65 @@ function gameOver() {
   const tb = document.getElementById("todaybtn"); if (tb) tb.onclick = () => switchMode("daily");
   const eb = document.getElementById("endlessbtn"); if (eb) eb.onclick = () => switchMode("endless");
   const cp = document.getElementById("copy");
-  if (cp) cp.onclick = () => {
-    const ta = document.getElementById("sharetext");
-    (navigator.clipboard ? navigator.clipboard.writeText(share) : Promise.reject()).then(() => { cp.textContent = "Copied! Paste it in a text"; })
-      .catch(() => { ta.hidden = false; ta.select(); cp.textContent = "Select and copy"; });
-  };
+  if (cp) cp.onclick = () => shareResult(share, cp);
+}
+
+// ---------- the Daily Board ends after 3 levels, with a result to share ----------
+const DAILY_LEVELS = 3;
+const DAILY_KEY = () => "wb-daily-result-" + todayKey();
+function dailyDone(earned) {
+  track("daily_complete", { score, words: found.length });
+  addCoins(earned);
+  const top = found.slice().sort((a, b) => b.s - a.s)[0];
+  const result = { no: dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null };
+  // Keep the best finish of the day; a replay that scores less doesn't replace it.
+  const prev = store.get(DAILY_KEY(), null);
+  if (!prev || score > prev.score) store.set(DAILY_KEY(), result);
+  // The finished board isn't resumed: opening the Daily again today shows this result.
+  store.set(SAVE_KEY + "-daily", null);
+  if (store.get(SAVE_KEY, null)?.mode === "daily") store.set(SAVE_KEY, null);
+  showDailyResult(result, earned, true);
+}
+function showDailyResult(r, earned, fresh) {
+  hideDefinitions();
+  over = true; busy = false; movable = null;
+  const best = store.get(DAILY_KEY(), r);
+  const share = [
+    `Wordglow Daily #${r.no} ✅`,
+    `⭐ ${DAILY_LEVELS}/${DAILY_LEVELS} levels · ${r.score.toLocaleString()} pts · ${r.words} word${r.words === 1 ? "" : "s"}`,
+    r.top ? `Best word: ${r.top.w.toUpperCase()} ${"🟨".repeat(r.top.w.length)} +${r.top.s}` : "",
+    INVITES_LIVE ? `Play with me! Use code ${myCode} for ${INVITE_REWARD} free coins` : "Can you beat it?",
+    "playbrightharbor.com/wordglow.html",
+  ].filter(Boolean).join("\n");
+  const el = document.getElementById("over");
+  el.innerHTML = `<div>
+    <h2>${fresh ? "Daily Board done! 🎉" : `Daily Board #${r.no} done`}</h2>
+    <p>You cleared all ${DAILY_LEVELS} levels${earned ? ` and earned <b>+${earned} 🪙</b>` : ""}.</p>
+    <div class="big">${r.score.toLocaleString()}</div>
+    <p>${r.words} word${r.words === 1 ? "" : "s"}${r.top ? `, best was <b>${r.top.w.toUpperCase()}</b> for ${r.top.s}` : ""}</p>
+    ${best.score > r.score ? `<p>Your best today: <b>${best.score.toLocaleString()}</b></p>` : ""}
+    <div class="row">
+      <button class="btn" id="copy">Share result</button>
+      <button class="btn ghost-btn" id="endlessbtn">Play Endless levels</button>
+      <button class="btn ghost-btn" id="again">Play today's board again</button>
+    </div>
+    <p style="opacity:.75">A new Daily Board comes out tomorrow.</p>
+    <textarea id="sharetext" rows="5" readonly hidden>${share}</textarea>
+  </div>`;
+  el.hidden = false;
+  if (fresh) { SFX.big(); fireworks(); }
+  renderScores();
+  document.getElementById("copy").onclick = e => shareResult(share, e.currentTarget);
+  document.getElementById("endlessbtn").onclick = () => switchMode("endless");
+  document.getElementById("again").onclick = () => newGame("daily", true);
+}
+// Share with the phone's share sheet where there is one; otherwise copy it, or show it to copy by hand.
+function shareResult(text, btn) {
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(() => { btn.textContent = "Copied! Paste it in a text"; })
+    .catch(() => { const ta = document.getElementById("sharetext"); if (ta) { ta.hidden = false; ta.select(); } btn.textContent = "Select and copy"; });
+  if (navigator.share) navigator.share({ text }).catch(e => { if (e?.name !== "AbortError") copy(); });
+  else copy();
 }
 
 // ---------- dragging ----------
@@ -1971,6 +2030,8 @@ boardEl.addEventListener("click", e => {
   if (tut?.phase === "place") return toast(tut.step === 1 ? "Not yet! Grow it first" : "Place the piece first");
   if (!erasing) {
     // A block can sit in an across word and a down word; cash in the bigger one.
+    // Read the words from the board as it is now, so a tap never acts on a stale glow.
+    lit = scanWords(board);
     const mine = lit.filter(w => w.cells.some(([R, C]) => R === r && C === c)).sort((a, b) => b.s - a.s);
     if (mine.length) {
       // Pull in every glowing word that touches it, and any that touch those: if it glows together, it goes together.
