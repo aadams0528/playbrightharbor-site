@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast 8710743 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 00af8c6 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast 8710743 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 00af8c6 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -122,7 +122,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 
 /* The result fills the screen above the menu bar (sheets opened from the menu still show on top), so the score
    and the next step are never squeezed into the board on a short phone. */
-.over{position:fixed;inset:0;z-index:34;background:rgba(10,20,16,.95);display:flex;align-items:center;justify-content:center;overflow-y:auto;text-align:center;color:#fff;padding:16px 16px calc(76px + env(safe-area-inset-bottom,0px))}
+.over{position:fixed;inset:0;z-index:34;background:rgba(10,20,16,.95);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;text-align:center;color:#fff;padding:16px 16px calc(76px + env(safe-area-inset-bottom,0px))}
 .over>div{max-width:420px}
 .over .keep{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.18)}
 .over .keep p{font-size:.85rem;opacity:.85}
@@ -140,7 +140,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .over .promo{display:inline-flex;margin-top:8px;padding:4px 6px 4px 4px;gap:8px;font-size:.78rem}
 .over .promo-icon{width:24px;height:24px;border-radius:7px;font-size:.85rem}
 .over .promo-go{padding:3px 9px}
-@media (max-height:700px){.over{padding:8px}.over h2{font-size:1.6rem}.over .big{font-size:2rem;margin:2px 0}.over p{margin:3px 0}.over .row{margin-top:5px}}
+@media (max-height:700px){.over{padding:8px 8px calc(72px + env(safe-area-inset-bottom,0px))}.over h2{font-size:1.6rem}.over .big{font-size:2rem;margin:2px 0}.over p{margin:3px 0}.over .row{margin-top:5px}}
 #sheet .promo{background:none;border:1px solid var(--line,rgba(0,0,0,.12));margin:0 0 10px}
 
 .tray{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;touch-action:none}
@@ -236,7 +236,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chestbar.open span{animation:newt 1.2s ease-out}
 .weeknote{font-size:.85rem;margin:2px 0 8px}.over .why.next{color:#ffe28a;font-weight:600;font-size:.9rem}.dstars{font-size:1.05rem}
 /* Very short screens (an iPhone SE browser with its toolbars, ~550px): a smaller target, hint and tray so nothing scrolls. */
-@media (max-height:600px){.slot{height:60px}.target b{font-size:2.2rem}#hint{font-size:.78rem;line-height:1.2}.tools{margin-top:4px}}
+@media (max-height:600px){.over .week{margin:4px 0}.over .wd{padding:2px 0}.over .keep{margin-top:8px;padding-top:6px}.slot{height:60px}.target b{font-size:2.2rem}#hint{font-size:.78rem;line-height:1.2}.tools{margin-top:4px}}
 </style>
 
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -716,18 +716,18 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){endSession
 const READ_MS=3200, CASH_MS=2400;
 // News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
 // The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
-let newsQ=[],newsTimer=null,newsWait=0;
-function news(text,big=false){newsQ.push([text,big]);if(!newsTimer)nextNews()}
+let newsQ=[],newsTimer=null,newsWait=0,cantQueued=false;
+function news(text,big=false,onShow){newsQ.push([text,big,onShow]);if(!newsTimer)nextNews()}
 function nextNews(){
   newsTimer=null;if(!newsQ.length)return;
   if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
   // Let a blast message finish first so both don't squeeze into the box (but never wait more than ~2s).
   if($('lane-main').firstChild&&newsWait++<8){newsTimer=setTimeout(nextNews,250);return}
   newsWait=0;
-  const [text,big]=newsQ.shift();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
+  const [text,big,onShow]=newsQ.shift();onShow&&onShow();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
 }
 function clearPending(keepNews){
-  if(!keepNews){newsQ=[];clearTimeout(newsTimer);newsTimer=null}
+  if(!keepNews){newsQ=[];clearTimeout(newsTimer);newsTimer=null;cantQueued=false}
   document.querySelectorAll(keepNews?'.toast:not(.news)':'.toast').forEach(t=>t.remove());
   msgState();
 }
@@ -780,7 +780,7 @@ function renderTray(){
     const s=document.createElement('div');s.className='slot';s.dataset.i=i;trayEl.appendChild(s);
     if(!p){s.classList.add('used');return}
     if(!canFit(p)){s.classList.add('cant');
-      if(!tut&&!store.get('nb-cant-seen',false)&&tray.some(q=>q&&canFit(q))){store.set('nb-cant-seen',true);news('Faded pieces don\'t fit anywhere yet.\nUse the others first.')}}
+      if(!tut&&!cantQueued&&!store.get('nb-cant-seen',false)&&tray.some(q=>q&&canFit(q))){cantQueued=true;news('Faded pieces don\'t fit anywhere yet.\nUse the others first.',false,()=>store.set('nb-cant-seen',true))}}
     const {rows,cols}=pieceSize(p),box=s.getBoundingClientRect();
     const size=Math.max(16,Math.min(32,Math.floor((Math.min(box.width,box.height)-16)/Math.max(rows,cols,2))-3));
     s.appendChild(pieceEl(p,size,'piece'));
@@ -965,7 +965,7 @@ function blast(cascade=0){
   }
   // Main message, then the extra news one at a time below it.
   const praise=cascade?'Cascade!':k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
-  const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('  &  ');
+  const label=valsList.map((v,i)=>v?v.join(' + ')+(cascade?' = '+T:''):runs[i].cells.length+' blocks').join('  &  ');
   // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
   // A quest finished by this same blast is named too, so two Erasers from one drop add up.
   const questGot=goalsDone.filter(g=>!g.full).map(g=>g.reward==='coins'?'quest +15 🪙':'quest '+g.reward[0].toUpperCase()+g.reward.slice(1));
@@ -1069,8 +1069,8 @@ function levelUp(){
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
       <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
       <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`,true);
-    const go=n=>{closeSheet();addCoins(n);maybeInterstitial(startNextLevel)};
-    $('dbl').onclick=()=>watchAd(()=>go(earned*2),()=>go(earned));
+    const go=(n,dbl)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);maybeInterstitial(startNextLevel)};
+    $('dbl').onclick=()=>watchAd(()=>go(earned*2,true),()=>go(earned));
     $('next').onclick=()=>go(earned);
   },900+left.length*40);
 }
@@ -1125,7 +1125,7 @@ function gameOver(){
   const mid=new Date();mid.setHours(24,0,0,0);const mins=Math.max(1,Math.round((mid-Date.now())/60000));
   const nextDaily=mins>=60?`${Math.floor(mins/60)}h ${mins%60}m`:`${mins}m`;
   $('over').innerHTML=`<div>
-    <h2>${newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):close?'So close!':'Board full'}</h2>
+    <h2>${newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):endedByChoice?'Run ended':close?'So close!':'Board full'}</h2>
     <p class="why">${endedByChoice?'You ended the run':board.some(x=>!x)?'No piece fits the gaps left':'No room left for a piece'}</p>
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
     <div class="big">${score.toLocaleString()}</div>
@@ -1222,7 +1222,7 @@ function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
   if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();finish(onSkip)};
 }
 const POWER_COST=30,FREE_ADS_PER_DAY=5;
-function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame()}
+function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame();if(kind==='eraser'&&!store.get('nb-longsum-tip',false))longSumTip()}
 const TOOL_TEXT={eraser:'Deletes any one block.',shuffle:'Swaps your pieces for new ones.',rotate:'Turns a piece a quarter turn.'};
 function offerPowerup(kind){
   const key='nb-free-ads-'+dayKey(),used=store.get(key,0);
@@ -1613,8 +1613,8 @@ function specialIntro(){
     $('sp-ok').onclick=closeSheet},600);
 }
 // After the first Eraser: a one-time card on building long sums (Alan 2026-11-08, reviewers round 6).
-function longSumTip(){
-  setTimeout(()=>{if(over||tut||store.get('nb-longsum-tip',false))return;if(!$('modal').hidden)return longSumTip();
+function longSumTip(m=mode){
+  setTimeout(()=>{if(over||tut||mode!==m||mode==='daily'||store.get('nb-longsum-tip',false))return;if(!$('modal').hidden)return longSumTip(m);
     store.set('nb-longsum-tip',true);
     const v=[0,1,2,3,4].map(i=>Math.floor(T/5)+(i>=5-T%5?1:0));
     openSheet(`<h3>🧩 Build a long sum</h3><p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
@@ -1692,7 +1692,7 @@ if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint(),giveTool:k=>giveTool(k)};
 })();
 </script>
 
