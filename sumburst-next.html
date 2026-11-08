@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast ac00ad9 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 81fb4ef (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast ac00ad9 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 81fb4ef (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -236,6 +236,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chestbar span{font-size:1.8rem;line-height:1}.chestbar b{font-variant-numeric:tabular-nums;font-size:.85rem;color:var(--muted)}
 .chestbar.open span{animation:newt 1.2s ease-out}
 .sharetext{white-space:pre-line;font-size:.8rem;text-align:left;display:inline-block;margin:6px auto;padding:6px 10px;border-radius:8px;background:rgba(127,127,127,.15)}
+.ladder{display:block;white-space:nowrap;text-transform:none;letter-spacing:0}
 .weeknote{font-size:.85rem;margin:2px 0 8px}.over .why.next{color:#ffe28a;font-weight:600;font-size:.9rem}.dstars{font-size:1.05rem}
 /* Very short screens (an iPhone SE browser with its toolbars, ~550px): a smaller target, hint and tray so nothing scrolls. */
 @media (max-height:600px){.over .week{margin:4px 0}.over .wd{padding:2px 0}.over .keep{margin-top:8px;padding-top:6px}.slot{height:60px}.target b{font-size:2.2rem}#hint{font-size:.78rem;line-height:1.2}.tools{margin-top:4px}}
@@ -422,6 +423,7 @@ function genPiece(){
 // Empty squares boxed in on all four sides (by blocks or the edge): only a 1-block piece fits there.
 const singleGaps=()=>board.reduce((n,x,k)=>{if(x)return n;const r=Math.floor(k/N),c=k%N;
   return n+([[r-1,c],[r+1,c],[r,c-1],[r,c+1]].every(([rr,cc])=>rr<0||cc<0||rr>=N||cc>=N||board[rr*N+cc])?1:0)},0);
+const tooBig=p=>p&&!p.cells.some(c=>c.t.star)&&p.cells.reduce((a,c)=>a+c.t.v,0)>T;
 const newTray=()=>{
   tray=[genPiece(),genPiece(),genPiece()];rotating=false;rotPaid=null;
   // Endless only (the Daily deals the same pieces to everyone): with 3+ single gaps left on the
@@ -440,6 +442,15 @@ const newTray=()=>{
     tray[1]={long:true,cells:[cell(0,v[0]),cell(1,v[1]),cell(2,v[2])]};
     tray[2]={long:true,cells:[cell(0,v[3]),cell(1,v[4])]};
     if(!store.get('nb-longsum-tip',false))longSumTip();   // the tip comes before its payoff (Nikola round 7)
+  }
+  // From level 5, never three pieces whose own numbers all add up past the target (Alan 2026-11-08, Muse round 8):
+  // the last plain piece is dealt again until it can be part of a sum. Uses the same rng, so the Daily stays shared.
+  if(!tut&&level>=5&&tray.every(tooBig)){
+    const i=[2,1,0].find(i=>!tray[i].long&&!tray[i].cells.some(c=>c.t.star||c.t.bomb));
+    if(i!==undefined){let p;for(let n=0;n<30&&(!p||tooBig(p));n++)p=genPiece();
+      // Still too big: keep the shape, shrink its numbers so they add up to less than the target.
+      if(tooBig(p)){const cap=Math.max(1,Math.floor((T-1)/p.cells.length));p.cells.forEach(c=>{if(!c.t.star)c.t.v=Math.min(c.t.v,cap)})}
+      tray[i]=p}
   }
   // Every game meets its first ⭐ star and its first 💣 bomb in its first tray of level 3
   // (specials: 1 = a star has been dealt, 2 = a bomb has). After that they stay random.
@@ -794,7 +805,7 @@ function renderTray(){
 function renderHUD(){
   $('target').textContent=T;
   if(tut){$('lvl').innerHTML='<small>Lesson</small>'+(tut.step+1)+' of '+LESSONS.length;$('bar').style.width=(tut.step/LESSONS.length*100)+'%'}
-  else{$('lvl').innerHTML=`<small>${mode==='daily'?'Daily #'+dailyNo():'Endless'}</small>Level ${level} <span class="lp">${Math.min(levelPts(),goalFor(level))}/${goalFor(level)}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
+  else{$('lvl').innerHTML=`<small>${mode==='daily'?`Daily #${dailyNo()} <span class="ladder">${starStr(starsFor(level-1))}${(n=>n?` next: level ${n}`:'')(STAR_LEVELS.find(l=>l>level-1))}</span>`:'Endless'}</small>Level ${level} <span class="lp">${Math.min(levelPts(),goalFor(level))}/${goalFor(level)}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
   $('score').innerHTML=(tut?'<small>Score</small>':'<small>Total score</small>')+score.toLocaleString();
   $('eraserN').textContent=erasers;$('shuffleN').textContent=shuffles;
   $('eraser').classList.toggle('on',erasing);$('eraser').setAttribute('aria-pressed',erasing);
@@ -1071,6 +1082,7 @@ function levelUp(){
   setTimeout(()=>{
     board=Array(N*N).fill(null);renderBoard();
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
+      ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level))} this run${(n=>n?` · next star at level ${n}`:' · all 3 stars!')(STAR_LEVELS.find(l=>l>level))}</p><p class="weeknote">${store.get(chestKey(),false)?'🎁 This week\'s chest is open.':`🎁 ${Math.min(weekStars(),CHEST_STARS)} of ${CHEST_STARS} ⭐ this week toward the chest (${CHEST_COINS} 🪙)`}</p>`:''}
       <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
       <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`,true);
     const go=(n,dbl)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);maybeInterstitial(startNextLevel)};
