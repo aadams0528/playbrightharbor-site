@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- Preview of Sumburst's first update (1.1) for the reviewers: built from number-blast PR #24 (branch claude/project-thread-xvy57x, commit 4e2853a) by scripts/build-test-pages.mjs. sumburst-test.html stays on the game's main branch. Unlisted test page: not linked from the site. Rebuild from the branch; don't edit by hand. -->
-<title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 49ed337 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -224,6 +223,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .restore{text-align:center;margin:6px 0 0}
 .foot{text-align:center;font-size:.7rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition:none!important}}
+.week{display:flex;justify-content:center;gap:4px;margin:8px 0 4px}.wd{min-width:38px;padding:4px 2px;border-radius:8px;background:var(--panel);border:1px solid var(--line);text-align:center;font-size:.7rem;line-height:1.3}.wd small{display:block;color:var(--muted);font-weight:700}.wd.today{border:2px solid var(--gold)}.wd.later{opacity:.45}
+.weeknote{font-size:.85rem;margin:2px 0 8px}.dstars{font-size:1.05rem}
+/* Very short screens (an iPhone SE browser with its toolbars, ~550px): a smaller target, hint and tray so nothing scrolls. */
+@media (max-height:600px){.slot{height:60px}.target b{font-size:2.2rem}#hint{font-size:.78rem;line-height:1.2}.tools{margin-top:4px}}
 </style>
 
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -283,7 +286,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Coins:</b> earn them by finishing levels, quests and your daily streak. Spend them on erasers, shuffles, rotates or a second chance.</li>
       <li><b>Daily streak:</b> blast at least one sum every day to grow your streak and earn more coins each day. Tap the 🔥 to see your calendar.</li>
       <li>You get three new pieces once all three are used. The game ends when no piece fits and you have no erasers, shuffles or rotates left that could help.</li>
-      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces today. Switching between them keeps your place in each.</li>
+      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily run</b> gives everyone the same pieces today and ends when no piece fits. Clear level 1, 3 and 5 for up to 3 ⭐; 15 ⭐ in a week opens a 🎁 coin chest. Switching between them keeps your place in each.</li>
     </ul>
     <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
   </div>
@@ -310,6 +313,34 @@ function mulberry(a){
 function hash(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 const dayKey=(off=0)=>{const d=new Date();d.setDate(d.getDate()+off);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
 const dailyNo=()=>Math.round((new Date(dayKey()+"T00:00")-new Date("2026-10-11T00:00"))/864e5)+1;
+// ---------- Daily run stars and the weekly chest (Alan 2026-11-08) ----------
+// Each day's run earns up to 3 stars: clear level 1, 3 and 5. The best of the day counts. A week runs
+// Monday to Sunday; 15 stars in a week opens a chest of 100 coins (once a week).
+const STAR_LEVELS=[1,3,5],CHEST_STARS=15,CHEST_COINS=100;
+const starsFor=cleared=>STAR_LEVELS.filter(l=>cleared>=l).length;
+const starStr=n=>'⭐'.repeat(n)+'☆'.repeat(3-n);
+const weekStart=()=>{const d=new Date();return -((d.getDay()+6)%7)};          // day offset of this week's Monday
+const weekDays=()=>{const m=weekStart();return [0,1,2,3,4,5,6].map(i=>dayKey(m+i))};
+const todayStars=()=>store.get('nb-dstars-'+dayKey(),0);
+const weekStars=()=>weekDays().reduce((n,d)=>n+store.get('nb-dstars-'+d,0),0);
+const chestKey=()=>'nb-chest-'+weekDays()[0];
+// Called when a Daily level is cleared. Saves a new best for today and opens the chest at 15.
+function dailyStars(cleared){
+  const n=starsFor(cleared),had=todayStars();if(n<=had)return;
+  store.set('nb-dstars-'+dayKey(),n);
+  news(`${starStr(n)} Daily star${n>had+1?'s':''}!\n${weekStars()} of ${CHEST_STARS} this week`,true);
+  if(weekStars()>=CHEST_STARS&&!store.get(chestKey(),false)){
+    store.set(chestKey(),true);addCoins(CHEST_COINS);track('daily_chest',{});
+    news(`🎁 Weekly chest opened!\n+${CHEST_COINS} coins`,true);
+  }
+}
+// The week as a row of days: stars per day, today marked.
+function weekStrip(){
+  const today=dayKey();
+  return `<div class="week">${weekDays().map((d,i)=>{const n=store.get('nb-dstars-'+d,0);
+    return `<div class="wd${d===today?' today':''}${d>today?' later':''}"><small>${'MTWTFSS'[i]}</small><span>${n?'⭐'.repeat(n):'·'}</span></div>`}).join('')}</div>
+    <p class="weeknote">${store.get(chestKey(),false)?`🎁 This week's chest is open. A new week starts Monday.`:`<b>${weekStars()} of ${CHEST_STARS} ⭐</b> this week. ${CHEST_STARS} opens the 🎁 chest (${CHEST_COINS} 🪙).`}</p>`;
+}
 
 // ---------- state ----------
 let mode="endless", level=1, levelBase=0, score=0, best=0, T=10, board=Array(N*N).fill(null), tray=[null,null,null],
@@ -959,6 +990,7 @@ function seedStarters(n){
 function levelUp(){
   busy=true;erasing=false;lockMovable();clearPending(true);track('level_complete',{mode,level});
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
+  if(mode==='daily')dailyStars(level);
   toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
   left.forEach((k,n)=>setTimeout(()=>{const el=boardEl.children[k].firstElementChild;el&&el.classList.add('pop')},300+n*40));
@@ -1010,7 +1042,7 @@ function gameOver(){
   store.set('nb-save',null);
   const sq=['🟥','🟧','🟨','🟩','🟦','🟪'];
   const share=[
-    mode==='daily'?`Sumburst Daily #${dailyNo()}`:'Sumburst',
+    mode==='daily'?`Sumburst Daily run #${dailyNo()} ${starStr(starsFor(level-1))}`:'Sumburst',
     `⭐ Level ${level} · ${score.toLocaleString()} pts · ${blastsGame} blast${blastsGame===1?'':'s'}`,
     bestRun?`Best sum: ${bestRun.join(' + ')} ${bestRun.map((_,i)=>sq[i%6]).join('')}`:'',
     'Play with me!','playbrightharbor.com',
@@ -1028,9 +1060,9 @@ function gameOver(){
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
-    ${mode==='daily'?`<p>New Daily Board in ${nextDaily}</p>`:''}
+    ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
-      ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily Board</button>'}</div>
+      ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily run</button>'}</div>
     ${!continued?`<div class="keep"><p>Or keep this board going (optional):</p><div class="row"><button class="btn ghost" id="cont-ad">Watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Use ${CONTINUE_COST} 🪙</button></div></div>`:''}
     ${promoForGameOver(!continued)?promoCard('over'):''}</div>`;
   $('over').hidden=false;
@@ -1254,18 +1286,28 @@ function showSums(){
       return `<h4>Make ${t} · ${list.length} of ${ways(t)} ways${list.length>=ways(t)?' ✓':''}</h4><div class="chips">${list.map(v=>`<span class="chip${v.length>=4?' long':''}">${v.join(' + ')}</span>`).join('')}</div>`}).join('')
       :'<p>Sums you blast show up here.</p>'}`);
 }
+function dailySheet(){
+  const fin=store.get('nb-final-daily-'+dayKey(),0),inPlay=store.get('nb-save-daily',null),going=inPlay&&inPlay.day===dayKey();
+  return `<h3>📅 Daily run #${dailyNo()}</h3><p>Everyone gets the same pieces today. It ends when no piece fits. Earn a ⭐ for clearing level 1, level 3 and level 5.</p>
+    ${fin?`<p class="dstars">Today's best: <b>${fin.toLocaleString()}</b> ${starStr(todayStars())}</p>`:''}${weekStrip()}
+    <p>Your Endless game is saved, so you can come back to it.</p>
+    <div class="btns"><button class="btn" id="go-mode">${going?'Continue today\'s run':fin?'Try today again':'Play today\'s run'}</button>${fin&&!going?'<button class="btn plain" id="d-share">Share today\'s result</button>':''}</div>`;
+}
 function showModeSwitch(){
   const toDaily=mode==='endless',saved=store.get('nb-save-endless',null);
   openTabSheet('mode',toDaily
-    ?`<h3>📅 Daily Board #${dailyNo()}</h3><p>Everyone gets the same pieces today. Come back tomorrow for a new one.</p><p>Your Endless game is saved, so you can come back to it.</p><div class="btns"><button class="btn" id="go-mode">Play today's board</button></div>`
-    :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily Board is saved too.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
+    ?dailySheet()
+    :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily run is saved too.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
   $('go-mode').onclick=()=>switchMode(toDaily?'daily':'endless');
+  if($('d-share'))$('d-share').onclick=()=>{
+    const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${store.get('nb-final-daily-'+dayKey(),0).toLocaleString()} pts\nPlay with me!\nplaybrightharbor.com`;
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{$('d-share').textContent='Copied! Paste it in a text'},()=>{$('d-share').textContent='Copy failed'})};
 }
 function switchMode(m){
   if(busy)return;
   clearPending();if(!over)saveGame();closeSheet();
   if(!resumeGame('nb-save-'+m,false))newGame(m);
-  news(m==='daily'?`Daily Board #${dailyNo()}`:`Endless · Level ${level}`);
+  news(m==='daily'?`Daily run #${dailyNo()}`:`Endless · Level ${level}`);
 }
 function showHelp(){
   openTabSheet('help',document.getElementById('help-tpl').innerHTML);
@@ -1316,7 +1358,7 @@ $('coinpill').onclick=openShop;
 // The shared studio module (cloudsave.js) handles sign-in and upload. Each game gives it this hook.
 // The save is every nb-* key except the device-only ones. Merging never loses anything earned on
 // either phone: best scores, unlocks and purchases win, and sum books are combined.
-const OLD_DAY=/^nb-(best-daily|final-daily)-(\d{4}-\d\d-\d\d)$/;
+const OLD_DAY=/^nb-(best-daily|final-daily|dstars|chest)-(\d{4}-\d\d-\d\d)$/;
 function cloudSnapshot(){
   const out={},cutoff=dayKey(-7);
   for(let i=0;i<localStorage.length;i++){
@@ -1335,8 +1377,8 @@ function betterSave(a,b){  // the further-along game of two saves
 }
 function mergeKey(k,a,b){  // a = this phone, b = cloud
   if(a==null)return b;if(b==null)return a;
-  if(k==='nb-coins'||k==='nb-best-endless'||/^nb-(best-daily|final)-/.test(k))return Math.max(+a||0,+b||0);
-  if(/^nb-(noads|bought-coins|tutorial-done|special-seen|rotate-seen|book-done-|book-half-|level-ms-)/.test(k))return !!(a||b);
+  if(k==='nb-coins'||k==='nb-best-endless'||/^nb-(best-daily|final|dstars)-/.test(k))return Math.max(+a||0,+b||0);
+  if(/^nb-(noads|bought-coins|tutorial-done|special-seen|rotate-seen|book-done-|book-half-|level-ms-|chest-)/.test(k))return !!(a||b);
   if(k==='nb-streak-saved')return a>b?a:b;
   if(k==='nb-book'){const m={};new Set([...Object.keys(a),...Object.keys(b)]).forEach(t=>m[t]=[...new Set([...(a[t]||[]),...(b[t]||[])])]);return m}
   if(k==='nb-stats'){
@@ -1536,7 +1578,7 @@ function fitScreen(){
   const last=[...app.children].filter(el=>el.offsetParent).pop();
   const used=last.getBoundingClientRect().bottom+parseFloat(getComputedStyle(last).marginBottom)+scrollY+parseFloat(getComputedStyle(document.body).paddingBottom);
   const w=Math.floor(innerHeight-(used-wrap.offsetHeight)-4);
-  const width=Math.max(220,Math.min(app.clientWidth,w));
+  const width=Math.max(innerHeight<600?180:220,Math.min(app.clientWidth,w));
   if(Math.abs(width-wrap.offsetWidth)>1){wrap.style.width=width+'px';renderTray()}
 }
 addEventListener('resize',()=>{if(!drag){fitScreen();renderTray()}});
@@ -1545,13 +1587,13 @@ if(window.ResizeObserver){const ro=new ResizeObserver(()=>fitScreen());const app
 // ---------- start ----------
 buildBoard();renderSound();
 if(!store.get('nb-tutorial-done',false))startTutorial();
-else if(!resumeGame())newGame('endless');
+else if(!resumeGame()&&!resumeGame('nb-save-endless',false))newGame('endless');  // after a Daily game over, go back to the saved Endless run
 checkStreakAtRisk();
 if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple is set up for Sumburst (App.entitlements)
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp()};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver()};
 })();
 </script>
 
