@@ -202,8 +202,11 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   #chain { grid-area: 1 / 2; font-size: 0.72rem; margin-top: 0; min-height: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #score { grid-area: 2 / 1 / 3 / 3; }
   #level { grid-area: 3 / 1 / 4 / 3; }
-  .hint { font-size: 0.85rem; line-height: 1.25; }
-  .hint.basic { display: none; }
+  /* The hint floats over the score block for the few moves it shows, so the board never jumps. */
+  .app { position: relative; }
+  .hint { font-size: 0.85rem; line-height: 1.25; position: absolute; left: 0; right: 0; top: var(--hint-top, 40px); z-index: 3;
+    min-height: var(--hint-h, 56px); box-sizing: border-box; padding-top: 4px; background: var(--bg); }
+  .hint:empty, .hint.basic { display: none; }
   .tray, .tray .slot { min-height: calc(var(--cell) * 0.72 * 3 + 6px); }
   .tray .piece .pc { width: calc(var(--cell) * 0.72); height: calc(var(--cell) * 0.72); }
   .tray .piece .pc .tile { font-size: calc(var(--cell) * 0.72 * 0.72); }
@@ -566,12 +569,24 @@ function helpScore(p) {   // the longest word this piece can make anywhere on th
   return best;
 }
 function helpTray(t) {
-  if (tut || mode === "daily" || !(rng() < (HELP_CHANCE[level] || 0))) return t;
-  const have = Math.max(...t.map(p => p.used ? 0 : helpScore(p)));
-  if (have >= HELP_AIM[level]) return t;
-  let bestP = null, bestS = have;
-  for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } }
-  if (bestP) t[Math.floor(rng() * 3)] = bestP;
+  if (tut || mode === "daily") return t;
+  if (rng() < (HELP_CHANCE[level] || 0)) {
+    const have = Math.max(...t.map(p => p.used ? 0 : helpScore(p)));
+    if (have < HELP_AIM[level]) {
+      let bestP = null, bestS = have;
+      for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } }
+      if (bestP) t[Math.floor(rng() * 3)] = bestP;
+    }
+  }
+  return bombLesson(t);
+}
+// From level 2 in Endless, until a player has seen a bomb word glow: a piece that makes a word right away
+// gets a bomb, so everyone meets the red rings (and the bomb hint) early instead of waiting on luck.
+function bombLesson(t) {
+  if (level < 2 || bombSeen || t.some(q => !q.used && q.specials?.includes("bomb"))) return t;
+  let p = t.find(q => !q.used && helpScore(q) >= 3);
+  if (!p) { p = extendPieces()[0]; const i = t.findIndex(q => !q.used); if (!p || i < 0) return t; t[i] = p; }
+  p.specials = p.cells.map((_, k) => k === 0 ? "bomb" : null);
   return t;
 }
 const dealTray = () => helpTray([makePiece(), makePiece(), makePiece()]);
@@ -980,6 +995,9 @@ function fitScreen() {
 }
 function sizeCells() {
   fitScreen();
+  const sc = document.querySelector(".scores");
+  document.documentElement.style.setProperty("--hint-top", sc.offsetTop + "px");
+  document.documentElement.style.setProperty("--hint-h", sc.offsetHeight + "px");
   const a = cellEls[0].getBoundingClientRect();
   document.documentElement.style.setProperty("--cell", a.width + "px");
 }
@@ -1714,7 +1732,7 @@ let chain = 0, chainMoves = 0;
 const chainMult = () => 1 + 0.5 * chain;
 function renderChain() {
   document.getElementById("chain").textContent = chain && !tut
-    ? `🔗 Chain x${chainMult()} · ${chainMoves ? `${chainMoves} move${chainMoves === 1 ? "" : "s"} left` : "score now"}` : "";
+    ? `🔗 Chain x${chainMult()} · ${chainMoves ? `${chainMoves} move${chainMoves === 1 ? "" : "s"} left` : "tap a word now"}` : "";
 }
 function keepPlaying() {
   track("continue_used", { level });
@@ -1805,7 +1823,8 @@ function startDrag(e, i, el, fromBoard = false, grab = null) {
   g.querySelectorAll(".tile sub").forEach(s => s.remove());
   document.body.appendChild(g);
   if (el) el.classList.add("dragging");
-  const lift = e.pointerType === "mouse" ? 0 : 70;
+  // On touch, lift the piece about 1.75 letters above the finger so it isn't hidden (70px at 40px letters).
+  const lift = e.pointerType === "mouse" ? 0 : Math.round(1.75 * cellEls[0].getBoundingClientRect().width);
   // Keep the tile you grabbed under your finger, so the piece lands where you aim it.
   const [ph, pw] = pieceDims(p);
   if (!grab && el) {
@@ -1831,8 +1850,9 @@ function moveDrag(e) {
   const ok = fits(drag.p, r0, c0) && (!tut || (r0 === LESSONS[tut.step].at[0] && c0 === LESSONS[tut.step].at[1]));
   const t = ok ? [r0, c0] : null;
   // Remember whether the piece is over the board, so a drop that doesn't fit can say so.
-  const bb = boardEl.getBoundingClientRect(), cx = x + gr.width / 2, cy = y + gr.height / 2;
-  drag.overBoard = cx > bb.left && cx < bb.right && cy > bb.top && cy < bb.bottom;
+  // Judge by the finger (and the lifted piece): a long piece hanging off the edge still counts.
+  const bb = boardEl.getBoundingClientRect(), over = (px, py) => px > bb.left && px < bb.right && py > bb.top && py < bb.bottom;
+  drag.overBoard = over(e.clientX, e.clientY) || over(x + gr.width / 2, y + gr.height / 2);
   if (drag.drawn && String(drag.target) === String(t)) return;
   drag.drawn = true; showPreview(t);
 }
