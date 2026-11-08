@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast 28214ed (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast b2f73ae (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast 28214ed (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast b2f73ae (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,6 +81,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:4px;padding:6px;background:var(--board);border-radius:14px;touch-action:none;aspect-ratio:1/1;width:100%}
 .cell{min-width:0;min-height:0;border-radius:7px;background:var(--slot);position:relative;display:flex;align-items:center;justify-content:center}
 /* Where the piece will land: its own tiles with a bright white frame, clear even under the dragged piece. */
+.cell.ghost.hintg{outline:3px dashed #fff;box-shadow:none}.cell.ghost.hintg>*{opacity:.5}
 .cell.ghost{background:var(--slot-hi);outline:3px solid #fff;outline-offset:-1px;box-shadow:0 0 10px rgba(255,255,255,.7)}
 .cell.target-cell{animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{50%{background:var(--slot-hi);box-shadow:0 0 0 3px var(--gold) inset}}
@@ -298,6 +299,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily run</b> gives everyone the same pieces today and ends when no piece fits. Clear level 1, 3 and 5 for up to 3 ⭐; 15 ⭐ in a week opens a 🎁 coin chest. Switching between them keeps your place in each.</li>
     </ul>
     <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
+    <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
@@ -434,6 +436,7 @@ const newTray=()=>{
     const dir=rng()<0.5?'h':'v',cell=(k,val)=>({r:dir==='v'?k:0,c:dir==='h'?k:0,t:{v:val,star:false,bomb:false}});
     tray[1]={long:true,cells:[cell(0,v[0]),cell(1,v[1]),cell(2,v[2])]};
     tray[2]={long:true,cells:[cell(0,v[3]),cell(1,v[4])]};
+    if(!store.get('nb-longsum-tip',false))longSumTip();   // the tip comes before its payoff (Nikola round 7)
   }
   // Every game meets its first ⭐ star and its first 💣 bomb in its first tray of level 3
   // (specials: 1 = a star has been dealt, 2 = a bomb has). After that they stay random.
@@ -754,7 +757,7 @@ function renderBoard(pv){
   const cells=boardEl.children;
   for(let i=0;i<N*N;i++){
     const el=cells[i],t=board[i];let cls='cell',html=tileHTML(t);
-    if(pv&&pv.ghost.has(i)){html=tileHTML(pv.tiles.get(i));cls+=' ghost'}
+    if(pv&&pv.ghost.has(i)){html=tileHTML(pv.tiles.get(i));cls+=' ghost'+(pv.hint?' hintg':'')}
     if(i===tutCell()&&!t&&!(pv&&pv.ghost.has(i)))cls+=' target-cell';
     if(erasing&&t)cls+=' erasable';
     if(t&&!erasing&&!(pv&&pv.ghost.has(i))&&movable&&movable.keys.includes(i))cls+=' movable';
@@ -776,7 +779,8 @@ function renderTray(){
   tray.forEach((p,i)=>{
     const s=document.createElement('div');s.className='slot';s.dataset.i=i;trayEl.appendChild(s);
     if(!p){s.classList.add('used');return}
-    if(!canFit(p))s.classList.add('cant');
+    if(!canFit(p)){s.classList.add('cant');
+      if(!tut&&!store.get('nb-cant-seen',false)&&tray.some(q=>q&&canFit(q))){store.set('nb-cant-seen',true);news('Faded pieces don\'t fit anywhere yet.\nUse the others first.')}}
     const {rows,cols}=pieceSize(p),box=s.getBoundingClientRect();
     const size=Math.max(16,Math.min(32,Math.floor((Math.min(box.width,box.height)-16)/Math.max(rows,cols,2))-3));
     s.appendChild(pieceEl(p,size,'piece'));
@@ -800,6 +804,7 @@ function renderHUD(){
 }
 function renderAll(){renderBoard();renderTray();renderHUD();renderCoins();renderStreak()}
 
+let endedByChoice=false;
 let specialSeen=store.get('nb-special-seen',false), justTutored=false, levelStartHint=false, rotateHintNow=false;
 function setHint(){
   const h=$('hint');h.classList.toggle('tut',!!tut);
@@ -822,6 +827,13 @@ function setHint(){
   else if(movable&&moveHintNow)h.innerHTML='Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.';
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
   else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
+  // A nearly full board with no sum to make: offer to end the run instead of spending tools one by one (Muse round 7).
+  if(endRunOffer()){h.insertAdjacentHTML('beforeend',' <button type="button" class="tut-skip" id="end-run">End run</button>');$('end-run').onclick=confirmEndRun}
+}
+const endRunOffer=()=>!tut&&!over&&!busy&&board.filter(Boolean).length>=N*N*3/4&&!canBlast();
+function confirmEndRun(){
+  openSheet(`<h3>End this run?</h3><p>Your score of <b>${score.toLocaleString()}</b> counts${mode==='daily'?` and your Daily stars stay`:''}.</p><div class="btns"><button class="btn" id="er-yes">End run</button><button class="btn plain" id="er-no">Keep playing</button></div>`);
+  $('er-yes').onclick=()=>{closeSheet();endedByChoice=true;track('run_ended',{mode,level});gameOver()};$('er-no').onclick=closeSheet;
 }
 
 // ---------- dragging ----------
@@ -954,7 +966,7 @@ function blast(){
   const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('  &  ');
   // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
   // A quest finished by this same blast is named too, so two Erasers from one drop add up.
-  const questGot=goalsDone.filter(g=>!g.full&&g.reward!=='coins').map(g=>'quest '+g.reward[0].toUpperCase()+g.reward.slice(1));
+  const questGot=goalsDone.filter(g=>!g.full).map(g=>g.reward==='coins'?'quest +15 🪙':'quest '+g.reward[0].toUpperCase()+g.reward.slice(1));
   const got=[earned&&'Eraser',shuffleEarned&&'Shuffle',rotEarned&&'Rotate',...questGot].filter(Boolean).join(' + ');
   // How the points add up: block bonus, chain and bomb, so every number can be traced.
   const how=[k===1&&mult(longest)>1&&`${longest} blocks x${mult(longest)}`,chainX>1&&`chain x${chainX}`,extra.size&&`💣 +3 each`].filter(Boolean).join(' · ');
@@ -974,13 +986,15 @@ function blast(){
   }
   if(rotEarned||goalsDone.some(g=>g.reward==='rotate'))rotateIntro();
   if(!tut&&longest>=5)store.set('nb-five-done',true);
-  if(earned&&!store.get('nb-longsum-tip',false))longSumTip();
+  if((earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))&&!store.get('nb-longsum-tip',false))longSumTip();
   // At most one extra message per blast so players aren't left reading a long line of them:
   // the most important one, plus the headline of the next. Every reward is still given.
   if(extras.length){
     const rank=([t])=>/🪙/.test(t)?0:/Quest done/.test(t)?1:/streak/i.test(t)?2:/New way/.test(t)?4:3;
-    const top=extras.slice().sort((a,b)=>rank(a)-rank(b)).slice(0,2);
-    news(top[0][0]+(top[1]?'\n'+top[1][0].split('\n')[0]:''),top.some(([,b])=>b));
+    // Every coin credit is shown in full, so coins never arrive silently (Muse round 7).
+    const sorted=extras.slice().sort((a,b)=>rank(a)-rank(b)),cash=sorted.filter(([t])=>/🪙/.test(t)),rest=sorted.filter(([t])=>!/🪙/.test(t));
+    const top=cash.length?[...cash,...rest.slice(0,1)]:rest.slice(0,2);
+    news(top.map((x,i)=>i<Math.max(1,cash.length)?x[0]:x[0].split('\n')[0]).join('\n'),top.some(([,b])=>b));
   }
   // Effects
   busy=true;renderHUD();
@@ -1093,7 +1107,7 @@ function gameOver(){
   const sq=['🟥','🟧','🟨','🟩','🟦','🟪'];
   const share=[
     mode==='daily'?`Sumburst Daily run #${dailyNo()} ${starStr(starsFor(level-1))}`:'Sumburst',
-    `⭐ Level ${level} · ${score.toLocaleString()} pts · ${blastsGame} blast${blastsGame===1?'':'s'}`,
+    `Level ${level} · ${score.toLocaleString()} pts · ${blastsGame} blast${blastsGame===1?'':'s'}`,
     bestRun?`Best sum: ${bestRun.join(' + ')} ${bestRun.map((_,i)=>sq[i%6]).join('')}`:'',
     'Play with me!','playbrightharbor.com',
   ].filter(Boolean).join('\n');
@@ -1107,16 +1121,17 @@ function gameOver(){
   const nextDaily=mins>=60?`${Math.floor(mins/60)}h ${mins%60}m`:`${mins}m`;
   $('over').innerHTML=`<div>
     <h2>${newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):close?'So close!':'Board full'}</h2>
-    <p class="why">${board.some(x=>!x)?'No piece fits the gaps left':'No room left for a piece'}</p>
+    <p class="why">${endedByChoice?'You ended the run':board.some(x=>!x)?'No piece fits the gaps left':'No room left for a piece'}</p>
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
-    ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p><p class="why next">${(n=>n?`Next star: clear level ${n}`:'All 3 stars this run!')(STAR_LEVELS.find(l=>l>level-1))}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}
+    ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p><p class="why next">${nextStar(level)}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
       ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily run</button>'}</div>
     ${!continued?`<div class="keep"><p>Or keep this board going (optional):</p><div class="row"><button class="btn ghost" id="cont-ad">Watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Use ${CONTINUE_COST} 🪙</button></div></div>`:''}
     ${promoForGameOver(!continued)?promoCard('over'):''}</div>`;
   $('over').hidden=false;
+  endedByChoice=false;
   $('again').onclick=()=>newGame(mode);
   if(!continued){$('cont-ad').onclick=()=>watchAd(keepPlaying);$('cont-coins').onclick=()=>{if(spendCoins(CONTINUE_COST))keepPlaying()}}
   if($('todaybtn'))$('todaybtn').onclick=()=>switchMode('daily');
@@ -1337,10 +1352,11 @@ function showSums(){
       return `<h4>Make ${t} · ${list.length} of ${ways(t)} ways${list.length>=ways(t)?' ✓':''}</h4><div class="chips">${list.map(v=>`<span class="chip${v.length>=4?' long':''}">${v.join(' + ')}</span>`).join('')}</div>`}).join('')
       :'<p>Sums you blast show up here.</p>'}`);
 }
+const nextStar=lv=>(n=>n?`Next star: clear level ${n}`:'All 3 stars this run!')(STAR_LEVELS.find(l=>l>lv-1));
 function dailySheet(){
   const fin=store.get('nb-final-daily-'+dayKey(),0),inPlay=store.get('nb-save-daily',null),going=inPlay&&inPlay.day===dayKey();
   return `<h3>📅 Daily run #${dailyNo()}</h3><p>Everyone gets the same pieces today. It ends when no piece fits. Earn a ⭐ for clearing level 1, level 3 and level 5.</p>
-    ${fin?`<p class="dstars">Today's best: <b>${fin.toLocaleString()}</b> ${starStr(todayStars())}</p>`:''}${weekStrip()}
+    ${fin?`<p class="dstars">Today's best: <b>${fin.toLocaleString()}</b> ${starStr(todayStars())}</p>`:''}${going?`<p class="dstars">This run: level ${inPlay.level} ${starStr(starsFor(inPlay.level-1))} · <b>${nextStar(inPlay.level)}</b></p>`:''}${weekStrip()}
     <p>Your Endless game is saved, so you can come back to it.</p>
     <div class="btns"><button class="btn" id="go-mode">${going?'Continue today\'s run':fin?'Try today again':'Play today\'s run'}</button>${fin||todayStars()?'<button class="btn plain" id="d-share">Share today\'s result</button>':''}</div>`;
 }
@@ -1348,7 +1364,7 @@ function showModeSwitch(){
   const toDaily=mode==='endless',saved=store.get('nb-save-endless',null);
   openTabSheet('mode',toDaily
     ?dailySheet()
-    :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily run is saved too.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
+    :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily run is saved too${mode==='daily'&&!over?`: level ${level}, ${starStr(starsFor(level-1))}. <b>${nextStar(level)}</b>`:''}.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
   $('go-mode').onclick=()=>switchMode(toDaily?'daily':'endless');
   if($('d-share'))$('d-share').onclick=()=>{
     const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${(f=>f?f.toLocaleString()+' pts':'Run in progress')(store.get('nb-final-daily-'+dayKey(),0))}\nPlay with me!\nplaybrightharbor.com`;
@@ -1363,6 +1379,12 @@ function switchMode(m){
 function showHelp(){
   openTabSheet('help',document.getElementById('help-tpl').innerHTML);
   $('tut-replay').onclick=()=>{if(busy)return;closeSheet();startTutorial()};
+  // Reviewers on the website test pages can start over as a brand-new player. Never shown in the phone apps.
+  if(/(^|\.)playbrightharbor\.com$/.test(location.hostname)||/[?&]tester\b/.test(location.search)){
+    $('sheet').querySelector('.tester').hidden=false;
+    $('tester-reset').onclick=()=>{if(!confirm('Erase all Sumburst progress in this browser and start as a new player?'))return;
+      try{Object.keys(localStorage).filter(k=>k.startsWith('nb-')).forEach(k=>localStorage.removeItem(k))}catch(e){}location.reload()};
+  }
   if(promoOn()){$('sheet').querySelector('.helpbody').insertAdjacentHTML('beforebegin',promoCard('help'));wirePromo('help')}
   renderCloudBox();
 }
@@ -1507,7 +1529,7 @@ function newGame(m){
 const LESSONS=[
   {tiles:{27:4},cell:28,piece:6,hint:'<b>Lesson 1 of 5: make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
   // The whole touching group counts: a drop that makes 10 with one neighbour but touches more is too much.
-  {tiles:{33:5,35:7},cell:34,piece:5,after:'5 + 5 + 7 = 17. Too much,\nso nothing blasts.',
+  {tiles:{33:5,35:7},cell:34,piece:5,after:'Right! 5 + 5 + 7 = 17 is too much,\nso nothing blasts.',
     hint:'<b>Lesson 2 of 5: the whole group counts.</b> Drop the <b>5</b> between the 5 and the 7. All the touching blocks add up: 5 + 5 + 7 = 17, not 10. <b>Red</b> means too much.'},
   {tiles:{33:5,36:7},cell:34,piece:5,hint:'<b>Lesson 3 of 5: a gap splits groups.</b> Now there is a gap before the 7. Drop the <b>5</b> next to the other 5: 5 + 5 = 10 blasts!'},
   {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Lesson 4 of 5: longer sums.</b> Drag the <b>5</b> onto the end. 2 + 3 + 5 = 10 is worth double!'},
@@ -1592,7 +1614,7 @@ function longSumTip(){
     const v=[0,1,2,3,4].map(i=>Math.floor(T/5)+(i>=5-T%5?1:0));
     openSheet(`<h3>🧩 Build a long sum</h3><p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
       <p>Keep one row or column open and fill it with small numbers, like <b>${v.join(' + ')} = ${T}</b>.</p>
-      <p>4 blocks earn an <b>Eraser</b>. 5 blocks earn a <b>↻ Rotate</b>.</p><div class="btns"><button class="btn" id="ls-ok">Got it</button></div>`);
+      <p>4 blocks earn an <b>Eraser</b>. 5 blocks earn a <b>↻ Rotate</b>.</p>${tray.filter(p=>p&&p.long).length===2?`<p><b>Try it now:</b> the two straight pieces below add up to <b>${T}</b>.</p>`:''}<div class="btns"><button class="btn" id="ls-ok">Got it</button></div>`);
     $('ls-ok').onclick=closeSheet},900);
 }
 function rotateIntro(){
@@ -1625,7 +1647,7 @@ $('hintbtn').onclick=()=>{
   const ghost=new Set(),tiles=new Map(),glow=new Set();
   tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
   m.runs.forEach(run=>run.cells.forEach(k=>glow.add(k)));
-  renderBoard({ghost,tiles,glow,much:new Set()});
+  renderBoard({ghost,tiles,glow,much:new Set(),hint:true});
   document.querySelectorAll('.slot')[m.i]?.classList.add('hinted');
   hintTimer=setTimeout(clearHint,2600);
 };
