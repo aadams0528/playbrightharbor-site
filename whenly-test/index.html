@@ -96,7 +96,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .card.hinted::after{content:"💡";position:absolute;top:4px;left:calc(var(--plate-w,var(--card-h)) - 22px);font-size:15px}
 /* The reveal tilts each card but never turns it edge-on, so no card seems to vanish (Muse, round 3). */
 .card.flip{animation:flip .6s ease}
-.card.flip .year{animation:yearIn .35s ease-out}
+.card.flip .year{animation:yearIn .2s ease-out}
 @keyframes yearIn{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
 @keyframes flip{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
 .card.shake{animation:shake .45s ease}
@@ -114,6 +114,20 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .app:has(#play:not([hidden])){padding-bottom:96px}
   /* ...and slightly shorter cards, so the fifth card clears that bar on a 724px screen (Nikola, round 10). */
   :root{--card-h:72px}}
+/* Smaller phones (iPhone SE and below): tighter cards, gaps and header so all five cards clear the bar (Nikola and Cooper, round 11). */
+@media (max-height:680px){:root{--card-h:64px;--card-gap:10px}
+  .app{gap:10px;padding-top:8px}
+  .logo{font-size:26px}
+  .icon{width:36px;height:36px}
+  .tabs button{padding:7px}
+  .meta h1{font-size:18px}
+  .ctext{padding-block:4px}}
+@media (max-height:600px){:root{--card-h:52px;--card-gap:6px}
+  .app{gap:7px;padding-top:6px}
+  .tabs button{padding:5px}
+  .ctext{font-size:14.5px}}
+@media (max-height:600px) and (max-width:374px){:root{--card-h:58px}
+  .card .ctext{font-size:13.5px;padding-block:3px}}
 .btn{border:0;border-radius:14px;padding:15px 18px;font-weight:700;font-size:17px}
 .btn.primary{background:var(--accent);color:var(--accent-ink)}
 .btn.ghost{background:var(--paper);border:1px solid var(--line)}
@@ -280,7 +294,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
   </div>
   <section id="archive" hidden></section>
   <section id="expert" hidden></section>
-  <footer id="foot">Bright Harbor Games</footer>
+  <footer id="foot">Bright Harbor Games<span class="build"> · Whenly 1.0 test 13</span></footer>
 </div>
 
 <script>
@@ -817,21 +831,24 @@ async function crowdGet(n){
 }
 // For each neighboring pair in the true order: was it swapped in the order you locked in?
 function swapsOf(order){const t=sortIds(G.ids);return t.slice(0,-1).map((a,i)=>order.indexOf(a)>order.indexOf(t[i+1]))}
+// Your slips by card, not by position: a pair counts only if you really had the later card above the earlier one on some try.
+// Older saves kept slips by position, which can point at the wrong cards, so for them only a pair still swapped at the end is named (Muse, rounds 9-11).
+function mySlips(){const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order);return t.slice(0,-1).map((a,i)=>end[i]||!!(G.slipIds&&G.slipIds.includes(a+">"+t[i+1])))}
 async function showCrowd(){
   const el=$("#crowd");if(!el)return;
   // With too few players (or offline), still name your own slip, just without the crowd's numbers (Nikola, round 5).
-  const ownLine=()=>{const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=G.slips||end,i=[0,1,2,3].find(k=>slips[k]);if(i==null)return;
+  const ownLine=()=>{const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=mySlips(),i=[0,1,2,3].find(k=>slips[k]);if(i==null)return;
     const A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];el.innerHTML=end[i]?`You finished with <b>${B}</b> above <b>${A}</b>, but <b>${A}</b> came first.`:`On one try you had <b>${B}</b> above <b>${A}</b>, but you fixed it.`;el.hidden=false};
   if(G.kind==="practice")return ownLine();
   // Name your own slip right away; the crowd's numbers replace it only if they arrive (Nikola, round 7).
   ownLine();let c=null;try{c=await Promise.race([crowdGet(G.n),new Promise(r=>setTimeout(()=>r(null),4000))])}catch(e){}
   if($("#crowd")!==el)return;if(!c||c.plays<CROWD.min)return;
-  const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=G.slips||end,pct=i=>Math.round(100*c.s[i]/c.plays);
+  const t=sortIds(G.ids),end=swapsOf(G.finalOrder||G.order),slips=mySlips(),pct=i=>Math.round(100*c.s[i]/c.plays);
   // Talk about your own slip when there is one (the one most players also got wrong), otherwise the crowd's most common one.
   const mine=[0,1,2,3].filter(i=>slips[i]).sort((a,b)=>c.s[b]-c.s[a]);
   const i=mine.length?mine[0]:c.s.indexOf(Math.max(...c.s)),A=EVENTS[t[i]][2],B=EVENTS[t[i+1]][2];
   if(!mine.length&&pct(i)<10){el.innerHTML=`Most players got every pair right today.`;el.hidden=false;return}
-  el.innerHTML=mine.length?(end[i]?`You finished with <b>${B}</b> above <b>${A}</b>, and so did <b>${pct(i)}%</b> of players. <b>${A}</b> came first.`:`On one try you had <b>${B}</b> above <b>${A}</b>. <b>${pct(i)}%</b> of players finished that way, but you fixed it.`)
+  el.innerHTML=mine.length?(end[i]?`You finished with <b>${B}</b> above <b>${A}</b>, and so did <b>${pct(i)}%</b> of players. <b>${A}</b> came first.`:`On one try you had <b>${B}</b> above <b>${A}</b>, but you fixed it. <b>${pct(i)}%</b> of players finished that way.`)
     :`<b>${pct(i)}%</b> of players finished with <b>${A}</b> and <b>${B}</b> swapped. You got them right.`;
   el.hidden=false;
 }
@@ -1056,8 +1073,8 @@ function newTutorial(){
 function persist(){if(G.kind==="daily"||G.kind==="archive"){S.days[G.n]={...(S.days[G.n]||{}),g:G};save()}}
 
 // ---------- render ----------
-const list=$("#list");let cardEls={};const GAP=16;
-function cardH(){return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-h"))}
+const list=$("#list");let cardEls={};let GAP=16;
+function cardH(){GAP=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-gap"))||16;return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-h"))}
 function slotTop(i){return i*(cardH()+GAP)}
 function build(){sel=null;
   list.innerHTML="";cardEls={};
@@ -1223,6 +1240,7 @@ function check(){
   // One share row per try: 🟩 a neighbor pair in order, 🟥 reversed, as the check showed it.
   // Which true neighbor pairs you had reversed at any check, so the crowd line can talk about your own slip (Nikola, round 4).
   const sw=swapsOf(G.order);G.slips=(G.slips||sw.map(()=>false)).map((v,i)=>v||sw[i]);
+  {const t=sortIds(G.ids);G.slipIds=G.slipIds||[];sw.forEach((v,i)=>{const k=t[i]+">"+t[i+1];if(v&&!G.slipIds.includes(k))G.slipIds.push(k)})}
   G.rows=(G.rows||[]).concat(G.order.slice(0,-1).map((a,i)=>yr(a)<yr(G.order[i+1])?"🟩":"🟥").join(""));
   if(perfect||G.attempt>=TRIES||(G.kind==="tutorial"&&G.attempt>1)){finish();return}
   // record what this check tells you about each neighboring pair
@@ -1257,9 +1275,9 @@ function finish(){
   if(G.gaveUp){const t=sortIds(G.order);list.classList.add("assemble");
     t.forEach((id,i)=>cardEls[id].style.transitionDelay=(i*.15)+"s");G.order=t;layout();lead=t.length*150+700;
     setTimeout(()=>{list.classList.remove("assemble");t.forEach(id=>cardEls[id].style.transitionDelay="")},lead)}
-  G.order.forEach((id,i)=>{const el=cardEls[id];setTimeout(()=>{el.classList.add("done","flip",mark[id]);buzz(12)},lead+i*160)});
+  G.order.forEach((id,i)=>{const el=cardEls[id];setTimeout(()=>{el.classList.add("done","flip",mark[id]);buzz(12)},lead+i*60)});
   $("#play").hidden=true;
-  setTimeout(()=>{G.order=t;layout();if(G.score>=90||G.milestone)fireworks();showResult()},lead+G.order.length*160+450);
+  setTimeout(()=>{G.order=t;layout();if(G.score>=90||G.milestone)fireworks();showResult()},lead+G.order.length*60+450);
   persist();
 }
 function recordDaily(){
