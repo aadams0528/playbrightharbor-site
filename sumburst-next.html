@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast 92fc9b3 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 1ad6260 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -229,6 +229,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .foot{text-align:center;font-size:.7rem;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition:none!important}}
 .week{display:flex;justify-content:center;gap:4px;margin:8px 0 4px}.wd{min-width:38px;padding:4px 2px;border-radius:8px;background:var(--panel);border:1px solid var(--line);text-align:center;font-size:.7rem;line-height:1.3}.wd small{display:block;color:var(--muted);font-weight:700}.wd.today{border:2px solid var(--gold)}.wd.later{opacity:.45}
+.chestbar{display:flex;align-items:center;gap:8px;margin:8px 0 2px}.chestbar .cb{flex:1;height:12px;border-radius:7px;background:var(--line);overflow:hidden}
+.chestbar .cb i{display:block;height:100%;background:linear-gradient(90deg,#f5b301,#ff8a3d);border-radius:7px}
+.chestbar span{font-size:1.8rem;line-height:1}.chestbar b{font-variant-numeric:tabular-nums;font-size:.85rem;color:var(--muted)}
+.chestbar.open span{animation:newt 1.2s ease-out}
 .weeknote{font-size:.85rem;margin:2px 0 8px}.dstars{font-size:1.05rem}
 /* Very short screens (an iPhone SE browser with its toolbars, ~550px): a smaller target, hint and tray so nothing scrolls. */
 @media (max-height:600px){.slot{height:60px}.target b{font-size:2.2rem}#hint{font-size:.78rem;line-height:1.2}.tools{margin-top:4px}}
@@ -339,12 +343,19 @@ function dailyStars(cleared){
     news(`🎁 Weekly chest opened!\n+${CHEST_COINS} coins`,true);
   }
 }
+// When the week's stars start over (Monday, midnight local time).
+function weekReset(){
+  const m=new Date();m.setHours(0,0,0,0);m.setDate(m.getDate()+7+weekStart());
+  const h=Math.max(1,Math.round((m-Date.now())/3600000)),d=Math.floor(h/24);
+  return `New week Monday (in ${d?d+'d ':''}${h%24}h).`;
+}
 // The week as a row of days: stars per day, today marked.
 function weekStrip(){
   const today=dayKey();
   return `<div class="week">${weekDays().map((d,i)=>{const n=store.get('nb-dstars-'+d,0);
     return `<div class="wd${d===today?' today':''}${d>today?' later':''}"><small>${'MTWTFSS'[i]}</small><span>${n?'⭐'.repeat(n):'·'}</span></div>`}).join('')}</div>
-    <p class="weeknote">${store.get(chestKey(),false)?`🎁 This week's chest is open. A new week starts Monday.`:`<b>${weekStars()} of ${CHEST_STARS} ⭐</b> this week. ${CHEST_STARS} opens the 🎁 chest (${CHEST_COINS} 🪙).`}</p>`;
+    <div class="chestbar${store.get(chestKey(),false)?' open':''}"><div class="cb"><i style="width:${Math.min(100,weekStars()/CHEST_STARS*100)}%"></i></div><span>${store.get(chestKey(),false)?'🎉':'🎁'}</span><b>${Math.min(weekStars(),CHEST_STARS)}/${CHEST_STARS}</b></div>
+    <p class="weeknote">${store.get(chestKey(),false)?`🎁 This week's chest is open.`:`<b>${weekStars()} of ${CHEST_STARS} ⭐</b> this week. ${CHEST_STARS} opens the 🎁 chest (${CHEST_COINS} 🪙).`} ${weekReset()}</p>`;
 }
 
 // ---------- state ----------
@@ -1087,7 +1098,7 @@ function gameOver(){
     <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
-    ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}
+    ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p><p class="why">${(n=>n?`Next star: clear level ${n}`:'All 3 stars this run!')(STAR_LEVELS.find(l=>l>level-1))}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
       ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily run</button>'}</div>
     ${!continued?`<div class="keep"><p>Or keep this board going (optional):</p><div class="row"><button class="btn ghost" id="cont-ad">Watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Use ${CONTINUE_COST} 🪙</button></div></div>`:''}
@@ -1318,7 +1329,7 @@ function dailySheet(){
   return `<h3>📅 Daily run #${dailyNo()}</h3><p>Everyone gets the same pieces today. It ends when no piece fits. Earn a ⭐ for clearing level 1, level 3 and level 5.</p>
     ${fin?`<p class="dstars">Today's best: <b>${fin.toLocaleString()}</b> ${starStr(todayStars())}</p>`:''}${weekStrip()}
     <p>Your Endless game is saved, so you can come back to it.</p>
-    <div class="btns"><button class="btn" id="go-mode">${going?'Continue today\'s run':fin?'Try today again':'Play today\'s run'}</button>${fin&&!going?'<button class="btn plain" id="d-share">Share today\'s result</button>':''}</div>`;
+    <div class="btns"><button class="btn" id="go-mode">${going?'Continue today\'s run':fin?'Try today again':'Play today\'s run'}</button>${fin||todayStars()?'<button class="btn plain" id="d-share">Share today\'s result</button>':''}</div>`;
 }
 function showModeSwitch(){
   const toDaily=mode==='endless',saved=store.get('nb-save-endless',null);
@@ -1327,7 +1338,7 @@ function showModeSwitch(){
     :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily run is saved too.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
   $('go-mode').onclick=()=>switchMode(toDaily?'daily':'endless');
   if($('d-share'))$('d-share').onclick=()=>{
-    const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${store.get('nb-final-daily-'+dayKey(),0).toLocaleString()} pts\nPlay with me!\nplaybrightharbor.com`;
+    const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${(f=>f?f.toLocaleString()+' pts':'Run in progress')(store.get('nb-final-daily-'+dayKey(),0))}\nPlay with me!\nplaybrightharbor.com`;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{$('d-share').textContent='Copied! Paste it in a text'},()=>{$('d-share').textContent='Copy failed'})};
 }
 function switchMode(m){
@@ -1490,6 +1501,7 @@ const LESSONS=[
   {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Lesson 5 of 5: combos.</b> Drop the <b>4</b> where it finishes a sum across and down at once.'},
 ];
 function startTutorial(){
+  if(!tut)saveGame();  // a replay from Help keeps the game in progress; it comes back afterwards
   clearPending();closeSheet();$('over').hidden=true;
   mode='endless';level=1;levelBase=0;score=0;T=10;chain=0;erasers=0;shuffles=0;rotates=0;rotating=false;rotPaid=null;over=false;busy=false;erasing=false;movable=null;
   tut={step:0};loadLesson();
@@ -1507,8 +1519,16 @@ function nextLesson(){
 function endTutorial(skipped){
   track(skipped?'tutorial_skip':'tutorial_complete',skipped?{step:tut.step+1}:{});
   tut=null;store.set('nb-tutorial-done',true);
-  newGame('endless');
-  if(!skipped){
+  // After a replay, the saved Endless run picks up where it was instead of starting over.
+  const back=resumeGame('nb-save-endless',false);
+  if(!back)newGame('endless');
+  if(back&&!skipped){
+    setHint();SFX.big();
+    openSheet(`<h3>🎉 Tutorial done!</h3><p>Back to your game: <b>level ${level}</b>, make <b>${T}</b>.</p>
+      <div class="btns"><button class="btn" id="tut-go">Keep playing</button></div>`,true);
+    $('tut-go').onclick=closeSheet;
+  }
+  else if(!skipped){
     justTutored=true;setHint();SFX.big();fireworks();
     openSheet(`<h3>🎉 Tutorial done!</h3><p>That was practice. <b>Now the real game starts.</b></p>
       <p>Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.</p>
@@ -1622,7 +1642,7 @@ if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c}};
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k)};
 })();
 </script>
 
