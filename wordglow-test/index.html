@@ -381,7 +381,7 @@ button.pill { cursor: pointer; }
 @keyframes land { from { transform: scale(1.18); } }
 @media (prefers-reduced-motion: reduce) { .modal.dock .sheet, .tab.bump .ti { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .board-wrap.shake1, .board-wrap.shake2, .piece.deal, .cell.placed .tile { animation: none; } }
-@media (prefers-reduced-motion: reduce) { .cell.pop .tile, .toast, .defcard { animation-duration: 0.01s; } .cell.lit .tile, .board.erasing .tile, .cell.tut-spot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cell.pop .tile, .toast, .defcard { animation-duration: 0.01s; } .cell.lit .tile, .board.erasing .tile, .cell.tut-spot, .cell.blast { animation: none; } }
 </style>
 
 <div class="app">
@@ -752,6 +752,10 @@ function saveGame() {
 function resumeGame(key = SAVE_KEY, welcome = true) {
   const g = store.get(key, null);
   if (!g || g.v !== 1 || (g.mode === "daily" && g.day !== todayKey())) return false;
+  // A save in the wrong shape (cut short, or from a broken build) starts a fresh game instead of crashing.
+  const shapeOk = Array.isArray(g.board) && g.board.length === N && g.board.every(row => Array.isArray(row) && row.length === N)
+    && Array.isArray(g.tray) && Array.isArray(g.goals) && Array.isArray(g.found) && Number.isFinite(g.score) && Number.isFinite(g.level);
+  if (!shapeOk) return false;
   if (g.goals.some(x => !GOALS.find(d => d.id === x.id))) return false;
   dropRotGuide();
   ({ mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, continued, levelsSinceAd, goalCount, tray } = g);
@@ -900,19 +904,19 @@ function renderBoard() {
   }
   lit = scanWords(board);
   lit.forEach(w => w.cells.forEach(([r, c]) => cellEl(r, c).classList.add("lit")));
-  // While a word with a bomb glows, ring the squares around the bomb: scoring it blows those up too.
-  lit.forEach(w => w.cells.forEach(([r, c]) => {
-    if (board[r][c]?.special !== "bomb") return;
-    let hit = 0;
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-      const R = r + dr, C = c + dc;
-      if ((dr || dc) && R >= 0 && C >= 0 && R < N && C < N && !w.cells.some(([a, b]) => a === R && b === C)) {
-        cellEl(R, C).classList.add("blast");
-        if (board[R][C]) hit++;
-      }
-    }
-    if (hit) { cellEl(r, c).dataset.boom = `💥+${hit * 3}`; cellEl(r, c).classList.toggle("boom-below", r === 0); }   // same 3 points per block the score gives
-  }));
+  // While a word with a bomb glows, ring every square its tap would blow up, and show the BOOM points once
+  // per group on its first bomb. Uses the same group as scoring, so the preview always matches the payout.
+  const shown = new Set();
+  lit.forEach(w => {
+    if (shown.has(w) || !w.cells.some(([r, c]) => board[r][c]?.special === "bomb")) return;
+    const group = bombReach(touchGroup([w]));
+    group.forEach(g => shown.add(g));
+    const ring = blastCells(group);
+    ring.forEach(([R, C]) => cellEl(R, C).classList.add("blast"));
+    const hit = ring.filter(([R, C]) => board[R][C]).length;
+    const [br, bc] = group.flatMap(g => g.cells).find(([r, c]) => board[r][c]?.special === "bomb");
+    if (hit) { cellEl(br, bc).dataset.boom = `💥+${hit * 3}`; cellEl(br, bc).classList.toggle("boom-below", br === 0); }   // same 3 points per block the score gives
+  });
   movableCells().forEach(([r, c]) => cellEl(r, c).classList.add("movable"));
   tutSpot().forEach(([r, c]) => cellEl(r, c).classList.add("tut-spot"));
   // Hidden while the special-blocks intro is the hint above the board: it says the same thing.
@@ -1262,8 +1266,8 @@ const READ_MS = 2800;
 let pendingToasts = [];   // bonus messages still waiting their turn
 
 // Word definitions (from WordNet), loaded from defs.json next to the game. Missing file = no definitions.
-let DEFS = {};
-fetch("defs.json").then(r => r.ok ? r.json() : {}).then(d => DEFS = d).catch(() => {});
+let DEFS = {}, defsLoaded = false;
+const defsReady = fetch("defs.json").then(r => r.ok ? r.json() : {}).then(d => DEFS = d).catch(() => {}).finally(() => defsLoaded = true);
 // How uncommon each word is (00 = everyday, 99 = rarest), two digits per word in WORDS order.
 let RARITY = new Map();
 fetch("rarity.txt").then(r => r.ok ? r.text() : "").then(t => loadRarity(t)).catch(() => {});
@@ -1286,6 +1290,8 @@ function defText(w) {
 // over the board). With several new words, the card shows the longest; the rest are in the word book.
 // It stays until the player next touches the screen; that touch still goes through to the game.
 function showDefinitions(words) {
+  // A word scored before the meanings finish loading still gets its card, once they arrive.
+  if (!defsLoaded) { if (words.length) defsReady.then(() => showDefinitions(words)); return; }
   const items = words.map(w => [w, defText(w)]).filter(([, d]) => d);
   hideDefinitions();
   if (!items.length) return;
@@ -1355,9 +1361,17 @@ function put(p, r0, c0, moved = false) {
 
 // Tapping a glowing word scores it and clears its blocks. Bombs in the word also clear their neighbours.
 // Words that share letters cash in together as a combo: +50% for each extra word.
-function cashIn(group) {
-  if (!Array.isArray(group)) group = [group];
-  movable = null;
+// Every glowing word that touches the group, and any that touch those: if it glows together, it goes together.
+function touchGroup(group) {
+  const touches = (a, b) => a.cells.some(([r1, c1]) => b.cells.some(([r2, c2]) => Math.abs(r1 - r2) + Math.abs(c1 - c2) <= 1));
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const w of lit) if (!group.includes(w) && group.some(g => touches(g, w))) { group.push(w); grew = true; }
+  }
+  return group;
+}
+// A glowing word inside a bomb's blast scores along with it.
+function bombReach(group) {
   for (let grew = true; grew;) {
     grew = false;
     const reach = new Set();
@@ -1366,6 +1380,24 @@ function cashIn(group) {
     }));
     for (const w of lit) if (!group.includes(w) && w.cells.some(x => reach.has(x.join(",")))) { group.push(w); grew = true; }
   }
+  return group;
+}
+// The blocks a group's bombs blow up: around each bomb, not part of any scored word. Worth 3 points each.
+function blastCells(group) {
+  const inWord = new Set(group.flatMap(g => g.cells.map(x => x.join(","))));
+  const blast = new Map();
+  group.forEach(g => g.cells.filter(([r, c]) => board[r][c]?.special === "bomb").forEach(([r, c]) => {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const R = r + dr, C = c + dc, k = R + "," + C;
+      if (R >= 0 && C >= 0 && R < N && C < N && !inWord.has(k)) blast.set(k, [R, C]);
+    }
+  }));
+  return [...blast.values()];   // every square in reach, empty or not
+}
+function cashIn(group) {
+  if (!Array.isArray(group)) group = [group];
+  movable = null;
+  bombReach(group);
   const k = group.length, comboMult = 1 + 0.5 * (k - 1);
   const seen = new Set(), cells = [];
   group.forEach(g => g.cells.forEach(x => { const key = x.join(","); if (!seen.has(key)) { seen.add(key); cells.push(x); } }));
@@ -1394,16 +1426,8 @@ function cashIn(group) {
   if (tut) tut.phase = "cashed";
   const streakNews = tut ? null : markPlayed();   // the tutorial doesn't start your streak
 
-  // Blocks around any bomb in the word get blown up too, worth 3 points each.
-  const inWord = new Set(w.cells.map(x => x.join(",")));
-  const blast = new Map();
-  w.cells.filter(([r, c]) => board[r][c].special === "bomb").forEach(([r, c]) => {
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-      const R = r + dr, C = c + dc, k = R + "," + C;
-      if (R >= 0 && C >= 0 && R < N && C < N && board[R][C] && !inWord.has(k)) blast.set(k, [R, C]);
-    }
-  });
-  const extra = [...blast.values()];
+  // Blocks around any bomb in the group get blown up too, worth 3 points each (the same squares the preview rings).
+  const extra = blastCells(group).filter(([R, C]) => board[R][C]);
   score += extra.length * 3;
 
   const n = w.cells.length;
@@ -2077,13 +2101,7 @@ boardEl.addEventListener("click", e => {
     const mine = lit.filter(w => w.cells.some(([R, C]) => R === r && C === c)).sort((a, b) => b.s - a.s);
     if (mine.length) {
       // Pull in every glowing word that touches it, and any that touch those: if it glows together, it goes together.
-      const group = [mine[0]];
-      const touches = (a, b) => a.cells.some(([r1, c1]) => b.cells.some(([r2, c2]) => Math.abs(r1 - r2) + Math.abs(c1 - c2) <= 1));
-      for (let grew = true; grew;) {
-        grew = false;
-        for (const w of lit) if (!group.includes(w) && group.some(g => touches(g, w))) { group.push(w); grew = true; }
-      }
-      cashIn(group);
+      cashIn(touchGroup([mine[0]]));
     } else {
       const el = cellEl(r, c); el.classList.remove("nope"); void el.offsetWidth; el.classList.add("nope");
       setTimeout(() => el.classList.remove("nope"), 400);
