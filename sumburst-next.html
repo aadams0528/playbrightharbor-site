@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast b2f73ae (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 8710743 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast b2f73ae (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 8710743 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -932,7 +932,9 @@ function put(p,pos,moved){
   finishTurn();
 }
 // Blasts every sum the last drop finished. Bombs in a sum also clear the 8 blocks around them.
-function blast(){
+// cascade > 0: a sum that the previous blast completed by clearing blocks next to it goes off right away,
+// with the chain bonus (Alan 2026-11-08, round 7).
+function blast(cascade=0){
   const runs=findRuns(board);
   if(!runs.length)return false;
   const set=new Set();runs.forEach(r=>r.cells.forEach(k=>set.add(k)));
@@ -962,7 +964,7 @@ function blast(){
     while(toShuffle>=BLASTS_PER_SHUFFLE){toShuffle-=BLASTS_PER_SHUFFLE;if(shuffles<MAX_SHUFFLES){shuffles++;shuffleEarned=true}}
   }
   // Main message, then the extra news one at a time below it.
-  const praise=k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
+  const praise=cascade?'Cascade!':k>1?`Combo x${comboMult}!`:longest>=5?'Amazing!':longest===4?'Great!':longest===3?'Nice!':'';
   const label=valsList.map((v,i)=>v?v.join(' + '):runs[i].cells.length+' blocks').join('  &  ');
   // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
   // A quest finished by this same blast is named too, so two Erasers from one drop add up.
@@ -972,6 +974,7 @@ function blast(){
   const how=[k===1&&mult(longest)>1&&`${longest} blocks x${mult(longest)}`,chainX>1&&`chain x${chainX}`,extra.size&&`💣 +3 each`].filter(Boolean).join(' · ');
   // Two short lines in the message strip: what you made, then what it scored.
   toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+(got?` · ${got} earned!`:''),longest>=4||k>1||extra.size>0,CASH_MS);
+  if(cascade&&!store.get('nb-cascade-seen',false)){store.set('nb-cascade-seen',true);news(`Cascade! Clearing blocks made a new ${T},\nso it blasted too, with a chain bonus.`,true)}
   const extras=[];
   if(!tut){
     const s=markPlayed();if(s)extras.push(s);
@@ -1019,6 +1022,8 @@ function blast(){
     all.forEach(key=>board[key]=null);extra.forEach(key=>board[key]=null);
     busy=false;
     if(tut)return nextLesson();
+    renderBoard();
+    if(blast(cascade+1))return;
     finishTurn();
   },done+(extra.size?450:300));
   return true;
@@ -1109,7 +1114,7 @@ function gameOver(){
     mode==='daily'?`Sumburst Daily run #${dailyNo()} ${starStr(starsFor(level-1))}`:'Sumburst',
     `Level ${level} · ${score.toLocaleString()} pts · ${blastsGame} blast${blastsGame===1?'':'s'}`,
     bestRun?`Best sum: ${bestRun.join(' + ')} ${bestRun.map((_,i)=>sq[i%6]).join('')}`:'',
-    'Play with me!','playbrightharbor.com',
+    'Play with me!','playbrightharbor.com/sumburst.html',
   ].filter(Boolean).join('\n');
   const need=goalFor(level)-levelPts(),close=need<=goalFor(level)*.6;
   // Best finished score for this mode (per day for the Daily Board). A new best gets fireworks.
@@ -1367,7 +1372,7 @@ function showModeSwitch(){
     :`<h3>♾️ Endless</h3><p>${saved?`Pick up your Endless game at level ${saved.level}.`:'Start an Endless game. It gets a little harder each level.'}</p><p>Today's Daily run is saved too${mode==='daily'&&!over?`: level ${level}, ${starStr(starsFor(level-1))}. <b>${nextStar(level)}</b>`:''}.</p><div class="btns"><button class="btn" id="go-mode">${saved?'Back to Endless':'Play Endless'}</button></div>`);
   $('go-mode').onclick=()=>switchMode(toDaily?'daily':'endless');
   if($('d-share'))$('d-share').onclick=()=>{
-    const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${(f=>f?f.toLocaleString()+' pts':'Run in progress')(store.get('nb-final-daily-'+dayKey(),0))}\nPlay with me!\nplaybrightharbor.com`;
+    const t=`Sumburst Daily run #${dailyNo()} ${starStr(todayStars())}\n${(f=>f?f.toLocaleString()+' pts':'Run in progress')(store.get('nb-final-daily-'+dayKey(),0))}\nPlay with me!\nplaybrightharbor.com/sumburst.html`;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{$('d-share').textContent='Copied! Paste it in a text'},()=>{$('d-share').textContent='Copy failed'})};
 }
 function switchMode(m){
