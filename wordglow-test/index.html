@@ -975,7 +975,7 @@ function renderTools() {
   const left = WORDS_PER_SHUFFLE - toShuffle;
   document.getElementById("enote").textContent = erasing ? "Tap any block to erase it. Tap Eraser again to cancel."
     : rotating ? "Tap a piece below to turn it. Tap Rotate again when it's the way you want."
-    : `5+ letter words earn erasers. Next shuffle in ${left} word${left === 1 ? "" : "s"}.`;
+    : `5+ letter words earn erasers. ${shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES}): use one to start earning again.` : `Next shuffle in ${left} word${left === 1 ? "" : "s"}.`}`;
   toolNote();
 }
 let shownScore = 0, rolling = false;
@@ -1122,6 +1122,7 @@ const GOALS = [
   { id: "new", text: "Find a word new to your word book", test: w => w.isNew },
 ];
 const REWARDS = ["eraser", "shuffle", "coins", "rotate"];
+const TOOL_NAME = { eraser: "Eraser", shuffle: "Shuffle", rotate: "Rotate" };   // quest rewards named in the score message
 const REWARD_TEXT = { eraser: "+1 eraser", shuffle: "+1 shuffle", coins: "+15 coins", rotate: "+1 rotate" };
 let goals = [], goalCount = 0;
 function newGoal(exclude) {
@@ -1293,7 +1294,7 @@ function defText(w) {
 function showDefinitions(words) {
   // A word scored before the meanings finish loading still gets its card, once they arrive.
   if (!defsLoaded) { if (words.length) defsReady.then(() => showDefinitions(words)); return; }
-  const items = words.map(w => [w, defText(w)]).filter(([, d]) => d);
+  const items = words.map(w => [w, defText(w) || (rarityOf(w) >= 65 ? { pos: "rare word", text: "Too rare for a meaning here, but it counts!" } : null)]).filter(([, d]) => d);
   hideDefinitions();
   if (!items.length) return;
   const [w, d] = items[0], more = items.length - 1;
@@ -1417,7 +1418,8 @@ function cashIn(group) {
     goalsDone.push(...checkGoals(g));
   }
   let shuffleEarned = false;
-  toShuffle += k;
+  // With shuffles full, words don't count toward the next one (the line under the tools says so).
+  toShuffle = shuffles >= MAX_SHUFFLES ? 0 : toShuffle + k;
   while (toShuffle >= WORDS_PER_SHUFFLE) {
     toShuffle -= WORDS_PER_SHUFFLE;
     if (shuffles < MAX_SHUFFLES) { shuffles++; shuffleEarned = true; }
@@ -1445,7 +1447,8 @@ function cashIn(group) {
   if (chainX > 1) why.push(`chain x${chainX}`);
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
     (extra.length ? `\nBOOM! +${extra.length * 3}` : "") +
-    (earned ? "\nEraser earned!" : "") + (shuffleEarned ? "\nShuffle earned!" : "") + (rotEarned ? "\nRotate earned!" : ""), longest >= 5 || k > 1 || extra.length > 0, CASH_MS);
+    (earned ? "\nEraser earned!" : "") + (shuffleEarned ? "\nShuffle earned!" : "") + (rotEarned ? "\nRotate earned!" : "") +
+    goalsDone.filter(g => TOOL_NAME[g.reward]).map(g => `\n🎯 Quest: +1 ${TOOL_NAME[g.reward]}`).join(""), longest >= 5 || k > 1 || extra.length > 0, CASH_MS);
   // Extra news after the main toast. To keep things quick, at most two items, shown together in one
   // more message, most important first. Every reward is still given; the coin count shows it.
   const extras = [];
@@ -1453,7 +1456,10 @@ function cashIn(group) {
     const bonus = 10 * (longest - 6);
     addCoins(bonus); extras.push([`👑 ${longest}-LETTER WORD! +${bonus} 🪙`, true]);
   }
-  if (goalsDone.length) { extras.push([goalsDone.map(g => "🎯 Quest done: " + REWARD_TEXT[g.reward]).join("\n"), false]); questNews(); }
+  // Tool rewards are already named in the score message; only coin quests need a line of their own.
+  const coinQuests = goalsDone.filter(g => !TOOL_NAME[g.reward]);
+  if (coinQuests.length) extras.push([coinQuests.map(g => "🎯 Quest done: " + REWARD_TEXT[g.reward]).join("\n"), false]);
+  if (goalsDone.length) questNews();
   if (streakNews) extras.push([streakNews[0].replace("\n", " "), streakNews[1]]);
   if (!tut) extras.push(...milestones(group, longest).map(([t, b]) => [t.replace("\n", " "), b]));
   const rare = group.reduce((a, g) => a + [...g.w].filter(ch => "jqxz".includes(ch)).length, 0);
@@ -2013,18 +2019,23 @@ function endDrag() {
   else { renderBoard(); if (tut) toast("Drop it on the glowing spot"); else if (overBoard) toast("Doesn't fit there"); }
 }
 // Press on the movable piece: a drag moves it, a plain tap still cashes in a glowing word.
+// Dragging any other block says it's locked in, so a piece that won't move never looks like a bug.
 boardEl.addEventListener("pointerdown", e => {
-  if (busy || over || erasing || !movable || drag) return;
+  if (busy || over || erasing || drag || tut) return;
   const k = cellEls.indexOf(e.target.closest(".cell"));
   if (k < 0) return;
   const r = Math.floor(k / N), c = k % N;
-  if (!movableCells().some(([R, C]) => R === r && C === c)) return;
-  e.preventDefault();
+  if (!board[r][c]) return;
+  const mine = movableCells().some(([R, C]) => R === r && C === c);
+  if (mine) e.preventDefault();
   const sx = e.clientX, sy = e.clientY;
   const cleanup = () => { removeEventListener("pointermove", onMove); removeEventListener("pointerup", cleanup); };
   const onMove = ev => {
     if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
-    cleanup(); suppressClick = true; startDrag(ev, null, null, true, [r - movable.at[0], c - movable.at[1]]);
+    cleanup(); suppressClick = true;
+    if (mine) return startDrag(ev, null, null, true, [r - movable.at[0], c - movable.at[1]]);
+    addEventListener("pointerup", () => setTimeout(() => suppressClick = false, 0), { once: true });
+    toast(movable ? "Locked in. Only the dashed piece can move" : "Locked in. Only the piece you just placed can move");
   };
   addEventListener("pointermove", onMove);
   addEventListener("pointerup", cleanup);
