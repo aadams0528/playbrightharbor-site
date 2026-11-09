@@ -107,6 +107,11 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .rail.themed::before{background:repeating-linear-gradient(var(--theme) 0 6px,transparent 6px 11px)}
 .card.bump{animation:bump .35s ease}
 @keyframes bump{50%{transform:scale(1.04)}}
+/* Hard days: the count of pairs in order flashes big over the cards after each Check (Alan, 2026-11-09). */
+.countflash{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;pointer-events:none;background:var(--ink);color:var(--paper);border-radius:18px;padding:14px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:countIn 2.6s ease forwards;white-space:nowrap}
+.countflash b{display:block;font-family:var(--display);font-size:40px;line-height:1.05}
+.countflash span{font-size:15px;font-weight:700}
+@keyframes countIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}20%{transform:translate(-50%,-50%) scale(1)}30%{transform:translate(-50%,-50%) scale(1.06)}38%{transform:translate(-50%,-50%) scale(1)}85%{opacity:1}100%{opacity:0}}
 
 .actions{display:grid;grid-template-columns:auto 1fr;gap:10px}
 /* Short screens: Hint and Check stay pinned to the bottom so they're never below the fold (Nikola, round 4). */
@@ -301,7 +306,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
   </div>
   <section id="archive" hidden></section>
   <section id="expert" hidden></section>
-  <footer id="foot">Bright Harbor Games<span class="build"> · Whenly 1.0 test 21</span></footer>
+  <footer id="foot">Bright Harbor Games<span class="build"> · Whenly 1.0 test 22</span></footer>
 </div>
 
 <script>
@@ -1314,12 +1319,16 @@ function check(){
   G.lastOk=ok;G.attempt++;layout();updateButtons();persist();feedbackLine();
   if(!hideTags())G.order.slice(0,-1).forEach((a,i)=>{const b=G.order[i+1];if(yr(a)>yr(b))[a,b].forEach(id=>{const el=cardEls[id];el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");setTimeout(()=>el.classList.remove("shake"),500)})});
   $("#sr").textContent=`${ok} of ${G.order.length-1} neighbors are in order. Try ${G.attempt} of ${TRIES}.`;
+  if(hideTags())flashCount(ok,G.order.length-1);
   buzz(20);
   // If the last card sits under the Hint and Check bar, scroll it into view so you can see every tag (Muse, round 14).
   // On very short portrait screens the bar sits under the cards, so bring the result text into view instead (Nikola, round 15). No smooth scroll with Reduce Motion on.
   {const lc=cardEls[G.order[G.order.length-1]],bar=$("#play .actions"),behavior=matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";if(lc&&bar){if(getComputedStyle(bar).position==="fixed"){const bt=bar.getBoundingClientRect().top,hr=$("#hintLine").getBoundingClientRect(),over=Math.max(lc.getBoundingClientRect().bottom,hr.bottom)-bt;if(over>0)scrollBy({top:Math.min(over+8,Math.max(0,hr.top-8)),behavior})}
     else{const hr=$("#hintLine").getBoundingClientRect(),need=Math.min(hr.bottom-innerHeight+8,hr.top-8);if(need>0)scrollBy({top:need,behavior})}}}
 }
+// Hard days show no tags, so make the one clue they get impossible to miss (Alan, 2026-11-09).
+function flashCount(ok,n){list.querySelectorAll(".countflash").forEach(e=>e.remove());const f=document.createElement("div");f.className="countflash";f.setAttribute("aria-hidden","true");
+  f.innerHTML=`<b>${ok} of ${n}</b><span>neighbor pairs in order</span>`;list.appendChild(f);setTimeout(()=>f.remove(),matchMedia("(prefers-reduced-motion: reduce)").matches?2200:2700)}
 function giveUp(){
   if(G.done)return;
   const pts=rnd(scoreParts().got*.5);
