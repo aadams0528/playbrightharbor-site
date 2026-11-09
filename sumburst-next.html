@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast 58ee079 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 5d3fb65 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast 58ee079 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 5d3fb65 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -344,11 +344,10 @@ const chestKey=()=>'nb-chest-'+weekDays()[0];
 function dailyStars(cleared){
   const n=starsFor(cleared),had=todayStars();if(n<=had)return false;
   store.set('nb-dstars-'+dayKey(),n);
-  news(`${starStr(n)} Daily star${n>had+1?'s':''}!\n${weekStars()} of ${CHEST_STARS} this week`,true);
   let paid3=false;
   if(n===3&&!store.get('nb-d3bonus-'+dayKey(),false)){
     store.set('nb-d3bonus-'+dayKey(),true);addCoins(THREE_STAR_COINS);track('daily_three_stars',{});
-    news(`⭐⭐⭐ All 3 stars today!\n+${THREE_STAR_COINS} coins`,true);paid3=true;
+    paid3=true;   // the level-complete card says so (no queued news: Cooper round 10)
   }
   if(weekStars()>=CHEST_STARS&&!store.get(chestKey(),false)){
     store.set(chestKey(),true);addCoins(CHEST_COINS);track('daily_chest',{});
@@ -616,7 +615,7 @@ function markPlayed(){
   streak.days=[...streak.days.filter(d=>d>=dayKey(-62)),dayKey()];
   const bonus=5*Math.min(streak.n,7);
   store.set('nb-streak',streak);renderStreak();addCoins(bonus);
-  return [`🔥 Day ${streak.n} streak!\n+${bonus} 🪙`,false];
+  return {n:streak.n,bonus};
 }
 const STREAK_SAVE_COST=100;
 function checkStreakAtRisk(){
@@ -831,6 +830,7 @@ function renderAll(){renderBoard();renderTray();renderHUD();renderCoins();render
 let endedByChoice=false,longPlaced=null,hudCleared=null;   // hudCleared: the level just cleared, while its card is up (Muse round 9)
 let specialSeen=store.get('nb-special-seen',false), justTutored=false, levelStartHint=false, rotateHintNow=false;
 function setHint(){
+  if(longPlaced&&!longPlaced.every(k=>board[k]))longPlaced=null;   // once any of its squares empties, it's gone for good (Nikola round 10)
   const h=$('hint');h.classList.toggle('tut',!!tut);
   // Stuck: nothing in the tray can make the target on a crowded board. Say so, and point at the Eraser (or Shuffle).
   const stuck=!tut&&!over&&board.filter(Boolean).length>=24&&tray.some(p=>p&&canFit(p))&&!canBlast();
@@ -999,19 +999,20 @@ function blast(cascade=0){
   const got=[earned&&'Eraser',shuffleEarned&&'Shuffle',rotEarned&&'Rotate',...questGot].filter(Boolean).join(' + ');
   // How the points add up: block bonus, chain and bomb, so every number can be traced.
   const how=[k===1&&mult(longest)>1&&`${longest} blocks x${mult(longest)}`,chainX>1&&`chain x${chainX}`,extra.size&&`💣 +3 each`].filter(Boolean).join(' · ');
+  // The day's streak bonus rides on this same message, so it is never lost in the queue (Muse round 10).
+  const st=tut?null:markPlayed(),stTxt=st?` · 🔥 Day ${st.n} streak +${st.bonus} 🪙`:'';
   // Two short lines in the message strip: what you made, then what it scored.
-  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+(got?` · ${got} earned!`:''),longest>=4||k>1||extra.size>0,CASH_MS);
+  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+(got?` · ${got} earned!`:'')+stTxt,longest>=4||k>1||extra.size>0||!!st,CASH_MS);
   if(cascade&&!store.get('nb-cascade-seen',false)){store.set('nb-cascade-seen',true);news(`Cascade! ${label}\nClearing blocks made a new ${T}, so it blasted too, with a chain bonus.`,true)}
   const extras=[];
   if(!tut){
-    const s=markPlayed();if(s)extras.push(s);
     newSums.forEach(v=>{
       const have=(book[T]||[]).length,all=ways(T);
       extras.push([`📒 New way to make ${T}!\n${v.join(' + ')}\n${have} of ${all} found`,false]);
       if(have>=Math.ceil(all/2)&&have<all&&!store.get('nb-book-half-'+T,false)){store.set('nb-book-half-'+T,true);addCoins(50);extras.push([`📒 Halfway! ${have} of ${all} ways to make ${T}\n+50 🪙`,true])}
       if(have===all&&!store.get('nb-book-done-'+T,false)){store.set('nb-book-done-'+T,true);addCoins(100);extras.push([`📒 Every way to make ${T}!\n+100 🪙`,true])}
     });
-    if(goalsDone.length){extras.push([goalsDone.map(g=>'🎯 Quest done: '+(g.full?'you already have 3 '+g.reward+'s':REWARD_TEXT[g.reward])).join('\n'),false]);questNews()}
+    if(goalsDone.length){const full=goalsDone.filter(g=>g.full).map(g=>g.reward+'s');extras.push([goalsDone.filter(g=>!g.full).map(g=>'🎯 Quest done: '+REWARD_TEXT[g.reward]).concat(full.length?[`🎯 Quest done (you already have 3 ${[...new Set(full)].join(' and 3 ')})`]:[]).join('\n'),false]);questNews()}
     extras.push(...milestones(runs,valsList));
   }
   if(rotEarned||goalsDone.some(g=>g.reward==='rotate'))rotateIntro();
@@ -1087,6 +1088,7 @@ function levelUp(){
   busy=true;erasing=false;lockMovable();clearPending(true);track('level_complete',{mode,level});
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   const paid3=mode==='daily'&&dailyStars(level);hudCleared=level;renderHUD();
+  saveGame();   // a reload on the level-complete card comes back to this card, not to the drop before it (Nikola round 10)
   toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
   left.forEach((k,n)=>setTimeout(()=>{const el=boardEl.children[k].firstElementChild;el&&el.classList.add('pop')},300+n*40));
