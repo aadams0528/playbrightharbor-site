@@ -98,12 +98,15 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
    and the bomb itself shows the BOOM points before the tap. */
 .cell.blast { box-shadow: inset 0 0 0 4px #ff3b3b; background: rgba(255, 59, 59, 0.3); animation: blastpulse 0.9s ease-in-out infinite alternate; }
 .cell.blast .tile, .cell.lit.blast .tile { box-shadow: 0 0 0 4px #ff3b3b, 0 0 10px 2px rgba(255, 59, 59, 0.7), inset 0 -4px 0 rgba(0,0,0,0.18); }
+.cell.blast-reach { background: rgba(255, 59, 59, 0.12); }
 @keyframes blastpulse { from { background: rgba(255, 59, 59, 0.18); } to { background: rgba(255, 59, 59, 0.42); } }
 .cell[data-boom]::after { content: attr(data-boom); position: absolute; left: 50%; top: 0; transform: translate(-50%, -60%); z-index: 3; pointer-events: none;
   background: #e5484d; color: #fff; font-weight: 800; font-size: max(10px, calc(var(--cell) * 0.28)); line-height: 1; padding: 2px 4px; border-radius: 6px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
 .cell[data-boom].boom-below::after { top: auto; bottom: 0; transform: translate(-50%, 60%); }   /* top row: show it under the bomb */
 /* The Rotate demo points at the button it wants tapped. */
 .eraser.guide { box-shadow: 0 0 0 3px var(--gold); animation: spot 0.9s ease-in-out infinite alternate; }
+.eraser.full .count::after { content: " full"; font-size: 0.7em; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .eraser.guide { animation: none; } }
 .board.erasing .cell.lit .tile { animation: wiggle 0.5s ease-in-out infinite alternate; }
 .cell.movable { touch-action: none; }
 .cell.movable .tile { outline: 2px dashed rgba(255, 255, 255, 0.9); outline-offset: -5px; cursor: grab; }
@@ -578,8 +581,23 @@ function helpScore(p) {   // the longest word this piece can make anywhere on th
   }
   return best;
 }
+const EASY_WORDS = "cat dog sun hat red map cup bed pen box egg fan jam log net pie rug ten top van".split(" ");
 function helpTray(t) {
   if (tut || mode === "daily") return t;
+  // From level 6 (after the help above ends): no dead trays. If no piece in a new set can make any word
+  // on the board right now, one is swapped for the best of 20 fresh pieces (plus word-growing ones).
+  if (level >= 6 && !t.some(p => !p.used && helpScore(p) >= 3)) {
+    let bestP = null, bestS = 0;
+    for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } if (bestS >= 5) break; }
+    // Still nothing (a very empty or very full board): a straight piece that spells a short everyday word.
+    for (let i = 0; bestS < 3 && i < 12; i++) {
+      const letters = [...pick(EASY_WORDS)], down = rng() < 0.5, cells = letters.map((_, k) => down ? [k, 0] : [0, k]);
+      const p = { cells, color: 1 + Math.floor(rng() * 6), letters, specials: cells.map(() => null), used: false, fresh: true };
+      const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; }
+    }
+    if (bestP) t[Math.floor(rng() * 3)] = bestP;
+    return bombLesson(t);
+  }
   if (rng() < (HELP_CHANCE[level] || 0)) {
     const have = Math.max(...t.map(p => p.used ? 0 : helpScore(p)));
     if (have < HELP_AIM[level]) {
@@ -654,6 +672,7 @@ function seedBoard() {
 }
 
 function newGame(m, replay = false) {
+  defGen++;
   mode = m; levelNewWords = []; dropRotGuide();
   track("game_start", { mode });
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
@@ -750,12 +769,20 @@ function saveGame() {
   store.set(SAVE_KEY, save); store.set(SAVE_KEY + "-" + mode, save);
 }
 function resumeGame(key = SAVE_KEY, welcome = true) {
+  defGen++;
   const g = store.get(key, null);
   if (!g || g.v !== 1 || (g.mode === "daily" && g.day !== todayKey())) return false;
   // A save in the wrong shape (cut short, or from a broken build) starts a fresh game instead of crashing.
   const shapeOk = Array.isArray(g.board) && g.board.length === N && g.board.every(row => Array.isArray(row) && row.length === N)
     && Array.isArray(g.tray) && Array.isArray(g.goals) && Array.isArray(g.found) && Number.isFinite(g.score) && Number.isFinite(g.level);
   if (!shapeOk) return false;
+  // Look inside too: every block, tray piece and quest has to be readable, or it's a fresh game.
+  const cellOk = x => x === null || (x && typeof x === "object" && typeof x.ch === "string" && x.ch.length === 1);
+  const pieceOk = q => q && typeof q === "object" && Array.isArray(q.cells) && q.cells.length > 0 && Array.isArray(q.letters)
+    && q.letters.length === q.cells.length && q.cells.every(c => Array.isArray(c) && c.length === 2 && c.every(Number.isInteger))
+    && q.letters.every(ch => typeof ch === "string" && ch.length === 1);
+  if (!g.board.every(row => row.every(cellOk)) || g.tray.length !== 3 || !g.tray.every(pieceOk)) return false;
+  if (!g.goals.every(x => x && typeof x === "object" && Number.isFinite(x.prog ?? 0))) return false;
   if (g.goals.some(x => !GOALS.find(d => d.id === x.id))) return false;
   dropRotGuide();
   ({ mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, continued, levelsSinceAd, goalCount, tray } = g);
@@ -912,7 +939,8 @@ function renderBoard() {
     const group = bombReach(touchGroup([w]));
     group.forEach(g => shown.add(g));
     const ring = blastCells(group);
-    ring.forEach(([R, C]) => cellEl(R, C).classList.add("blast"));
+    // Thick red ring on each block that will blow up; empty squares in reach get only a faint tint.
+    ring.forEach(([R, C]) => cellEl(R, C).classList.add(board[R][C] ? "blast" : "blast-reach"));
     const hit = ring.filter(([R, C]) => board[R][C]).length;
     const [br, bc] = group.flatMap(g => g.cells).find(([r, c]) => board[r][c]?.special === "bomb");
     if (hit) { cellEl(br, bc).dataset.boom = `💥+${hit * 3}`; cellEl(br, bc).classList.toggle("boom-below", br === 0); }   // same 3 points per block the score gives
@@ -965,6 +993,9 @@ function renderTools() {
   const s = document.getElementById("shuffle");
   s.disabled = busy || over;
   document.getElementById("scount").textContent = shuffles;
+  // Full: the button itself says so, since short screens hide the line under the tools.
+  s.classList.toggle("full", shuffles >= MAX_SHUFFLES);
+  s.title = shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES})` : "Shuffle";
   const t = document.getElementById("rotate");
   t.disabled = busy || over;
   if (t.disabled || (!rotates && rotPaid === null)) { rotating = false; rotPaid = null; }
@@ -1036,6 +1067,12 @@ if (window.ResizeObserver) { const ro = new ResizeObserver(() => sizeCells()); [
 // ---------- rules ----------
 function fits(p, r0, c0) {
   return p.cells.every(([r, c]) => { const R = r0 + r, C = c0 + c; return R >= 0 && C >= 0 && R < N && C < N && !board[R][C]; });
+}
+// Why a drop failed, in a few words: part of the piece hangs off the board, or a square is already taken.
+function noFitReason(p, at) {
+  if (!at) return "Doesn't fit there";
+  const off = p.cells.some(([r, c]) => { const R = at[0] + r, C = at[1] + c; return R < 0 || C < 0 || R >= N || C >= N; });
+  return off ? "Doesn't fit: it hangs off the board" : "Doesn't fit: those squares are taken";
 }
 function canFitAnywhere(p) { for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (fits(p, r, c)) return true; return false; }
 // A quarter turn clockwise: a row of letters becomes a column read top to bottom. Letters and
@@ -1141,11 +1178,13 @@ function checkGoals(w) {
     if (!g.test(w)) return g;
     const prog = g.prog + 1;
     if (prog < g.need) return { ...g, prog };
-    done.push(g);
-    if (g.reward === "eraser") erasers = Math.min(MAX_ERASERS, erasers + 1);
-    else if (g.reward === "shuffle") shuffles = Math.min(MAX_SHUFFLES, shuffles + 1);
-    else if (g.reward === "rotate") rotates = Math.min(MAX_ROTATES, rotates + 1);
+    // A tool reward when that tool is already full is noted as full, so the message never promises a +1 that isn't given.
+    let full = false;
+    if (g.reward === "eraser") { full = erasers >= MAX_ERASERS; erasers = Math.min(MAX_ERASERS, erasers + 1); }
+    else if (g.reward === "shuffle") { full = shuffles >= MAX_SHUFFLES; shuffles = Math.min(MAX_SHUFFLES, shuffles + 1); }
+    else if (g.reward === "rotate") { full = rotates >= MAX_ROTATES; rotates = Math.min(MAX_ROTATES, rotates + 1); }
     else addCoins(15);
+    done.push(full ? { ...g, full } : g);
     return newGoal([...next, ...goals.slice(next.length)].map(x => x.id));
   })());
   goals = next;
@@ -1291,9 +1330,11 @@ function defText(w) {
 // The first time a word is scored, its meaning shows on a card over the header and score line (never
 // over the board). With several new words, the card shows the longest; the rest are in the word book.
 // It stays until the player next touches the screen; that touch still goes through to the game.
+let defGen = 0;   // goes up with every new game or level
 function showDefinitions(words) {
   // A word scored before the meanings finish loading still gets its card, once they arrive.
-  if (!defsLoaded) { if (words.length) defsReady.then(() => showDefinitions(words)); return; }
+  // It's dropped if a new game or level has started by then, so a late card never shows out of place.
+  if (!defsLoaded) { const at = defGen; if (words.length) defsReady.then(() => { if (at === defGen) showDefinitions(words); }); return; }
   const items = words.map(w => [w, defText(w) || (rarityOf(w) >= 65 ? { pos: "rare word", text: "Too rare for a meaning here, but it counts!" } : null)]).filter(([, d]) => d);
   hideDefinitions();
   if (!items.length) return;
@@ -1445,10 +1486,15 @@ function cashIn(group) {
   if (k === 1 && group[0].m > 1) why.push(`${group[0].w.length} letters x${group[0].m}`);
   if (k === 1 && group[0].dbl) why.push(`2x block${group[0].dbl > 1 ? "s" : ""} x${2 ** group[0].dbl}`);
   if (chainX > 1) why.push(`chain x${chainX}`);
+  // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
+  const rare = group.reduce((a, g) => a + [...g.w].filter(ch => "jqxz".includes(ch)).length, 0);
+  if (rare) addCoins(5 * rare);
+  const questLines = goalsDone.map(g => !TOOL_NAME[g.reward] ? `\n🎯 Quest: +15 🪙`
+    : g.full ? `\n🎯 Quest done: ${TOOL_NAME[g.reward]}s full (3)` : `\n🎯 Quest: +1 ${TOOL_NAME[g.reward]}`).join("");
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
     (extra.length ? `\nBOOM! +${extra.length * 3}` : "") +
     (earned ? "\nEraser earned!" : "") + (shuffleEarned ? "\nShuffle earned!" : "") + (rotEarned ? "\nRotate earned!" : "") +
-    goalsDone.filter(g => TOOL_NAME[g.reward]).map(g => `\n🎯 Quest: +1 ${TOOL_NAME[g.reward]}`).join(""), longest >= 5 || k > 1 || extra.length > 0, CASH_MS);
+    questLines + (rare ? `\n💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙` : ""), longest >= 5 || k > 1 || extra.length > 0, CASH_MS);
   // Extra news after the main toast. To keep things quick, at most two items, shown together in one
   // more message, most important first. Every reward is still given; the coin count shows it.
   const extras = [];
@@ -1456,14 +1502,9 @@ function cashIn(group) {
     const bonus = 10 * (longest - 6);
     addCoins(bonus); extras.push([`👑 ${longest}-LETTER WORD! +${bonus} 🪙`, true]);
   }
-  // Tool rewards are already named in the score message; only coin quests need a line of their own.
-  const coinQuests = goalsDone.filter(g => !TOOL_NAME[g.reward]);
-  if (coinQuests.length) extras.push([coinQuests.map(g => "🎯 Quest done: " + REWARD_TEXT[g.reward]).join("\n"), false]);
   if (goalsDone.length) questNews();
   if (streakNews) extras.push([streakNews[0].replace("\n", " "), streakNews[1]]);
   if (!tut) extras.push(...milestones(group, longest).map(([t, b]) => [t.replace("\n", " "), b]));
-  const rare = group.reduce((a, g) => a + [...g.w].filter(ch => "jqxz".includes(ch)).length, 0);
-  if (rare) { addCoins(5 * rare); extras.push([`💎 Rare letter${rare > 1 ? "s" : ""}! +${5 * rare} 🪙`, false]); }
   const news = extras.slice(0, 2);
   if (news.length) toast(news.map(n => n[0]).join("\n"), "news", EXTRA_MS);
   if (rotEarned || goalsDone.some(g => g.reward === "rotate")) rotateIntro();
@@ -1700,6 +1741,7 @@ document.getElementById("modal").addEventListener("click", e => { if (e.target.i
 
 // Level done: clear what's left with a flourish, then a fresh, seeded board and a slightly bigger target.
 function levelUp() {
+  defGen++;
   track("level_complete", { level });
   busy = true; movable = null; erasing = false;
   renderAll();
@@ -1939,7 +1981,7 @@ let drag = null, tutorialJustDone = false, suppressClick = false;
 function startDrag(e, i, el, fromBoard = false, grab = null) {
   if (busy || over || drag) return;
   if (rotating && !fromBoard) { e.preventDefault(); return rotatePiece(i); }
-  if (rotating) { rotating = false; rotPaid = null; renderTools(); }
+  if (rotating) { if (rotPaid === null) toast("Rotate is off. It turns pieces in the tray below"); rotating = false; rotPaid = null; renderTools(); }
   if (erasing) { erasing = false; renderTools(); }
   e.preventDefault();
   const p = fromBoard ? movable.p : tray[i];
@@ -1968,8 +2010,10 @@ function startDrag(e, i, el, fromBoard = false, grab = null) {
   moveDrag(e);
   addEventListener("pointermove", moveDrag);
   addEventListener("pointerup", endDrag, { once: true });
-  addEventListener("pointercancel", endDrag, { once: true });
+  addEventListener("pointercancel", cancelDrag, { once: true });
 }
+// A cancelled touch (a system gesture, a call) is never a drop: the piece goes back where it came from.
+function cancelDrag() { if (drag) { drag.target = null; drag.overBoard = false; endDrag(); } }
 function moveDrag(e) {
   if (!drag) return;
   const gr = drag.g.getBoundingClientRect();
@@ -1980,6 +2024,7 @@ function moveDrag(e) {
   const c0 = Math.round((x - a.left) / pitch), r0 = Math.round((y - a.top) / pitch);
   const ok = fits(drag.p, r0, c0) && (!tut || (r0 === LESSONS[tut.step].at[0] && c0 === LESSONS[tut.step].at[1]));
   const t = ok ? [r0, c0] : null;
+  drag.at = [r0, c0];
   // Remember whether the piece is over the board, so a drop that doesn't fit can say so.
   // Judge by the finger (and the lifted piece): a long piece hanging off the edge still counts.
   const bb = boardEl.getBoundingClientRect(), over = (px, py) => px > bb.left && px < bb.right && py > bb.top && py < bb.bottom;
@@ -2001,26 +2046,28 @@ function showPreview(t) {
   const placed = p.cells.map(([r, c]) => [t[0] + r, t[1] + c]);
   for (const w of findWords(sim, placed)) w.cells.forEach(([r, c]) => cellEl(r, c).classList.add("willword"));
 }
-function endDrag() {
+function endDrag(e) {
   if (!drag) return;
-  const { i, p, el, g, target, fromBoard, origin, overBoard } = drag;
+  // Drop where the finger lifts, not where the last move event happened to land.
+  if (e && e.type === "pointerup" && Number.isFinite(e.clientX)) moveDrag(e);
+  const { i, p, el, g, target, fromBoard, origin, overBoard, at } = drag;
   removeEventListener("pointermove", moveDrag);
   removeEventListener("pointerup", endDrag);
-  removeEventListener("pointercancel", endDrag);
+  removeEventListener("pointercancel", cancelDrag);
   g.remove(); if (el) el.classList.remove("dragging");
   drag = null;
   if (fromBoard) {
     setTimeout(() => suppressClick = false, 0);
     if (target) put(p, target[0], target[1], true);
     else {
-      if (overBoard) toast("Doesn't fit there");
+      if (overBoard) toast(noFitReason(p, at));
       // Dropped off the board: it goes back where it was.
       p.cells.forEach(([r, c], k) => board[origin[0] + r][origin[1] + c] = { ch: p.letters[k], color: p.color, special: p.specials?.[k] });
       movable = { p, at: origin };
       renderBoard();
     }
   } else if (target) place(i, target[0], target[1]);
-  else { renderBoard(); if (tut) toast("Drop it on the glowing spot"); else if (overBoard) toast("Doesn't fit there"); }
+  else { renderBoard(); if (tut) toast("Drop it on the glowing spot"); else if (overBoard) toast(noFitReason(p, at)); }
 }
 // Press on the movable piece: a drag moves it, a plain tap still cashes in a glowing word.
 // Dragging any other block says it's locked in, so a piece that won't move never looks like a bug.
@@ -2107,7 +2154,11 @@ function stepRotGuide() {
 boardEl.addEventListener("click", e => {
   if (suppressClick) { suppressClick = false; return; }
   if (busy || over) return;
-  if (rotating) { rotating = false; rotPaid = null; renderTools(); }
+  if (rotating) {
+    // Rotate turns pieces in the tray; tapping the board before turning one says so instead of silently cancelling.
+    if (rotPaid === null) toast("Rotate is off. It turns pieces in the tray below");
+    rotating = false; rotPaid = null; renderTools();
+  }
   const k = cellEls.indexOf(e.target.closest(".cell"));
   if (k < 0) return;
   const r = Math.floor(k / N), c = k % N;
