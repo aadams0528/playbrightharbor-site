@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<!-- number-blast 5d3fb65 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 8b7ad88 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,7 +16,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<!-- number-blast 5d3fb65 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
+<!-- number-blast 8b7ad88 (PR #24) --><title>Sumburst 1.1 preview (test version)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,7 +42,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
   --bg:#0f1715; --fg:#e9f1ed; --muted:#9db0a9; --panel:#17221f; --line:#2a3a35;
   --board:#0b1f1a; --slot:#1b3830; --slot-hi:#25483d; --accent:#ff6b6f; color-scheme:dark}
 *{box-sizing:border-box}
-html,body{margin:0}
+html,body{margin:0;overscroll-behavior:none}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16px calc(var(--tabh) + 12px + env(safe-area-inset-bottom,0px));
   -webkit-user-select:none;user-select:none;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
 .app{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
@@ -97,7 +97,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:8px 16
 .tile.pop{animation:pop .3s ease-in forwards}
 @keyframes pop{40%{transform:scale(1.25)}100%{transform:scale(0);opacity:0}}
 .tile.star{background:conic-gradient(var(--n1),var(--n3),var(--n4),var(--n5),var(--n7),var(--n1))}
-.tile .bomb{position:absolute;top:0;right:1px;font-size:.65em}
+.tile .bomb{position:absolute;top:1px;right:1px;font-size:.5em;line-height:1;pointer-events:none}   /* small, tucked in the corner so it never covers the number (Alan 2026-11-09, iPhone) */
+.tile.hasbomb{padding:.18em .22em 0 0;box-sizing:border-box}
 .cell.erasable .tile{animation:wob .5s ease-in-out infinite}
 .cell.movable .tile{outline:2px dashed rgba(255,255,255,.9);outline-offset:-4px;cursor:grab}
 @keyframes wob{25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
@@ -669,7 +670,7 @@ function tickFx(){
 function shake(n){if(reduceMotion)return;const w=$('boardwrap');w.classList.remove('shake1','shake2');void w.offsetWidth;w.classList.add(n>1?'shake2':'shake1')}
 function fireworks(){const r=boardEl.getBoundingClientRect();for(let i=0;i<6;i++)setTimeout(()=>burst(r.left+r.width*(.15+Math.random()*.7),r.top+r.height*(.1+Math.random()*.5),[numColor(1+i),GOLD,'#ffffff'],34,1.5),i*170)}
 let actx=null,muted=store.get('nb-muted',false);
-function audio(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(actx.state==='suspended')actx.resume();return actx}
+function audio(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(actx.state!=='running'&&actx.state!=='closed')actx.resume().catch(()=>{});return actx}
 function tone(freq,dur=.12,type='sine',vol=.15,delay=0,slide=0){
   if(muted)return;const a=audio();if(!a)return;
   const t0=a.currentTime+delay,o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(freq,t0);
@@ -688,7 +689,16 @@ const SFX={
   over:()=>[392,330,262,196].forEach((f,i)=>tone(f,.4,'triangle',.12,i*.22)),
 };
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
-document.addEventListener('pointerdown',()=>{if(!muted)audio()},{once:true});
+// Unlock sound on the first touch. iPhones only allow it on a touch's release or a tap (not on the press that
+// starts a drag), and want a short silent sound played at that moment, so keep trying until it's running
+// (Alan 2026-11-09: no sound in the lessons until level 2).
+function unlockAudio(){
+  // Also after the phone pauses sound (switching apps, locking the screen, a call): the next touch wakes it.
+  if(muted||(actx&&actx.state==='running'))return;const a=audio();if(!a)return;
+  try{const b=a.createBuffer(1,1,22050),s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start(0)}catch(e){}
+}
+['pointerdown','pointerup','touchend','click','keydown'].forEach(t=>document.addEventListener(t,unlockAudio,true));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&actx&&!muted)audio()});
 
 // ---------- analytics ----------
 // Events show where testers stop: each tutorial step, each level reached, and where a session ends.
@@ -771,7 +781,7 @@ function toast(text,big=false,ms=0,lane='main'){
 function tileHTML(t){
   if(!t)return '';
   if(t.star)return '<div class="tile star">★</div>';
-  return `<div class="tile" style="background:var(--n${t.v})">${t.v}${t.bomb?'<span class="bomb">💣</span>':''}</div>`;
+  return `<div class="tile${t.bomb?' hasbomb':''}" style="background:var(--n${t.v})">${t.v}${t.bomb?'<span class="bomb">💣</span>':''}</div>`;
 }
 function buildBoard(){boardEl.innerHTML='';for(let i=0;i<N*N;i++){const d=document.createElement('div');d.className='cell';d.dataset.i=i;boardEl.appendChild(d)}}
 const tutCell=()=>tut?LESSONS[tut.step].cell:-1;
@@ -900,6 +910,9 @@ function moveDrag(e){
   const glow=new Set();findRuns(b).forEach(run=>run.cells.forEach(k=>glow.add(k)));
   renderBoard({ghost,tiles,glow,much:tooMuch(b,ghost)});
 }
+// While a piece is held, the page never scrolls or pulls down, even when the finger passes over the
+// tray or the space around the board (Alan 2026-11-09: dragging a piece back down scrolled the page).
+document.addEventListener('touchmove',e=>{if(drag)e.preventDefault()},{passive:false});
 function endDrag(e){
   if(!drag)return;
   if(e&&e.type==='pointercancel'){drag.pos=null}
@@ -1098,7 +1111,7 @@ function levelUp(){
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
       ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level))} this run${(n=>n?` · next star at level ${n}`:paid3?` · all 3 stars! +${THREE_STAR_COINS} 🪙 bonus`:' · all 3 stars!')(STAR_LEVELS.find(l=>l>level))}</p><p class="weeknote">${store.get(chestKey(),false)?'🎁 This week\'s chest is open.':`🎁 ${Math.min(weekStars(),CHEST_STARS)} of ${CHEST_STARS} ⭐ this week toward the chest (${CHEST_COINS} 🪙)`}</p>`:''}
       <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
-      <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`,true);
+      <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">📺 Watch an ad: get +${earned*2} 🪙 instead</button></div>`,true);
     const go=(n,dbl)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);maybeInterstitial(startNextLevel)};
     $('dbl').onclick=()=>watchAd(()=>go(earned*2,true),()=>go(earned));
     $('next').onclick=()=>go(earned);
