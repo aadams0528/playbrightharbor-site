@@ -582,19 +582,36 @@ function helpScore(p) {   // the longest word this piece can make anywhere on th
   return best;
 }
 const EASY_WORDS = "cat dog sun hat red map cup bed pen box egg fan jam log net pie rug ten top van".split(" ");
+// The best piece for making a word on the board right now: word-growing pieces and 20 fresh ones, then
+// (on a very empty or very full board) a straight piece spelling a short everyday word.
+function wordPiece() {
+  let bestP = null, bestS = 0;
+  for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } if (bestS >= 5) break; }
+  for (let i = 0; bestS < 3 && i < 12; i++) {
+    const letters = [...pick(EASY_WORDS)], down = rng() < 0.5, cells = letters.map((_, k) => down ? [k, 0] : [0, k]);
+    const p = { cells, color: 1 + Math.floor(rng() * 6), letters, specials: cells.map(() => null), used: false, fresh: true };
+    const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; }
+  }
+  return bestS >= 3 ? bestP : null;
+}
+// From level 6 in Endless, checked after every move: when nothing is glowing and no piece left in the tray
+// can make a word (say the word a tray was dealt around just got scored), one of them is swapped.
+function rescueTray() {
+  if (tut || mode !== "endless" || level < 6 || scanWords(board).length) return false;
+  const left = tray.map((p, i) => [p, i]).filter(([p]) => !p.used);
+  if (!left.length || left.some(([p]) => helpScore(p) >= 3)) return false;
+  const p = wordPiece();
+  if (!p) return false;
+  tray[left[Math.floor(rng() * left.length)][1]] = p;
+  toast("One piece swapped so you can play", false, READ_MS);
+  return true;
+}
 function helpTray(t) {
   if (tut || mode === "daily") return t;
   // From level 6 (after the help above ends): no dead trays. If no piece in a new set can make any word
   // on the board right now, one is swapped for the best of 20 fresh pieces (plus word-growing ones).
   if (level >= 6 && !t.some(p => !p.used && helpScore(p) >= 3)) {
-    let bestP = null, bestS = 0;
-    for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } if (bestS >= 5) break; }
-    // Still nothing (a very empty or very full board): a straight piece that spells a short everyday word.
-    for (let i = 0; bestS < 3 && i < 12; i++) {
-      const letters = [...pick(EASY_WORDS)], down = rng() < 0.5, cells = letters.map((_, k) => down ? [k, 0] : [0, k]);
-      const p = { cells, color: 1 + Math.floor(rng() * 6), letters, specials: cells.map(() => null), used: false, fresh: true };
-      const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; }
-    }
+    const bestP = wordPiece();
     if (bestP) t[Math.floor(rng() * 3)] = bestP;
     return bombLesson(t);
   }
@@ -989,6 +1006,7 @@ function renderTools() {
   if (b.disabled || !erasers) erasing = false;
   b.setAttribute("aria-pressed", erasing);
   document.getElementById("ecount").textContent = erasers;
+  b.classList.toggle("full", erasers >= MAX_ERASERS); b.setAttribute("aria-label", `Eraser, ${erasers} of ${MAX_ERASERS}${erasers >= MAX_ERASERS ? ", full" : ""}`);
   boardEl.classList.toggle("erasing", erasing);
   const s = document.getElementById("shuffle");
   s.disabled = busy || over;
@@ -996,17 +1014,20 @@ function renderTools() {
   // Full: the button itself says so, since short screens hide the line under the tools.
   s.classList.toggle("full", shuffles >= MAX_SHUFFLES);
   s.title = shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES})` : "Shuffle";
+  s.setAttribute("aria-label", `Shuffle, ${shuffles} of ${MAX_SHUFFLES}${shuffles >= MAX_SHUFFLES ? ", full" : ""}`);
   const t = document.getElementById("rotate");
   t.disabled = busy || over;
   if (t.disabled || (!rotates && rotPaid === null)) { rotating = false; rotPaid = null; }
   t.setAttribute("aria-pressed", rotating);
   document.getElementById("rcount").textContent = rotates;
+  t.classList.toggle("full", rotates >= MAX_ROTATES); t.setAttribute("aria-label", `Rotate, ${rotates} of ${MAX_ROTATES}${rotates >= MAX_ROTATES ? ", full" : ""}`);
   document.getElementById("tray").classList.toggle("rotating", rotating);
   stepRotGuide();
   const left = WORDS_PER_SHUFFLE - toShuffle;
   document.getElementById("enote").textContent = erasing ? "Tap any block to erase it. Tap Eraser again to cancel."
     : rotating ? "Tap a piece below to turn it. Tap Rotate again when it's the way you want."
-    : `5+ letter words earn erasers. ${shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES}): use one to start earning again.` : `Next shuffle in ${left} word${left === 1 ? "" : "s"}.`}`;
+    : shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES}). Use one to start earning shuffles again.`
+    : `5+ letter words earn erasers. Next shuffle in ${left} word${left === 1 ? "" : "s"}.`;
   toolNote();
 }
 let shownScore = 0, rolling = false;
@@ -1161,6 +1182,11 @@ const GOALS = [
 const REWARDS = ["eraser", "shuffle", "coins", "rotate"];
 const TOOL_NAME = { eraser: "Eraser", shuffle: "Shuffle", rotate: "Rotate" };   // quest rewards named in the score message
 const REWARD_TEXT = { eraser: "+1 eraser", shuffle: "+1 shuffle", coins: "+15 coins", rotate: "+1 rotate" };
+// A tool reward reads "(full)" while that tool is already at 3, so the quest list never promises a +1 it can't give.
+function rewardText(r) {
+  const full = { eraser: [erasers, MAX_ERASERS, "erasers"], shuffle: [shuffles, MAX_SHUFFLES, "shuffles"], rotate: [rotates, MAX_ROTATES, "rotates"] }[r];
+  return full && full[0] >= full[1] ? `${full[2]} full (${full[1]})` : REWARD_TEXT[r];
+}
 let goals = [], goalCount = 0;
 function newGoal(exclude) {
   const pool = GOALS.filter(g => !exclude.includes(g.id) && (!g.after || level >= g.after));
@@ -1217,7 +1243,7 @@ function showQuests() {
   const nextLevel = nextOf(Object.keys(LEVEL_MILESTONES).map(Number), topLevel);
   const alive = streak.last === dayKey() || streak.last === dayKey(-1);
   openTabSheet("quests", `<h3>🎯 Spell Quests</h3><p>Finish a quest to win its prize. A new one takes its place.</p>
-    <ul class="qlist">${goals.map(g => `<li><span class="g-text">${g.text}</span><span class="g-reward">${REWARD_TEXT[g.reward]}</span>${g.need > 1 ? bar(g.prog, g.need) + `<span class="g-sub">${g.prog} of ${g.need}</span>` : ""}</li>`).join("")}</ul>
+    <ul class="qlist">${goals.map(g => `<li><span class="g-text">${g.text}</span><span class="g-reward">${rewardText(g.reward)}</span>${g.need > 1 ? bar(g.prog, g.need) + `<span class="g-sub">${g.prog} of ${g.need}</span>` : ""}</li>`).join("")}</ul>
     <h4>🏅 Big goals</h4>
     <ul class="qlist">
       ${nextWords ? `<li><span class="g-text">Spell ${nextWords.toLocaleString()} words</span><span class="g-reward">+50 coins</span>${bar(stats.words, nextWords)}<span class="g-sub">${stats.words.toLocaleString()} so far, across all games</span></li>` : ""}
@@ -1280,7 +1306,7 @@ function showHelp() {
   if (promoReady()) { document.getElementById("promo-help").outerHTML = promoCard("promo-help"); wirePromo("promo-help", "help"); }
   document.getElementById("feedback").href = feedbackLink();
   renderCloudHelp();
-  document.getElementById("app-ver").textContent = `Wordglow ${APP_VERSION}${ADS_TESTING ? " (test version)" : ""}`;
+  document.getElementById("app-ver").textContent = `Wordglow ${APP_VERSION}${ADS_TESTING ? " (test version)" : ""}${BUILD_STAMP.startsWith("__") ? "" : ` · build ${BUILD_STAMP}`}`;
   document.getElementById("help-x").onclick = document.getElementById("help-close").onclick = () => closeSheet();
   document.getElementById("tut-replay").onclick = () => { if (busy) return; store.set("wb-tutorial-done", false); newGame("endless"); scrollTo({ top: 0, behavior: "smooth" }); };
 }
@@ -1489,8 +1515,10 @@ function cashIn(group) {
   // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
   const rare = group.reduce((a, g) => a + [...g.w].filter(ch => "jqxz".includes(ch)).length, 0);
   if (rare) addCoins(5 * rare);
-  const questLines = goalsDone.map(g => !TOOL_NAME[g.reward] ? `\n🎯 Quest: +15 🪙`
-    : g.full ? `\n🎯 Quest done: ${TOOL_NAME[g.reward]}s full (3)` : `\n🎯 Quest: +1 ${TOOL_NAME[g.reward]}`).join("");
+  // Two quests finished by one word share one line, so the message stays short enough to read in full.
+  const questBits = goalsDone.map(g => !TOOL_NAME[g.reward] ? "+15 🪙" : g.full ? `${TOOL_NAME[g.reward]}s full (3)` : `+1 ${TOOL_NAME[g.reward]}`);
+  const questLines = goalsDone.length > 1 ? `\n🎯 ${goalsDone.length} quests: ${questBits.join(" · ")}`
+    : goalsDone.length ? (goalsDone[0].full ? `\n🎯 Quest done: ${questBits[0]}` : `\n🎯 Quest: ${questBits[0]}`) : "";
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
     (extra.length ? `\nBOOM! +${extra.length * 3}` : "") +
     (earned ? "\nEraser earned!" : "") + (shuffleEarned ? "\nShuffle earned!" : "") + (rotEarned ? "\nRotate earned!" : "") +
@@ -1576,6 +1604,7 @@ function finishTurn() {
   if (movable && moveHints < 3) store.set("wb-move-hints", ++moveHints);
   if (!over && levelPts() >= target()) return levelUp();
   if (tray.every(p => p.used)) tray = dealTray();
+  rescueTray();
   renderAll(); saveGame();
   store.set(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", best);
   if (!tray.some(p => !p.used && canFitAnywhere(p))) {
@@ -1747,11 +1776,15 @@ function levelUp() {
   renderAll();
   // The level message gets the stage to itself: earlier messages and queued bonus messages are dropped
   // (their coins and rewards were already given).
+  // Quest and rare-letter rewards from the finishing word move onto the level-complete sheet, so clearing
+  // the messages never hides them.
+  const kept = [toastNow?.text, ...toastQ.map(q => q.text)].filter(Boolean).join("\n").split("\n").filter(l => /^(🎯|💎)/.test(l.trim()));
   clearToasts();
   pendingToasts.forEach(clearTimeout); pendingToasts = [];
   hideDefinitions();   // the new words move into the level-complete screen below
   // From level 3, every Endless level cleared gives a Rotate (up to the usual 3), so Rotates keep coming.
   const rotGift = mode === "endless" && level >= 3 && rotates < MAX_ROTATES;
+  const rotLine = mode === "endless" && level >= 3 ? (rotGift ? "↻ +1 Rotate" : `↻ Rotates full (${MAX_ROTATES})`) : "";
   if (rotGift) rotates++;
   toast(`Level ${level} complete!` + (rotGift ? "\n↻ +1 Rotate" : ""), true);
   if (rotGift) { renderTools(); rotateIntro(); }
@@ -1766,7 +1799,7 @@ function levelUp() {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
     if (dailyEnd) return dailyDone(earned);
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox" style="background:none;color:inherit;padding:6px"><span class="count">+${earned} 🪙</span></div>
-      ${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`, true);
+      ${[rotLine, ...kept].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`, true);
     const go = n => { closeSheet(); addCoins(n); maybeInterstitial(startNextLevel); };
     document.getElementById("dbl").onclick = () => watchAd(() => go(earned * 2), () => go(earned));
     document.getElementById("next").onclick = () => go(earned);
@@ -2006,16 +2039,17 @@ function startDrag(e, i, el, fromBoard = false, grab = null) {
     grab = [clamp((e.clientY - r.top) / r.height, ph), clamp((e.clientX - r.left) / r.width, pw)];
   }
   const fy = grab ? (grab[0] + 0.5) / ph : 0.5, fx = grab ? (grab[1] + 0.5) / pw : 0.5;
-  drag = { i, p, el, g, lift, fx, fy, target: null, fromBoard, origin };
+  drag = { i, p, el, g, lift, fx, fy, target: null, fromBoard, origin, id: e.pointerId };
   moveDrag(e);
   addEventListener("pointermove", moveDrag);
   addEventListener("pointerup", endDrag, { once: true });
   addEventListener("pointercancel", cancelDrag, { once: true });
 }
 // A cancelled touch (a system gesture, a call) is never a drop: the piece goes back where it came from.
-function cancelDrag() { if (drag) { drag.target = null; drag.overBoard = false; endDrag(); } }
+function cancelDrag(e) { if (drag && !otherFinger(e)) { drag.target = null; drag.overBoard = false; endDrag(); } }
+const otherFinger = e => e && e.pointerId !== undefined && drag.id !== undefined && e.pointerId !== drag.id;
 function moveDrag(e) {
-  if (!drag) return;
+  if (!drag || (e.pointerId !== undefined && drag.id !== undefined && e.pointerId !== drag.id)) return;   // only the finger holding the piece
   const gr = drag.g.getBoundingClientRect();
   const x = e.clientX - gr.width * drag.fx, y = e.clientY - gr.height * drag.fy - drag.lift;
   drag.g.style.left = x + "px"; drag.g.style.top = y + "px";
@@ -2048,6 +2082,8 @@ function showPreview(t) {
 }
 function endDrag(e) {
   if (!drag) return;
+  // A second finger lifting doesn't drop the piece; keep listening for the one that holds it.
+  if (otherFinger(e)) { addEventListener(e.type, e.type === "pointerup" ? endDrag : cancelDrag, { once: true }); return; }
   // Drop where the finger lifts, not where the last move event happened to land.
   if (e && e.type === "pointerup" && Number.isFinite(e.clientX)) moveDrag(e);
   const { i, p, el, g, target, fromBoard, origin, overBoard, at } = drag;
@@ -2097,7 +2133,7 @@ document.getElementById("shuffle").onclick = () => {
   if (!shuffles) return offerPowerup("shuffle");
   shuffles--; erasing = false; rotating = false; rotPaid = null; movable = null;
   SFX.shuffle();
-  tray = tray.map(p => p.used ? p : makePiece());
+  tray = helpTray(tray.map(p => p.used ? p : makePiece()));   // a paid shuffle never deals a dead tray either
   finishTurn();
 };
 document.getElementById("eraser").onclick = () => { if (busy || over || tut) return; if (!erasers) return offerPowerup("eraser"); erasing = !erasing; rotating = false; rotPaid = null; renderTools(); };
@@ -2213,6 +2249,8 @@ const AD_UNITS = {
 const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.1";
+// Filled in by the build with the commit and build time, so testers can tell builds apart.
+const BUILD_STAMP = "2ad246f 2026-11-09 06:00Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
