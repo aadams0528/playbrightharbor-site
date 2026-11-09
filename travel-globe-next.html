@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.7 (working title; travel memories app, 2026-11-09). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
+<!-- Travel Globe prototype v0.7.1 (working title; travel memories app, 2026-11-09). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1012,6 +1012,9 @@ function postcardData(){
 function postcardHTML(){
   if (store.get("postcardOff", false)) return "";
   const p = postcardData(); if (!p.years.length) return "";
+  // if On This Day already shows the same trip, one card is enough
+  const o = store.get("otdHidden", "") === todayStr() ? null : otdPick();
+  if (o && p.years.every(y => y.items.every(i => i.trip === o.best.stop.trip.id))) return "";
   const rows = p.years.map(({y, items}) => { const names = [...new Set(items.map(i => i.name))]; const trip = items.find(i => i.trip);
     return `<div class="yr"><b>${y}</b><span>${esc(names.slice(0, 3).join(" · "))}${names.length > 3 ? ` · +${names.length - 3} more` : ""}<br><small style="text-transform:none;letter-spacing:0;font-family:inherit;color:var(--muted);font-size:11px">${thisYearAgo(y)}</small></span>${trip ? `<button data-replay="${trip.trip}">▶ Play</button>` : items[0].mem ? `<button data-mem="${items[0].mem}">Open</button>` : ""}</div>`; }).join("");
   return `<div class="postcard" aria-label="Sunday postcard"><div class="stamp" aria-hidden="true">✉</div><small>${p.sunday ? "Your Sunday postcard" : "Sunday postcard · preview"}${p.span ? " · " + esc(p.span) : ""}</small><h3>${esc(p.label)}</h3>${rows}
@@ -1096,7 +1099,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.7 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.7.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1140,7 +1143,8 @@ const showList = () => { if (isPhone() && sheetPos === "peek") setSheet("half");
 /* ---------------- golf helpers ---------------- */
 function confirmedCourse(){ if (!confirmedCourse.c){ const par = [4,4,4,4,4,4,4,3,4,4,3,4,3,4,5,3,4,4]; const c = {id:SUGGEST.id, name:SUGGEST.name, place:SUGGEST.place, lat:SUGGEST.lat, lon:SUGGEST.lon, par, rounds:[{date:SUGGEST.date, with:"Mike, Dave, Tom", scores:makeScores("nb", par)}], tripId:"scotland", note:""}; confirmedCourse.c = c; } return confirmedCourse.c; }
 function findCourse(id){ return id === SUGGEST.id ? confirmedCourse() : COURSES.find(c => c.id === id); }
-function allRounds(c){ return [...c.rounds, ...(extraRounds[c.id] || [])]; }
+const builtRounds = c => c.id === SUGGEST.id && store.get("photoRoundHidden", false) ? [] : c.rounds;
+function allRounds(c){ return [...builtRounds(c), ...(extraRounds[c.id] || [])]; }
 function total(r){ return r.scores.reduce((a, b) => a + b, 0); }
 function bestRound(c){ const r = allRounds(c); return r.length ? Math.min(...r.map(total)) : "—"; }
 function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.date).sort().pop() : SUGGEST.date; }
@@ -1183,7 +1187,7 @@ function openCourse(id){
   const rounds = allRounds(c); const parTot = c.par.reduce((a, b) => a + b, 0);
   const cell = (s, p) => `<td class="${s < p ? "b" : s === p ? "e" : ""}">${s}</td>`;
   const half = (arr, a) => arr.slice(a, a + 9).reduce((x, y) => x + y, 0);
-  const rows = rounds.map((r, i) => { const xi = i - c.rounds.length; return `<tr><td class="lbl">${fmtShort(r.date)} '${r.date.slice(2,4)}${xi >= 0 ? ` <button class="rdel" data-round-del="${c.id}|${xi}" aria-label="Delete this round">✕</button>` : ""}</td>${r.scores.slice(0,9).map((s, j) => cell(s, c.par[j])).join("")}<td class="tot">${half(r.scores,0)}</td>${r.scores.slice(9).map((s, j) => cell(s, c.par[j+9])).join("")}<td class="tot">${half(r.scores,9)}</td><td class="tot">${total(r)}</td></tr>`; }).join("");
+  const rows = rounds.map((r, i) => { const xi = i - builtRounds(c).length; return `<tr><td class="lbl">${fmtShort(r.date)} '${r.date.slice(2,4)}${xi >= 0 ? ` <button class="rdel" data-round-del="${c.id}|${xi}" aria-label="Delete this round">✕</button>` : c.id === SUGGEST.id ? ` <button class="rdel" data-photo-round-del aria-label="Delete the round read from the photo">✕</button>` : ""}</td>${r.scores.slice(0,9).map((s, j) => cell(s, c.par[j])).join("")}<td class="tot">${half(r.scores,0)}</td>${r.scores.slice(9).map((s, j) => cell(s, c.par[j+9])).join("")}<td class="tot">${half(r.scores,9)}</td><td class="tot">${total(r)}</td></tr>`; }).join("");
   const entry = `<tr><td class="lbl">New round</td>${c.par.map((p, j) => `<td><input inputmode="numeric" maxlength="2" id="ns-${j}" data-hole="${j}" aria-label="Hole ${j+1} score" placeholder="${p}"></td>${j === 8 ? "<td></td>" : ""}`).join("")}<td></td><td class="tot" id="ns-tot">—</td></tr>`;
   const trip = c.tripId && TRIPS.find(t => t.id === c.tripId);
   openSheet(`<div class="hero"><img src="${photo("green", c.id, 960, 540)}" alt=""><div class="cap"><h2>${esc(c.name)}</h2><p>${esc(c.place)} · par ${parTot}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
@@ -1192,7 +1196,7 @@ function openCourse(id){
     <div class="scorewrap"><table class="score"><thead><tr><th class="lbl">Hole</th>${[1,2,3,4,5,6,7,8,9].map(n => `<th>${n}</th>`).join("")}<th>Out</th>${[10,11,12,13,14,15,16,17,18].map(n => `<th>${n}</th>`).join("")}<th>In</th><th>Tot</th></tr>
       <tr><th class="lbl">Par</th>${c.par.slice(0,9).map(p => `<th>${p}</th>`).join("")}<th>${half(c.par,0)}</th>${c.par.slice(9).map(p => `<th>${p}</th>`).join("")}<th>${half(c.par,9)}</th><th>${parTot}</th></tr></thead>
       <tbody>${rows}${entry}</tbody></table></div>
-    ${c.id === SUGGEST.id ? `<p class="note" style="margin:0">The round on ${fmt(SUGGEST.date)} was read from the scorecard photo in your Scotland trip. If a hole is wrong, delete it and enter the round again.</p>` : ""}
+    ${c.id === SUGGEST.id && builtRounds(c).length ? `<p class="note" style="margin:0">The round on ${fmt(SUGGEST.date)} was read from the scorecard photo in your Scotland trip. If a hole is wrong, tap ✕ to delete it and enter the round again.</p>` : ""}
     <div class="row-btns" style="margin:0"><button class="btn green" data-save-round="${c.id}">Save round</button><span class="note" style="align-self:center">Green = birdie or better, gold = par.</span></div>
     <div><label class="l" for="cnote">Course notes</label><textarea id="cnote" data-cnote="${c.id}" placeholder="Favorite hole, who you played with, the shot you'll never forget">${esc(notes["c_" + c.id] ?? c.note ?? "")}</textarea><div class="saved" id="saved-c_${c.id}"></div></div>
     <div><div class="sec" style="margin:0 0 6px">Paper scorecard</div><div class="strip" style="margin:0"><img src="${photo("scorecard", c.id)}" alt="Photo of the paper scorecard" data-raw="${photo("scorecard", c.id)}" data-rawcap="Scorecard · ${esc(c.name)}"><img src="${photo("green", c.id + "b")}" alt="" data-raw="${photo("green", c.id + "b")}" data-rawcap="${esc(c.name)}"></div><p class="note">In the app you snap the card and the phone reads the numbers for you.</p></div>
@@ -1767,7 +1771,7 @@ function momentPhoto(el, src){
   const img = new Image(); img.src = src; img.alt = ""; img.className = "kb"; el.querySelector(".pics").appendChild(img);
   const pics = el.querySelectorAll(".pics img"); if (pics.length > 2) pics[0].remove();
 }
-const PACE = {slow:1.45, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"1×", fast:"Fast"};
+const PACE = {slow:1.45, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 async function replay(id, opts = {}){
   const t = TRIPS.find(x => x.id === id); const st = stopsOf(t); $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
@@ -1793,12 +1797,14 @@ async function replay(id, opts = {}){
     const prev = i ? [st[i-1].lon, st[i-1].lat] : [HOME.lon, HOME.lat], prevName = i ? stopName(st[i-1]) : "Home";
     const dist = d3.geoDistance(prev, to), car = dist < DRIVE_MAX;
     (replayState.roads = replayState.roads || []).length = i; replayState.leg = i - 1; mom.classList.remove("on");
-    if (jump){ chip.hidden = true; await flyTo(s.lon, s.lat, Math.max(zoom, 4), 700); jump = false; }
+    if (replayState.repause) jump = true; // Previous/Next pressed while paused: go straight to the stop
+    if (jump){ chip.hidden = true; await flyTo(s.lon, s.lat, Math.max(zoom, 4), REDUCED() ? 1 : 700); jump = false; }
     else {
       chip.innerHTML = `<span>${car ? "🚗" : "✈"}</span> ${esc(prevName)} → <b>${esc(stopName(s))}</b> · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi`; chip.hidden = false;
       await travel(prev, to, (car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) * Math.min(1.2, PACE[replayPace])); if (!alive()) return;
       if (goBack()){ i = Math.max(0, i - 1); jump = true; continue; }
     }
+    replayState.next = false;
     replayState.roads[i] = car && !jump ? replayState.lastRoad : null;
     replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true;
     await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 1); jump = true; continue; }
@@ -1811,8 +1817,10 @@ async function replay(id, opts = {}){
       mtxt.innerHTML = `<div class="d">${fmt(s.date)} · Stop ${i+1} of ${st.length}</div><h2>${esc(stopName(s))}</h2>${main ? `<p class="best">${esc(main)}</p>` : ""}${story.who ? `<div class="who">With ${esc(story.who)}</div>` : ""}${last && story.note ? `<p class="n">${esc(story.note)}</p>` : story.best ? `<p class="n">${esc(ph.caption)}</p>` : ""}`;
       if (j === 0){ mtxt.classList.remove("show"); void mtxt.offsetWidth; mtxt.classList.add("show"); } else mtxt.classList.add("show", "still");
       mom.classList.add("on"); prog((i + (j+1)/s.photos.length) / st.length);
+      if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
       await wait(last && story.note ? per + 1500 : per); if (!alive()) return;
       if (goBack()){ back = true; break; }
+      if (replayState.next){ replayState.next = false; break; }
     }
     mtxt.classList.remove("still");
     if (back){ i = Math.max(0, i - 1); jump = true; continue; }
@@ -1925,6 +1933,7 @@ document.addEventListener("click", e => {
     if (sc.some(v => v === null)){ toast("Enter a score for all 18 holes first"); return; }
     (extraRounds[c.id] = extraRounds[c.id] || []).push({date:todayStr(), with:"", scores:sc}); store.set("rounds", extraRounds);
     toast(`Round saved: ${sc.reduce((a, x) => a + x, 0)}`); rerender(); openCourse(c.id); return; }
+  if (g("[data-photo-round-del]")){ store.set("photoRoundHidden", true); rerender(); openCourse(SUGGEST.id); toast("Round from the scorecard photo deleted", () => { store.set("photoRoundHidden", false); rerender(); openCourse(SUGGEST.id); }); return; }
   if ((b = g("[data-round-del]"))){ const [cid, xi] = b.dataset.roundDel.split("|"); const arr = extraRounds[cid] || []; const [r] = arr.splice(+xi, 1); store.set("rounds", extraRounds); rerender(); openCourse(cid);
     toast(`Round of ${total(r)} deleted`, () => { (extraRounds[cid] = extraRounds[cid] || []).splice(+xi, 0, r); store.set("rounds", extraRounds); rerender(); openCourse(cid); }); return; }
   if ((b = g("[data-stop-ignore]"))){ const id = b.dataset.stopIgnore; const s = TRIPS.flatMap(t => t.stops).find(x => x.id === id);
@@ -2004,9 +2013,10 @@ document.addEventListener("keydown", e => {
 });
 $("#replay").addEventListener("click", e => {
   if (e.target.id === "rpause"){ replayState.paused = !replayState.paused; e.target.textContent = replayState.paused ? "Play" : "Pause"; }
+  if ((e.target.id === "rprev" || e.target.id === "rskip") && replayState && replayState.paused){ replayState.paused = false; replayState.repause = true; }
   if (e.target.id === "rprev" && replayState){ replayState.back = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
   if (e.target.id === "rpace" && replayState){ replayPace = {slow:"normal", normal:"fast", fast:"slow"}[replayPace]; store.set("pace", replayPace); e.target.textContent = PACE_LABEL[replayPace]; toast("Story pace: " + {slow:"slow", normal:"normal", fast:"fast"}[replayPace]); }
-  if (e.target.id === "rskip" && replayState){ replayState.skip = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
+  if (e.target.id === "rskip" && replayState){ replayState.skip = true; replayState.next = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
   if (e.target.id === "rclose"){ endReplay(); }
   if (e.target.id === "rpause" && replayState){ e.target.textContent = replayState.paused ? "▶" : "❚❚"; e.target.setAttribute("aria-label", replayState.paused ? "Play" : "Pause"); }
   if (e.target.id === "rmute"){ music.setMuted(!musicMuted); e.target.textContent = musicMuted ? "🔇" : "🔊"; e.target.setAttribute("aria-label", musicMuted ? "Turn sound on" : "Mute"); }
