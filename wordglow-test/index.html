@@ -234,9 +234,12 @@ body.tut .tools { display: none; }
 .slot { display: grid; place-items: center; border-radius: 12px; min-height: calc(var(--cell) * 0.7 * 3 + 16px); }
 .slot.dead .piece { opacity: 0.3; }
 /* A piece swapped in to rescue the tray glows for a moment, so it's easy to spot which one changed. */
-.piece.swapped { animation: swapGlow 1.1s ease-in-out 3; }
-@keyframes swapGlow { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 8px #ffd666) brightness(1.15); } }
+.piece.swapped { filter: drop-shadow(0 0 5px #ffd666); animation: swapGlow 1.1s ease-in-out 3; }
+@keyframes swapGlow { 0%, 100% { filter: drop-shadow(0 0 5px #ffd666); } 50% { filter: drop-shadow(0 0 12px #ffd666) drop-shadow(0 0 4px #fff) brightness(1.2); transform: scale(1.06); } }
 /* Soft hint: the row or column where a word can be made glows faintly. */
+.cell.nudge .tile { animation: nudge 0.6s ease-in-out 4; }
+@keyframes nudge { 50% { transform: scale(1.18); box-shadow: 0 0 14px #ffd666; } }
+@media (prefers-reduced-motion: reduce) { .cell.nudge .tile { animation: none; box-shadow: 0 0 10px #ffd666; } }
 .cell.softhint { background: rgba(255, 214, 102, 0.16); box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.4); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .rot-gift { margin: 6px auto; }
@@ -542,8 +545,8 @@ const VOWELS = "aaaaeeeeeiiiooou";
 const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
 // Difficulty: 1 = easiest (level 1), 0 = full difficulty (level 12 and later).
 const ease = () => Math.max(0, 1 - (level - 1) / 11);
-// Points needed to finish a level: 30, then 15 more each level.
-const target = () => 30 + 15 * (level - 1);
+// Targets: +15 a level up to level 8 (135), then +10 a level (Alan, 2026-11-09: ease after 8).
+const target = () => level <= 8 ? 30 + 15 * (level - 1) : 135 + 10 * (level - 8);
 let levelBase = 0;                       // score when this level started
 // First-time demos: the Rotate walkthrough's step (0 = off) and whether the bomb hint has been shown.
 let rotGuide = 0, rotGuideTurns = 0, bombSeen = store.get("wb-bomb-seen", false);
@@ -618,7 +621,9 @@ function rescueTray() {
   if (!left.length || left.some(([p]) => helpScore(p) >= 3)) return false;
   const key = boardKey();
   if (key === noRescueKey) return false;
-  const p = wordPiece();
+  // wordPiece is partly random, so it gets 3 tries before this board is marked as having no rescue (Muse round 11).
+  let p = null;
+  for (let t = 0; t < 3 && !p; t++) p = wordPiece();
   if (!p) { noRescueKey = key; return false; }
   p.swapped = true;
   tray[left[Math.floor(rng() * left.length)][1]] = p;
@@ -644,7 +649,7 @@ function hintLine() {
   }
   if (!best) return null;
   const [r0, c0] = best.cells[0];
-  return best.cells.every(([r]) => r === r0) ? { row: r0 } : { col: c0 };
+  return { ...(best.cells.every(([r]) => r === r0) ? { row: r0 } : { col: c0 }), key: boardKey() };
 }
 // A swap only ever replaces a piece still in the tray, never fills a slot already played (a Shuffle passes
 // in a part-used tray). With all three unused this picks exactly as before, so nothing else changes.
@@ -825,7 +830,7 @@ function saveGame() {
   if (tut || over) return;
   const save = {
     v: 1, day: todayKey(), mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, rotates,
-    continued, levelsSinceAd, goalCount, chain, chainMoves, seed: rng.seed(),
+    continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(),
     tray: tray.map(p => ({ ...p, fresh: false })),
     goals: goals.map(g => ({ id: g.id, prog: g.prog, need: g.need, reward: g.reward })),
   };
@@ -839,7 +844,7 @@ function saveOk(g) {
   const num = v => Number.isFinite(v), opt = v => v === undefined || v === null || Number.isFinite(v);
   if (!g || typeof g !== "object" || (g.mode !== "endless" && g.mode !== "daily")) return false;
   if (!Number.isInteger(g.level) || g.level < 1 || !num(g.score) || !opt(g.levelBase) || !num(g.seed ?? 0)) return false;
-  if (![g.erasers, g.shuffles, g.toShuffle, g.rotates, g.chain, g.chainMoves, g.levelsSinceAd, g.goalCount].every(opt)) return false;
+  if (![g.erasers, g.shuffles, g.toShuffle, g.rotates, g.chain, g.chainMoves, g.dryMoves, g.levelsSinceAd, g.goalCount].every(opt)) return false;
   if (!Array.isArray(g.board) || g.board.length !== N || !g.board.every(row => Array.isArray(row) && row.length === N)) return false;
   if (!Array.isArray(g.tray) || !Array.isArray(g.goals) || !Array.isArray(g.found)) return false;
   const cellOk = x => x === null || (x && typeof x === "object" && typeof x.ch === "string" && x.ch.length === 1);
@@ -856,7 +861,7 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   if (!g || g.v !== 1 || (g.mode === "daily" && g.day !== todayKey()) || !saveOk(g)) return false;
   dropRotGuide();
   ({ mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, continued, levelsSinceAd, goalCount, tray } = g);
-  chain = g.chain || 0; chainMoves = g.chainMoves || 0; rotates = g.rotates || 0; rotating = false; rotPaid = null;
+  chain = g.chain || 0; chainMoves = g.chainMoves || 0; dryMoves = g.dryMoves || 0; softHint = null; rotates = g.rotates || 0; rotating = false; rotPaid = null;
   goals = g.goals.map(x => ({ ...GOALS.find(d => d.id === x.id), ...x }));
   rng = mulberry(g.seed);
   tut = null; movable = null; erasing = false; over = false; busy = false; shownScore = score;
@@ -1079,7 +1084,8 @@ function renderTools() {
   stepRotGuide();
   const left = WORDS_PER_SHUFFLE - toShuffle;
   document.getElementById("enote").textContent = erasing ? "Tap any block to erase it. Tap Eraser again to cancel."
-    : rotating ? "Tap a piece below to turn it. Tap Rotate again when it's the way you want."
+    : rotating ? (rotPaid !== null ? "Turn this piece as often as you like, still one rotate. Tap Rotate again when it's right."
+      : "Tap a piece below to turn it. One rotate per piece, turned as often as you like.")
     : shuffles >= MAX_SHUFFLES ? `Shuffles full (${MAX_SHUFFLES}). Use one to start earning shuffles again.`
     : `5+ letter words earn erasers. Next shuffle in ${left} word${left === 1 ? "" : "s"}.`;
   toolNote();
@@ -1108,7 +1114,16 @@ function renderScores() {
   const pct = Math.min(100, 100 * levelPts() / target());
   document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""} · ${Math.min(levelPts(), target())} / ${target()}<span class="lvbar"><i style="width:${pct}%"></i></span>`;
 }
-function renderAll() { renderBoard(); renderTray(); renderScores(); sizeCells(); }
+function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores(); sizeCells(); }
+// A Rotate, Shuffle or Eraser changes the tray or board between moves: the soft hint is worked out again,
+// so it only ever points where a piece still in the tray can make a word (Muse round 11).
+function freshHint() {
+  if (!softHint || softHint.key === boardKey()) return;
+  const swap = softHint.swap;
+  softHint = hintLine();
+  if (softHint && swap) softHint.swap = true;
+  setHint();
+}
 
 // Phones differ in height: shrink the board (and the pieces with it) just enough that the whole
 // game fits on screen, so a drag that misses a tile never scrolls the page.
@@ -1427,8 +1442,8 @@ function showDefinitions(words) {
   el.style.left = app.left + "px"; el.style.width = app.width + "px";
   el.style.maxHeight = Math.max(60, boardTop - 12) + "px";
   document.body.appendChild(el);
-  // Wait a moment so the tap that cashed the word in doesn't close it straight away.
-  setTimeout(() => document.addEventListener("pointerdown", hideDefinitions, { once: true, capture: true }), 300);
+  // Wait a moment so the tap that cashed the word in (or a quick next tap) doesn't close it before it's read.
+  setTimeout(() => document.addEventListener("pointerdown", hideDefinitions, { once: true, capture: true }), 1200);
 }
 // New words cashed in this level, newest first, for the recap on the level-complete screen.
 let levelNewWords = [];
@@ -1460,7 +1475,9 @@ function addToBook(word) {
 // The piece placed last stays movable until the next piece, a cash-in, an eraser or a shuffle.
 let movable = null;
 const movableCells = () => movable ? movable.p.cells.map(([r, c]) => [movable.at[0] + r, movable.at[1] + c]) : [];
-function place(i, r0, c0) { tray[i].used = true; put(tray[i], r0, c0); dryMoves++; }
+// The dry count goes up before put(), so the soft hint shows on exactly the 3rd dry placement (Cooper, Muse round 11).
+// A swapped-in piece keeps its marker until it is played itself (Muse round 11).
+function place(i, r0, c0) { delete tray[i].swapped; tray[i].used = true; dryMoves++; put(tray[i], r0, c0); }
 function put(p, r0, c0, moved = false) {
   const placed = p.cells.map(([r, c]) => [r0 + r, c0 + c]);
   placed.forEach(([r, c], k) => board[r][c] = { ch: p.letters[k], color: p.color, special: p.specials?.[k] });
@@ -1537,7 +1554,7 @@ function cashIn(group) {
     found.push({ w: g.w, s: Math.round(g.s * comboMult * chainX) });   // what it actually scored, with combo and chain
     if (g.w.length >= 5 && erasers < MAX_ERASERS) { erasers++; earned = true; }
     if (g.w.length >= 6 && !tut && rotates < MAX_ROTATES) { rotates++; rotEarned = true; }
-    goalsDone.push(...checkGoals(g));
+    goalsDone.push(...checkGoals({ ...g, s: Math.round(g.s * comboMult * chainX) }));   // quests count the score shown (Muse round 11)
   }
   let shuffleEarned = false;
   // With shuffles full, words don't count toward the next one (the line under the tools says so).
@@ -1591,7 +1608,7 @@ function cashIn(group) {
   if (streakNews) extras.push([streakNews[0].replace("\n", " "), streakNews[1]]);
   if (!tut) extras.push(...milestones(group, longest).map(([t, b]) => [t.replace("\n", " "), b]));
   // Every reward this word gave, one line each, for the level-complete card if this word clears the level.
-  lastWordLines = [questLines.trim(), rare ? `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙` : "", ...extras.map(x => x[0])].filter(Boolean);
+  lastWordLines = [...rewardLines, ...extras.map(x => x[0])];
   const news = extras.slice(0, 2);
   if (news.length) toast(news.map(n => n[0]).join("\n"), "news", EXTRA_MS);
   if (rotEarned || goalsDone.some(g => g.reward === "rotate")) rotateIntro();
@@ -1648,7 +1665,8 @@ function setHint() {
     h.innerHTML = "💣 <b>Bomb word!</b> Scoring it also blows up the <b style='color:#e5484d'>red squares</b>. Tap the word to set it off.";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
-  else if (softHint) h.innerHTML = `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
+  else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
+    : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
   else if (!found.length && level === 1) h.innerHTML = `Score <b>${target()} points</b> to clear level 1 and get a fresh board.`;
   else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.";
@@ -1664,15 +1682,20 @@ function finishTurn() {
   if (movable && moveHints < 3) store.set("wb-move-hints", ++moveHints);
   if (!over && levelPts() >= target()) return levelUp();
   if (tray.every(p => p.used)) tray = dealTray();
-  tray.forEach(p => { if (p.swapped && p.used) delete p.swapped; });
-  if (!rescueTray()) tray.forEach(p => delete p.swapped);
+  const rescued = rescueTray();
+  // After a swap, the row or column where the new piece makes a word glows too (Muse round 10).
   const hadHint = softHint;
-  softHint = softHintWanted() ? hintLine() : null;
+  softHint = rescued || softHintWanted() ? hintLine() : null;
+  if (softHint && rescued) softHint.swap = true;
   if (softHint || hadHint) setHint();
   renderAll(); saveGame();
   store.set(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", best);
   if (!tray.some(p => !p.used && canFitAnywhere(p))) {
-    if (lit.length) toast("No room!\nTap a glowing word", false, READ_MS);
+    if (lit.length) {
+      toast("No room!\nTap a glowing word", false, READ_MS);
+      // Make the glowing word easy to find, even under the message (Muse round 10).
+      lit.forEach(w => w.cells.forEach(([r, c]) => cellEl(r, c).classList.add("nudge")));
+    }
     else if (rotates && tray.some(p => !p.used && fitsTurned(p))) {
       rotating = true; erasing = false; renderTools();
       toast("No room!\nTry a rotate", false, READ_MS);
@@ -1859,7 +1882,7 @@ function levelUp() {
   const earned = 10 + 2 * level;
   // A level milestone (level 10, 25, ...) is paid with this card, so the card adds up to what the coin count gains.
   const msLevel = level + 1, msCoins = mode === "endless" && !store.get("wb-level-ms-" + msLevel, false) ? LEVEL_MILESTONES[msLevel] || 0 : 0;
-  if (invitePending) { invitePending = false; store.set("wb-invite-pending", false); setTimeout(() => { addCoins(INVITE_REWARD); toast(`🎁 Friend bonus!\n+${INVITE_REWARD} 🪙`, false, READ_MS); }, 400); }
+  if (invitePending) { invitePending = false; store.set("wb-invite-pending", false); kept.push(`🎁 Friend bonus: +${INVITE_REWARD} 🪙`); setTimeout(() => { addCoins(INVITE_REWARD); toast(`🎁 Friend bonus!\n+${INVITE_REWARD} 🪙`, false, READ_MS); }, 400); }
   const dailyEnd = mode === "daily" && level >= DAILY_LEVELS;
   setTimeout(() => {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
@@ -1867,7 +1890,8 @@ function levelUp() {
     const msLine = msCoins ? `🏅 Level ${msLevel} reached: +${msCoins} 🪙` : "";
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox" style="background:none;color:inherit;padding:6px"><span class="count">+${earned + msCoins} 🪙</span></div>
       ${msCoins ? `<p style="color:var(--muted);font-size:0.85rem;margin:0">Level clear +${earned} · milestone +${msCoins}</p>` : ""}
-      ${[rotLine, msLine, ...kept].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`, true);
+      ${[rotLine, msLine].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}
+      ${kept.length ? `<p style="color:var(--muted);font-size:0.8rem;margin:8px 0 0">Also earned (already added):</p>` + kept.map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("") : ""}${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Double it: watch an ad</button></div>`, true);
     const go = n => {
       closeSheet(); addCoins(n + msCoins);
       if (msCoins) store.set("wb-level-ms-" + msLevel, true);
@@ -1932,6 +1956,8 @@ function nextToast() {
   document.querySelector(".board-wrap").appendChild(t);
   // The next message starts as this one floats away.
   q.timer = setTimeout(() => endToast(q), q.ms - TOAST_OVERLAP);
+  // Safety net: a message is never left on screen once its animation has finished (Muse round 11).
+  t.addEventListener("animationend", e => { if (e.target !== t) return; if (toastNow === q) endToast(q); else t.remove(); });
 }
 function endToast(q) {
   clearTimeout(q.timer);
@@ -2228,12 +2254,15 @@ document.getElementById("rotate").onclick = () => {
 function rotatePiece(i) {
   const p = tray[i];
   if (!p || p.used) return;
+  // A one-tile piece looks the same turned, so tapping it never uses a rotate (Muse round 11).
+  if (p.cells.length === 1) { toast("That piece looks the same turned"); return; }
   if (rotPaid !== i) {
     if (!rotates) { rotating = false; rotPaid = null; renderTools(); return offerPowerup("rotate"); }
     rotates--; rotPaid = i;
   }
   tray[i] = turned(p);
   movable = null;
+  if (softHint) { freshHint(); renderBoard(); }   // the hint follows the turned piece
   SFX.shuffle(); buzz(10);
   renderTray(); renderTools(); saveGame();
 }
@@ -2326,7 +2355,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.1";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "0331f9c 2026-11-09 14:26Z";
+const BUILD_STAMP = "586f8ef 2026-11-09 16:33Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
