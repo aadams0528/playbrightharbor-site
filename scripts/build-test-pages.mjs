@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, cpSync, rmSync, existsSync, appendFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { execSync } from "node:child_process";
 
 const SRC = process.argv[2];
 if (!SRC) throw new Error("Usage: node scripts/build-test-pages.mjs <folder holding the game repos>");
@@ -35,6 +36,9 @@ function build(g) {
   if (/<!doctype|<html/i.test(game)) throw new Error("src/game.html already has its own <html> wrapper");
   // Test pages are beta builds: test ads and tester tools stay on.
   game = game.replace(/(["'])__BUILD__\1/g, "$1beta$1");
+  // A build id (the game repo's commit and the build time) for games that show one, so testers can tell builds apart.
+  let sha = "dev"; try { sha = execSync("git rev-parse --short HEAD", { cwd: join(SRC, g.repo) }).toString().trim(); } catch {}
+  game = game.replace(/__STAMP__/g, `${sha} ${new Date().toISOString().slice(0, 16).replace("T", " ")}Z`);
   if (g.words) {
     if (!game.includes("__WORDS__")) throw new Error("src/game.html is missing the __WORDS__ placeholder");
     game = game.replace("__WORDS__", readFileSync(join(src, "words.txt"), "utf8").trim());
