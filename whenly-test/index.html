@@ -67,6 +67,9 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .list{position:relative;touch-action:none}
 /* Finished puzzles can't be dragged, so let a finger on the cards scroll the page (Alan's iPhone check, test 24). */
 .list.done{touch-action:pan-y}
+.morebtns{display:flex;justify-content:center;gap:18px;margin:0}
+.tag.spot-no{background:#fde8e4}.tag.spot-ok{background:#e3f4e1}
+@media (prefers-color-scheme:dark){.tag.spot-no{background:#4a2722}.tag.spot-ok{background:#203f22}}
 .hardtag{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:var(--ink);color:var(--paper);white-space:nowrap}
 .card{position:absolute;left:0;right:0;height:var(--card-h);display:grid;grid-template-columns:var(--plate-w,var(--card-h)) 1fr auto;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;transition:top .22s cubic-bezier(.3,.7,.3,1),transform .15s,box-shadow .15s,border-color .3s;cursor:grab;user-select:none;-webkit-user-select:none}
 .card.drag{transition:transform .15s,box-shadow .15s;z-index:5;transform:scale(1.03) rotate(-.6deg);box-shadow:0 18px 30px -14px rgba(0,0,0,.45);cursor:grabbing}
@@ -305,11 +308,11 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     </div>
     <div class="tries" id="tries"></div>
     <p class="hint-line" id="hintLine">Drag a card, or tap it and then tap its new spot.</p>
-    <p style="text-align:center;margin:0"><button class="linkbtn" id="bGiveUp" hidden>Show the answer</button></p>
+    <p class="morebtns"><button class="linkbtn" id="bSpot" hidden>🎯 Spot check</button><button class="linkbtn" id="bGiveUp" hidden>Show the answer</button></p>
   </div>
   <section id="archive" hidden></section>
   <section id="expert" hidden></section>
-  <footer id="foot">Bright Harbor Games<span class="build"> · Whenly 1.0 test 26</span></footer>
+  <footer id="foot">Bright Harbor Games<span class="build"> · Whenly 1.0 test 27</span></footer>
 </div>
 
 <script>
@@ -966,7 +969,7 @@ function quality(order){
   return {pairs,tot,q:.6*pairs/tot+.3*(1-dist/maxDist)+.1*best/(n-1)};
 }
 // The ⭐ bonus needs a finish with no hints, no placed card and no "Show the answer".
-const noHelp=()=>G.hintsUsed===0&&!(G.placed||[]).length&&!G.gaveUp;
+const noHelp=()=>G.hintsUsed===0&&!(G.placed||[]).length&&!G.gaveUp&&!G.spot;
 // One rounding rule everywhere: halves round up, with a nudge so 57.4999… (floating-point 57.5) shows as 58 (Cooper, round 7).
 const rnd=x=>Math.round(x+1e-9);
 // The score's parts, computed once so the "Why" line and the score always agree.
@@ -985,7 +988,7 @@ function whyLine(){
 function helpLine(){
   if(noHelp())return "⭐ No help, +10 bonus";
   const p=[];if(G.hintsUsed)p.push(`${G.hintsUsed} hint${G.hintsUsed>1?"s":""} used`);
-  if((G.placed||[]).length)p.push("1 card placed");
+  if((G.placed||[]).length)p.push("1 card placed");if(G.spot)p.push("🎯 spot check used");
   return p.length?p.join(" · ")+" · no ⭐":"no ⭐";
 }
 // Spoiler-free tiles: one per neighboring pair in the TRUE order.
@@ -1001,7 +1004,7 @@ function fresh(kind,ids,order){return{kind,ids,order,attempt:1,known:{},hints:{}
 // A save from an older version (or the tester tool) may lack newer fields; fill them in so the board always works (Muse, round 8).
 // A damaged save whose order isn't exactly this puzzle's cards gets a fresh shuffle, never the sorted answer (Nikola, round 15).
 const okOrder=(o,ids)=>Array.isArray(o)&&Array.isArray(ids)&&o.length===ids.length&&ids.every(id=>o.includes(id));
-function filled(g,n){const good=okOrder(g.order,g.ids),d=fresh(g.kind,g.ids,good?g.order:g.done?sortIds(g.ids):scramble(g.ids,rng(Date.now()))),o={...d,...g};if(!good)o.order=d.order;if(o.finalOrder&&!okOrder(o.finalOrder,o.ids))o.finalOrder=null;for(const k in d)if(o[k]==null)o[k]=d[k];if(n){o.n=n;if(o.wd==null)o.wd=dealFor(n).wd}if(o.done){o.finalOrder=o.finalOrder||o.order.slice();o.marks=o.marks||o.order.map(()=>"g");if(!o.tiles&&!(o.rows&&o.rows.length))o.tiles=pairTiles(o.finalOrder)}return o}
+function filled(g,n){const good=okOrder(g.order,g.ids),d=fresh(g.kind,g.ids,good?g.order:g.done?sortIds(g.ids):scramble(g.ids,rng(Date.now()))),o={...d,...g};if(!good)o.order=d.order;if(o.finalOrder&&!okOrder(o.finalOrder,o.ids))o.finalOrder=null;if(o.spot&&!(o.spot&&o.ids.includes(o.spot.id)&&o.spot.slot>=0&&o.spot.slot<o.ids.length))o.spot=null;for(const k in d)if(o[k]==null)o[k]=d[k];if(n){o.n=n;if(o.wd==null)o.wd=dealFor(n).wd}if(o.done){o.finalOrder=o.finalOrder||o.order.slice();o.marks=o.marks||o.order.map(()=>"g");if(!o.tiles&&!(o.rows&&o.rows.length))o.tiles=pairTiles(o.finalOrder)}return o}
 // The puzzle for day n is the same for everyone, so the archive can rebuild any past day.
 function dateOf(n){const d=new Date(EPOCH);d.setDate(d.getDate()+n-1);return d}
 // A puzzle saved before its day was re-picked keeps its own cards, so it must not borrow the new day's title (Cooper, round 6).
@@ -1181,7 +1184,8 @@ function layout(){
     cardEls[id].setAttribute("aria-label",G.done?`${EVENTS[id][2]}, ${yr(id)}`:`${EVENTS[id][2]}, position ${i+1} of ${n}`);const el=cardEls[id];if(!el.classList.contains("drag"))el.style.top=slotTop(i)+"px";
     const [up,dn]=el.querySelectorAll(".moves button"),fr=G.order.filter(x=>!isPlaced(x)),fi=fr.indexOf(id);up.disabled=fi<=0;dn.disabled=fi<0||fi===fr.length-1;
     const tw=el.querySelector(".tagwrap"),ht=hintText(id),pl=G.placed.includes(id);
-    tw.innerHTML=(ht||pl)?`<br>${ht?`<span class="tag">💡 ${ht}</span> `:""}${pl?`<span class="tag">📌 placed</span>`:""}`:"";
+    const sp=G.spot&&G.spot.id===id&&i===G.spot.slot&&!pl?`<span class="tag spot-${G.spot.ok?"ok":"no"}">🎯 ${G.spot.ok?"right spot":"not its spot"}</span>`:"";
+    tw.innerHTML=(ht||pl||sp)?`<br>${ht?`<span class="tag">💡 ${ht}</span> `:""}${pl?`<span class="tag">📌 placed</span>`:""}${sp}`:"";
   });
   drawChips();
 }
@@ -1269,16 +1273,17 @@ function tapPlace(id){
 let picking=false;
 function hint(){
   if(G.done)return;
-  if(picking){stopPicking();return}
+  if(picking){const was=picking;stopPicking();if(was==="hint")return}
   clearSel();
   if(G.hintsUsed>=MAX_HINTS){toast("No hints left for this puzzle");return}
-  picking=true;Object.values(cardEls).forEach(c=>c.classList.add("picking"));
+  picking="hint";Object.values(cardEls).forEach(c=>c.classList.add("picking"));
   // Say what a hint costs before it's spent (only while the ⭐ is still on the table).
   $("#hintLine").textContent=`Tap a card to see ${hintStep(1)[0]}. A second hint on the same card shows ${hintStep(2)[0]}. Each card can take 2 hints.`+(noHelp()?" Using a hint gives up the ⭐ (10 bonus points).":"");
   $("#bHint").textContent="Cancel";
 }
 function stopPicking(){picking=false;Object.values(cardEls).forEach(c=>c.classList.remove("picking"));updateButtons();feedbackLine()}
 function pickCard(id){
+  if(picking==="spot")return spotCard(id);
   const h=G.hints[id]||0;
   if(h>=2){toast("That card has used both its hints");return}
   G.hints[id]=h+1;G.hintsUsed++;stopPicking();layout();track("hint_used",{mode:G.kind,level:h+1});
@@ -1286,6 +1291,27 @@ function pickCard(id){
   $("#hintLine").textContent=`💡 Hint ${G.hintsUsed} of ${MAX_HINTS} used (up to 2 on one card). Hints give up the ⭐ bonus.`;
   persist();
 }
+// ---------- spot check ----------
+// Once per puzzle: tap a card to learn whether it is in its final spot. It gives up the ⭐ (Nikola, Muse; Alan chose it Nov 9).
+// The answer only shows while the card stays in the slot it was checked in, so it never goes stale.
+function spot(){
+  if(G.done||!spotOK())return;
+  if(picking){const was=picking;stopPicking();if(was==="spot")return}
+  if(G.spot){toast("You've used this puzzle's spot check");return}
+  clearSel();picking="spot";Object.values(cardEls).forEach(c=>c.classList.add("picking"));
+  $("#hintLine").innerHTML=`<b>🎯 Spot check:</b> tap one card to learn if it's in its final spot right now. You get one per puzzle.`+(noHelp()?" It gives up the ⭐ (10 bonus points).":"");
+  $("#bSpot").textContent="Cancel spot check";
+}
+function spotCard(id){
+  if(isPlaced(id)){toast("📌 That card is already in its spot");return}
+  const slot=G.order.indexOf(id),ok=yr(sortIds(G.ids)[slot])===yr(id);
+  G.spot={id,slot,ok};stopPicking();layout();track("spot_check",{mode:G.kind,ok:ok?1:0});buzz(ok?[10,40,10]:20);
+  const el=cardEls[id];el.classList.remove("bump");void el.offsetWidth;el.classList.add("bump");
+  $("#hintLine").innerHTML=`🎯 <b>"${EVENTS[id][2]}" ${ok?"is in its final spot.":"is not in its final spot."}</b> The 🎯 tag stays while the card stays there.`;
+  $("#sr").textContent=`${EVENTS[id][2]} ${ok?"is in its final spot":"is not in its final spot"}.`;
+  persist();
+}
+const spotOK=()=>G.kind!=="tutorial";
 function place(){
   if(G.done)return;
   // Place the card that is furthest from its spot, so it never picks one that already looks right.
@@ -1304,6 +1330,8 @@ function updateButtons(){
   $("#bLock").textContent="Check my order";$("#bLock").disabled=sameAsChecked();
   $("#tries").innerHTML=G.kind==="tutorial"?"":`Try ${G.attempt} of ${TRIES} ${Array.from({length:TRIES},(_,i)=>`<i class="${i<G.attempt?"used":""}"></i>`).join("")}`;
   $("#bGiveUp").hidden=G.kind==="tutorial"||G.attempt<2;
+  const sb=$("#bSpot");sb.hidden=!spotOK()||G.done;sb.disabled=!!G.spot;if(picking!=="spot")sb.textContent=G.spot?"🎯 Spot check used":"🎯 Spot check · 1";
+  if(!sb.hidden&&!G.spot&&!S.spotSeen){S.spotSeen=1;save();toast("New: 🎯 Spot check. Once per puzzle, tap it and then a card to learn if that card is in its final spot.")}
   $("#offer").hidden=G.kind==="tutorial"||G.attempt<3||G.offerUsed;
 }
 
@@ -1447,7 +1475,7 @@ function showResult(){
 }
 function shareText(){
   const how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)}/${TRIES}`:`Not solved in ${TRIES}`;
-  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${LEVELS[levelOf(G.ids)]}${themeOf(G.n,G.ids)&&G.kind!=="practice"?" · "+themeOf(G.n,G.ids):""}\nhttps://playwhenly.com`;
+  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}${G.spot?" 🎯":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${LEVELS[levelOf(G.ids)]}${themeOf(G.n,G.ids)&&G.kind!=="practice"?" · "+themeOf(G.n,G.ids):""}\nhttps://playwhenly.com`;
 }
 function copy(t){
   const ok=()=>toast("Result copied. Paste it in a text to friends and family.");
@@ -1591,6 +1619,7 @@ function help(){sheet(`<h2>How to play</h2>
   <p><b>Put them in order, oldest at the top.</b> Drag a card, tap its arrows, or tap a card and then the card whose spot it should take.</p>
   <p>Tap <b>Check my order</b>. You get 3 tries. After each try, a green ✓ between two cards means they're in the right order, and a red × means those two are out of order. A tag is about that pair only, not a card's final spot. Tags follow the cards as you move them, and only show pairs a check has proved; a new pair stays blank until you check again.</p>
   <p><b>💡 Hints:</b> tap Hint, then a card, to see its century (or its decade, when every card is from the same century). A second hint on the same card narrows it further (to early, mid or late in the decade when the cards are close). Each card can take 2 hints. Finish with no hints for a ⭐ and 10 bonus points.</p>
+  <p><b>🎯 Spot check:</b> once per puzzle, tap Spot check and then a card to learn if that card is in its final spot right now. Its 🎯 tag stays while the card stays there. It gives up the ⭐.</p>
   <p><b>📌 Stuck?</b> From try 2, <b>Show the answer</b> ends the puzzle early for half the points your order would earn. On try 3, "Place a card" puts one card in its right spot. Both give up the ⭐, and your streak still counts.</p>
   <p><b>Your result:</b> one row of squares for each try, like the tags you saw. 🟩 those two neighbors were in order, 🟥 they were out of order.</p>
   <p><b>Score:</b> up to 100, for pairs in the right order and cards close to their spots. Solving on your first try scores highest.</p>
@@ -1872,7 +1901,7 @@ if(window.BHCloud){BHCloud.config.appleReady=true;BHCloud.init().then(afterSync)
 try{if(sessionStorage.getItem("whenly-restored")){sessionStorage.removeItem("whenly-restored");setTimeout(()=>toast("☁️ Progress restored!"),600)}}catch(e){}
 
 // ---------- wire up ----------
-$("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
+$("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bSpot").onclick=spot;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
 // Tabs open after the first lesson; say so instead of ignoring the tap (Nikola, round 9).
 const tabGo=m=>()=>{if(tutorial){toast("Finish this short lesson first. Then every tab opens.");return}setMode(m)};
 $("#tDaily").onclick=tabGo("daily");$("#tPractice").onclick=tabGo("practice");$("#tArchive").onclick=tabGo("archive");$("#tExpert").onclick=tabGo("expert");
