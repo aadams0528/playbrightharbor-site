@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.9 (working title; travel memories app, 2026-11-10). Unlisted test page for reviewers (round 5). Not linked from the site. -->
+<!-- Travel Globe prototype v0.10.2 (hikes from GPX + all round 5 fixes; working title; travel memories app, 2026-11-10). Unlisted test page for reviewers (round 5). Not linked from the site. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -228,7 +228,7 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 @keyframes recblink{50%{opacity:.25}}
 .moment{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .7s ease;pointer-events:none;background:#05070d;overflow:hidden;display:flex;flex-direction:column;padding-bottom:84px;box-sizing:border-box}
 .moment .pics{position:relative;flex:1;min-height:0;overflow:hidden}
-.moment.on{opacity:1}
+.moment.on{opacity:1;pointer-events:auto}
 .moment .pics img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:mfade .9s ease forwards,kb 9s ease-out forwards}
 .moment .pics::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,7,13,.3) 0%,rgba(5,7,13,0) 22%,rgba(5,7,13,0) 80%,rgba(5,7,13,.6) 100%)}
 @media (min-aspect-ratio:5/4){.moment{flex-direction:row;padding-bottom:84px}.moment .mtxt{width:min(38%,460px);align-self:center}}
@@ -264,7 +264,7 @@ body.rpaused .moment .pics img{animation-play-state:running,paused!important}
 .themeopt img{width:100%;aspect-ratio:1/1;border-radius:10px;max-width:100%}
 .themeopt b{font-size:14px} .themeopt span{font-size:12px;color:var(--muted);line-height:1.35}
 .themeopt[aria-pressed="true"]{border-color:var(--lit);box-shadow:0 0 0 1px var(--lit)}
-.toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:40;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 96px);transform:translateX(-50%);z-index:40;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 
 .catchips{display:flex;flex-wrap:wrap;gap:6px}
 .catchips .chip{padding:6px 11px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
@@ -839,6 +839,7 @@ function draw(t){
     else path({type:"LineString", coordinates:coords});
     ctx.strokeStyle = sel ? th.route[0] : th.route[1]; ctx.lineWidth = sel ? 2.2 : 1.1; ctx.setLineDash(sel ? [] : [3,3]); ctx.stroke(); ctx.setLineDash([]);
   });
+  if (layers.trips || replayState) drawHikes(ctx, th);
   if (layers.diary && diaryOn && !replayState && zoom < 2.2){
     ctx.beginPath(); TRIPS.forEach(tr => { const f = stopsOf(tr)[0]; if (f) path({type:"LineString", coordinates:[[HOME.lon, HOME.lat], [f.lon, f.lat]]}); });
     ctx.strokeStyle = th.diary; ctx.lineWidth = 1; ctx.stroke();
@@ -985,9 +986,10 @@ function statDefs(){
     {k:"photos", label:"Photos", v:TRIPS.reduce((a, t) => a + stopsOf(t).reduce((b, x) => b + x.photos.length, 0), 0) + allSnaps().length, tab:"trips"},
     {k:"trips", label:"Trips", v:TRIPS.length, tab:"trips"},
     {k:"miles", label:"Miles", v:(miles/1000).toFixed(0) + "k", tab:"trips"},
+    {k:"hikes", label:"Hike km", v:Math.round(hikes.reduce((a, x) => a + x.km, 0)), tab:"collections", col:"hike", color:catColor("hike")},
     {k:"golf", label:"Courses", v:golfCounts().played, tab:"collections", col:"golf", color:catColor("golf")},
     ...CATS.filter(c => c.k !== "golf").map(c => ({k:c.k, label:SHORT[c.k] || c.label, v:collectionItems(c.k).length, tab:"collections", col:c.k, color:catColor(c.k)}))
-  ];
+  ].map(x => x.v === 1 && STAT_ONE[x.label] ? Object.assign({}, x, {label:STAT_ONE[x.label]}) : x);
 }
 function renderStats(){
   const defs = statDefs(); const picks = headerPicks.map(k => defs.find(d => d.k === k)).filter(Boolean);
@@ -1092,7 +1094,7 @@ function renderBody(){
     const k = colFilter || "food";
     h += `<div class="colgrid">`;
     CATS.forEach(c => { const items = collectionItems(c.k); const img = items[0] ? items[0].img : photo(c.scene || "lake", c.k);
-      const count = c.k === "golf" ? plural(golfCounts().played, "course") : `${items.length} saved`;
+      const count = c.k === "golf" ? plural(golfCounts().played, "course") : c.k === "hike" && hikes.length ? `${plural(hikes.length, "trail")} · ${items.length} saved` : `${items.length} saved`;
       h += `<button class="coltile" aria-pressed="${k === c.k}" data-col="${c.k}"><img src="${img}" alt=""><span>${esc(c.label)}<small>${count}</small></span></button>`; });
     h += `<button class="coltile newcol" data-newcol><span>+ New collection<small>Breweries, ballparks, concerts…</small></span></button></div>`;
     h += `<div id="colList" style="display:contents">`;
@@ -1100,6 +1102,7 @@ function renderBody(){
     else {
       if (k === "race" && allSnaps().some(r => r.cat === "race" && r.by === PARTNER)){ const rs = allSnaps().filter(r => r.cat === "race" && r.by === PARTNER); h += `<div class="suggest" style="border-color:rgba(255,122,184,.4);background:rgba(255,122,184,.07)"><b>${(() => { const all = allSnaps().filter(r => r.cat === "race"), mine = all.filter(r => !r.by && !r.sample).length; return `Races · ${plural(all.length, "finish", "finishes")} · ${PARTNER}'s ${rs.length}${mine ? ` · added by you ${mine}` : ""}`; })()} · ${rs.filter(r => r.dist === "13.1 mi").length} of ${PARTNER}'s are halves · ${rs.filter(r => (r.dist || "").startsWith("140")).length} full IRONMAN</b><p>${(() => { const hv = rs.filter(r => r.dist === "13.1 mi" && r.time).sort((a, b) => a.time.localeCompare(b.time))[0]; return hv ? `Best half: ${esc(hv.time)} at ${esc(hv.name.replace(/ Half( Marathon)?$/, ""))}. ` : ""; })()}Sample races are shared from ${PARTNER}'s globe; races you add are marked "added by you". The results stay ${PARTNER}'s.</p></div>`; }
       const items = collectionItems(k);
+      if (k === "hike") h += hikesHTML(hikes, true);
       h += `<div class="sec">${esc(catLabel(k))} · ${items.length}</div>`;
       items.forEach(it => h += itemHTML(it));
       if (!items.length) h += `<p class="note" style="margin:0">Nothing here yet. Add the first one, with or without a photo.</p>`;
@@ -1138,10 +1141,12 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.9 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.10.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
+const STAT_ONE = {Places:"Place", Photos:"Photo", Trips:"Trip", Courses:"Course"};
+const LAYER_ONE = {trips:"trip stop", snaps:"memory", golf:"golf course", diary:"Travel Diary place", bucket:"bucket list place"};
 const LAYER_NOUN = {trips:"trip stops", snaps:"memories", golf:"golf courses", diary:"Travel Diary places", bucket:"bucket list places"};
 const KIND_OF = {trips:["stop"], snaps:["snap"], golf:["course","suggest"], diary:["diary"], bucket:["bucket"]};
 function renderLayers(){
@@ -1153,7 +1158,7 @@ function revealLayer(k, quiet){
   if (!pts.length){ if (!quiet) toast("Nothing to show yet"); return; }
   if (!quiet){
     if (!pts.some(p => visible(p.lon, p.lat)) || zoom > 3){ const c = d3.geoCentroid({type:"MultiPoint", coordinates:pts.map(p => [p.lon, p.lat])}); flyTo(c[0], c[1], 1, 1000); }
-    toast(`Showing ${pts.length} ${LAYER_NOUN[k]}`);
+    toast(`Showing ${pts.length} ${pts.length === 1 ? LAYER_ONE[k] : LAYER_NOUN[k]}`);
   }
 }
 function rerender(){ renderStats(); renderTabs(); renderBody(); renderLayers(); dirty = true; }
@@ -1189,14 +1194,14 @@ function bestRound(c){ const r = allRounds(c); return r.length ? Math.min(...r.m
 function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.date).sort().pop() : SUGGEST.date; }
 
 /* ---------------- overlays ---------------- */
-function openSheet(html, kind = ""){ $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
+function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
 // drag the grip (or a sheet title) down to close a sheet; titles don't select text while dragging
 (function(){ let y0 = null, el = null, dy = 0;
   document.addEventListener("pointerdown", e => { const h = e.target.closest(".sheet-grip, .sheet-in h2"); if (!h || e.target.closest("button,input,textarea,select")) return; el = h.closest(".sheet-in"); if (!el) return; y0 = e.clientY; dy = 0; el.style.transition = "none"; });
   document.addEventListener("pointermove", e => { if (y0 == null || !el) return; dy = Math.max(0, e.clientY - y0); el.style.transform = dy ? `translateY(${dy}px)` : ""; });
   const end = () => { if (y0 == null || !el) return; const s = el; y0 = null; el = null; s.style.transition = "transform .18s"; if (dy > 90){ s.style.transform = "translateY(100%)"; setTimeout(closeSheet, 160); } else s.style.transform = ""; };
   document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end); })();
-function closeSheet(){ const wasTrip = $("#overlay").dataset.kind === "trip"; if (["welcome", "loader"].includes($("#overlay").dataset.kind)) setTimeout(() => { if (!document.querySelector(".sheet")) lightSample(); }, 0); $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
+function closeSheet(){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); const wasTrip = $("#overlay").dataset.kind === "trip"; if (["welcome", "loader"].includes($("#overlay").dataset.kind)) setTimeout(() => { if (!document.querySelector(".sheet")) lightSample(); }, 0); $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
 function flyToStops(st, ms = 1300){ if (!st.length) return; const lats = st.map(s => s.lat), lons = st.map(s => s.lon);
   flyTo(d3.mean(lons), d3.mean(lats), Math.min(14, 2.2 / Math.max(.15, d3.geoDistance([d3.min(lons), d3.min(lats)], [d3.max(lons), d3.max(lats)]) * 3)), ms); }
 function stopHTML(s){
@@ -1222,11 +1227,12 @@ function openTrip(id, noFly){
   const scroll = noFly && document.querySelector(".sheet-in") ? document.querySelector(".sheet-in").scrollTop : 0;
   openSheet(`<div class="hero"><img src="${photo(cover.photos[0].scene, cover.photos[0].id, 960, 540)}" alt=""><div class="cap"><h2>${esc(t.title)}</h2><p>${fmt(t.start)} – ${fmt(t.end)} · ${esc(t.country)}${TRIP_WHO[t.id] ? " · with " + esc(TRIP_WHO[t.id]) : ""}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
    <div class="pad">
-    <div class="facts"><div><b>${days(t)}</b><span>Days</span></div><div><b>${st.length}</b><span>Places</span></div><div><b>${n}</b><span>Photos</span></div><div><b>${tripMiles(t).toLocaleString()}</b><span>Miles</span></div></div>
+    <div class="facts"><div><b>${days(t)}</b><span>${days(t) === 1 ? "Day" : "Days"}</span></div><div><b>${st.length}</b><span>${st.length === 1 ? "Place" : "Places"}</span></div><div><b>${n}</b><span>${n === 1 ? "Photo" : "Photos"}</span></div><div><b>${tripMiles(t).toLocaleString()}</b><span>${tripMiles(t) === 1 ? "Mile" : "Miles"}</span></div></div>
     <div class="row-btns" style="margin:0"><button class="btn primary" data-replay="${t.id}">▶ Play my story</button><button class="btn" data-music="${t.id}">♪ ${esc(choiceName(musicChoice(t.id) === "auto" ? autoChoice(t.id) : musicChoice(t.id)))}</button><button class="btn" data-share="${t.id}">🎬 Make a video</button></div>
     <p class="note" style="margin:0">Stops were grouped from your photo locations. Rename one, or hide it if it doesn't belong.</p>
     ${golf.length ? `<div class="suggest" style="padding:10px"><b>⛳ Golf on this trip</b><div class="row-btns" style="margin-top:8px">${golf.map(c => `<button class="btn green" data-course="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     ${t.stops.map(stopHTML).join("")}
+    ${hikesFor(t).length ? hikesHTML(hikesFor(t), false) : ""}
    </div>`, "trip");
   if (scroll) document.querySelector(".sheet-in").scrollTop = scroll;
 }
@@ -1399,7 +1405,8 @@ function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where<
   <input type="search" id="whereQ" placeholder="Search a city or landmark, like Kyoto or Machu Picchu" autocomplete="off" style="margin-top:6px" aria-controls="whereRes">
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
 function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
-document.addEventListener("change", e => { if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
+document.addEventListener("change", e => { if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else loadState.placed.set(p.file, loadState.trips[v].pts[0]); } } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState) $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
+  if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
   if (e.target.dataset && e.target.dataset.ldMove !== undefined && e.target.value){ const [si, j] = e.target.value.split(":").map(Number); moveStop(+e.target.dataset.ldMove, si, j); } });
 document.addEventListener("input", e => { if (e.target.id !== "whereQ") return; whereResults = searchPlaces(e.target.value);
@@ -1472,7 +1479,7 @@ function findTrips(pts, home){
     if (away(p)){ if (cur && p.t - cur.last <= 3 * DAY) { cur.pts.push(p); cur.last = p.t; } else { cur = {pts:[p], last:p.t}; trips.push(cur); } }
     else if (cur && p.t - cur.last > 12 * 36e5) cur = null;
   });
-  return trips.map(tr => buildTrip(tr.pts));
+  const out = trips.map(tr => { tr.pts.forEach(p => delete p.off); const b = buildTrip(tr.pts); if (!b.keep) b.pts.forEach(p => p.off = true); return b; }); dedupeTitles(out); return out;
 }
 const MAX_STOPS = 25;
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1489,12 +1496,14 @@ function buildTrip(pts){
   // two different stops with the same name (say two spots near the same town) get told apart by day
   const cnt = {}; stops.forEach(s => cnt[s.name] = (cnt[s.name] || 0) + 1);
   stops.forEach(s => { if (cnt[s.name] > 1) s.name += " (" + new Date(s.t).toLocaleDateString("en-US", {month:"short", day:"numeric"}) + ")"; });
-  const top = [...stops].sort((a, b) => b.pts.length - a.pts.length); const names = [...new Set(top.map(s => s.name.replace(/^Near /, "").replace(/ \(.*\)$/, "")))];
+  const top = [...stops].sort((a, b) => b.pts.length - a.pts.length); const base = s => s.name.replace(/^Near /, "").replace(/ \(.*\)$/, "");
+  // the two biggest places name the trip, written in the order you went there
+  let names = [...new Set(top.map(base))]; const first = n => stops.findIndex(s => base(s) === n); names = [...names.slice(0, 2).sort((a, b) => first(a) - first(b)), ...names.slice(2)];
   const d0 = new Date(pts[0].t), d1 = new Date(pts[pts.length - 1].t);
   const when = d0.getMonth() === d1.getMonth() || d1 - d0 < 5 * DAY ? `${MONTHS[d0.getMonth()]} ${d0.getFullYear()}` : `${MONTHS[d0.getMonth()].slice(0, 3)}–${MONTHS[d1.getMonth()].slice(0, 3)} ${d1.getFullYear()}`;
   const title = (names.length === 1 ? names[0] : names.length === 2 ? names[0] + " & " + names[1] : `${names[0]}, ${names[1]} & more`) + ", " + when;
   const ds = t => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-  return {title, country:countryOf(top[0].region), start:ds(pts[0].t), end:ds(pts[pts.length - 1].t), stops:stops.slice(0, MAX_STOPS), extraStops:Math.max(0, stops.length - MAX_STOPS), photos:pts.length, keep:pts.length >= 3, pts};
+  return {title, country:countryOf(top[0].region), start:ds(pts[0].t), end:ds(pts[pts.length - 1].t), stops:stops.slice(0, MAX_STOPS), extraStops:Math.max(0, stops.length - MAX_STOPS), photos:pts.length, keep:pts.length >= 2, pts};
 }
 let loadState = null;
 function openLoader(){
@@ -1506,6 +1515,7 @@ function openLoader(){
     <label class="btn primary" style="align-self:flex-start;cursor:pointer">Choose photos<input type="file" id="ldFiles" accept="image/*" multiple hidden></label>
     <p class="note" style="margin:0">Tip: select a lot at once. Only photos inside your time period are used. In the app it reads your library for these dates by itself, with no picking.</p>
     <p class="note" style="margin:0">On iPhone, the photo picker may remove locations. If you see <b>Options</b> at the top of the picker, turn on <b>Location</b>. A computer works too.</p>
+    <button class="btn" data-sample-photos style="align-self:flex-start">No photos handy? Try it with sample photos</button>
     <div id="ldProg" class="note" style="margin:0"></div></div>`, "loader");
 }
 function periodRange(){
@@ -1516,18 +1526,18 @@ function periodRange(){
   return [0, now + DAY];
 }
 async function processFiles(files){
-  const [a, b] = periodRange(); const prog = $("#ldProg"); const pts = []; let noLoc = 0, outside = 0, i = 0; const noLocNames = [], noLocPts = [];
+  const [a, b] = periodRange(); const prog = $("#ldProg"); const pts = []; let noLoc = 0, outside = 0, i = 0; const noLocNames = [], noLocPts = [], noLocAll = [], why = []; const nm = f => f.name || "a photo";
   for (const f of files){
-    i++; if (i % 5 === 0 || i === files.length){ prog.textContent = `Reading ${i} of ${files.length} photos…`; await new Promise(r => setTimeout(r, 0)); }
+    i++; if (i % 5 === 0 || i === files.length){ prog.textContent = `Reading ${i} of ${plural(files.length, "photo")}…`; await new Promise(r => setTimeout(r, 0)); }
     let ex = {}; try { ex = await readExif(f); } catch(e){}
     const t = ex.t || f.lastModified;
-    if (t < a || t > b){ outside++; continue; }
-    if (!isFinite(ex.lat)){ noLoc++; if (noLocNames.length < 6) noLocNames.push(f.name || "a photo"); if (ex.t) noLocPts.push({file:f, t}); continue; }
+    if (t < a || t > b){ outside++; why.push(`${nm(f)}: taken ${new Date(t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}${ex.t ? "" : " (file date; no camera date found)"}, outside the time period`); continue; }
+    if (!isFinite(ex.lat)){ why.push(`${nm(f)}: ${ex.t ? "has a camera date but no location" : "no camera data (Exif) found, so no date or location. Screenshots, edited copies and some messaging apps remove it"}`); noLoc++; if (noLocNames.length < 6) noLocNames.push(f.name || "a photo"); if (ex.t) noLocPts.push({file:f, t}); noLocAll.push({file:f, t:ex.t || null, name:nm(f)}); continue; }
     pts.push({file:f, lat:ex.lat, lon:ex.lon, t});
   }
   pts.sort((x, y) => x.t - y.t);
-  loadState.pts = pts; loadState.noLoc = noLoc; loadState.noLocNames = noLocNames; loadState.noLocPts = noLocPts; loadState.outside = outside; loadState.total = files.length; loadState.homeOk = false;
-  if (!pts.length){ prog.innerHTML = `<b style="color:var(--ink)">No photos with a location${outside ? " in that time period" : ""}.</b> ${noLoc ? `${plural(noLoc, "photo")} had no location saved (${esc(noLocNames.join(", "))}${noLoc > noLocNames.length ? "…" : ""}). On iPhone, turn on Location under Options in the photo picker, or try from a computer. ` : ""}${outside ? `${plural(outside, "photo")} were outside your dates.` : ""}`; return; }
+  loadState.pts = pts; loadState.noLoc = noLoc; loadState.noLocNames = noLocNames; loadState.noLocPts = noLocPts; loadState.outside = outside; loadState.total = files.length; loadState.homeOk = false; loadState.why = why; loadState.noLocAll = noLocAll; loadState.placed = new Map();
+  if (!pts.length){ prog.innerHTML = `<b style="color:var(--ink)">No photos with a location${outside ? " in that time period" : ""}.</b> ${noLoc ? `${plural(noLoc, "photo")} had no location saved (${esc(noLocNames.join(", "))}${noLoc > noLocNames.length ? "…" : ""}). On iPhone, turn on Location under Options in the photo picker, or try from a computer. ` : ""}${outside ? `${plural(outside, "photo")} ${outside === 1 ? "was" : "were"} outside your dates.` : ""}${whyHTML(why)}`; return; }
   loadState.home = findHome(pts); loadState.trips = findTrips(pts, loadState.home);
   openReview();
 }
@@ -1540,14 +1550,22 @@ async function thumb(file, max, asBlob){
   catch(e){ return null; }
 }
 function reviewSave(){ // keep typed names and ticks when the review is drawn again
-  (loadState.trips || []).forEach((t, i) => { const ti = document.querySelector(`[data-ld-title="${i}"]`), k = document.querySelector(`[data-ld-keep="${i}"]`); if (ti) t.title = ti.value; if (k) t.keep = k.checked; }); }
+  (loadState.trips || []).forEach((t, i) => { const ti = document.querySelector(`[data-ld-title="${i}"]`), k = document.querySelector(`[data-ld-keep="${i}"]`); if (ti) t.title = ti.value; if (k && k.checked !== t.keep){ t.keep = k.checked; t.pts.forEach(p => p.off = !k.checked); } }); }
+// Undo for the review fixes: a copy of the trips before the change, and the sheet keeps its scroll place
+function reviewSnap(){ reviewSave(); return {trips:loadState.trips.map(t => Object.assign({}, t)), scroll:(document.querySelector(".sheet-in") || {}).scrollTop || 0}; }
+function reviewRedraw(scroll){ openReview(); const si = document.querySelector(".sheet-in"); if (si) si.scrollTop = scroll; }
+function reviewDone(snap, msg){ dedupeTitles(loadState.trips); reviewRedraw(snap.scroll); toast(msg, () => { loadState.trips = snap.trips; reviewRedraw(snap.scroll); }); }
+// a part keeps its tick unless every photo in it came from a trip you unticked
+function partKeep(pts, fallback){ return pts.every(p => p.off) ? false : pts.some(p => p.off === false) ? true : fallback; }
+// two trips never share a title: the later one gets its dates
+function dedupeTitles(tr){ const seen = {}; tr.forEach(t => { const k = String(t.title || "").trim().toLowerCase(); if (seen[k]){ const d0 = new Date(t.pts[0].t), d1 = new Date(t.pts[t.pts.length - 1].t), f = d => d.toLocaleDateString("en-US", {month:"short", day:"numeric"}); t.title = t.title.replace(/,[^,]*$/, "") + `, ${f(d0)}${d1 - d0 > DAY ? "–" + f(d1) : ""} ${d1.getFullYear()}`; } seen[String(t.title).trim().toLowerCase()] = true; }); }
 function openReview(){
   const L = loadState; const tr = L.trips; whereDraft = {lon:L.home.lon, lat:L.home.lat, label:L.home.label, set:true};
   const kept = tr.filter(t => t.keep).length;
   const days = t => Math.round((new Date(t.end) - new Date(t.start)) / DAY) + 1;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Your trips")}<div class="steps">Step 2 of 2</div>
     <p class="note" style="margin:0">${plural(L.pts.length, "photo")} with a location${L.outside ? `, ${L.outside} outside your dates` : ""}. ${tr.length ? `They make ${plural(tr.length, "trip")} away from home. Tick the ones to keep, fix any names, and merge or split trips if they're grouped wrong.` : "None of them were far from home, so there are no trips yet."}</p>
-    ${L.noLoc ? `<p class="note" style="margin:0">📍✕ ${plural(L.noLoc, "photo")} had no location and ${L.noLoc === 1 ? "was" : "were"} skipped: ${esc((L.noLocNames || []).join(", "))}${L.noLoc > (L.noLocNames || []).length ? "…" : ""}. ${pinnable(L) ? "" : "You can add them as memories later."}</p>${pinnable(L) ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="ldPin" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Put the ${plural(pinnable(L), "photo")} taken during a trip into that trip, by date and time (untick to skip them)</span></label>` : ""}` : ""}
+    ${L.noLoc ? `<p class="note" style="margin:0">📍✕ ${plural(L.noLoc, "photo")} had no location: ${esc((L.noLocNames || []).join(", "))}${L.noLoc > (L.noLocNames || []).length ? "…" : ""}. <span id="ldNoLocFate">${noLocFate(L)}</span></p>${placeHTML(L)}${whyHTML(L.why)}${pinnable(L) ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="ldPin" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Put the ${plural(pinnable(L), "photo")} taken during a trip into that trip, by date and time (untick to skip them)</span></label>` : ""}` : ""}
     <div><div class="l">Home</div><div class="wherechip${L.homeOk ? "" : " guess"}"><span aria-hidden="true">🏠</span><b>${L.homeOk ? "" : `<small class="guesstag">Is this home? Guessed from where most photos were taken</small>`}${esc(L.home.label)}</b>${L.homeOk ? "" : `<button class="btn" data-ld-home-ok>Yes</button>`}<button class="btn" data-ld-home>${L.homeOk ? "Change" : "No, change it"}</button></div></div>
     <div id="ldHomePick" hidden>${whereHTML("Pick your home town. Trips are worked out again from it.")}<button class="btn" data-ld-home-set style="margin-top:6px">Use this as home</button></div>
     ${tr.map((t, i) => `<div class="suggest" style="display:flex;gap:10px;align-items:flex-start;border-color:var(--line);background:var(--panel-2)">
@@ -1556,7 +1574,7 @@ function openReview(){
       <div style="flex:1;min-width:0"><input type="text" data-ld-title="${i}" value="${esc(t.title)}" aria-label="Trip name" style="font-weight:600">
       <div class="note" style="margin:4px 0 0">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(t.stops.length, "stop")} · ${plural(t.photos, "photo")}</div>
       <div class="note" style="margin:2px 0 0">${t.stops.map(s => s.unsure ? `${esc(s.name)}? <span class="checktag">check</span>` : esc(s.name)).join(" → ")}${t.extraStops ? ` <b>+ ${plural(t.extraStops, "more stop")} not shown</b> (the first ${MAX_STOPS} are kept)` : ""}</div>
-      ${!t.keep && t.photos < 3 ? `<div class="note" style="margin:2px 0 0">Not ticked: only ${plural(t.photos, "photo")}.</div>` : ""}
+      ${!t.keep && t.photos < 2 ? `<div class="note" style="margin:2px 0 0">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
       <div class="row-btns" style="margin:6px 0 0">${i < tr.length - 1 ? `<button class="btn" data-ld-merge="${i}" style="font-size:12px;padding:5px 10px">Merge with next trip</button>` : ""}${days(t) > 1 ? `<label class="btn" style="font-size:12px;padding:5px 10px">Split from <select data-ld-split="${i}" style="font-size:12px;background:transparent;color:inherit;border:0">
         <option value="">day…</option>${[...new Set(t.pts.map(p => new Date(p.t).toDateString()))].slice(1).map(d => `<option value="${esc(d)}">${new Date(d).toLocaleDateString("en-US", {month:"short", day:"numeric"})}</option>`).join("")}</select></label>` : ""}${tr.length > 1 ? `<label class="btn" style="font-size:12px;padding:5px 10px">Move a stop <select data-ld-move="${i}" style="font-size:12px;background:transparent;color:inherit;border:0;max-width:150px"><option value="">to…</option>${t.stops.map((s, si) => tr.map((u, j) => j === i ? "" : `<option value="${si}:${j}">${esc(s.name)} → ${esc(u.title)}</option>`).join("")).join("")}</select></label>` : ""}</div></div></div>`).join("")}
     ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start;font-size:13px">Name every trip by place and month</button>` : ""}
@@ -1571,17 +1589,32 @@ function pinnable(L){ return (L.noLocPts || []).filter(p => (L.trips || []).some
 function pinNoLoc(t){ // a photo with no location goes to the stop you were at closest in time
   const [a, b] = tripDayRange(t);
   (loadState.noLocPts || []).filter(p => p.t >= a && p.t < b).forEach(p => { let best = null, bd = Infinity; t.stops.forEach(s => s.pts.forEach(q => { const d = Math.abs(q.t - p.t); if (d < bd){ bd = d; best = s; } })); if (best && !best.pts.includes(p)){ best.pts.push({file:p.file, lat:best.lat, lon:best.lon, t:p.t, pinned:true}); best.pts.sort((x, y) => x.t - y.t); } }); }
-function mergeTrips(i){ reviewSave(); const tr = loadState.trips, a = tr[i], b = tr[i + 1]; if (!b) return; const m = buildTrip([...a.pts, ...b.pts]); m.keep = a.keep || b.keep; tr.splice(i, 2, m); openReview(); toast("Trips merged"); }
-function splitTrip(i, day){ reviewSave(); const tr = loadState.trips, t = tr[i]; const cut = new Date(day).getTime(); const a = t.pts.filter(p => p.t < cut), b = t.pts.filter(p => p.t >= cut); if (!a.length || !b.length) return; const ta = buildTrip(a), tb = buildTrip(b); ta.keep = t.keep; tb.keep = t.keep; tr.splice(i, 1, ta, tb); openReview(); toast("Trip split in two"); }
-function moveStop(i, si, j){ reviewSave(); const tr = loadState.trips, a = tr[i], b = tr[j]; const st = a.stops[si]; if (!st || !b) return;
+function mergeTrips(i){ const snap = reviewSnap(); const tr = loadState.trips, a = tr[i], b = tr[i + 1]; if (!b) return; const m = buildTrip([...a.pts, ...b.pts]); m.keep = a.keep || b.keep; tr.splice(i, 2, m); reviewDone(snap, "Trips merged"); }
+function splitTrip(i, day){ const snap = reviewSnap(); const tr = loadState.trips, t = tr[i]; const cut = new Date(day).getTime(); const a = t.pts.filter(p => p.t < cut), b = t.pts.filter(p => p.t >= cut); if (!a.length || !b.length) return; const ta = buildTrip(a), tb = buildTrip(b); ta.keep = partKeep(a, t.keep); tb.keep = partKeep(b, t.keep); tr.splice(i, 1, ta, tb); reviewDone(snap, "Trip split in two"); }
+// what happens to photos with no location, kept in step with the "put them into the trip" switch
+// one line per left-out photo, so a problem can be told apart (no Exif, Exif without GPS, outside dates)
+// photos with no location that no trip covers: pick a trip for each, or leave it out
+function outsideNoLoc(L){ return (L.noLocAll || []).filter(p => !(p.t && (L.trips || []).some(t => { const [a, b] = tripDayRange(t); return p.t >= a && p.t < b; }))); }
+function placeHTML(L){ const list = outsideNoLoc(L); if (!list.length || !(L.trips || []).length) return "";
+  return `<div class="note" style="margin:6px 0 0">Add a photo with no location to a trip yourself:</div>${list.slice(0, 12).map(p => { const cur = L.placed.get(p.file); const ci = cur ? L.trips.findIndex(t => t.pts[0] === cur) : -1;
+    return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 0"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}${p.t ? " · " + new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}) : ""}</span><select data-ld-place="${(L.noLocAll || []).indexOf(p)}" style="max-width:55%;font-size:13px"><option value="-1">Leave out</option>${L.trips.map((t, i) => `<option value="${i}"${i === ci ? " selected" : ""}>${esc(t.title)}</option>`).join("")}</select></label>`; }).join("")}`; }
+// put a chosen photo into the stop nearest in time (or the first stop when it has no date)
+function placeChosen(L, t){ L.placed.forEach((first, file) => { if (first !== t.pts[0]) return; const p = L.noLocAll.find(x => x.file === file); if (!p) return; let best = t.stops[0], bd = Infinity; if (p.t) t.stops.forEach(s => s.pts.forEach(q => { const d = Math.abs(q.t - p.t); if (d < bd){ bd = d; best = s; } })); if (!best.pts.some(q => q.file === file)){ best.pts.push({file, lat:best.lat, lon:best.lon, t:p.t || best.pts[0].t, pinned:true}); best.pts.sort((x, y) => x.t - y.t); } }); }
+function whyHTML(why){ return why && why.length ? `<details style="margin-top:8px"><summary>Why each photo was left out</summary><ul style="margin:6px 0 0;padding-left:18px">${why.slice(0, 12).map(w => `<li>${esc(w)}</li>`).join("")}${why.length > 12 ? `<li>and ${why.length - 12} more</li>` : ""}</ul></details>` : ""; }
+function noLocFate(L, on){ const p = pinnable(L), n = L.noLoc || 0, one = n === 1; if (on === undefined) on = !!p;
+  if (!p) return `${one ? "It" : "They"} will be left out unless you pick a trip below.`;
+  if (!on) return `${one ? "It" : "They"} will be skipped.`;
+  return p === n ? `${one ? "It was" : "They were"} taken during a trip and will be added to that trip by date.` : `${p} of them ${p === 1 ? "was" : "were"} taken during a trip and will be added by date. The other ${n - p} will be left out unless you pick a trip below.`; }
+function moveStop(i, si, j){ const snap = reviewSnap(); const tr = loadState.trips, a = tr[i], b = tr[j]; const st = a.stops[si]; if (!st || !b) return;
   const rest = a.pts.filter(p => !st.pts.includes(p)); const nb = buildTrip([...b.pts, ...st.pts]); nb.keep = b.keep || a.keep;
-  tr[j] = nb; if (rest.length){ const na = buildTrip(rest); na.keep = a.keep; tr[i] = na; } else tr.splice(i, 1);
-  tr.sort((x, y) => x.pts[0].t - y.pts[0].t); openReview(); toast(`Moved ${st.name}`); }
+  tr[j] = nb; if (rest.length){ const na = buildTrip(rest); na.keep = partKeep(rest, a.keep); tr[i] = na; } else tr.splice(i, 1);
+  tr.sort((x, y) => x.pts[0].t - y.pts[0].t); reviewDone(snap, `Moved ${st.name}`); }
 function updateAddCount(){ const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]"); if (b){ b.textContent = n ? `Add ${plural(n, "trip")}` : "Tick a trip to add"; b.disabled = !n; } }
 async function addRealTrips(){
   const L = loadState; const pick = L.trips.map((t, i) => ({t, i})).filter(({i}) => document.querySelector(`[data-ld-keep="${i}"]`).checked);
   if (!pick.length){ toast("Tick at least one trip"); return; }
   if ($("#ldPin") && $("#ldPin").checked) pick.forEach(({t}) => { if (!t.pinnedDone){ pinNoLoc(t); t.pinnedDone = true; } });
+  if (L.placed && L.placed.size) pick.forEach(({t}) => placeChosen(L, t));
   const btn = document.querySelector("[data-ld-add]"); btn.disabled = true; const prog = $("#ldProg");
   const existing = store.get("realTrips", []); const out = []; const base = Date.now().toString(36); let done = 0, failed = 0;
   const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + Math.min(8, s.pts.length), 0), 0);
@@ -1629,7 +1662,7 @@ function openGuide(step = 1){
   } else if (step === 2){
     const t = TRIPS.find(x => x.id === guideTrip); const n = t.stops.reduce((a, s) => a + s.photos.length, 0); const hid = t.stops.length - stopsOf(t).length;
     openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(esc(t.title))}<div class="steps">Step 2 of 3 · Is this right?</div>
-      <p class="note" style="margin:0">We grouped ${n} photos from ${fmtShort(t.start)} to ${fmt(t.end)} into ${plural(t.stops.length, "stop")}${hid ? ` (${hid} hidden)` : ""}. Fix anything that's off. Nothing changes until you say so.</p>
+      <p class="note" style="margin:0">We grouped ${plural(n, "photo")} from ${fmtShort(t.start)} to ${fmt(t.end)} into ${plural(t.stops.length, "stop")}${hid ? ` (${hid} hidden)` : ""}. Fix anything that's off. Nothing changes until you say so.</p>
       ${t.stops.map(s => { const st = stopState[s.id]; return `<div class="guide-stop ${st || ""}"><img src="${photoURL(s.photos[0])}" alt=""><div class="txt">${guideRename === s.id ? `<input type="text" data-stopname="${s.id}" value="${esc(stopName(s))}" aria-label="Stop name">` : `<div class="t">${esc(stopName(s))}</div>`}<div class="s">${fmtShort(s.date)} · ${s.photos.length} photo${s.photos.length > 1 ? "s" : ""}${st === "ignored" ? " · hidden" : st === "ok" ? " · confirmed" : " · guessed from photo locations"}</div></div>
         <div class="seg lab"><button data-gs="ok" data-id="${s.id}" aria-pressed="${st === "ok"}" aria-label="Confirm ${esc(stopName(s))}"><b>✓</b><small>Right</small></button><button data-gs="rename" data-id="${s.id}" aria-label="Rename ${esc(stopName(s))}"><b>✎</b><small>Rename</small></button><button data-gs="ignored" data-id="${s.id}" aria-pressed="${st === "ignored"}" aria-label="Not part of this trip"><b>✕</b><small>Not this trip</small></button></div></div>`; }).join("")}
       <div class="row-btns" style="margin:0"><button class="btn primary" data-guide-next>Looks right</button><button class="btn" data-guide-back>Pick another trip</button></div></div>`);
@@ -1784,7 +1817,7 @@ const music = (() => {
     // a voice note: the music dips while you talk, and a video being made records it too
     voice(src){ return new Promise(res => { const a = new Audio(src); let n = null; if (ctx()){ try { n = ac.createMediaElementSource(a); n.connect(ac.destination); if (recDest) n.connect(recDest); } catch(e){} }
       const lvl = playingKey === "song" ? .6 : song ? .55 : .4; if (playingKey && !musicMuted) fadeTo(lvl * .18, .4);
-      const done = () => { if (playingKey && !musicMuted) fadeTo(lvl, 1.2); res(); }; a.onended = done; a.onerror = done; a.play().catch(done); voiceNow = a; }); }
+      let fin = false; const done = () => { if (fin) return; fin = true; if (playingKey && !musicMuted) fadeTo(lvl, 1.2); res(); }; a.onended = done; a.onerror = done; a._done = done; a.play().catch(done); voiceNow = a; }); }
   };
 })();
 function openMusicPicker(tripId, fromReplay){
@@ -1933,21 +1966,24 @@ async function replay(id, opts = {}){
     replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true; if (rec) rec.chip = "";
     await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 2); jump = true; continue; }
     mom.querySelector(".pics").innerHTML = "";
-    const per = j0 => j0 === 0 ? (REC ? 6000 : 7000) : (REC ? 2600 : 3200); let back = false; // the story card gets its own reading time on the first photo
-    const nPh = REC ? Math.min(4, s.photos.length) : s.photos.length; // a video keeps up to 4 photos a stop so it stays short
+    const VP = REC ? vidPlan(t) : null; const per = j0 => j0 === 0 ? (REC ? 6000 * VP.sc : 7000) : (REC ? 2600 * VP.sc : 3200); let back = false; // the story card gets its own reading time on the first photo
+    const nPh = REC ? Math.min(VP.cap, s.photos.length) : s.photos.length; let vEnd = 0; // a video keeps up to 4 photos a stop so it stays short
     for (let j = 0; j < nPh; j++){
       const ph = s.photos[j], last = j === nPh - 1;
       const src = photo(ph.scene, ph.id, 1280, 960); momentPhoto(mom, src); recPhoto(src);
       const dl = dayLineForStop(s); const main = story.best || (dl && dl.text) || "";
-      if (j === 0 && !jump){ const vk = hasVoice_(s.id) ? "vn:stop:" + s.id : VOICE.has("vn:day:" + s.date) ? "vn:day:" + s.date : null; if (vk) setTimeout(() => { if (alive() && replayState.leg === i) voicePlay(vk); }, 900); }
+      if (j === 0 && !jump){ const vk = hasVoice_(s.id) ? "vn:stop:" + s.id : VOICE.has("vn:day:" + s.date) ? "vn:day:" + s.date : null; if (vk){ vEnd = performance.now() + 900 + ((store.get("voiceLen", {}) || {})[vk] || 0) * 1000 + 600; setTimeout(() => { if (alive() && replayState.leg === i) voicePlay(vk); }, 900); } }
       const lab = phLabel(ph);
       mtxt.innerHTML = `<div class="d">${fmt(s.date)} · ${lab ? esc(stopName(s)) + " · " : ""}Stop ${i+1} of ${st.length}</div><h2>${esc(lab || stopName(s))}</h2>${main ? `<p class="best">${esc(main)}</p>` : ""}${story.who ? `<div class="who">With ${esc(story.who)}</div>` : ""}${last && story.note ? `<p class="n">${esc(story.note)}</p>` : ph.scene !== "real" ? `<p class="n">${esc(ph.caption)}</p>` : ""}`;
       const head = lab || stopName(s), fresh = j === 0 || head !== replayState.lastHead; replayState.lastHead = head;
       if (fresh){ mtxt.classList.remove("show", "still"); void mtxt.offsetWidth; mtxt.classList.add("show"); } else mtxt.classList.add("show", "still");
-      if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
+      const hk = j === 0 ? hikesFor(t).find(x => hikeStopId(x, t) === s.id) : null; if (hk) mtxt.insertAdjacentHTML("beforeend", `<div class="who" style="color:${hikeColor()}">🥾 ${esc(hk.name)} · ${hikeLine(hk)}</div>`);
+      if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:hk ? `🥾 ${hk.name} · ${hikeLine(hk)}` : last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
       mom.classList.add("on"); prog((i + (j+1)/s.photos.length) / st.length);
       if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
       await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
+      // a voice note gets to finish before the story moves on
+      if (last && vEnd > performance.now() && !replayState.next && !replayState.back){ await wait(vEnd - performance.now(), false); if (!alive()) return; }
       if (goBack()){ back = true; break; }
       if (replayState.next){ replayState.next = false; break; }
     }
@@ -1967,7 +2003,7 @@ async function replay(id, opts = {}){
   if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:`${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} miles`}; await wait(3500, false); if (alive() && rec) recFinish(); }
 }
 function endReplay(){
-  if (voiceNow){ voiceNow.pause(); voiceNow = null; }
+  if (voiceNow){ voiceNow.pause(); voiceNow._done && voiceNow._done(); voiceNow = null; }
   if (rec && rec.mr.state !== "inactive" && !rec.finishing) recAbort();
   music.stop();
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
@@ -1985,7 +2021,7 @@ const hasVoice_ = stopId => VOICE.has("vn:stop:" + stopId);
 function voiceSave(key, blob){ return idb.put(key, blob).then(() => { VOICE.add(key); store.set("voiceKeys", [...VOICE]); }); }
 async function voiceDel(key){ try { await idb.del(key); } catch(e){} VOICE.delete(key); store.set("voiceKeys", [...VOICE]); }
 async function voiceSrc(key){ let v = null; try { v = await idb.get(key); } catch(e){} if (!v) return null; return typeof v === "string" ? v : URL.createObjectURL(v); }
-async function voicePlay(key){ if (voiceNow){ voiceNow.pause(); voiceNow = null; } const src = await voiceSrc(key); if (!src){ toast("That voice note couldn't be found"); return; } await music.voice(src); }
+async function voicePlay(key){ if (voiceNow){ voiceNow.pause(); voiceNow._done && voiceNow._done(); voiceNow = null; } const src = await voiceSrc(key); if (!src){ toast("That voice note couldn't be found"); return; } await music.voice(src); }
 const dayKey = d => { const x = d instanceof Date ? d : new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
 const lineFor = date => dayLines[date] || null;
 // tonight's prompt: only when you've turned it on, said you're away, it's after your chosen hour, and today has no line yet
@@ -1993,7 +2029,7 @@ function journalDue(){ const now = new Date(); return journal.on && journal.away
 function journalCheck(){ if (journalDue() && !document.querySelector(".sheet") && !replayState) openDayPrompt(); }
 
 /* voice recorder (60 s max), used for tonight's line and for any stop */
-let vrec = null;
+var vrec = null;
 function audioMime(){ if (typeof MediaRecorder === "undefined") return null; return ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch(e){ return false; } }) || ""; }
 async function vrecStart(onDone){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || audioMime() === null){ toast("This browser can't record voice notes"); return false; }
@@ -2007,7 +2043,9 @@ async function vrecStart(onDone){
   return true;
 }
 function vrecStop(){ if (vrec && vrec.mr.state !== "inactive") vrec.mr.stop(); }
-function vrecCancel(){ if (!vrec) return; const r = vrec; r.onDone = () => {}; vrecStop(); }
+function vrecCancel(){ if (!vrec) return; const r = vrec; r.onDone = () => {}; vrecStop(); try { r.stream.getTracks().forEach(t => t.stop()); } catch(e){} }
+// the mic never outlives its sheet: closing or swapping a sheet, or leaving the page, cancels a recording
+document.addEventListener("visibilitychange", () => { if (document.hidden && typeof vrec !== "undefined" && vrec) vrecCancel(); });
 function voiceUI(key, label){ // the voice-note row on a stop or on tonight's prompt
   return VOICE.has(key) ? `<div class="vnrow"><button class="btn" data-vn-play="${esc(key)}">▶ ${esc(label || "Voice note")}</button><button class="btn" data-vn-new="${esc(key)}">Record again</button><button class="btn" data-vn-del="${esc(key)}" aria-label="Delete voice note">✕</button></div>`
     : `<div class="vnrow"><button class="btn" data-vn-new="${esc(key)}">🎙 Add a voice note</button></div>`;
@@ -2036,7 +2074,7 @@ const voiceLen = key => { const m = store.get("voiceLen", {}) || {}; return m[ke
 function openDayPrompt(date){
   date = date || dayKey(new Date()); const L = lineFor(date) || {}; const key = "vn:day:" + date;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Best moment today?")}<div class="steps">${fmt(date)}</div>
-    <p class="note" style="margin:0">One line is enough. It goes into this trip's story, on the stop from today.</p>
+    <p class="note" style="margin:0">${(() => { const m = stopForDate(date); return m ? `One line is enough. It goes into ${esc(m.t.title)}, on the ${esc(stopName(m.s))} stop.` : "One line is enough. It's saved in your trip journal. No trip matches this date yet, so it will join a trip when you add one with photos from this day."; })()}</p>
     <input type="text" id="dayLine" value="${esc(L.text || "")}" placeholder="The first thing you'd tell a friend" maxlength="160">
     ${voiceUI(key, voiceLen(key))}
     <div class="row-btns" style="margin:0"><button class="btn primary" data-day-save="${date}">Save today's line</button><button class="btn" data-day-skip="${date}">Not tonight</button></div></div>`, "journal");
@@ -2060,7 +2098,73 @@ function openJournal(){
   </div>`, "journal");
 }
 // a day line belongs to the stop you were at that day (or the trip day closest to it)
+function stopForDate(date){ for (const t of TRIPS) for (const s of t.stops) if (s.date === date) return {t, s}; return null; }
 function dayLineForStop(s){ return lineFor(s.date) || null; }
+
+
+/* ---------------- hikes: GPX tracks from a watch or an app, drawn on the globe ---------------- */
+let hikes = (store.get("hikes", []) || []).filter(h => h && Array.isArray(h.pts) && h.pts.length > 1);
+const hikeColor = () => TH().dark ? "#8fe39b" : "#1d7a3c";
+function parseGPX(text, fileName){
+  const doc = new DOMParser().parseFromString(text, "application/xml"); if (doc.querySelector("parsererror")) throw new Error("not a GPX file");
+  let nodes = [...doc.getElementsByTagName("trkpt")]; if (!nodes.length) nodes = [...doc.getElementsByTagName("rtept")]; if (nodes.length < 2) throw new Error("no track points");
+  const raw = nodes.map(n => { const e = n.getElementsByTagName("ele")[0], t = n.getElementsByTagName("time")[0]; return [+n.getAttribute("lon"), +n.getAttribute("lat"), e ? +e.textContent : null, t ? Date.parse(t.textContent) : null]; }).filter(q => isFinite(q[0]) && isFinite(q[1]));
+  if (raw.length < 2) throw new Error("no track points");
+  let km = 0, gain = 0, lastE = null; for (let i = 1; i < raw.length; i++) km += d3.geoDistance(raw[i - 1], raw[i]) * KM;
+  raw.forEach(q => { if (q[2] == null || !isFinite(q[2])) return; if (lastE == null){ lastE = q[2]; return; } const d = q[2] - lastE; if (Math.abs(d) >= 3){ if (d > 0) gain += d; lastE = q[2]; } }); // ignore GPS jitter under 3 m
+  const times = raw.map(q => q[3]).filter(isFinite); const mins = times.length > 1 ? Math.round((Math.max(...times) - Math.min(...times)) / 60000) : null;
+  const step = Math.max(1, Math.ceil(raw.length / 500)); const pts = raw.filter((q, i) => i % step === 0 || i === raw.length - 1).map(q => [+q[0].toFixed(5), +q[1].toFixed(5), q[2] == null || !isFinite(q[2]) ? null : Math.round(q[2])]);
+  const nm = (doc.querySelector("trk > name") || doc.querySelector("metadata > name") || doc.querySelector("name") || {}).textContent || String(fileName || "Hike").replace(/\.gpx$/i, "").replace(/[_-]+/g, " ");
+  const date = times.length ? dayKey(new Date(Math.min(...times))) : todayStr();
+  return {id:"hk" + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name:nm.trim().slice(0, 60) || "Hike", date, km:+km.toFixed(1), gain:Math.round(gain), mins, pts, near:placeName(pts[0][1], pts[0][0]).name};
+}
+function addHike(h){ if (hikes.some(x => x.date === h.date && Math.abs(x.km - h.km) < .05 && x.name === h.name)){ toast("That hike is already on your globe"); return false; }
+  hikes.push(h); if (!store.set("hikes", hikes)){ hikes.pop(); toast("Couldn't save the hike: storage is full"); return false; } rerender(); return true; }
+async function loadGPXFiles(files){ let n = 0, bad = 0, last = null;
+  for (const f of files){ try { const h = parseGPX(await f.text(), f.name); if (addHike(h)){ n++; last = h; } } catch(e){ bad++; } }
+  if (bad && !n) toast("That file couldn't be read. Choose a .gpx file exported from your watch or hiking app.");
+  else if (n){ toast(`Added ${plural(n, "hike")}${bad ? ` (${bad} file${bad > 1 ? "s" : ""} couldn't be read)` : ""}`); openHike(last.id); } }
+function sampleGPX(){ // a made-up walk up Johnston Canyon to the Ink Pots, near Banff, for trying hikes without a file
+  const a = [-115.8399, 51.2453], b = [-115.8203, 51.2617], n = 140, t0 = Date.UTC(2018, 7, 13, 16, 0); let out = "";
+  for (let i = 0; i <= n; i++){ const k = i / n, w = Math.sin(k * 23) * .0016 + Math.sin(k * 7.1) * .0022; const lon = a[0] + (b[0] - a[0]) * k + w, lat = a[1] + (b[1] - a[1]) * k + Math.cos(k * 17) * .0009;
+    const ele = 1430 + 330 * (k < .7 ? k / .7 : 1 - (k - .7) * .25) + Math.sin(k * 40) * 6; out += `<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>${ele.toFixed(1)}</ele><time>${new Date(t0 + k * 2.6 * 3600e3).toISOString()}</time></trkpt>`; }
+  return `<?xml version="1.0"?><gpx version="1.1" creator="Travel Globe sample"><trk><name>Johnston Canyon to the Ink Pots</name><trkseg>${out}</trkseg></trk></gpx>`;
+}
+const hikeTrip = h => TRIPS.find(t => h.date >= t.start && h.date <= t.end) || null;
+const hikesFor = t => hikes.filter(h => h.date >= t.start && h.date <= t.end);
+// a hike joins the stop nearest to it, by day and then by distance
+function hikeStopId(h, t){ const st = stopsOf(t); if (!st.length) return null; const dd = s => Math.abs(new Date(s.date) - new Date(h.date)) / DAY + d3.geoDistance([s.lon, s.lat], h.pts[0]) * 6; return st.reduce((a, b) => dd(b) < dd(a) ? b : a).id; }
+const fmtMins = m => m == null ? "" : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`;
+const hikeLine = h => `${h.km.toLocaleString()} km${h.gain ? ` · ${h.gain.toLocaleString()} m climb` : ""}${h.mins ? ` · ${fmtMins(h.mins)}` : ""}`;
+function hikeProfile(h){ const e = h.pts.map(q => q[2]).filter(v => v != null); if (e.length < 2) return "";
+  const lo = Math.min(...e), hi = Math.max(...e), W = 320, H = 80, span = Math.max(20, hi - lo); let d = 0; const xs = [0]; for (let i = 1; i < h.pts.length; i++){ d += d3.geoDistance(h.pts[i - 1], h.pts[i]); xs.push(d); }
+  const pt = h.pts.map((q, i) => q[2] == null ? null : `${(xs[i] / d * W).toFixed(1)},${(H - 6 - (q[2] - lo) / span * (H - 14)).toFixed(1)}`).filter(Boolean);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Elevation from ${lo} to ${hi} metres"><polygon points="0,${H} ${pt.join(" ")} ${W},${H}" fill="${hikeColor()}" fill-opacity=".18"/><polyline points="${pt.join(" ")}" fill="none" stroke="${hikeColor()}" stroke-width="2"/><text x="4" y="12" font-size="10" fill="currentColor" opacity=".7">${hi.toLocaleString()} m</text><text x="4" y="${H - 2}" font-size="10" fill="currentColor" opacity=".7">${lo.toLocaleString()} m</text></svg>`; }
+function openHike(id){
+  const h = hikes.find(x => x.id === id); if (!h) return; const t = hikeTrip(h);
+  flyToStops(h.pts.map(q => ({lon:q[0], lat:q[1]})), 1300);
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("🥾 " + esc(h.name))}<div class="steps">${fmt(h.date)} · near ${esc(h.near)}${t ? ` · ${esc(t.title)}` : ""}</div>
+    <div class="stats" style="padding:10px;background:var(--panel-2);border-radius:12px"><div class="stat"><b>${h.km.toLocaleString()}</b><span>km</span></div><div class="stat"><b>${h.gain.toLocaleString()}</b><span>m climb</span></div>${h.mins ? `<div class="stat"><b>${fmtMins(h.mins).replace(" min", "m").replace(" h ", "h ")}</b><span>time</span></div>` : ""}</div>
+    ${hikeProfile(h)}
+    <div><label class="l" for="hkName">Name</label><input type="text" id="hkName" data-hike-name="${h.id}" value="${esc(h.name)}" maxlength="60"></div>
+    <p class="note" style="margin:0">${t ? "This trail shows on the globe, on the trip page and in the trip's story and video." : "This trail shows on the globe. When it falls inside a trip's dates, it joins that trip's story too."}</p>
+    <div class="row-btns" style="margin:0">${t ? `<button class="btn" data-open-trip="${t.id}">Open the trip</button>` : ""}<button class="btn" data-hike-del="${h.id}">Delete hike</button></div></div>`, "hike");
+}
+function hikesHTML(list, withAdd){
+  let h = `<div class="sec">Trails you walked · ${list.length}</div>`;
+  list.slice().sort((a, b) => b.date.localeCompare(a.date)).forEach(x => { h += `<button class="item" data-hike="${x.id}"><div class="flag ring" style="color:${hikeColor()};border-color:${hikeColor()}">🥾</div><div class="txt"><div class="t">${esc(x.name)}</div><div class="s">${fmt(x.date)} · ${hikeLine(x)}</div></div></button>`; });
+  if (withAdd) h += `<div class="row-btns" style="margin:0"><label class="btn primary" style="cursor:pointer">Load a hike (GPX)<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple hidden></label>${hikes.some(x => x.sample) ? "" : `<button class="btn" data-hike-sample>Try a sample hike</button>`}</div>
+    <p class="note" style="margin:0">Export a GPX file from Strava, AllTrails, Garmin, Apple Watch apps or Komoot. It's read on this device and never uploaded.</p>`;
+  return h;
+}
+function drawHikes(ctx2, th){
+  if (!hikes.length) return; const list = replayState ? hikesFor(replayState.trip) : hikes; if (!list.length) return;
+  ctx2.save(); ctx2.lineJoin = ctx2.lineCap = "round";
+  list.forEach(h => { const line = {type:"LineString", coordinates:h.pts.map(q => [q[0], q[1]])};
+    ctx2.beginPath(); path(line); ctx2.strokeStyle = th.dark ? "rgba(5,10,8,.75)" : "rgba(255,255,255,.85)"; ctx2.lineWidth = zoom > 6 ? 5.5 : 3.2; ctx2.stroke();
+    ctx2.beginPath(); path(line); ctx2.strokeStyle = hikeColor(); ctx2.lineWidth = zoom > 6 ? 3 : 1.6; ctx2.stroke(); });
+  ctx2.restore();
+}
 
 /* ---------------- story video: Replay recorded into a portrait video, made on this device ---------------- */
 const await0 = p => Promise.resolve(p).catch(() => {});
@@ -2076,7 +2180,7 @@ function recStart(trip){
   const mime = recMime(); let mr;
   try { mr = new MediaRecorder(stream, {mimeType:mime, videoBitsPerSecond:5e6, audioBitsPerSecond:128e3}); } catch(e){ try { mr = new MediaRecorder(stream); } catch(e2){ return false; } }
   const chunks = []; mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  rec = {cv, x, mr, chunks, mime:mr.mimeType || mime, trip, photo:null, prev:null, on:0, onT:0, text:null, chip:"", title:1, titleT:1, end:null, endA:0, t0:performance.now(), audio:!!at && (!!music.playing || hasVoice)};
+  rec = {cv, x, mr, stream, chunks, mime:mr.mimeType || mime, trip, photo:null, prev:null, on:0, onT:0, text:null, chip:"", title:1, titleT:1, end:null, endA:0, t0:performance.now(), audio:!!at && (!!music.playing || hasVoice)};
   mr.start(1000);
   const me = rec; (function frame(){ if (rec !== me) return; recDraw(me); requestAnimationFrame(frame); })();
   return true;
@@ -2122,9 +2226,10 @@ function recDraw(r){
   // small mark
   x.textAlign = "right"; x.textBaseline = "alphabetic"; x.font = "italic 30px 'Instrument Serif', Georgia, serif"; x.fillStyle = "rgba(255,246,226,.55)"; x.fillText("Travel Globe", VW - 34, VH - 40);
 }
-function recAbort(){ const r = rec; rec = null; music.recEnd(); if (r){ try { r.mr.onstop = null; r.mr.stop(); } catch(e){} } }
+const recTracksOff = r => { try { r.stream.getTracks().forEach(t => t.stop()); } catch(e){} };
+function recAbort(){ const r = rec; rec = null; music.recEnd(); if (r){ try { r.mr.onstop = null; r.mr.stop(); } catch(e){} recTracksOff(r); } }
 async function recFinish(){
-  const r = rec; if (!r) return; await new Promise(res => { r.mr.onstop = res; try { r.mr.stop(); } catch(e){ res(); } }); if (rec === r) rec = null; music.recEnd();
+  const r = rec; if (!r || r.finishing) return; r.finishing = true; await new Promise(res => { r.mr.onstop = res; try { r.mr.stop(); } catch(e){ res(); } }); if (rec === r) rec = null; music.recEnd(); recTracksOff(r);
   const type = (r.mime || "video/webm").split(";")[0]; const blob = new Blob(r.chunks, {type}); const secs = Math.round((performance.now() - r.t0) / 1000);
   endReplay(); openVideoSheet(blob, r.trip, secs, r.audio);
 }
@@ -2138,10 +2243,14 @@ function openVideoSheet(blob, t, secs, audio){
     <div class="row-btns" style="margin:0">${share ? `<button class="btn primary" data-video-share>Share video</button>` : ""}<a class="btn${share ? "" : " primary"}" href="${url}" download="${esc(name)}">Save video</a><button class="btn" data-video-again="${t.id}">Make it again</button></div>
     ${ext === "webm" ? `<p class="note" style="margin:0">This browser makes WebM videos. They play on computers and Android; for iPhone, make the video on the iPhone itself, which saves MP4.</p>` : ""}</div>`);
 }
+// keep a video near 90 seconds: fewer photos a stop first, then shorter photo time (never under half)
+function vidPlan(t){ const st = stopsOf(t), est = (cap, sc) => 5 + st.reduce((a, s) => a + 4.5 + sc * (6 + 2.6 * (Math.min(cap, s.photos.length) - 1)), 0);
+  let cap = 4; while (cap > 1 && est(cap, 1) > 90) cap--; let sc = 1; if (est(cap, 1) > 90){ const fixed = 5 + 4.5 * st.length, ph = est(cap, 1) - fixed; sc = Math.max(.5, (90 - fixed) / ph); }
+  return {cap, sc, est:Math.round(est(cap, sc))}; }
 function openVideoStart(id){
   const t = TRIPS.find(x => x.id === id); if (!t) return;
   if (!canRecord()){ toast("This browser can't make videos. Try Chrome, Safari or Edge."); return; }
-  const st = stopsOf(t); const est = Math.round(5 + st.reduce((a, s) => a + 4 + 6 + 2.6 * (Math.min(4, s.photos.length) - 1) + .5, 0));
+  const st = stopsOf(t); const est = vidPlan(t).est;
   const m = musicChoice(t.id); const mname = m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Make a story video")}
     <p style="margin:0">Your story plays once while it records a tall video, ready for messages, Stories and Reels.</p>
@@ -2160,6 +2269,11 @@ async function exportBackup(){
     toast(`Backup file saved: ${plural(snaps.length, "memory", "memories")} and ${plural(Object.keys(images).length, "photo")}. Keep it somewhere safe.`);
   } catch(e){ toast("This browser blocked the download"); }
 }
+// what a backup would leave in place: data this browser has that the file doesn't
+const DATA_KEYS = {"tg.snaps":"memories", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections"};
+function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
+function restoreKeptHTML(d){ const kept = restoreKept(d); const has = Object.keys(DATA_KEYS).filter(k => k in d.keys).map(k => DATA_KEYS[k]);
+  return `This replaces ${has.length ? has.join(", ") : "nothing but settings"} in this browser. ${kept.length ? `The backup has no ${kept.map(x => x.label).join(", ")}, so the ones in this browser (${kept.map(x => x.label.split(" ")[0] + ": " + x.n).join(", ")}) stay unless you tick below.</p><label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="rsWipe" style="width:20px;height:20px;accent-color:var(--lit)"><span>Remove them too, so this browser matches the backup exactly</span></label><p class="note" style="margin:0">` : ""}Settings like your globe style stay as they are. `; }
 function importBackup(file){
   const fr = new FileReader();
   fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){}
@@ -2168,25 +2282,28 @@ function importBackup(file){
     const has = k => { try { const v = JSON.parse(d.keys[k]); return Array.isArray(v) ? v.length > 0 : !!(v && typeof v === "object" && Object.keys(v).length); } catch(e){ return false; } };
     if (!has("tg.snaps") && !has("tg.realTrips") && !has("tg.stories") && !Array.isArray((() => { try { return JSON.parse(d.keys["tg.snaps"]); } catch(e){ return null; } })())){ toast("That backup has nothing in it to restore, so nothing was changed"); return; }
     pendingRestore = d; let n = 0; try { n = JSON.parse(d.keys["tg.snaps"] || "[]").length; } catch(e){}
-    openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Restore this backup?")}<p style="margin:0">Backup from ${esc(String(d.exported || "").slice(0, 10) || "an unknown date")}: ${plural(n, "memory", "memories")}, ${(() => { try { return plural(JSON.parse(d.keys["tg.realTrips"] || "[]").length, "loaded trip"); } catch(e){ return "0 loaded trips"; } })()} and ${plural(Object.keys(d.images || {}).length, "photo")}.</p><p class="note" style="margin:0">This replaces what is saved in this browser now: ${plural(snaps.length, "memory", "memories")} and ${plural(Object.keys(stories).length, "story", "stories")}. Settings the backup doesn't have, like your globe style, stay as they are, and so do trips loaded from your photos unless the backup has its own. If saving fails, your old data is put back.</p><div class="row-btns" style="margin:0"><button class="btn primary" data-restore-go>Replace with this backup</button><button class="btn" data-close>Cancel</button></div></div>`);
+    openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Restore this backup?")}<p style="margin:0">Backup from ${esc(String(d.exported || "").slice(0, 10) || "an unknown date")}: ${plural(n, "memory", "memories")}, ${(() => { try { return plural(JSON.parse(d.keys["tg.realTrips"] || "[]").length, "loaded trip"); } catch(e){ return "0 loaded trips"; } })()} and ${plural(Object.keys(d.images || {}).length, "photo")}.</p><p class="note" style="margin:0">${restoreKeptHTML(d)}If saving fails, your old data is put back.</p><div class="row-btns" style="margin:0"><button class="btn primary" data-restore-go>Replace with this backup</button><button class="btn" data-close>Cancel</button></div></div>`);
   };
   fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file);
 }
 async function doRestore(){
-  const d = pendingRestore; if (!d) return;
+  const d = pendingRestore; if (!d) return; const wipe = !!($("#rsWipe") && $("#rsWipe").checked);
   // 1. snapshot what's here now, so a failed restore can be undone
   const snap = {}; try { Object.keys(localStorage).filter(k => k.startsWith("tg.")).forEach(k => snap[k] = localStorage.getItem(k)); } catch(e){ toast("Couldn't restore: this browser blocked storage"); return; }
   const rollback = () => { try { Object.keys(localStorage).filter(k => k.startsWith("tg.")).forEach(k => localStorage.removeItem(k)); Object.entries(snap).forEach(([k, v]) => localStorage.setItem(k, v)); } catch(e){} };
   // 2. write the backup's settings and stories
   // settings the backup doesn't have (an older file with no globe style, say) are kept
-  try { Object.keys(snap).filter(k => k in d.keys).forEach(k => localStorage.removeItem(k)); Object.entries(d.keys).forEach(([k, v]) => { if (k.startsWith("tg.") && typeof v === "string") localStorage.setItem(k, v); }); }
+  try { Object.keys(snap).filter(k => k in d.keys).forEach(k => localStorage.removeItem(k)); Object.entries(d.keys).forEach(([k, v]) => { if (k.startsWith("tg.") && typeof v === "string") localStorage.setItem(k, v); }); if (wipe) [...Object.keys(DATA_KEYS), "tg.voiceKeys", "tg.voiceLen", "tg.realHome"].forEach(k => { if (!(k in d.keys)) localStorage.removeItem(k); }); }
   catch(e){ rollback(); toast("Couldn't restore (storage is full). Nothing was changed."); return; }
+  // "already seen" flags never go backwards on restore, so a dismissed guide or welcome doesn't come back
+  try { ["tg.guideShown", "tg.guided", "tg.seen"].forEach(k => { if (snap[k] === "true") localStorage.setItem(k, "true"); }); } catch(e){}
   // 3. photos: replace old ones, count what made it
   const imgs = Object.entries(d.images || {}).filter(([k, v]) => typeof v === "string" && (v.startsWith("data:image/") || (String(k).startsWith("vn:") && v.startsWith("data:audio/")))); let ok = 0;
   // write the new photos first; old ones are only removed once every new one is safely saved
-  for (const [k, v] of imgs){ try { await idb.put(k, v); ok++; } catch(e){} }
+  // loaded-trip photos and voice notes go back in as compact files, the way they were saved
+  for (const [k, v] of imgs){ try { let val = v; if (/^(rp|vn):/.test(k)){ try { val = await (await fetch(v)).blob(); } catch(e){ val = v; } } await idb.put(k, val); ok++; } catch(e){} }
   // photos of trips loaded from your phone stay unless this backup brings its own loaded trips
-  const keepSet = new Set(imgs.map(x => x[0])), keepReal = !("tg.realTrips" in d.keys), keepVoice = !imgs.some(x => String(x[0]).startsWith("vn:"));
+  const keepSet = new Set(imgs.map(x => x[0])), keepReal = !("tg.realTrips" in d.keys) && !wipe, keepVoice = !imgs.some(x => String(x[0]).startsWith("vn:")) && !wipe;
   if (ok === imgs.length){ try { await idb.clearPhotos(k => keepSet.has(k) || (keepReal && String(k).startsWith("rp:")) || (keepVoice && String(k).startsWith("vn:"))); } catch(e){} }
   if (keepVoice) try { localStorage.setItem("tg.voiceKeys", snap["tg.voiceKeys"] || "[]"); localStorage.setItem("tg.voiceLen", snap["tg.voiceLen"] || "{}"); } catch(e){}
   let n = 0; try { n = JSON.parse(d.keys["tg.snaps"] || "[]").length; } catch(e){}
@@ -2222,6 +2339,9 @@ document.addEventListener("click", e => {
   if ((b = g("[data-layer-on]"))){ layers[b.dataset.layerOn] = true; store.set("layers2", layers); renderLayers(); revealLayer(b.dataset.layerOn); dirty = true; return; }
   if ((b = g("[data-share]"))){ const id = b.dataset.share || (replayState && replayState.trip.id); if (replayState) endReplay(); openVideoStart(id); return; }
   if (g("[data-journal]")){ openJournal(); return; }
+  if ((b = g("[data-hike]"))){ openHike(b.dataset.hike); return; }
+  if (g("[data-hike-sample]")){ const hk = parseGPX(sampleGPX(), "sample.gpx"); hk.sample = true; if (addHike(hk)){ toast("Sample hike added near Banff"); openHike(hk.id); } return; }
+  if ((b = g("[data-hike-del]"))){ const id = b.dataset.hikeDel, i = hikes.findIndex(x => x.id === id); if (i < 0) return; const [gone] = hikes.splice(i, 1); store.set("hikes", hikes); closeSheet(); rerender(); toast("Hike deleted", () => { hikes.splice(i, 0, gone); store.set("hikes", hikes); rerender(); }); return; }
   if ((b = g("[data-j-hour]"))){ journal.hour = +b.dataset.jHour; store.set("journal", journal); openJournal(); renderBody(); return; }
   if (g("[data-day-open]")){ openDayPrompt(); return; }
   if ((b = g("[data-day-edit]"))){ openDayPrompt(b.dataset.dayEdit); return; }
@@ -2292,9 +2412,9 @@ document.addEventListener("click", e => {
   if (g("[data-sample-look]")){ globeDark = false; closeSheet(); $("#scan").hidden = false; introRunning = true; intro(); return; }
   if ((b = g("[data-ld-period]"))){ loadState.period = b.dataset.ldPeriod; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x === b)); $("#ldCustom").hidden = loadState.period !== "custom"; return; }
   if (g("[data-ld-home]")){ $("#ldHomePick").hidden = false; $("#whereQ").focus(); return; }
-  if (g("[data-ld-home-set]")){ if (!whereDraft.set){ toast("Search for your home town first"); return; } loadState.home = {lat:whereDraft.lat, lon:whereDraft.lon, label:whereDraft.label.replace(/^near /, "").split(",")[0] + " area"}; loadState.homeOk = true; loadState.trips = findTrips(loadState.pts, loadState.home); openReview(); return; }
+  if (g("[data-ld-home-set]")){ if (!whereDraft.set){ toast("Search for your home town first"); return; } loadState.home = {lat:whereDraft.lat, lon:whereDraft.lon, label:whereDraft.label.replace(/^near /i, "").split(",")[0].replace(/ area$/i, "") + " area"}; loadState.homeOk = true; loadState.trips = findTrips(loadState.pts, loadState.home); openReview(); return; }
   if (g("[data-ld-home-ok]")){ reviewSave(); loadState.homeOk = true; openReview(); return; }
-  if (g("[data-ld-names]")){ reviewSave(); loadState.trips.forEach(t => { t.title = buildTrip(t.pts).title; }); openReview(); toast("Every trip renamed by place and month"); return; }
+  if (g("[data-ld-names]")){ const snap = reviewSnap(); const tmp = loadState.trips.map(t => ({pts:t.pts, title:buildTrip(t.pts).title})); dedupeTitles(tmp); let n = 0; loadState.trips.forEach((t, i) => { if (tmp[i].title !== t.title){ t.title = tmp[i].title; n++; } }); if (!n){ toast("Every trip already has its place-and-month name"); return; } reviewDone(snap, `${plural(n, "trip")} renamed by place and month`); return; }
   if ((b = g("[data-ld-merge]"))){ mergeTrips(+b.dataset.ldMerge); return; }
   if (g("[data-ld-add]")){ addRealTrips(); return; }
   if (g("[data-ld-again]")){ openLoader(); return; }
@@ -2327,6 +2447,7 @@ function openDiaryConsent(){
 }
 $("#snapBtn").onclick = () => openSnap(tab === "collections" && colFilter ? colFilter : "food");
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.hikeName){ const h = hikes.find(x => x.id === e.target.dataset.hikeName); if (h){ h.name = e.target.value.slice(0, 60) || "Hike"; store.set("hikes", hikes); } return; }
   if (e.target.dataset && e.target.dataset.phlabel){ const id = e.target.dataset.phlabel, v = e.target.value.slice(0, 60); if (v.trim()) phLabels[id] = v; else delete phLabels[id]; store.set("phLabels", phLabels); const c = document.getElementById("lbCap"); if (c){ const it = lbList[lbIdx]; c.textContent = v.trim() || it.cap; } const im = document.querySelector(`.strip img[data-ph="${id}"]`); if (im) im.classList.toggle("labeled", !!v.trim()); return; }
   const t = e.target;
   if (t.dataset.story){ const id = t.dataset.story; stories[id] = Object.assign(stories[id] || {}, {[t.dataset.f]: t.value}); const ok = store.set("stories", stories); const s = document.getElementById("saved-" + id); if (s) s.textContent = ok ? "Saved" : "Couldn't save: storage full"; }
@@ -2344,10 +2465,13 @@ document.addEventListener("change", e => {
   if (e.target.dataset && e.target.dataset.stopname){ renderBody(); }
 });
 document.addEventListener("keydown", e => {
+  if (replayState && !replayState.opts.record && !/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || "")) && !document.querySelector(".sheet")){
+    const id = {" ":"rpause", ArrowLeft:"rprev", ArrowRight:"rskip"}[e.key]; if (id && document.getElementById(id)){ e.preventDefault(); document.getElementById(id).click(); return; } }
   if (e.key === "Escape"){ if (pinMode) endPinMode(false); else if (document.getElementById("lb")) closeLB(); else if (replayState) endReplay(); else closeSheet(); }
   if (e.key === "Enter" && e.target.dataset && e.target.dataset.stopname){ e.target.blur(); if (guideRename){ guideRename = null; openGuide(2); } else { const s = TRIPS.flatMap(t => t.stops).find(x => x.id === e.target.dataset.stopname); openTrip(s.trip.id, true); } renderBody(); }
 });
 $("#replay").addEventListener("click", e => {
+  if (replayState && !replayState.opts.record && e.target.closest("#rmoment") && !e.target.closest("button, a, input")){ const pb = document.getElementById("rpause"); if (pb){ pb.click(); toast(replayState.paused ? "Paused · tap again to play" : "Playing"); } return; }
   if (e.target.id === "rpause"){ replayState.paused = !replayState.paused; e.target.textContent = replayState.paused ? "Play" : "Pause"; }
   if ((e.target.id === "rprev" || e.target.id === "rskip") && replayState && replayState.paused){ replayState.paused = false; replayState.repause = true; }
   if (e.target.id === "rprev" && replayState){ replayState.back = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
@@ -2431,7 +2555,7 @@ async function intro(){
     const nC = Math.ceil(k * LIGHT_ORDER.length);
     LIGHT_ORDER.forEach((id, i) => { const local = Math.max(0, Math.min(1, (k * LIGHT_ORDER.length - i))); if (local > 0) lit.set(id, local); });
     pinsShown = Math.floor(k * totalStops);
-    $("#scanCount").textContent = `${Math.round(k * totalPhotos)} photos · ${plural(Math.min(nC, Math.round(k * nWorld)), "country", "countries")}`;
+    $("#scanCount").textContent = `${plural(Math.round(k * totalPhotos), "photo")} · ${plural(Math.min(nC, Math.round(k * nWorld)), "country", "countries")}`;
     if (k < 1) requestAnimationFrame(step); else res(); })(); });
   pinsShown = 999; LIGHT_ORDER.forEach(id => lit.set(id, 1));
   $("#scanTitle").textContent = "Your globe is ready";
