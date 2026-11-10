@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.9 (working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
+<!-- Travel Globe prototype v0.10 (hikes from GPX; working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -839,6 +839,7 @@ function draw(t){
     else path({type:"LineString", coordinates:coords});
     ctx.strokeStyle = sel ? th.route[0] : th.route[1]; ctx.lineWidth = sel ? 2.2 : 1.1; ctx.setLineDash(sel ? [] : [3,3]); ctx.stroke(); ctx.setLineDash([]);
   });
+  if (layers.trips || replayState) drawHikes(ctx, th);
   if (layers.diary && diaryOn && !replayState && zoom < 2.2){
     ctx.beginPath(); TRIPS.forEach(tr => { const f = stopsOf(tr)[0]; if (f) path({type:"LineString", coordinates:[[HOME.lon, HOME.lat], [f.lon, f.lat]]}); });
     ctx.strokeStyle = th.diary; ctx.lineWidth = 1; ctx.stroke();
@@ -985,6 +986,7 @@ function statDefs(){
     {k:"photos", label:"Photos", v:TRIPS.reduce((a, t) => a + stopsOf(t).reduce((b, x) => b + x.photos.length, 0), 0) + allSnaps().length, tab:"trips"},
     {k:"trips", label:"Trips", v:TRIPS.length, tab:"trips"},
     {k:"miles", label:"Miles", v:(miles/1000).toFixed(0) + "k", tab:"trips"},
+    {k:"hikes", label:"Hike km", v:Math.round(hikes.reduce((a, x) => a + x.km, 0)), tab:"collections", col:"hike", color:catColor("hike")},
     {k:"golf", label:"Courses", v:golfCounts().played, tab:"collections", col:"golf", color:catColor("golf")},
     ...CATS.filter(c => c.k !== "golf").map(c => ({k:c.k, label:SHORT[c.k] || c.label, v:collectionItems(c.k).length, tab:"collections", col:c.k, color:catColor(c.k)}))
   ];
@@ -1092,7 +1094,7 @@ function renderBody(){
     const k = colFilter || "food";
     h += `<div class="colgrid">`;
     CATS.forEach(c => { const items = collectionItems(c.k); const img = items[0] ? items[0].img : photo(c.scene || "lake", c.k);
-      const count = c.k === "golf" ? plural(golfCounts().played, "course") : `${items.length} saved`;
+      const count = c.k === "golf" ? plural(golfCounts().played, "course") : c.k === "hike" && hikes.length ? `${plural(hikes.length, "trail")} · ${items.length} saved` : `${items.length} saved`;
       h += `<button class="coltile" aria-pressed="${k === c.k}" data-col="${c.k}"><img src="${img}" alt=""><span>${esc(c.label)}<small>${count}</small></span></button>`; });
     h += `<button class="coltile newcol" data-newcol><span>+ New collection<small>Breweries, ballparks, concerts…</small></span></button></div>`;
     h += `<div id="colList" style="display:contents">`;
@@ -1100,6 +1102,7 @@ function renderBody(){
     else {
       if (k === "race" && allSnaps().some(r => r.cat === "race" && r.by === PARTNER)){ const rs = allSnaps().filter(r => r.cat === "race" && r.by === PARTNER); h += `<div class="suggest" style="border-color:rgba(255,122,184,.4);background:rgba(255,122,184,.07)"><b>${(() => { const all = allSnaps().filter(r => r.cat === "race"), mine = all.filter(r => !r.by && !r.sample).length; return `Races · ${plural(all.length, "finish", "finishes")} · ${PARTNER}'s ${rs.length}${mine ? ` · added by you ${mine}` : ""}`; })()} · ${rs.filter(r => r.dist === "13.1 mi").length} of ${PARTNER}'s are halves · ${rs.filter(r => (r.dist || "").startsWith("140")).length} full IRONMAN</b><p>${(() => { const hv = rs.filter(r => r.dist === "13.1 mi" && r.time).sort((a, b) => a.time.localeCompare(b.time))[0]; return hv ? `Best half: ${esc(hv.time)} at ${esc(hv.name.replace(/ Half( Marathon)?$/, ""))}. ` : ""; })()}Sample races are shared from ${PARTNER}'s globe; races you add are marked "added by you". The results stay ${PARTNER}'s.</p></div>`; }
       const items = collectionItems(k);
+      if (k === "hike") h += hikesHTML(hikes, true);
       h += `<div class="sec">${esc(catLabel(k))} · ${items.length}</div>`;
       items.forEach(it => h += itemHTML(it));
       if (!items.length) h += `<p class="note" style="margin:0">Nothing here yet. Add the first one, with or without a photo.</p>`;
@@ -1138,7 +1141,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.9 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.10 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1227,6 +1230,7 @@ function openTrip(id, noFly){
     <p class="note" style="margin:0">Stops were grouped from your photo locations. Rename one, or hide it if it doesn't belong.</p>
     ${golf.length ? `<div class="suggest" style="padding:10px"><b>⛳ Golf on this trip</b><div class="row-btns" style="margin-top:8px">${golf.map(c => `<button class="btn green" data-course="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     ${t.stops.map(stopHTML).join("")}
+    ${hikesFor(t).length ? hikesHTML(hikesFor(t), false) : ""}
    </div>`, "trip");
   if (scroll) document.querySelector(".sheet-in").scrollTop = scroll;
 }
@@ -1399,7 +1403,8 @@ function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where<
   <input type="search" id="whereQ" placeholder="Search a city or landmark, like Kyoto or Machu Picchu" autocomplete="off" style="margin-top:6px" aria-controls="whereRes">
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
 function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
-document.addEventListener("change", e => { if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
+document.addEventListener("change", e => { if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
+  if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
   if (e.target.dataset && e.target.dataset.ldMove !== undefined && e.target.value){ const [si, j] = e.target.value.split(":").map(Number); moveStop(+e.target.dataset.ldMove, si, j); } });
 document.addEventListener("input", e => { if (e.target.id !== "whereQ") return; whereResults = searchPlaces(e.target.value);
@@ -1944,7 +1949,8 @@ async function replay(id, opts = {}){
       mtxt.innerHTML = `<div class="d">${fmt(s.date)} · ${lab ? esc(stopName(s)) + " · " : ""}Stop ${i+1} of ${st.length}</div><h2>${esc(lab || stopName(s))}</h2>${main ? `<p class="best">${esc(main)}</p>` : ""}${story.who ? `<div class="who">With ${esc(story.who)}</div>` : ""}${last && story.note ? `<p class="n">${esc(story.note)}</p>` : ph.scene !== "real" ? `<p class="n">${esc(ph.caption)}</p>` : ""}`;
       const head = lab || stopName(s), fresh = j === 0 || head !== replayState.lastHead; replayState.lastHead = head;
       if (fresh){ mtxt.classList.remove("show", "still"); void mtxt.offsetWidth; mtxt.classList.add("show"); } else mtxt.classList.add("show", "still");
-      if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
+      const hk = j === 0 ? hikesFor(t).find(x => hikeStopId(x, t) === s.id) : null; if (hk) mtxt.insertAdjacentHTML("beforeend", `<div class="who" style="color:${hikeColor()}">🥾 ${esc(hk.name)} · ${hikeLine(hk)}</div>`);
+      if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:hk ? `🥾 ${hk.name} · ${hikeLine(hk)}` : last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
       mom.classList.add("on"); prog((i + (j+1)/s.photos.length) / st.length);
       if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
       await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
@@ -2061,6 +2067,71 @@ function openJournal(){
 }
 // a day line belongs to the stop you were at that day (or the trip day closest to it)
 function dayLineForStop(s){ return lineFor(s.date) || null; }
+
+
+/* ---------------- hikes: GPX tracks from a watch or an app, drawn on the globe ---------------- */
+let hikes = (store.get("hikes", []) || []).filter(h => h && Array.isArray(h.pts) && h.pts.length > 1);
+const hikeColor = () => TH().dark ? "#8fe39b" : "#1d7a3c";
+function parseGPX(text, fileName){
+  const doc = new DOMParser().parseFromString(text, "application/xml"); if (doc.querySelector("parsererror")) throw new Error("not a GPX file");
+  let nodes = [...doc.getElementsByTagName("trkpt")]; if (!nodes.length) nodes = [...doc.getElementsByTagName("rtept")]; if (nodes.length < 2) throw new Error("no track points");
+  const raw = nodes.map(n => { const e = n.getElementsByTagName("ele")[0], t = n.getElementsByTagName("time")[0]; return [+n.getAttribute("lon"), +n.getAttribute("lat"), e ? +e.textContent : null, t ? Date.parse(t.textContent) : null]; }).filter(q => isFinite(q[0]) && isFinite(q[1]));
+  if (raw.length < 2) throw new Error("no track points");
+  let km = 0, gain = 0, lastE = null; for (let i = 1; i < raw.length; i++) km += d3.geoDistance(raw[i - 1], raw[i]) * KM;
+  raw.forEach(q => { if (q[2] == null || !isFinite(q[2])) return; if (lastE == null){ lastE = q[2]; return; } const d = q[2] - lastE; if (Math.abs(d) >= 3){ if (d > 0) gain += d; lastE = q[2]; } }); // ignore GPS jitter under 3 m
+  const times = raw.map(q => q[3]).filter(isFinite); const mins = times.length > 1 ? Math.round((Math.max(...times) - Math.min(...times)) / 60000) : null;
+  const step = Math.max(1, Math.ceil(raw.length / 500)); const pts = raw.filter((q, i) => i % step === 0 || i === raw.length - 1).map(q => [+q[0].toFixed(5), +q[1].toFixed(5), q[2] == null || !isFinite(q[2]) ? null : Math.round(q[2])]);
+  const nm = (doc.querySelector("trk > name") || doc.querySelector("metadata > name") || doc.querySelector("name") || {}).textContent || String(fileName || "Hike").replace(/\.gpx$/i, "").replace(/[_-]+/g, " ");
+  const date = times.length ? dayKey(new Date(Math.min(...times))) : todayStr();
+  return {id:"hk" + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name:nm.trim().slice(0, 60) || "Hike", date, km:+km.toFixed(1), gain:Math.round(gain), mins, pts, near:placeName(pts[0][1], pts[0][0]).name};
+}
+function addHike(h){ if (hikes.some(x => x.date === h.date && Math.abs(x.km - h.km) < .05 && x.name === h.name)){ toast("That hike is already on your globe"); return false; }
+  hikes.push(h); if (!store.set("hikes", hikes)){ hikes.pop(); toast("Couldn't save the hike: storage is full"); return false; } rerender(); return true; }
+async function loadGPXFiles(files){ let n = 0, bad = 0, last = null;
+  for (const f of files){ try { const h = parseGPX(await f.text(), f.name); if (addHike(h)){ n++; last = h; } } catch(e){ bad++; } }
+  if (bad && !n) toast("That file couldn't be read. Choose a .gpx file exported from your watch or hiking app.");
+  else if (n){ toast(`Added ${plural(n, "hike")}${bad ? ` (${bad} file${bad > 1 ? "s" : ""} couldn't be read)` : ""}`); openHike(last.id); } }
+function sampleGPX(){ // a made-up walk up Johnston Canyon to the Ink Pots, near Banff, for trying hikes without a file
+  const a = [-115.8399, 51.2453], b = [-115.8203, 51.2617], n = 140, t0 = Date.UTC(2018, 7, 13, 16, 0); let out = "";
+  for (let i = 0; i <= n; i++){ const k = i / n, w = Math.sin(k * 23) * .0016 + Math.sin(k * 7.1) * .0022; const lon = a[0] + (b[0] - a[0]) * k + w, lat = a[1] + (b[1] - a[1]) * k + Math.cos(k * 17) * .0009;
+    const ele = 1430 + 330 * (k < .7 ? k / .7 : 1 - (k - .7) * .25) + Math.sin(k * 40) * 6; out += `<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>${ele.toFixed(1)}</ele><time>${new Date(t0 + k * 2.6 * 3600e3).toISOString()}</time></trkpt>`; }
+  return `<?xml version="1.0"?><gpx version="1.1" creator="Travel Globe sample"><trk><name>Johnston Canyon to the Ink Pots</name><trkseg>${out}</trkseg></trk></gpx>`;
+}
+const hikeTrip = h => TRIPS.find(t => h.date >= t.start && h.date <= t.end) || null;
+const hikesFor = t => hikes.filter(h => h.date >= t.start && h.date <= t.end);
+// a hike joins the stop nearest to it, by day and then by distance
+function hikeStopId(h, t){ const st = stopsOf(t); if (!st.length) return null; const dd = s => Math.abs(new Date(s.date) - new Date(h.date)) / DAY + d3.geoDistance([s.lon, s.lat], h.pts[0]) * 6; return st.reduce((a, b) => dd(b) < dd(a) ? b : a).id; }
+const fmtMins = m => m == null ? "" : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`;
+const hikeLine = h => `${h.km.toLocaleString()} km${h.gain ? ` · ${h.gain.toLocaleString()} m climb` : ""}${h.mins ? ` · ${fmtMins(h.mins)}` : ""}`;
+function hikeProfile(h){ const e = h.pts.map(q => q[2]).filter(v => v != null); if (e.length < 2) return "";
+  const lo = Math.min(...e), hi = Math.max(...e), W = 320, H = 80, span = Math.max(20, hi - lo); let d = 0; const xs = [0]; for (let i = 1; i < h.pts.length; i++){ d += d3.geoDistance(h.pts[i - 1], h.pts[i]); xs.push(d); }
+  const pt = h.pts.map((q, i) => q[2] == null ? null : `${(xs[i] / d * W).toFixed(1)},${(H - 6 - (q[2] - lo) / span * (H - 14)).toFixed(1)}`).filter(Boolean);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Elevation from ${lo} to ${hi} metres"><polygon points="0,${H} ${pt.join(" ")} ${W},${H}" fill="${hikeColor()}" fill-opacity=".18"/><polyline points="${pt.join(" ")}" fill="none" stroke="${hikeColor()}" stroke-width="2"/><text x="4" y="12" font-size="10" fill="currentColor" opacity=".7">${hi.toLocaleString()} m</text><text x="4" y="${H - 2}" font-size="10" fill="currentColor" opacity=".7">${lo.toLocaleString()} m</text></svg>`; }
+function openHike(id){
+  const h = hikes.find(x => x.id === id); if (!h) return; const t = hikeTrip(h);
+  flyToStops(h.pts.map(q => ({lon:q[0], lat:q[1]})), 1300);
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("🥾 " + esc(h.name))}<div class="steps">${fmt(h.date)} · near ${esc(h.near)}${t ? ` · ${esc(t.title)}` : ""}</div>
+    <div class="stats" style="padding:10px;background:var(--panel-2);border-radius:12px"><div class="stat"><b>${h.km.toLocaleString()}</b><span>km</span></div><div class="stat"><b>${h.gain.toLocaleString()}</b><span>m climb</span></div>${h.mins ? `<div class="stat"><b>${fmtMins(h.mins).replace(" min", "m").replace(" h ", "h ")}</b><span>time</span></div>` : ""}</div>
+    ${hikeProfile(h)}
+    <div><label class="l" for="hkName">Name</label><input type="text" id="hkName" data-hike-name="${h.id}" value="${esc(h.name)}" maxlength="60"></div>
+    <p class="note" style="margin:0">${t ? "This trail shows on the globe, on the trip page and in the trip's story and video." : "This trail shows on the globe. When it falls inside a trip's dates, it joins that trip's story too."}</p>
+    <div class="row-btns" style="margin:0">${t ? `<button class="btn" data-open-trip="${t.id}">Open the trip</button>` : ""}<button class="btn" data-hike-del="${h.id}">Delete hike</button></div></div>`, "hike");
+}
+function hikesHTML(list, withAdd){
+  let h = `<div class="sec">Trails you walked · ${list.length}</div>`;
+  list.slice().sort((a, b) => b.date.localeCompare(a.date)).forEach(x => { h += `<button class="item" data-hike="${x.id}"><div class="flag ring" style="color:${hikeColor()};border-color:${hikeColor()}">🥾</div><div class="txt"><div class="t">${esc(x.name)}</div><div class="s">${fmt(x.date)} · ${hikeLine(x)}</div></div></button>`; });
+  if (withAdd) h += `<div class="row-btns" style="margin:0"><label class="btn primary" style="cursor:pointer">Load a hike (GPX)<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple hidden></label>${hikes.some(x => x.sample) ? "" : `<button class="btn" data-hike-sample>Try a sample hike</button>`}</div>
+    <p class="note" style="margin:0">Export a GPX file from Strava, AllTrails, Garmin, Apple Watch apps or Komoot. It's read on this device and never uploaded.</p>`;
+  return h;
+}
+function drawHikes(ctx2, th){
+  if (!hikes.length) return; const list = replayState ? hikesFor(replayState.trip) : hikes; if (!list.length) return;
+  ctx2.save(); ctx2.lineJoin = ctx2.lineCap = "round";
+  list.forEach(h => { const line = {type:"LineString", coordinates:h.pts.map(q => [q[0], q[1]])};
+    ctx2.beginPath(); path(line); ctx2.strokeStyle = th.dark ? "rgba(5,10,8,.75)" : "rgba(255,255,255,.85)"; ctx2.lineWidth = zoom > 6 ? 5.5 : 3.2; ctx2.stroke();
+    ctx2.beginPath(); path(line); ctx2.strokeStyle = hikeColor(); ctx2.lineWidth = zoom > 6 ? 3 : 1.6; ctx2.stroke(); });
+  ctx2.restore();
+}
 
 /* ---------------- story video: Replay recorded into a portrait video, made on this device ---------------- */
 const await0 = p => Promise.resolve(p).catch(() => {});
@@ -2222,6 +2293,9 @@ document.addEventListener("click", e => {
   if ((b = g("[data-layer-on]"))){ layers[b.dataset.layerOn] = true; store.set("layers2", layers); renderLayers(); revealLayer(b.dataset.layerOn); dirty = true; return; }
   if ((b = g("[data-share]"))){ const id = b.dataset.share || (replayState && replayState.trip.id); if (replayState) endReplay(); openVideoStart(id); return; }
   if (g("[data-journal]")){ openJournal(); return; }
+  if ((b = g("[data-hike]"))){ openHike(b.dataset.hike); return; }
+  if (g("[data-hike-sample]")){ const hk = parseGPX(sampleGPX(), "sample.gpx"); hk.sample = true; if (addHike(hk)){ toast("Sample hike added near Banff"); openHike(hk.id); } return; }
+  if ((b = g("[data-hike-del]"))){ const id = b.dataset.hikeDel, i = hikes.findIndex(x => x.id === id); if (i < 0) return; const [gone] = hikes.splice(i, 1); store.set("hikes", hikes); closeSheet(); rerender(); toast("Hike deleted", () => { hikes.splice(i, 0, gone); store.set("hikes", hikes); rerender(); }); return; }
   if ((b = g("[data-j-hour]"))){ journal.hour = +b.dataset.jHour; store.set("journal", journal); openJournal(); renderBody(); return; }
   if (g("[data-day-open]")){ openDayPrompt(); return; }
   if ((b = g("[data-day-edit]"))){ openDayPrompt(b.dataset.dayEdit); return; }
@@ -2327,6 +2401,7 @@ function openDiaryConsent(){
 }
 $("#snapBtn").onclick = () => openSnap(tab === "collections" && colFilter ? colFilter : "food");
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.hikeName){ const h = hikes.find(x => x.id === e.target.dataset.hikeName); if (h){ h.name = e.target.value.slice(0, 60) || "Hike"; store.set("hikes", hikes); } return; }
   if (e.target.dataset && e.target.dataset.phlabel){ const id = e.target.dataset.phlabel, v = e.target.value.slice(0, 60); if (v.trim()) phLabels[id] = v; else delete phLabels[id]; store.set("phLabels", phLabels); const c = document.getElementById("lbCap"); if (c){ const it = lbList[lbIdx]; c.textContent = v.trim() || it.cap; } const im = document.querySelector(`.strip img[data-ph="${id}"]`); if (im) im.classList.toggle("labeled", !!v.trim()); return; }
   const t = e.target;
   if (t.dataset.story){ const id = t.dataset.story; stories[id] = Object.assign(stories[id] || {}, {[t.dataset.f]: t.value}); const ok = store.set("stories", stories); const s = document.getElementById("saved-" + id); if (s) s.textContent = ok ? "Saved" : "Couldn't save: storage full"; }
