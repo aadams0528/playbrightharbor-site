@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.13.1 (v0.13 plus Nikola's round 6 fixes: two people's copies of a trip merge, delete a trip, honest photo messages; working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html). -->
+<!-- Travel Globe preview v0.13.2: round 7 fixes from Cooper, Nikola and Muse, no page reloads -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -245,6 +245,7 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .mtxt.show > *{animation:rise .8s ease forwards}
 .mtxt.show > :nth-child(2){animation-delay:.15s}.mtxt.show > :nth-child(3){animation-delay:.6s}.mtxt.show > :nth-child(4){animation-delay:1.1s}.mtxt.show > :nth-child(5){animation-delay:1.4s}
 body.rpaused .mtxt *{animation-play-state:paused!important}
+body.rpaused .replay:not(.recording)::after{content:"Paused · tap the globe or ▶ to keep going";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;background:rgba(10,15,30,.9);border:1px solid rgba(255,255,255,.18);color:#fff;font:600 15px/1.3 var(--ui,system-ui);padding:10px 16px;border-radius:999px;white-space:nowrap}
 body.rpaused .moment .pics img{animation-play-state:running,paused!important}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes mfade{from{opacity:0}to{opacity:1}}
@@ -361,6 +362,7 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
 .bnum{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a6a2c}
 .bcover img{width:100%;aspect-ratio:16/11;object-fit:cover;border-radius:3px;margin-bottom:16px;display:block}
 .bcover p{margin:8px 0 0;font-size:16px}
+.bmap{margin:16px 0 0}.bmap svg{width:100%;height:auto;display:block;border-radius:3px;border:1px solid #e4ddcf}
 .bfacts{margin-top:14px;padding-top:12px;border-top:1px solid #e4ddcf;font-size:14px;color:#5b544a}
 .btoc{margin:14px 0 0;padding-left:20px;columns:2;font-size:14px;color:#3b362e} .btoc span{color:#8b8477;font-size:12px}
 .bphotos{display:grid;gap:8px;margin-top:14px;grid-template-columns:repeat(2,1fr)}
@@ -506,9 +508,11 @@ const TRIPS = [
  ]}
 ];
 // Real trips loaded from the player's own photos (stored in tg.realTrips; images in IndexedDB as rp:<photo id>)
-const REAL_TRIPS = store.get("realTrips", []).filter(t => t && typeof t.id === "string" && Array.isArray(t.stops) && t.stops.length && t.stops.every(s => isFinite(s.lat) && isFinite(s.lon) && Array.isArray(s.photos)));
-const NOSAMPLE = store.get("hideSample", false) && REAL_TRIPS.length > 0;
+const validTrips = a => (a || []).filter(t => t && typeof t.id === "string" && Array.isArray(t.stops) && t.stops.length && t.stops.every(s => isFinite(s.lat) && isFinite(s.lon) && Array.isArray(s.photos)));
+const REAL_TRIPS = validTrips(store.get("realTrips", []));
+let NOSAMPLE = store.get("hideSample", false) && REAL_TRIPS.length > 0;
 TRIPS.forEach(t => t.sample = true);
+const SAMPLE_TRIPS = TRIPS.slice(); // kept, so the samples can come back without a reload
 { const repl = new Set(REAL_TRIPS.map(t => t.replaces).filter(Boolean)); for (let k = TRIPS.length - 1; k >= 0; k--) if (repl.has(TRIPS[k].id)) TRIPS.splice(k, 1); } // a sample trip that was shared becomes your own copy
 if (NOSAMPLE) TRIPS.length = 0;
 REAL_TRIPS.forEach(t => { t.real = true; TRIPS.push(t); });
@@ -519,13 +523,14 @@ let PHOTOS = [];
 const PH_HIDDEN = store.get("phHidden", {}) || {}; // photos you took out of a trip (kept, so you can put them back)
 const COVERS = store.get("covers", {}) || {};    // trip id -> the photo you picked as its cover
 const PH_ORDER = store.get("phOrder", {}) || {};  // stop id -> photo ids in the order you set
-TRIPS.forEach(t => t.stops.forEach(s => {
+function expandStop(t, s){
   s.trip = t;
   const all = s.photos.map((p, i) => { const id = s.id + "-" + i; return {id, scene:p[0], caption:p[1], col:p[2] || null, rating:p[3] || 0, uid:p[4] || null, by:p[5] || null, stop:s, date:s.date, hidden:!!PH_HIDDEN[id]}; });
   { const ord = PH_ORDER[s.id]; if (Array.isArray(ord)) all.sort((a, b) => ((ord.indexOf(a.id) + 1) || 1e4) - ((ord.indexOf(b.id) + 1) || 1e4)); }
   if (all.length && all.every(o => o.hidden)) all[0].hidden = false; // a stop always keeps one photo
   s.allPhotos = all; s.photos = all.filter(o => !o.hidden); s.photos.forEach(o => PHOTOS.push(o));
-}));
+}
+TRIPS.forEach(t => t.stops.forEach(s => expandStop(t, s)));
 const COUNTRY_IDS = {"United States":"840","Canada":"124","Italy":"380","Iceland":"352","Japan":"392","United Kingdom":"826"};
 let LIGHT_ORDER = ["840","124","380","352","392","826"]; // recomputed from the trips once the map is loaded
 
@@ -657,6 +662,7 @@ async function loadImages(){
 }
 let CATS = [...BASE_CATS, ...customCats];
 const allSnaps = () => [...snaps, ...SAMPLE_SNAPS];
+const snapPhotos = () => allSnaps().filter(x => x.hasImg || x.img || imgCache.has(x.id)).length; // a memory counts as a photo only if it has one
 let layers = Object.assign({trips:true, snaps:true, golf:true, diary:false, bucket:false}, store.get("layers2", {}));
 if (!diaryOn) layers.diary = false;
 
@@ -939,7 +945,8 @@ function draw(t){
 let lastPins = []; let lastDraw = 0, spinFor = 0;
 
 function loop(t){
-  const rp = !!(replayState && replayState.paused); if (rp !== document.body.classList.contains("rpaused")) document.body.classList.toggle("rpaused", rp); // Pause also freezes the photo drift and text
+  const rp = !!(replayState && replayState.paused); if (rp !== document.body.classList.contains("rpaused")){ document.body.classList.toggle("rpaused", rp); // a voice note already playing pauses and resumes with the story
+    if (typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin){ try { if (rp) voiceNow.pause(); else voiceNow.play().catch(() => {}); } catch(e){} } } // Pause also freezes the photo drift and text
   const dt = Math.min(64, t - (lastT || t)); lastT = t;
   if (anim && replayState && replayState.paused) anim.t0 += dt;
   if (anim){ const k = Math.min(1, (t - anim.t0) / anim.ms); anim.step(k); dirty = true; if (k >= 1){ const a = anim; anim = null; a.done && a.done(); } }
@@ -1044,7 +1051,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 function sheetHead(title){ return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0;font-family:var(--display);font-weight:400;font-size:30px;line-height:1.05">${title}</h2><button class="close" style="position:static;flex:none" data-close aria-label="Close">✕</button></div>`; }
 function golfCounts(){ const played = COURSES.length + (golfConfirmed ? 1 : 0); const rounds = COURSES.reduce((a, c) => a + allRounds(c).length, 0) + (golfConfirmed ? allRounds(confirmedCourse()).length : 0); return {played, rounds}; }
 function statDefs(){
-  const ctry = new Set(TRIPS.map(t => t.country)); const n = PHOTOS.length + allSnaps().length;
+  const ctry = new Set(TRIPS.map(t => t.country)); const n = PHOTOS.length + snapPhotos();
   // distinct places away from home: stops, courses, diary and memories, with anything within ~8 km of a counted place treated as the same place
   const places = (() => { const pts = [...TRIPS.flatMap(t => stopsOf(t).map(s => [s.lon, s.lat])), ...COURSES.map(c => [c.lon, c.lat]), ...(golfConfirmed ? [[SUGGEST.lon, SUGGEST.lat]] : []), ...(diaryOn ? DIARY.map(d => [d.lon, d.lat]) : []), ...allSnaps().map(x => [x.lon, x.lat])], uniq = [];
     pts.forEach(p => { if (p[0] == null || p[1] == null) return; if (!uniq.some(q => d3.geoDistance(p, q) < 8 / 6371)) uniq.push(p); }); return uniq.length; })();
@@ -1052,7 +1059,7 @@ function statDefs(){
   return [
     (() => { const w = beenWorld(); return {k:"world", label:w.countries.size === 1 ? "Country" : "Countries", sub:`${plural(w.states.size, "US state")} · ${w.continents.size}/7 continents`, v:w.countries.size, tab:"trips", world:true}; })(),
     {k:"places", label:"Places", v:places, tab:"trips"},
-    {k:"photos", label:"Photos", v:TRIPS.reduce((a, t) => a + stopsOf(t).reduce((b, x) => b + x.photos.length, 0), 0) + allSnaps().length, tab:"trips"},
+    {k:"photos", label:"Photos", v:TRIPS.reduce((a, t) => a + stopsOf(t).reduce((b, x) => b + x.photos.length, 0), 0) + snapPhotos(), tab:"trips"},
     {k:"trips", label:"Trips", v:TRIPS.length, tab:"trips"},
     {k:"miles", label:"Miles", v:(miles/1000).toFixed(0) + "k", tab:"trips"},
     {k:"hikes", label:"Hike km", v:Math.round(hikes.reduce((a, x) => a + x.km, 0)), tab:"collections", col:"hike", color:catColor("hike")},
@@ -1214,7 +1221,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.13.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.13.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1309,7 +1316,7 @@ function openTrip(id, noFly){
     ${golf.length ? `<div class="suggest" style="padding:10px"><b>⛳ Golf on this trip</b><div class="row-btns" style="margin-top:8px">${golf.map(c => `<button class="btn green" data-course="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     ${t.stops.map(stopHTML).join("")}
     ${hikesFor(t).length ? hikesHTML(hikesFor(t), false) : ""}
-    ${t.real ? `<button class="btn" data-trip-del="${t.id}" style="align-self:flex-start;font-size:13px;opacity:.85">🗑 Delete this trip</button>` : ""}
+    ${t.real ? `<button class="btn" data-trip-del="${t.id}" style="align-self:flex-start;font-size:13px;opacity:.85">🗑 Delete this trip</button>` : `<p class="note" style="margin:0">This is a sample trip, so it stays as it is. With your own trips you can also <b>add photos</b>, <b>move a stop</b> and <b>delete the trip</b>. <button class="linkbtn" data-load-photos>Load trips from my photos</button></p>`}
    </div>`, "trip");
   if (scroll) document.querySelector(".sheet-in").scrollTop = scroll;
 }
@@ -1384,7 +1391,7 @@ function toast(msg, undo, sticky){
   const off = ev => { if (t.contains(ev.target)) return; t.remove(); document.removeEventListener("pointerdown", off, true); };
   setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
 }
-const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+const plural = (n, one, many) => `${typeof n === "number" ? n.toLocaleString("en-US") : n} ${n === 1 ? one : (many || one + "s")}`;
 
 /* ---------------- add a memory ---------------- */
 let snapDraft = null;
@@ -1427,7 +1434,7 @@ async function saveSnap(){
   const before = ed ? JSON.parse(JSON.stringify(ed)) : null;
   const name = $("#snapName").value.trim() || (({food:"Something delicious", golf:"A round of golf", race:"Race day", hike:"A great hike", view:"A view worth keeping"})[snapDraft.cat] || catLabel(snapDraft.cat));
   const sn = ed || {id:"snap" + Date.now(), date:todayStr()};
-  if (!ed || whereDraft.set){ sn.lon = whereDraft.lon; sn.lat = whereDraft.lat; if (!ed || whereDraft.lon !== ed.lon || whereDraft.lat !== ed.lat){ sn.place = whereDraft.label; delete sn.near; } }
+  if (!ed || whereDraft.set){ sn.lon = whereDraft.lon; sn.lat = whereDraft.lat; if (!ed || whereDraft.lon !== before.lon || whereDraft.lat !== before.lat || whereDraft.label !== (before.place || before.near)){ sn.place = whereDraft.label; delete sn.near; } } // compare with the memory as it was: sn is the same object, so its place had already moved
   Object.assign(sn, {cat:snapDraft.cat, name, note:$("#snapNote").value.trim(), rating:snapDraft.rating, scene:(CATS.find(x => x.k === snapDraft.cat) || {}).scene || "lake"});
   delete sn.img;
   if (snapDraft.cat === "race"){ sn.dist = $("#raceDist").value.trim(); sn.time = $("#raceTime").value.trim(); const by = $("#raceBy").value.trim(); if (by && !/^me$/i.test(by)) sn.by = by; else delete sn.by; sn.rating = 0; }
@@ -1600,9 +1607,10 @@ function openLoader(){
 document.addEventListener("focusin", e => { if (e.target.id === "myName" && e.target.value) setTimeout(() => { try { e.target.select(); } catch(er){} }, 0); });
 document.addEventListener("input", e => { if (e.target.id === "ldManTitle") try { sessionStorage.setItem("tgManName", e.target.value); } catch(er){} });
 // a picker that never opens fails silently in some browsers: after two seconds with no picker, say so
-document.addEventListener("click", e => { const lb = e.target.closest && e.target.closest("label"); if (!lb || !lb.querySelector("#ldFiles")) return; let opened = false; const on = () => { opened = true; };
+let PICKED = false; document.addEventListener("change", e => { if (e.target && e.target.type === "file"){ PICKED = true; const pg = $("#ldProg"); if (pg && /No photo picker opened/.test(pg.textContent)) pg.textContent = ""; } }, true);
+document.addEventListener("click", e => { const lb = e.target.closest && e.target.closest("label"); if (!lb || !lb.querySelector("#ldFiles")) return; let opened = false; PICKED = false; const on = () => { opened = true; };
   window.addEventListener("blur", on, {once:true}); document.addEventListener("visibilitychange", on, {once:true});
-  setTimeout(() => { window.removeEventListener("blur", on); document.removeEventListener("visibilitychange", on); const pg = $("#ldProg"); if (!opened && pg && !pg.textContent.trim()) pg.innerHTML = "No photo picker opened? Some browsers block it on this page. Try <b>sample photos</b>, or open the page in Chrome or Safari."; }, 2000); }, true);
+  setTimeout(() => { window.removeEventListener("blur", on); document.removeEventListener("visibilitychange", on); const pg = $("#ldProg"), inp = $("#ldFiles"); if (!opened && !PICKED && !(inp && inp.files && inp.files.length) && pg && !pg.textContent.trim()) pg.innerHTML = "No photo picker opened? Some browsers block it on this page. Try <b>sample photos</b>, or open the page in Chrome or Safari."; }, 2000); }, true);
 function openManual(){
   loadState = {period:"all", from:"", to:"", manual:true};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Make a trip by hand")}<div class="steps">One trip, from the photos you choose</div>
@@ -1770,7 +1778,7 @@ async function addRealTrips(){
   if (L.manual) try { sessionStorage.removeItem("tgManName"); } catch(e){}
   store.set("hideSample", $("#ldHide") ? $("#ldHide").checked : false);
   try { sessionStorage.setItem("tgRealAdded", JSON.stringify({n:out.length, failed, heicFails, heicUsed})); } catch(e){}
-  location.reload();
+  closeSheet(); await refreshTrips(); realAddedNotice();
 }
 function realAddedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgRealAdded") || "null"); sessionStorage.removeItem("tgRealAdded"); } catch(e){} if (!v) return;
   if (v.failed) toast(`Added ${plural(v.n, "trip")}, but ${plural(v.failed, "photo")} couldn't be opened${v.heicFails ? ". They're iPhone HEIC photos and the converter couldn't load. Check your connection and load them again, or use Safari" : " in this browser"}.`, null, true);
@@ -1781,10 +1789,17 @@ async function forgetTrips(trips){ const tids = new Set(trips.map(t => t.id)), s
   const hit = k => tids.has(k) || sids.some(sid => k === sid || k.startsWith(sid + "-") || k === "vn:stop:" + sid);
   for (const t of trips) for (const s of t.stops){ const n = (s.allPhotos || s.photos).length + 25; for (let i = 0; i < n; i++){ try { await idb.del("rp:" + s.id + "-" + i); } catch(e){} } try { await idb.del("vn:stop:" + s.id); } catch(e){} }
   ["stories", "stopState", "stopNames", "phLabels", "phHidden", "phRot", "phOrder", "covers", "tripMusic", "backSeen", "voiceLen", "notes"].forEach(k => { const o = store.get(k, {}); if (!o || typeof o !== "object" || Array.isArray(o)) return; let ch = false; Object.keys(o).forEach(x => { if (hit(x)){ delete o[x]; ch = true; } }); if (ch) store.set(k, o); });
-  const vk = store.get("voiceKeys", []); if (Array.isArray(vk)) store.set("voiceKeys", vk.filter(k => !hit(String(k)))); }
-async function removeRealTrips(){ await forgetTrips(REAL_TRIPS); store.set("realTrips", []); store.set("hideSample", false); location.reload(); } // your home stays set
+  // journal lines and day voice notes for the trip's days go too, unless another trip you keep covers that day
+  const keep = TRIPS.filter(t => !tids.has(t.id)), days = new Set();
+  for (const t of trips){ for (let d = new Date(t.start + "T12:00"); d <= new Date(t.end + "T12:00"); d = new Date(+d + DAY)){ const k = d.toISOString().slice(0, 10); if (!keep.some(o => k >= o.start && k <= o.end)) days.add(k); } }
+  if (days.size){ let ch = false; days.forEach(k => { if (dayLines[k]){ delete dayLines[k]; ch = true; } }); if (ch) store.set("dayLines", dayLines);
+    for (const k of days){ try { await idb.del("vn:day:" + k); } catch(e){} VOICE.delete("vn:day:" + k); }
+    const vl = store.get("voiceLen", {}) || {}; let vch = false; days.forEach(k => { if (vl["vn:day:" + k] != null){ delete vl["vn:day:" + k]; vch = true; } }); if (vch) store.set("voiceLen", vl); }
+  const dayHit = k => /^vn:day:/.test(k) && days.has(k.slice(7));
+  const vk = store.get("voiceKeys", []); if (Array.isArray(vk)) store.set("voiceKeys", vk.filter(k => !hit(String(k)) && !dayHit(String(k)))); }
+async function removeRealTrips(){ await forgetTrips([...REAL_TRIPS]); store.set("realTrips", []); store.set("hideSample", false); await refreshTrips(null, "Your loaded trips were removed. Your home stays set."); } // your home stays set
 async function deleteRealTrip(id){ const t = REAL_TRIPS.find(x => x.id === id); if (!t) return; await forgetTrips([t]); const raw = (store.get("realTrips", []) || []).filter(x => x.id !== id); store.set("realTrips", raw); if (!raw.length) store.set("hideSample", false);
-  try { sessionStorage.setItem("tgDeletedMsg", `Deleted ${t.title}. Your original photos are not touched.`); } catch(e){} location.reload(); }
+  await refreshTrips(null, `Deleted ${t.title}. Your original photos are not touched.`); }
 
 /* ---------------- guided first session ---------------- */
 let guideTrip = null;
@@ -1833,7 +1848,7 @@ const MOODS = {
 };
 const MOOD_ORDER = ["warm","north","piazza","island","blossom","highlands","desert","city"];
 const TRIP_MOOD = {banff:"north", italy:"piazza", iceland:"north", maui:"island", nyc:"city", japan:"blossom", scotland:"highlands", arizona:"desert", rockies2:"north"};
-TRIPS.forEach(t => { if (t.real && !TRIP_MOOD[t.id]){ const la = Math.abs(d3.mean(t.stops, s => s.lat)); TRIP_MOOD[t.id] = la > 55 ? "north" : la < 24 ? "island" : t.stops.length > 2 ? "city" : "warm"; } });
+const setMoods = () => TRIPS.forEach(t => { if (t.real && !TRIP_MOOD[t.id]){ const la = Math.abs(d3.mean(t.stops, s => s.lat)); TRIP_MOOD[t.id] = la > 55 ? "north" : la < 24 ? "island" : t.stops.length > 2 ? "city" : "warm"; } }); setMoods();
 /* Private test only: real recordings from Alan's Epidemic Sound account, to judge the feel. Not licensed for a shipped app yet. */
 const REAL = {
   highlands:{name:"Highland air", desc:"Gentle Scottish and Irish folk"},
@@ -1954,7 +1969,7 @@ const music = (() => {
     // a voice note: the music dips while you talk, and a video being made records it too
     voice(src){ return new Promise(res => { const a = new Audio(src); let n = null; if (ctx()){ try { n = ac.createMediaElementSource(a); n.connect(ac.destination); if (recDest) n.connect(recDest); } catch(e){} }
       const lvl = playingKey === "song" ? .6 : song ? .55 : .4; if (playingKey && !musicMuted) fadeTo(lvl * .18, .4);
-      let fin = false; const done = () => { if (fin) return; fin = true; if (playingKey && !musicMuted) fadeTo(lvl, 1.2); res(); }; a.onended = done; a.onerror = done; a._done = done; a.play().catch(done); voiceNow = a; }); }
+      let fin = false; const done = () => { if (fin) return; fin = true; a._fin = true; if (playingKey && !musicMuted) fadeTo(lvl, 1.2); res(); }; a.onended = done; a.onerror = done; a._done = done; a.play().catch(done); voiceNow = a; }); }
   };
 })();
 function openMusicPicker(tripId, fromReplay){
@@ -2091,6 +2106,7 @@ async function replay(id, opts = {}){
     const s = st[i], story = getStory(s), to = [s.lon, s.lat];
     const prev = i ? [st[i-1].lon, st[i-1].lat] : [HOME.lon, HOME.lat], prevName = i ? stopName(st[i-1]) : HOME.name.replace(/^Home · /, "");
     const dist = d3.geoDistance(prev, to), car = dist < DRIVE_MAX;
+    if (dist * KM < 2 && !jump) jump = true; // the stop is where you started (home is right here): no drive to show, just go there
     (replayState.roads = replayState.roads || []).length = i; replayState.leg = i - 1; mom.classList.remove("on"); if (rec) rec.onT = 0;
     if (replayState.repause) jump = true; // Previous/Next pressed while paused: go straight to the stop
     if (jump){ chip.hidden = true; await flyTo(s.lon, s.lat, Math.max(zoom, 4), REDUCED() ? 1 : 700); jump = false; }
@@ -2123,6 +2139,7 @@ async function replay(id, opts = {}){
       await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
       // a voice note gets to finish before the story moves on
       if (last && vEnd > performance.now() && !replayState.next && !replayState.back){ await wait(vEnd - performance.now(), false); if (!alive()) return; }
+      while (last && vEnd && typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin && !replayState.next && !replayState.back && alive()) await wait(200, false); // still talking (it was paused): let it finish
       if (goBack()){ back = true; break; }
       if (replayState.next){ replayState.next = false; break; }
     }
@@ -2384,7 +2401,7 @@ const monthYear = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {mo
 
 // Back again: a stop within 30 km of a stop on an earlier trip
 const BACK_KM = 30;
-function backAgain(t){ const prev = TRIPS.filter(x => x !== t && x.start < t.start), hits = [];
+function backAgain(t){ const prev = TRIPS.filter(x => x !== t && !!x.real === !!t.real && x.start < t.start), hits = []; // your trips only compare with your trips, samples with samples
   stopsOf(t).forEach(s => { const seen = new Map();
     prev.forEach(x => stopsOf(x).forEach(o => { if (!seen.has(x.id) && d3.geoDistance([s.lon, s.lat], [o.lon, o.lat]) * 6371 < BACK_KM) seen.set(x.id, {trip:x, stop:o}); }));
     if (seen.size){ const v = [...seen.values()].sort((a, b) => a.trip.start.localeCompare(b.trip.start)); hits.push({stop:s, visits:v, nth:v.length + 1, last:v[v.length - 1]}); } });
@@ -2435,12 +2452,14 @@ function tripsListHTML(){ let h = `<div class="catchips" role="group" aria-label
     if (!groups.length) h += `<p class="note" style="margin:0">Add who was with you on a trip's stops (or share a trip with someone) and your trips group by person here.</p>`;
     groups.forEach(g => { h += `<div class="sec">Trips with ${esc(withName(g.name))} · ${g.trips.length}</div>`; newest(g.trips).forEach(t => h += tripItemHTML(t)); });
     if (solo.length && groups.length){ h += `<div class="sec">No one named yet · ${solo.length}</div>`; newest(solo).forEach(t => h += tripItemHTML(t)); }
+    if (groups.length) h += `<p class="note" style="margin:6px 0 0">A trip with several people shows under each of them.</p>`;
   } else if (tripGroup === "chapters"){
     if (!chapters.length) h += `<div class="suggest"><b>Group trips by the times of your life</b><p>Like College years, Our first apartment or When the kids were little. Give a chapter a name and the years it covers, and its trips gather under it.</p></div>`;
     const inAny = new Set();
     [...chapters].sort((a, b) => (b.to || "9999").localeCompare(a.to || "9999") || b.from.localeCompare(a.from)).forEach(c => { const ts = chapterTrips(c); ts.forEach(t => inAny.add(t));
       h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center">${esc(c.name)} · ${chapterYears(c)} · ${plural(ts.length, "trip")}<button class="linkbtn" data-ch-edit="${c.id}">✎ Edit</button></div>`;
       newest(ts).forEach(t => h += tripItemHTML(t)); if (!ts.length) h += `<p class="note" style="margin:0">No trips in these years yet.</p>`; });
+    if (chapters.length > 1) h += `<p class="note" style="margin:6px 0 0">Chapters can overlap, so a trip shows in every chapter its dates fall in.</p>`;
     h += `<button class="btn primary" data-ch-new style="align-self:flex-start">+ Add a life chapter</button>`;
     const rest = TRIPS.filter(t => !inAny.has(t)); if (chapters.length && rest.length){ h += `<div class="sec">Not in a chapter · ${rest.length}</div>`; newest(rest).forEach(t => h += tripItemHTML(t)); }
   } else { h += `<div class="sec">${plural(TRIPS.length, "trip")}, newest first · ▶ to play one as a story</div>`; [...TRIPS].reverse().forEach(t => h += tripItemHTML(t)); }
@@ -2448,6 +2467,15 @@ function tripsListHTML(){ let h = `<div class="catchips" role="group" aria-label
 
 // Trip book: a print-ready page you can print or save as a PDF
 let bookAll = store.get("bookAll", false);
+// a printed map of the trip: the land, your route in order and a numbered dot for each stop
+function bookMap(st){ if (!st.length) return ""; const W0 = 640, H0 = 400, pad = 46;
+  const pts = st.map(s => [s.lon, s.lat]); const span = st.length > 1 ? d3.geoDistance([d3.min(pts, p => p[0]), d3.min(pts, p => p[1])], [d3.max(pts, p => p[0]), d3.max(pts, p => p[1])]) : 0;
+  const box = {type:"MultiPoint", coordinates:span < .004 ? [[pts[0][0] - .3, pts[0][1] - .2], [pts[0][0] + .3, pts[0][1] + .2]] : pts};
+  const pr = d3.geoMercator().fitExtent([[pad, pad], [W0 - pad, H0 - pad]], box), path = d3.geoPath(pr);
+  const land = countries.map(f => path(f)).filter(Boolean).join(" ");
+  const xy = pts.map(p => pr(p)); const line = xy.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + "," + q[1].toFixed(1)).join("");
+  const dots = xy.map((q, i) => { const nm = esc(stopName(st[i])), right = q[0] < W0 - 150; return `<g><circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="11" fill="#b5542c" stroke="#fff" stroke-width="2"/><text x="${q[0].toFixed(1)}" y="${(q[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${i + 1}</text><text x="${(q[0] + (right ? 16 : -16)).toFixed(1)}" y="${(q[1] + 4).toFixed(1)}" text-anchor="${right ? "start" : "end"}" font-size="13" fill="#3b352d" stroke="#f7f3ea" stroke-width="3" paint-order="stroke">${nm}</text></g>`; }).join("");
+  return `<figure class="bmap"><svg viewBox="0 0 ${W0} ${H0}" role="img" aria-label="Map of the trip"><rect width="${W0}" height="${H0}" fill="#dfe8ec"/><path d="${land}" fill="#f1ebdd" stroke="#c9bfa9" stroke-width=".8"/>${st.length > 1 ? `<path d="${line}" fill="none" stroke="#b5542c" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round"/>` : ""}${dots}</svg></figure>`; }
 function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const st = stopsOf(t); closeSheet();
   const n = st.reduce((a, s) => a + s.photos.length, 0), cov = tripCover(t), ppl = tripPeople(t), chs = chaptersOf(t);
   const pic = (ph, w, h) => `<figure><img src="${photo(ph.scene, ph.id, w, h)}" alt="">${phLabel(ph) || ph.by || ph.scene !== "real" ? `<figcaption>${esc(phLabel(ph) || (ph.scene !== "real" ? ph.caption : ""))}${ph.by ? ` <i>Photo: ${esc(ph.by)}</i>` : ""}</figcaption>` : ""}</figure>`;
@@ -2465,13 +2493,17 @@ function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; c
       <section class="bcover"><img src="${photo(cov.scene, cov.id, 1600, 1100)}" alt=""><div class="bnum">${fmt(t.start)} – ${fmt(t.end)}${t.country ? " · " + esc(t.country) : ""}</div><h1>${esc(t.title)}</h1>
         ${ppl.length ? `<p>With ${esc(ppl.join(", "))}</p>` : ""}${chs.length ? `<p class="bnum">${chs.map(c => esc(c.name)).join(" · ")}</p>` : ""}
         <div class="bfacts">${plural(days(t), "day")} · ${plural(st.length, "place")} · ${plural(n, "photo")} · ${plural(tripMiles(t), "mile")}</div>
+        ${bookMap(st)}
         <ol class="btoc">${st.map(s => `<li>${esc(stopName(s))} <span>${fmtShort(s.date)}</span></li>`).join("")}</ol></section>
       ${stops}
       <section class="bend"><p>Made with Travel Globe · ${fmt(new Date().toISOString().slice(0, 10))}</p></section></div>`;
   document.body.appendChild(el); document.body.classList.add("booking"); el.querySelector("[data-book-print]").focus(); }
 function closeBook(){ const el = $("#book"); if (el) el.remove(); document.body.classList.remove("booking"); }
 async function printBook(){ const imgs = [...document.querySelectorAll("#book img")]; await Promise.race([Promise.all(imgs.map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; }))), new Promise(r => setTimeout(r, 4000))]);
-  try { window.print(); } catch(e){ toast("Printing isn't allowed here. Open the trip book on playbrightharbor.com."); } }
+  const t0 = performance.now(); let ok = true; try { window.print(); } catch(e){ ok = false; }
+  // a real print window holds the page; if it came back at once, no window opened, so say what to do instead
+  if (!ok || performance.now() - t0 < 300){ const bt = document.querySelector("#book .booktools"); if (!bt) return; let n = bt.querySelector(".bookhelp"); if (!n){ n = document.createElement("p"); n.className = "bookhelp note"; n.setAttribute("role", "status"); n.style.cssText = "flex-basis:100%;margin:4px 0 0"; bt.appendChild(n); }
+    n.textContent = isIOS() ? "No print window? Tap Share (the square with an arrow), then Print. On the preview, pinch out to save it as a PDF." : "No print window? Open your browser's menu, choose Print (or press Ctrl+P), and pick Save as PDF."; } }
 
 // Install to home screen (works on playbrightharbor.com, not inside the Claude viewer)
 const PWA = {prompt:null, site:/(^|\.)playbrightharbor\.com$|^localhost$|^127\.0\.0\.1$/.test(location.hostname) && /\/travel-globe[^/]*\.html$/.test(location.pathname)};
@@ -2493,7 +2525,7 @@ function openInstall(){ const off = !!(navigator.serviceWorker && navigator.serv
       <p class="note" style="margin:0">The installed app uses the same trips as this browser.</p>`;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Install to home screen")}
     ${isStandalone() ? `<p style="margin:0">You're already using the home screen app. ✓</p>` : !PWA.site ? `<p style="margin:0">Installing only works on the web page: <b>playbrightharbor.com/travel-globe-test.html</b>. Open it in your phone's browser and come back here, under More.</p>` : `<p style="margin:0">Put Travel Globe on your home screen. It opens full screen like an app and works without internet once it has opened here.</p>${PWA.prompt ? `<div class="row-btns" style="margin:0"><button class="btn primary" data-install-go>Install Travel Globe</button></div>` : steps}`}
-    ${PWA.site ? `<p class="note" style="margin:0">${off ? "✓ Ready to work offline on this device." : "Offline copy not ready yet. Reload the page once while online."} Search for a city and the HEIC photo converter still need the internet.</p>` : ""}</div>`); }
+    ${PWA.site ? `<p class="note" style="margin:0">${off ? "✓ Ready to work offline on this device." : "Offline copy not ready yet. Reload the page once while online."} Searching for a city needs the internet. The iPhone (HEIC) photo converter is saved for offline use too, once this page has opened online.</p>` : ""}</div>`); }
 function openVideoSheet(blob, t, secs, audio){
   const ext = blob.type.includes("mp4") ? "mp4" : "webm"; const name = (t.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "trip") + "." + ext;
   if (lastVideo) URL.revokeObjectURL(lastVideo.url); const url = URL.createObjectURL(blob); lastVideo = {url, file:new File([blob], name, {type:blob.type}), title:t.title};
@@ -2508,8 +2540,14 @@ function openVideoSheet(blob, t, secs, audio){
 // video length: Short aims for 45 seconds, Normal for 90, Full keeps every photo at its normal pace
 const VLEN = {short:{label:"Short", target:45, cap:2}, normal:{label:"Normal", target:90, cap:4}, full:{label:"Full", target:Infinity, cap:99}};
 let vidLen = store.get("vidLen", "normal"); if (!VLEN[vidLen]) vidLen = "normal";
-function vidPlan(t, len = vidLen){ const L = VLEN[len] || VLEN.normal; const st = stopsOf(t), est = (cap, sc) => 5 + st.reduce((a, s) => a + 4.5 + sc * (6 + 2.6 * (Math.min(cap, s.photos.length) - 1)), 0);
-  let cap = L.cap; while (cap > 1 && est(cap, 1) > L.target) cap--; let sc = 1; if (est(cap, 1) > L.target){ const fixed = 5 + 4.5 * st.length, ph = est(cap, 1) - fixed; sc = Math.max(.5, (L.target - fixed) / ph); }
+// the estimate follows the same timings Replay uses: title card, each flight or drive, arrival, photos, notes, voice notes, the overview and the end card
+function vidPlan(t, len = vidLen){ const L = VLEN[len] || VLEN.normal; const st = stopsOf(t), vl = store.get("voiceLen", {}) || {};
+  const legs = st.map((s, i) => { const prev = i ? [st[i-1].lon, st[i-1].lat] : [HOME.lon, HOME.lat], dist = d3.geoDistance(prev, [s.lon, s.lat]); const car = dist < DRIVE_MAX;
+    const vk = hasVoice_(s.id) ? "vn:stop:" + s.id : VOICE.has("vn:day:" + s.date) ? "vn:day:" + s.date : null;
+    return {fly:(car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) / 1000, note:getStory(s).note ? 2.5 : 0, voice:vk ? 1.5 + (vl[vk] || 0) : 0, n:s.photos.length}; });
+  const FIX = 3.3 + 2.6 + 1.9 + 3.5; // start-up (music, fonts, recorder), title card, overview, end card
+  const est = (cap, sc) => FIX + legs.reduce((a, g) => { const k = Math.min(cap, g.n), ph = sc * (6 + 2.6 * (k - 1)) + g.note; return a + g.fly + .6 + Math.max(ph, g.voice) + .5; }, 0);
+  let cap = L.cap; while (cap > 1 && est(cap, 1) > L.target) cap--; let sc = 1; if (est(cap, 1) > L.target){ const fixed = est(cap, 0), ph = est(cap, 1) - fixed; sc = Math.max(.5, (L.target - fixed) / ph); }
   return {cap, sc, est:Math.round(est(cap, sc))}; }
 function secsText(n){ return n < 100 ? `${n} seconds` : `${Math.round(n / 60 * 2) / 2} minutes`; }
 function openVideoStart(id){
@@ -2519,7 +2557,12 @@ function openVideoStart(id){
   const m = musicChoice(t.id); const mname = m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Make a story video")}
     <p style="margin:0">Your story plays once while it records a tall video, ready for messages, Stories and Reels.</p>
-    <div><div class="l">How long?</div><div class="catchips">${Object.entries(VLEN).map(([k, L]) => `<button data-vlen="${k}|${t.id}" aria-pressed="${vidLen === k}">${L.label} · ${secsText(vidPlan(t, k).est).replace(" seconds", " s").replace(" minutes", " min")}</button>`).join("")}</div></div>
+    <div><div class="l">How long?</div><div class="catchips">${(() => { const ks = Object.keys(VLEN), P = Object.fromEntries(ks.map(k => [k, vidPlan(t, k)])); // a length that would make the same video as the one before it is shown as "same as"
+      const isDup = n => n > 0 && P[ks[n - 1]].cap >= Math.min(P[ks[n]].cap, maxPh) && P[ks[n - 1]].sc === P[ks[n]].sc && P[ks[n - 1]].est === P[ks[n]].est;
+      let on = Math.max(0, ks.indexOf(vidLen)); while (isDup(on)) on--; // a chosen length that matches a shorter one shows the shorter one as chosen
+      return ks.map((k, n) => { const L = VLEN[k], dup = isDup(n);
+        return dup ? `<button disabled aria-disabled="true" style="opacity:.5" title="This trip is short enough that ${L.label} makes the same video as ${VLEN[ks[n - 1]].label}">${L.label} · same as ${VLEN[ks[n - 1]].label}</button>`
+          : `<button data-vlen="${k}|${t.id}" aria-pressed="${on === n}">${L.label} · ${secsText(P[k].est).replace(" seconds", " s").replace(" minutes", " min")}</button>`; }).join(""); })()}</div></div>
     <ul class="note" style="margin:0;padding-left:18px;display:grid;gap:4px"><li>${esc(t.title)} · ${plural(st.length, "stop")} · about ${secsText(est)}</li><li>${VP.cap >= maxPh ? "Every photo at each stop" : VP.cap === 1 ? "The first photo at each stop" : `Up to ${VP.cap} photos for each stop`}, with your best moments and who was there</li><li>Music: ${esc(mname)} (change it with ♪ on the trip page)</li><li>Keep this screen open until it's done</li></ul>
     <div class="row-btns" style="margin:0"><button class="btn primary" data-video-go="${t.id}">Start recording</button><button class="btn" data-close>Not now</button></div></div>`);
 }
@@ -2536,7 +2579,7 @@ async function exportBackup(){
   } catch(e){ toast("This browser blocked the download"); }
 }
 // what a backup would leave in place: data this browser has that the file doesn't
-const DATA_KEYS = {"tg.snaps":"memories", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections"};
+const DATA_KEYS = {"tg.snaps":"memories", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections", "tg.chapters":"life chapters", "tg.covers":"trip covers", "tg.phHidden":"photos removed from trips", "tg.phOrder":"photo order", "tg.phRot":"turned photos", "tg.backSeen":"hidden Back again cards"};
 function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
 function restoreKeptHTML(d){ const kept = restoreKept(d); const has = Object.keys(DATA_KEYS).filter(k => k in d.keys).map(k => DATA_KEYS[k]);
   return `This replaces ${has.length ? has.join(", ") : "nothing but settings"} in this browser. ${kept.length ? `The backup has no ${kept.map(x => x.label).join(", ")}, so the ones in this browser (${kept.map(x => x.label.split(" ")[0] + ": " + x.n).join(", ")}) stay unless you tick below.</p><label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="rsWipe" style="width:20px;height:20px;accent-color:var(--lit)"><span>Remove them too, so this browser matches the backup exactly</span></label><p class="note" style="margin:0">` : ""}Settings like your globe style stay as they are. `; }
@@ -2590,12 +2633,12 @@ function openPhotoReview(id, at){ const t = TRIPS.find(x => x.id === id); if (!t
 function drawPhotoReview(){ const R = prev, ph = R.list[R.i], s = ph.stop, off = !!R.hidden[ph.id];
   const stopLeft = (s.allPhotos || s.photos).filter(p => !R.hidden[p.id]).length; const isCover = (COVERS[R.trip.id] || "") === ph.id;
   const kept = R.list.filter(p => !R.hidden[p.id]).length;
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">${R.i + 1} of ${R.list.length} · ${esc(stopName(s))} · ${fmt(s.date)} · ${kept} kept${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">Photo ${R.i + 1} of ${R.list.length} in this trip · ${kept} kept</div><div class="note" style="margin:-4px 0 0">${esc(stopName(s))} · ${fmt(s.date)} · ${(s.allPhotos || s.photos).length === 1 ? "the only photo here" : `${(s.allPhotos || s.photos).length} photos here`}${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
     <div style="position:relative;border-radius:14px;overflow:hidden;background:#0b0f1a"><img src="${photo(ph.scene, ph.id, 960, 720)}" alt="${esc(phLabel(ph) || ph.caption)}" style="width:100%;aspect-ratio:4/3;object-fit:contain;display:block;${off ? "opacity:.3;filter:grayscale(1)" : ""}">
       ${off ? `<div style="position:absolute;inset:auto 0 12px 0;text-align:center"><span class="badge">Removed from this trip</span></div>` : isCover ? `<div style="position:absolute;top:10px;left:10px"><span class="badge">★ Trip cover</span></div>` : ""}</div>
     <div><label class="l" for="prCap">Caption</label><input type="text" id="prCap" data-phlabel="${ph.id}" maxlength="60" value="${esc(phLabel(ph))}" placeholder="${ph.scene === "real" ? "What's in this photo? Shows in your story and video" : esc(ph.caption)}"></div>
     <div class="row-btns" style="margin:0">${off ? `<button class="btn primary" data-pr-keep>✓ Put it back in the trip</button>` : `<button class="btn" data-pr-remove ${stopLeft <= 1 ? "disabled title=\"A stop keeps at least one photo\"" : ""}>✕ Remove from trip</button><button class="btn" data-pr-cover ${isCover ? "disabled" : ""}>${isCover ? "★ This is the cover" : "★ Make it the cover"}</button>`}</div>
-    ${(() => { const arr = s.allPhotos || s.photos, k = arr.indexOf(ph); return `<div class="row-btns" style="margin:0"><button class="btn" data-pr-rot aria-label="Rotate a quarter turn">⟳ Rotate</button>${arr.length > 1 ? `<button class="btn" data-pr-move="-1" ${k <= 0 ? "disabled" : ""} aria-label="Move earlier in this stop">◀ Earlier</button><button class="btn" data-pr-move="1" ${k >= arr.length - 1 ? "disabled" : ""} aria-label="Move later in this stop">Later ▶</button><span class="note" style="align-self:center">Photo ${k + 1} of ${arr.length} at this stop</span>` : ""}</div>`; })()}
+    ${(() => { const arr = s.allPhotos || s.photos, k = arr.indexOf(ph); return `<div class="row-btns" style="margin:0"><button class="btn" data-pr-rot aria-label="Rotate a quarter turn">⟳ Rotate</button>${arr.length > 1 ? `<button class="btn" data-pr-move="-1" ${k <= 0 ? "disabled" : ""} aria-label="Move earlier in this stop">◀ Earlier</button><button class="btn" data-pr-move="1" ${k >= arr.length - 1 ? "disabled" : ""} aria-label="Move later in this stop">Later ▶</button><span class="note" style="align-self:center">Photo ${k + 1} of ${arr.length} at this stop</span>` : `<span class="note" style="align-self:center">Only photo at this stop, so there's nothing to reorder</span>`}</div>`; })()}
     ${!off && stopLeft <= 1 ? `<p class="note" style="margin:0">This is the last photo at ${esc(stopName(s))}. To drop the whole stop, use <b>Not part of this trip</b> on the trip page.</p>` : ""}
     <div class="row-btns" style="margin:0;justify-content:space-between"><button class="btn" data-pr-step="-1" ${R.i === 0 ? "disabled" : ""}>‹ Previous</button><button class="btn primary" data-pr-done>Done</button><button class="btn" data-pr-step="1" ${R.i === R.list.length - 1 ? "disabled" : ""}>Next ›</button></div></div>`, "prev"); }
 function prMove(d){ const ph = prev.list[prev.i], arr = ph.stop.allPhotos || ph.stop.photos, k = arr.indexOf(ph), j = k + d; if (j < 0 || j >= arr.length) return;
@@ -2613,8 +2656,27 @@ function prSetHidden(on){ const ph = prev.list[prev.i]; if (on) prev.hidden[ph.i
   if (on && COVERS[prev.trip.id] === ph.id){ delete COVERS[prev.trip.id]; store.set("covers", COVERS); }
   store.set("phHidden", prev.hidden); drawPhotoReview(); }
 function prDone(){ if (!prev) return; const R = prev; prev = null;
-  if (R.changed){ try { sessionStorage.setItem("tgOpenTrip", R.trip.id); } catch(e){} location.reload(); return; }
+  if (R.changed){ refreshTrips(R.trip.id); return; }
   openTrip(R.trip.id, true); }
+// your trips changed (photos added, merged, reordered): rebuild them in place, with no page reload
+async function refreshTrips(openId, msg){
+  const raw = validTrips(store.get("realTrips", []));
+  NOSAMPLE = store.get("hideSample", false) && raw.length > 0;
+  { const rh = store.get("realHome", null); if (rh && isFinite(rh.lat) && isFinite(rh.lon)) Object.assign(HOME, {name:"Home · " + String(rh.label || "your area"), lon:+rh.lon, lat:+rh.lat}); }
+  const repl = new Set(raw.map(t => t.replaces).filter(Boolean)); TRIPS.length = 0;
+  if (!NOSAMPLE) SAMPLE_TRIPS.forEach(t => { if (repl.has(t.id)) return; if (t.stops.some(s => !s.allPhotos)) t.stops.forEach(s => expandStop(t, s)); TRIPS.push(t); });
+  REAL_TRIPS.length = 0; raw.forEach(t => { t.real = true; REAL_TRIPS.push(t); TRIPS.push(t); }); TRIPS.sort((a, b) => a.start.localeCompare(b.start));
+  [[PH_HIDDEN, "phHidden"], [COVERS, "covers"], [PH_ORDER, "phOrder"]].forEach(([o, k]) => { Object.keys(o).forEach(x => delete o[x]); Object.assign(o, store.get(k, {}) || {}); });
+  raw.forEach(t => t.stops.forEach(s => expandStop(t, s)));
+  PHOTOS = TRIPS.flatMap(t => t.stops.flatMap(s => s.photos)); ALL_STOPS.length = 0; ALL_STOPS.push(...TRIPS.flatMap(t => t.stops)); setMoods();
+  try { LIGHT_ORDER = [...new Set([[HOME.lon, HOME.lat], ...TRIPS.flatMap(t => t.stops.map(s => [s.lon, s.lat]))].map(p => (countries.find(f => d3.geoContains(f, p)) || {}).id).filter(Boolean))]; } catch(e){}
+  globeDark = false; introRunning = false; pinsShown = 999; LIGHT_ORDER.forEach(c => lit.set(c, 1)); { const sc = $("#scan"); if (sc) sc.hidden = true; }
+  { const ct = $("#chipTag"); if (ct && REAL_TRIPS.length) ct.textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample"; }
+  await loadImages(); // brings in the new photos and redraws everything
+  if (openId && TRIPS.find(x => x.id === openId)) openTrip(openId, true); else closeSheet();
+  if (msg) toast(msg);
+  window.__tgRefreshed = (window.__tgRefreshed || 0) + 1; // lets tests know the rebuild finished
+}
 function openTripAfterReload(){ let id = null, msg = null; try { id = sessionStorage.getItem("tgOpenTrip"); sessionStorage.removeItem("tgOpenTrip"); msg = sessionStorage.getItem("tgAddedMsg") || sessionStorage.getItem("tgDeletedMsg"); sessionStorage.removeItem("tgAddedMsg"); sessionStorage.removeItem("tgDeletedMsg"); } catch(e){} if (msg) setTimeout(() => toast(msg), 900); if (id && TRIPS.find(x => x.id === id)) setTimeout(() => openTrip(id), 500); }
 
 /* ---------------- shared trips: a trip file you send, they add to, and send back ---------------- */
@@ -2627,9 +2689,20 @@ const tripShareId = t => t.shareId || (t.sample ? "sample-" + t.id : t.id);
 // add more photos to a trip you already have (yours, or one someone shared with you): each joins the nearest stop, or makes a new one
 async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []) || []; const t = raw.find(x => x.id === id); if (!t){ toast("Photos can be added to your own trips and to trips shared with you. Sample trips stay as they are."); return; }
   const ds = ms => { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-  let added = 0, newStops = 0, skipped = 0, full = 0, i = 0;
-  for (const f of files){ i++; toast(`Adding photo ${i} of ${files.length}…`);
-    let ex = {}; try { ex = await readExif(f); } catch(e){} const when = ex.t || f.lastModified;
+  let added = 0, newStops = 0, skipped = 0, full = 0, same = 0, left = 0, i = 0;
+  // read dates first: photos from well outside this trip's dates get a heads-up before anything is saved
+  const items = []; for (const f of files){ let ex = {}; try { ex = await readExif(f); } catch(e){} items.push({f, ex, when:ex.t || f.lastModified}); }
+  const lo = new Date(t.start + "T00:00") - 21 * DAY, hi = new Date(t.end + "T23:59") + 21 * DAY, far = items.filter(x => x.when < lo || x.when > hi);
+  if (far.length){ const months = [...new Set(far.map(x => monthYear(ds(x.when))))].slice(0, 3).join(", ");
+    const pick = await new Promise(res => { openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Heads up: different dates")}
+      <p style="margin:0">${far.length === items.length ? (items.length === 1 ? "This photo is" : `All ${items.length} photos are`) : `${far.length} of these ${items.length} photos are`} from ${esc(months)}, well outside ${esc(t.title)} (${fmtShort(t.start)} – ${fmt(t.end)}). Adding ${far.length === 1 ? "it" : "them"} would stretch the trip to cover those dates.</p>
+      <div class="row-btns" style="margin:0">${far.length < items.length ? `<button class="btn primary" id="farSkip">Add only the ones from this trip</button>` : ""}<button class="btn${far.length < items.length ? "" : " primary"}" id="farAll">Add ${far.length === items.length ? (items.length === 1 ? "it" : "them") : "all"} anyway</button><button class="btn" id="farNo">Cancel</button></div></div>`, "far");
+      const b = id => document.getElementById(id); if (b("farSkip")) b("farSkip").onclick = () => res("skip"); b("farAll").onclick = () => res("all"); b("farNo").onclick = () => res("no");
+      const ov = $("#overlay"), obs = new MutationObserver(() => { if (!document.getElementById("farAll")){ obs.disconnect(); res("no"); } }); obs.observe(ov, {childList:true, subtree:true}); });
+    closeSheet(); if (pick === "no"){ openTrip(id, true); toast("No photos were added"); return; } if (pick === "skip"){ left = far.length; items.splice(0, items.length, ...items.filter(x => !far.includes(x))); } }
+  // fingerprints of the photos already in this trip, so a re-saved or turned copy isn't added twice
+  const prints = []; for (const o of t.stops) for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); }
+  for (const {f, ex, when} of items){ i++; toast(`Adding photo ${i} of ${items.length}…`);
     let st = null;
     if (isFinite(ex.lat)){ const near = t.stops.map(o => ({o, d:d3.geoDistance([ex.lon, ex.lat], [o.lon, o.lat]) * 6371})).sort((a, b) => a.d - b.d)[0];
       if (near && near.d < 15) st = near.o;
@@ -2638,21 +2711,21 @@ async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []
     if (!st){ skipped++; continue; } if (st.photos.length >= PER_STOP){ full++; continue; }
     let url = await thumb(f, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } }
     if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ skipped++; continue; }
+    { const fp = await picPrint(url); if (fp && prints.some(q => samePic(fp, q))){ same++; if (!st.photos.length){ t.stops.splice(t.stops.indexOf(st), 1); newStops--; } continue; } }
     const pid = st.id + "-" + st.photos.length; try { await idb.put("rp:" + pid, url); } catch(e){ skipped++; continue; }
     st.photos.push(["real", new Date(when).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); added++;
     const d = ds(when); if (d < t.start) t.start = d; if (d > t.end) t.end = d; }
   t.stops.sort((a, b) => a.date.localeCompare(b.date));
-  if (!added){ toast(skipped ? "Those photos couldn't be opened here" : full ? `Those stops already have ${PER_STOP} photos each` : "No photos were added"); return; }
+  if (!added){ toast(same ? `${same === 1 ? "That photo is" : "Those photos are"} already in this trip` : skipped ? "Those photos couldn't be opened here" : full ? `Those stops already have ${PER_STOP} photos each` : "No photos were added"); return; }
   if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; }
-  try { sessionStorage.setItem("tgOpenTrip", id); sessionStorage.setItem("tgAddedMsg", `Added ${plural(added, "photo")}${newStops ? `, with ${plural(newStops, "new stop")}` : ""}${skipped ? `. ${plural(skipped, "photo")} couldn't be opened` : ""}${full ? `. ${full} skipped: stops keep up to ${PER_STOP} photos` : ""}.`); } catch(e){}
-  location.reload(); }
+  { const msg = `Added ${plural(added, "photo")}${newStops ? `, with ${plural(newStops, "new stop")}` : ""}${skipped ? `. ${plural(skipped, "photo")} couldn't be opened` : ""}${full ? `. ${full} skipped: stops keep up to ${PER_STOP} photos` : ""}${same ? `. ${plural(same, "photo")} you already had ${same === 1 ? "was" : "were"} left out` : ""}${left ? `. ${plural(left, "photo")} from other dates ${left === 1 ? "was" : "were"} left out` : ""}.`; await refreshTrips(id, msg); } }
 function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const real = t.stops.reduce((a, s) => a + s.photos.filter(p => p.scene === "real").length, 0);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Share this trip")}<div class="steps">${esc(t.title)}</div>
     <p style="margin:0">Send this trip to someone who was there. They open it in Travel Globe, add their own photos and best moments, and send it back. Your two copies merge, so nothing is lost and no photo is doubled.</p>
     <ol class="note sharesteps"><li>You send the trip file.</li><li>They open it: More → Open a shared trip.</li><li>They add their photos and best moments, then tap 👥 Share this trip.</li><li>You open their file the same way, and it merges into yours.</li></ol>
     <div><label class="l" for="myName">Your name, so they see who added what${myName() ? "" : " (needed)"}</label><input type="text" id="myName" value="${esc(myName())}" placeholder="Type your first name" maxlength="30"></div>
-    ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about ${Math.max(1, Math.round(real * .12 * 10) / 10)} MB)</span></label>`
-      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : "There are no photos of your own on this trip, so only"} the stops, best moments and captions travel. The file is tiny.</p>`}
+    ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about ${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))})</span></label>`
+      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : "There are no photos of your own on this trip, so only"} the stops, best moments and captions travel. The file is about ${sizeText(JSON.stringify(stopsOf(t).map(s => ({n:stopName(s), d:s.date, lat:s.lat, lon:s.lon, o:s.others || {}, st:getStory(s), p:s.photos.map(p => ({u:p.uid || p.id, s:p.scene, c:p.caption, l:phLabel(p) || ""}))}))).length + 700)}.</p>`}
     <p class="note" style="margin:0">File: <b>${esc(tripFileName(t))}</b></p>
     <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">Send the trip file</button>
     <p class="note" style="margin:0">It goes as one file through Messages, WhatsApp, email or AirDrop. Nothing is uploaded to us, and there's no account. In the app this would be a link.</p></div>`, "tshare"); }
@@ -2668,7 +2741,7 @@ async function buildTripFile(t, withPhotos){ const from = myName(); const out = 
   Object.keys(dayLines).forEach(d => { if (d >= t.start && d <= t.end && dayLines[d] && dayLines[d].text) out.lines[d] = {text:dayLines[d].text, by:dayLines[d].by || from}; });
   return out; }
 const tripFileName = t => `travel-globe-trip-${t.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "trip"}.json`;
-const sizeText = n => n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
+const sizeText = n => n < 10240 ? `${Math.max(.1, Math.round(n / 102.4) / 10)} KB` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`; // small files keep one decimal, so 1.4 KB doesn't read as 1 KB
 async function sendTripFile(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const nm = ($("#myName") || {}).value; if (nm != null){ if (!String(nm).trim()){ toast("Type your name first, so they know who sent it"); $("#myName").focus(); return; } store.set("myName", String(nm).trim().slice(0, 30)); }
   const btn = document.querySelector("[data-tshare-go]"); if (btn){ btn.disabled = true; btn.textContent = "Packing the trip…"; }
   const data = await buildTripFile(t, !$("#tsPhotos") || $("#tsPhotos").checked); const name = tripFileName(t);
@@ -2683,6 +2756,18 @@ function findLocalShared(d, raw = store.get("realTrips", []) || []){ const ids =
 function findOverlap(d, raw = store.get("realTrips", []) || []){ const a = d.trip.start, b = d.trip.end, shift = (x, n) => { const t = new Date(x + "T12:00"); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
   return raw.find(t => t.start <= shift(b, 1) && t.end >= shift(a, -1) && t.stops.some(s => d.trip.stops.some(o => d3.geoDistance([s.lon, s.lat], [+o.lon, +o.lat]) * KM < 25))) || null; }
 // a quick fingerprint of a photo's image, so the same photo loaded by two people is kept once
+// a picture fingerprint that survives re-saving, resizing and turning: a 16x16 light/dark pattern, kept in all four turns
+const PH_FP = new Map();
+async function picPrint(url){ if (typeof url !== "string" || !url.startsWith("data:image/")) return null; const key = imgHash(url); if (PH_FP.has(key)) return PH_FP.get(key);
+  const im = new Image(); const ok = await new Promise(r => { im.onload = () => r(true); im.onerror = () => r(false); im.src = url; }); if (!ok) return null;
+  const N = 24, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, N, N);
+  const d = x.getImageData(0, 0, N, N).data, g = [], cl = []; for (let i = 0; i < N * N; i++){ g.push(d[i*4] * .299 + d[i*4+1] * .587 + d[i*4+2] * .114); cl.push([d[i*4], d[i*4+1], d[i*4+2]]); }
+  const mean = g.reduce((a, v) => a + v, 0) / g.length, sd = Math.sqrt(g.reduce((a, v) => a + (v - mean) ** 2, 0) / g.length) || 1; const z = g.map(v => (v - mean) / sd);
+  const rot = b => { const o = new Array(N * N); for (let r = 0; r < N; r++) for (let q = 0; q < N; q++) o[q * N + (N - 1 - r)] = b[r * N + q]; return o; };
+  const all = [z]; for (let k = 0; k < 3; k++) all.push(rot(all[k])); const out = {z:all, col:[mean, sd]}; PH_FP.set(key, out); return out; }
+// the same picture if some quarter turn of one lines up almost exactly with the other (correlation of the light/dark pattern)
+function picCorr(a, b){ if (!a || !b) return 0; const base = b.z[0]; return Math.max(...a.z.map(v => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * base[i]; return s / v.length; })); }
+function samePic(a, b){ return picCorr(a, b) > .945; } // re-saved and turned copies score .955 and up; different holiday snaps stayed under .91 in testing
 function imgHash(u){ if (typeof u !== "string" || !u) return null; let h = 2166136261; for (let i = 0; i < u.length; i += 61){ h ^= u.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ":" + u.length; }
 const sampleFor = d => String(d.trip.shareId || "").startsWith("sample-") ? TRIPS.find(x => x.sample && "sample-" + x.id === d.trip.shareId) || null : null;
 let pendingTrip = null;
@@ -2705,6 +2790,7 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   if (!t){ t = {id:"sh" + Date.now().toString(36), shareId:d.trip.shareId, title:d.trip.title, country:d.trip.country || "", start:d.trip.start, end:d.trip.end, stops:[], sharedWith:[]}; raw.push(t); }
   t.sharedWith = [...new Set([...(t.sharedWith || []), ...(d.trip.people || []), d.from].filter(n => n && n !== me))];
   const labels = Object.assign({}, phLabels);
+  const before = new Set(); t.stops.forEach(x => x.photos.forEach((p, i) => before.add(x.id + "-" + i))); // the photos you had before this merge
   for (const is of d.trip.stops){
     const dd = x => Math.abs(new Date(x.date + "T12:00") - new Date(is.date + "T12:00")) / DAY;
     let s = t.stops.find(x => (x.uid || x.id) === is.uid) || t.stops.find(x => x.date === is.date && d3.geoDistance([x.lon, x.lat], [is.lon, is.lat]) * KM < 3) || t.stops.find(x => dd(x) <= 1 && d3.geoDistance([x.lon, x.lat], [is.lon, is.lat]) * KM < 10);
@@ -2712,8 +2798,9 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
     s.others = Object.assign({}, s.others || {}); Object.entries(is.others || {}).forEach(([n, v]) => { if (n && n !== me && v){ const nv = {who:String(v.who || "").slice(0, 120), best:String(v.best || "").slice(0, 300), note:String(v.note || "").slice(0, 600)}; if ((nv.best || nv.who || nv.note) && JSON.stringify(s.others[n] || null) !== JSON.stringify(nv)) moments++; s.others[n] = nv; } });
     if (is.story && d.from && d.from !== me && (is.story.best || is.story.who || is.story.note)) s.others[d.from] = is.story;
     const have = new Set(s.photos.map((p, i) => p[4] || s.id + "-" + i)); t.stops.forEach(x => x.photos.forEach((p, i) => have.add(p[4] || x.id + "-" + i)));
-    const hashes = new Set(); t.stops.forEach(x => x.photos.forEach((p, i) => { const hh = p[0] === "real" ? imgHash(imgCache.get("rp:" + x.id + "-" + i)) : null; if (hh) hashes.add(hh); }));
-    for (const ip of is.photos){ if (!ip.uid || have.has(ip.uid)) continue; { const hh = ip.img ? imgHash(ip.img) : null; if (hh && hashes.has(hh)){ dupes++; have.add(ip.uid); continue; } if (hh) hashes.add(hh); } const idx = s.photos.length; const by = ip.by && ip.by !== me ? ip.by : null;
+    const hashes = new Set(), prints = []; for (const x of t.stops){ const near = dd(x) <= 1; for (let i = 0; i < x.photos.length; i++){ const p = x.photos[i]; if (p[0] !== "real") continue; const u = imgCache.get("rp:" + x.id + "-" + i), hh = imgHash(u); if (hh) hashes.add(hh); if (near && u && before.has(x.id + "-" + i)){ const f = await picPrint(u); if (f) prints.push(f); } } }
+    for (const ip of is.photos){ if (!ip.uid || have.has(ip.uid)) continue; { const hh = ip.img ? imgHash(ip.img) : null; if (hh && hashes.has(hh)){ dupes++; have.add(ip.uid); continue; } if (hh) hashes.add(hh);
+        const f = ip.img ? await picPrint(ip.img) : null; if (f && prints.some(q => samePic(f, q))){ dupes++; have.add(ip.uid); continue; } } /* only against photos you already had: two similar shots in their copy both stay */ const idx = s.photos.length; const by = ip.by && ip.by !== me ? ip.by : null;
       if (ip.scene === "real"){ if (!ip.img || !/^data:image\//.test(ip.img)){ imgFail++; continue; } try { const b = await (await fetch(ip.img)).blob(); await idb.put("rp:" + s.id + "-" + idx, b); } catch(e){ imgFail++; continue; } }
       s.photos.push([ip.scene === "real" ? "real" : String(ip.scene || "city"), String(ip.caption || "").slice(0, 120), null, 0, ip.uid, by]); have.add(ip.uid); added++;
       if (ip.label && !labels[s.id + "-" + idx]) labels[s.id + "-" + idx] = String(ip.label).slice(0, 60); }
@@ -2726,7 +2813,7 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   store.set("phLabels", labels); store.set("dayLines", dayLines);
   if (isNew && !store.get("realHome", null) && !REAL_TRIPS.length) store.set("hideSample", false);
   try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
-  location.reload(); }
+  closeSheet(); await refreshTrips(); sharedNotice(); }
 function sharedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgShared") || "null"); sessionStorage.removeItem("tgShared"); } catch(e){} if (!v) return;
   toast(v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : v.added || v.newStops || v.moments ? `Merged from ${v.from || "their copy"}: ${[v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : ""].filter(Boolean).join(", ")}${v.dupes ? `. ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything`);
   if (v.imgFail) setTimeout(() => toast(`${plural(v.imgFail, "photo")} couldn't be added in this browser`), 600);
@@ -2864,7 +2951,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-ld-merge]"))){ mergeTrips(+b.dataset.ldMerge); return; }
   if (g("[data-ld-add]")){ addRealTrips(); return; }
   if (g("[data-ld-again]")){ openLoader(); return; }
-  if (g("[data-sample-toggle]")){ store.set("hideSample", !NOSAMPLE); location.reload(); return; }
+  if (g("[data-sample-toggle]")){ store.set("hideSample", !NOSAMPLE); refreshTrips(null, NOSAMPLE ? "Showing the sample traveler again" : "Sample traveler hidden"); return; }
   if (g("[data-real-remove]")){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Remove my loaded trips?")}<p class="note" style="margin:0">This takes your ${plural(REAL_TRIPS.length, "loaded trip")}, their photos, captions and stories off this device and brings back the sample traveler. Your home stays set, and your original photos are not touched.</p><div class="row-btns"><button class="btn primary" data-real-remove-yes>Remove them</button><button class="btn" data-close>Keep them</button></div></div>`); return; }
   if (g("[data-real-remove-yes]")){ removeRealTrips(); return; }
   if ((b = g("[data-trip-del]"))){ const t = TRIPS.find(x => x.id === b.dataset.tripDel); if (!t) return; openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Delete this trip?")}<p class="note" style="margin:0"><b>${esc(t.title)}</b>, its ${plural(t.stops.reduce((a, s) => a + (s.allPhotos || s.photos).length, 0), "photo")}, captions, best moments and voice notes come off this device. Your original photos are not touched. This can't be undone.</p><div class="row-btns"><button class="btn primary" data-trip-del-yes="${t.id}">Delete it</button><button class="btn" data-close>Keep it</button></div></div>`); return; }
