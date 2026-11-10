@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.7.2 (working title; travel memories app, 2026-11-09). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
+<!-- Travel Globe prototype v0.7.3 (working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -64,6 +64,8 @@ canvas#globe.dragging{cursor:grabbing}
 .stage:has(#scan:not([hidden])) .fab,.stage:has(#scan:not([hidden])) .zoomctl{display:none}
 .wherechip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px}
 .wherechip b{font-weight:600;flex:1;min-width:120px}
+.wherechip.guess{border:1.5px dashed var(--lit);background:rgba(255,200,90,.08)}
+.wherechip .guesstag{display:block;font-size:11px;font-weight:700;color:var(--lit);text-transform:uppercase;letter-spacing:.04em}
 .wherechip .btn{font-size:12px;padding:6px 10px}
 .whereres{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .whereres:empty{display:none}
@@ -212,7 +214,8 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .moment.on{opacity:1}
 .moment .pics img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:mfade .9s ease forwards,kb 9s ease-out forwards}
 .moment::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,7,13,.35) 0%,rgba(5,7,13,0) 30%,rgba(5,7,13,0) 45%,rgba(5,7,13,.92) 100%)}
-.mtxt{position:absolute;left:max(22px,env(safe-area-inset-left,0px));right:max(22px,env(safe-area-inset-right,0px));bottom:92px;z-index:1;max-width:720px}
+.mtxt{position:absolute;left:max(22px,env(safe-area-inset-left,0px));right:max(22px,env(safe-area-inset-right,0px));bottom:92px;z-index:1;max-width:720px;width:fit-content;padding:14px 18px 16px;border-radius:18px;background:rgba(6,9,18,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 10px 40px rgba(0,0,0,.35);text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.mtxt:empty{display:none}
 .mtxt h2{margin:2px 0 0;font-family:var(--display);font-weight:400;font-size:clamp(38px,8vw,64px);line-height:1;text-wrap:balance}
 .mtxt p{margin:8px 0 0;font-size:clamp(17px,2.4vw,22px);line-height:1.35;font-style:italic;color:#f1ead8}
 .mtxt p.best{font-style:normal;font-family:var(--display);font-size:clamp(24px,4.6vw,36px);line-height:1.15;color:#fff6e2;text-wrap:balance}
@@ -223,7 +226,8 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .mtxt > *{opacity:0}
 .mtxt.show > *{animation:rise .8s ease forwards}
 .mtxt.show > :nth-child(2){animation-delay:.15s}.mtxt.show > :nth-child(3){animation-delay:.6s}.mtxt.show > :nth-child(4){animation-delay:1.1s}.mtxt.show > :nth-child(5){animation-delay:1.4s}
-body.rpaused .moment *{animation-play-state:paused!important}
+body.rpaused .mtxt *{animation-play-state:paused!important}
+body.rpaused .moment .pics img{animation-play-state:running,paused!important}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes mfade{from{opacity:0}to{opacity:1}}
 @keyframes kb{from{transform:scale(1.03)}to{transform:scale(1.16) translate(-2%,-1.5%)}}
@@ -949,8 +953,9 @@ function sheetHead(title){ return `<div style="display:flex;justify-content:spac
 function golfCounts(){ const played = COURSES.length + (golfConfirmed ? 1 : 0); const rounds = COURSES.reduce((a, c) => a + allRounds(c).length, 0) + (golfConfirmed ? allRounds(confirmedCourse()).length : 0); return {played, rounds}; }
 function statDefs(){
   const ctry = new Set(TRIPS.map(t => t.country)); const n = PHOTOS.length + allSnaps().length;
-  const places = (() => { const pts = [...TRIPS.flatMap(t => stopsOf(t).map(s => [s.lon, s.lat])), ...(diaryOn ? DIARY.map(d => [d.lon, d.lat]) : []), ...allSnaps().map(x => [x.lon, x.lat])], uniq = [];
-    pts.forEach(p => { if (!uniq.some(q => d3.geoDistance(p, q) < 2 / 6371)) uniq.push(p); }); return uniq.length; })();
+  // distinct places: home, stops, courses, diary and memories, with anything within ~8 km of a counted place treated as the same place
+  const places = (() => { const pts = [[HOME.lon, HOME.lat], ...TRIPS.flatMap(t => stopsOf(t).map(s => [s.lon, s.lat])), ...COURSES.map(c => [c.lon, c.lat]), ...(golfConfirmed ? [[SUGGEST.lon, SUGGEST.lat]] : []), ...(diaryOn ? DIARY.map(d => [d.lon, d.lat]) : []), ...allSnaps().map(x => [x.lon, x.lat])], uniq = [];
+    pts.forEach(p => { if (p[0] == null || p[1] == null) return; if (!uniq.some(q => d3.geoDistance(p, q) < 8 / 6371)) uniq.push(p); }); return uniq.length; })();
   const miles = TRIPS.reduce((a, t) => a + tripMiles(t), 0);
   return [
     {k:"countries", label:"Countries", v:beenWorld().countries.size, tab:"trips", world:true},
@@ -1109,7 +1114,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.7.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.7.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1217,7 +1222,7 @@ function openCourse(id){
     <div><label class="l" for="cnote">Course notes</label><textarea id="cnote" data-cnote="${c.id}" placeholder="Favorite hole, who you played with, the shot you'll never forget">${esc(notes["c_" + c.id] ?? c.note ?? "")}</textarea><div class="saved" id="saved-c_${c.id}"></div></div>
     <div><div class="sec" style="margin:0 0 6px">Paper scorecard</div><div class="strip" style="margin:0"><img src="${photo("scorecard", c.id)}" alt="Photo of the paper scorecard" data-raw="${photo("scorecard", c.id)}" data-rawcap="Scorecard · ${esc(c.name)}"><img src="${photo("green", c.id + "b")}" alt="" data-raw="${photo("green", c.id + "b")}" data-rawcap="${esc(c.name)}"></div><p class="note">In the app you snap the card and the phone reads the numbers for you.</p></div>
     ${trip ? `<button class="item" data-open-trip="${trip.id}" style="padding:0"><img src="${photoURL(trip.stops[0].photos[0])}" alt=""><div class="txt"><div class="t">Part of: ${esc(trip.title)}</div><div class="s">${fmt(trip.start)}</div></div></button>` : ""}
-    <p class="note" style="margin:0">Sample scorecards. Pars are placeholders except the Old Course.</p>
+    <p class="note" style="margin:0">Sample scorecards. The Old Course and North Berwick use their real pars; the other courses use placeholder pars.</p>
    </div>`);
 }
 function openMemory(id){
@@ -1284,10 +1289,11 @@ function openSnap(cat = "food", editId = null){
   snapDraft = {cat, rating:ed ? ed.rating || 0 : 0, img:ed ? imgCache.get(ed.id) || null : null, editId:ed ? ed.id : null};
   whereDraft = {lon:c[0], lat:c[1], label: ed ? (ed.place || ed.near || whereLabel(c)) : whereLabel(c), set:!!ed};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(ed ? "Edit memory" : "Add a memory")}
-    <div class="catchips" id="snapCats">${CATS.map(k => `<button data-cat="${k.k}" aria-pressed="false">${esc(k.label)}</button>`).join("")}${ed ? "" : `<button data-newcat aria-pressed="false">+ New</button>`}</div>
+    <div class="l" id="catLbl" style="margin-bottom:-8px">Which collection?</div>
+    <div class="catchips" id="snapCats" role="group" aria-labelledby="catLbl">${CATS.map(k => `<button data-cat="${k.k}" aria-pressed="false">${esc(k.label)}</button>`).join("")}${ed ? "" : `<button data-newcat aria-pressed="false">+ New</button>`}</div>
     <div id="newCatRow" hidden><label class="l" for="newCatName">New collection name</label><input type="text" id="newCatName" placeholder="Breweries, ballparks, concerts, beaches…"></div>
     <div><label class="l" for="snapName">Name</label><input type="text" id="snapName" value="${ed ? esc(ed.name) : ""}"></div>
-    ${whereHTML(ed ? "" : "Starts where the globe is pointing. In the app it starts where you're standing.")}
+    ${whereHTML(ed ? "" : "Search for the place, or fine-tune the pin. In the app it starts where you're standing.")}
     <div id="raceRow" hidden style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="l" for="raceDist">Distance</label><input type="text" id="raceDist" placeholder="13.1 mi" value="${ed ? esc(ed.dist || "") : ""}"></div><div><label class="l" for="raceTime">Finish time</label><input type="text" id="raceTime" placeholder="1:52:40" value="${ed ? esc(ed.time || "") : ""}"></div><div><label class="l" for="raceBy">Whose race</label><input type="text" id="raceBy" placeholder="Me" value="${ed ? esc(ed.by || "") : ""}"></div></div>
     <div id="rateRow"><div class="l" id="rateLbl">Rating</div><div class="ratepick" role="group" aria-labelledby="rateLbl">${[1,2,3,4,5].map(n => `<button data-rate="${n}" aria-label="${n} stars" class="${snapDraft.rating >= n ? "on" : ""}">★</button>`).join("")}</div></div>
     <div><label class="l" for="snapNote">Note</label><textarea id="snapNote" placeholder="What made it great? Who was there?">${ed ? esc(ed.note || "") : ""}</textarea></div>
@@ -1351,10 +1357,10 @@ function whereLabel(c){
   return fmtLL(c[0], c[1]);
 }
 function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where</label>
-  <div class="wherechip"><span aria-hidden="true">📍</span><b id="whereText">${esc(whereDraft.label)}</b><button class="btn" data-where-map>Fine-tune on the globe</button></div>
+  <div class="wherechip${whereDraft.set ? "" : " guess"}" id="whereChip"><span aria-hidden="true">📍</span><b id="whereText">${whereDraft.set ? "" : `<small class="guesstag">Not set · globe centre: </small>`}${esc(whereDraft.label)}</b><button class="btn" data-where-map>Fine-tune on the globe</button></div>
   <input type="search" id="whereQ" placeholder="Search a city or landmark, like Kyoto or Machu Picchu" autocomplete="off" style="margin-top:6px" aria-controls="whereRes">
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
-function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; }
+function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
 document.addEventListener("change", e => { if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); });
 document.addEventListener("input", e => { if (e.target.id !== "whereQ") return; whereResults = searchPlaces(e.target.value);
   $("#whereRes").innerHTML = whereResults.length ? whereResults.map((r, i) => `<button data-where-pick="${i}">${esc(r.name)}<small>${esc(r.region)}</small></button>`).join("") : (normP(e.target.value).length >= 2 ? `<p class="note" style="margin:4px 0 0">No match in the built-in list. Use "Fine-tune on the globe" to drop the pin anywhere.</p>` : ""); });
@@ -1370,21 +1376,24 @@ function pinTick(t){ if (!pinMode || t - pinLabelAt < 160) return; pinLabelAt = 
 async function readExif(file){
   const head = await file.slice(0, Math.min(file.size, 512 * 1024)).arrayBuffer();
   let r = parseExif(new DataView(head));
-  if (!r && file.size > head.byteLength && file.size < 30e6 && /heic|heif/i.test(file.type + file.name)) r = parseExif(new DataView(await file.arrayBuffer()));
+  // no location in the first 512 KB (some cameras and editors put the Exif block later): read the whole file once
+  if ((!r || r.lat == null) && file.size > head.byteLength && file.size < 40e6){ const full = parseExif(new DataView(await file.arrayBuffer())); if (full && (full.lat != null || !r)) r = Object.assign({}, r || {}, full); }
   return r || {};
 }
 function parseExif(dv){
   // find "Exif\0\0" followed by a TIFF header (works for JPEG APP1 and the Exif item inside HEIC)
   const n = dv.byteLength; let o = -1;
-  for (let i = 0; i < n - 10; i++){ if (dv.getUint32(i) === 0x45786966 && dv.getUint16(i + 4) === 0){ const b = dv.getUint16(i + 6); if (b === 0x4949 || b === 0x4d4d){ o = i + 6; break; } } }
+  // "Exif" then one or two zero bytes (some writers use one) and a TIFF header: II*\0 or MM\0*
+  const tiff = q => q + 4 <= n && ((dv.getUint16(q) === 0x4949 && dv.getUint16(q + 2) === 0x2a00) || (dv.getUint16(q) === 0x4d4d && dv.getUint16(q + 2) === 0x002a));
+  for (let i = 0; i < n - 10; i++){ if (dv.getUint32(i) === 0x45786966 && dv.getUint8(i + 4) === 0){ if (dv.getUint8(i + 5) === 0 && tiff(i + 6)){ o = i + 6; break; } if (tiff(i + 5)){ o = i + 5; break; } } }
   if (o < 0) return null;
   const le = dv.getUint16(o) === 0x4949; const u16 = p => dv.getUint16(o + p, le), u32 = p => dv.getUint32(o + p, le);
   const ok = p => p >= 0 && o + p + 12 <= n;
   const ifd = p => { const out = {}; if (!ok(p)) return out; const cnt = u16(p); for (let i = 0; i < cnt; i++){ const e = p + 2 + i * 12; if (!ok(e)) break; out[u16(e)] = {type:u16(e + 2), count:u32(e + 4), at:e + 8}; } return out; };
-  const val = ent => { if (!ent) return null; const {type, count, at} = ent; const size = ({1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 10:8})[type] || 1; const p = size * count > 4 ? u32(at) : at; if (!ok(p) && o + p + size * count > n) return null;
+  const val = ent => { if (!ent) return null; const {type, count, at} = ent; const size = ({1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 9:4, 10:8, 13:4})[type] || 1; const p = size * count > 4 ? u32(at) : at; if (!ok(p) && o + p + size * count > n) return null;
     if (type === 2){ let str = ""; for (let i = 0; i < count - 1 && o + p + i < n; i++) str += String.fromCharCode(dv.getUint8(o + p + i)); return str; }
     if (type === 5 || type === 10){ const a = []; for (let i = 0; i < count; i++){ const num = u32(p + i * 8), den = u32(p + i * 8 + 4); a.push(den ? num / den : 0); } return a; }
-    if (type === 3) return u16(p); if (type === 4) return u32(p); return dv.getUint8(o + p); };
+    if (type === 3) return u16(p); if (type === 4 || type === 9 || type === 13) return u32(p); return dv.getUint8(o + p); };
   try {
     const ifd0 = ifd(u32(4)); const res = {};
     const exifP = val(ifd0[0x8769]), gpsP = val(ifd0[0x8825]);
@@ -1824,12 +1833,12 @@ async function replay(id, opts = {}){
     else {
       chip.innerHTML = `<span>${car ? "🚗" : "✈"}</span> ${esc(prevName)} → <b>${esc(stopName(s))}</b> · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi`; chip.hidden = false;
       await travel(prev, to, (car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) * Math.min(1.2, PACE[replayPace])); if (!alive()) return;
-      if (goBack()){ i = Math.max(0, i - 1); jump = true; continue; }
+      if (goBack()){ i = Math.max(0, i - 2); jump = true; continue; } // still on the way: the last card you saw was the previous stop, so go one before it
     }
     replayState.next = false;
     replayState.roads[i] = car && !jump ? replayState.lastRoad : null;
     replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true;
-    await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 1); jump = true; continue; }
+    await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 2); jump = true; continue; }
     mom.querySelector(".pics").innerHTML = "";
     const per = j0 => j0 === 0 ? 7000 : 3200; let back = false; // the story card gets its own reading time on the first photo
     for (let j = 0; j < s.photos.length; j++){
@@ -1862,7 +1871,7 @@ function endReplay(){
   music.stop();
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
-  flyTo(centerLonLat()[0], 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
+  flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
 
 /* ---------------- backup ---------------- */
