@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.11.1 (shared trips + iPhone HEIC photos converted on the device, 20 photos a stop, honest tile when a photo cannot open; working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html). -->
+<!-- Travel Globe prototype v0.11.2 (shared trips, HEIC conversion, 20 photos a stop, iPhone broken-photo fix; working title; travel memories app, 2026-11-10). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html). -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -591,7 +591,8 @@ const idb = (() => { let dbp = null;
     all:() => run("readonly", st => { const out = {}; const c = st.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur){ out[cur.key] = cur.value; cur.continue(); } }; return out; }) };
 })();
 async function loadImages(){
-  try { const all = await idb.all(); Object.entries(all).forEach(([k, v]) => { if (typeof v === "string") imgCache.set(k, v); else if (v instanceof Blob && String(k).startsWith("rp:")) imgCache.set(k, URL.createObjectURL(v)); }); }
+  try { const all = await idb.all(); await Promise.all(Object.entries(all).map(async ([k, v]) => { if (typeof v === "string"){ if (!String(k).startsWith("rp:") || (v.length > 2000 && v.startsWith("data:image/"))) imgCache.set(k, v); }
+      else if (v instanceof Blob && String(k).startsWith("rp:") && v.size > 1500){ try { const u = await blobURL(v); if (u && u.length > 2000 && u.startsWith("data:image/")) imgCache.set(k, u); } catch(e){} } })); }
   catch(e){ imgStoreOK = false; }
   // move photos saved inline by older versions into IndexedDB
   let moved = false;
@@ -1150,7 +1151,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.11.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.11.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1571,8 +1572,8 @@ async function decodeBitmap(file, max){
 async function thumb(file, max, asBlob){
   // phone-safe: let the browser shrink while decoding, so a 48-megapixel photo never sits in memory at full size
   try { const bm = await decodeBitmap(file, max); const s = Math.min(1, max / Math.max(bm.width, bm.height)); const c = document.createElement("canvas"); c.width = Math.round(bm.width * s); c.height = Math.round(bm.height * s); c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height); bm.close && bm.close();
-    if (asBlob){ const b = await new Promise(r => c.toBlob(r, "image/jpeg", .74)); c.width = c.height = 0; if (b) return b; }
-    return c.toDataURL("image/jpeg", .72); }
+    if (asBlob){ const b = await new Promise(r => c.toBlob(r, "image/jpeg", .74)); if (b && b.size > 1500){ c.width = c.height = 0; return b; } }
+    const u = c.toDataURL("image/jpeg", .72); c.width = c.height = 0; return u && u.length > 2000 && u.startsWith("data:image/") ? u : null; }
   catch(e){ return null; }
 }
 function reviewSave(){ // keep typed names and ticks when the review is drawn again
@@ -1652,7 +1653,9 @@ async function addRealTrips(){
     for (let si = 0; si < t.stops.length; si++){
       const s = t.stops[si]; const sid = id + "s" + si; const n = Math.min(PER_STOP, s.pts.length); const chosen = []; for (let k = 0; k < n; k++) chosen.push(s.pts[Math.floor(k * s.pts.length / n)]);
       const photos = [];
-      for (const p of chosen){ const url = await thumb(p.file, 1024, true); done++; prog.textContent = `Saving photos ${done} of ${total}…`;
+      for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); }
+        if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
+        done++; prog.textContent = `Saving photos ${done} of ${total}…`;
         const pid = sid + "-" + photos.length; if (!url){ failed++; if (isHeic(p.file)) heicFails++; continue; }
         try { await idb.put("rp:" + pid, url); photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); } catch(e){ failed++; } }
       if (!photos.length) photos.push(["missing", heicFails ? "iPhone HEIC photos this browser couldn't open" : "Photos this browser couldn't open", null, 0]);
@@ -2341,6 +2344,8 @@ async function doRestore(){
 }
 function restoredNotice(){ let r = null; try { r = JSON.parse(sessionStorage.getItem("tgRestored") || "null"); sessionStorage.removeItem("tgRestored"); } catch(e){} if (!r) return;
   toast(`Backup restored: ${plural(r.n, "memory", "memories")}, ${r.ok === r.of ? plural(r.ok, "photo") : r.ok + " of " + r.of + " photos (your old photos were kept)"}`, null, true); }
+
+document.addEventListener("error", e => { const im = e.target; if (im && im.tagName === "IMG" && !im.dataset.fb){ im.dataset.fb = "1"; im.src = missingTile(640, 480); } }, true);
 
 /* ---------------- shared trips: a trip file you send, they add to, and send back ---------------- */
 const myName = () => String(store.get("myName", "") || "").trim();
