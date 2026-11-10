@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe preview v0.13.2: round 7 fixes from Cooper, Nikola and Muse, no page reloads -->
+<!-- Travel Globe preview v0.13.3: 'Getting your photos' wait message and reading percentage -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -226,6 +226,7 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .recchip button{color:var(--lit-soft);font-weight:700;text-decoration:underline}
 .row-btns a.btn{text-decoration:none;display:inline-flex;align-items:center}
 @keyframes recblink{50%{opacity:.25}}
+.ldbar{height:8px;border-radius:4px;background:color-mix(in srgb,var(--ink) 12%,transparent);overflow:hidden;margin:6px 0 2px;max-width:320px}.ldbar>i{display:block;height:100%;background:var(--accent,#3b82f6);border-radius:4px;transition:width .2s}.ldbar.busy>i{width:35%;animation:ldbusy 1.4s ease-in-out infinite}@keyframes ldbusy{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 .moment{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .7s ease;pointer-events:none;background:#05070d;overflow:hidden;display:flex;flex-direction:column;padding-bottom:84px;box-sizing:border-box}
 .moment .pics{position:relative;flex:1;min-height:0;overflow:hidden}
 .moment.on{opacity:1;pointer-events:auto}
@@ -1221,7 +1222,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.13.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.13.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1607,8 +1608,17 @@ function openLoader(){
 document.addEventListener("focusin", e => { if (e.target.id === "myName" && e.target.value) setTimeout(() => { try { e.target.select(); } catch(er){} }, 0); });
 document.addEventListener("input", e => { if (e.target.id === "ldManTitle") try { sessionStorage.setItem("tgManName", e.target.value); } catch(er){} });
 // a picker that never opens fails silently in some browsers: after two seconds with no picker, say so
-let PICKED = false; document.addEventListener("change", e => { if (e.target && e.target.type === "file"){ PICKED = true; const pg = $("#ldProg"); if (pg && /No photo picker opened/.test(pg.textContent)) pg.textContent = ""; } }, true);
-document.addEventListener("click", e => { const lb = e.target.closest && e.target.closest("label"); if (!lb || !lb.querySelector("#ldFiles")) return; let opened = false; PICKED = false; const on = () => { opened = true; };
+let PICKED = false; document.addEventListener("change", e => { if (e.target && e.target.type === "file"){ PICKED = true; stopGetting(); const pg = $("#ldProg"); if (pg && /No photo picker opened|Getting your photos|Nothing arrived/.test(pg.textContent)) pg.textContent = ""; } }, true);
+/* After you tap Add in the phone's picker, the phone copies the photos over (and downloads any kept only in iCloud) before the page gets anything, so show that wait instead of looking frozen */
+let GET_T = null, GET_T0 = 0;
+function stopGetting(){ if (GET_T){ clearInterval(GET_T); GET_T = null; } }
+function startGetting(){ if (PICKED || GET_T) return; const pg = $("#ldProg"); if (!pg || $("#overlay").dataset.kind !== "loader") return; GET_T0 = Date.now();
+  const draw = () => { const pg = $("#ldProg"); if (PICKED || !pg || $("#overlay").dataset.kind !== "loader"){ stopGetting(); return; } const sec = Math.round((Date.now() - GET_T0) / 1000);
+    if (sec > 300){ stopGetting(); pg.innerHTML = "<b style=\"color:var(--ink)\">Nothing arrived from the photo picker.</b> If you closed it, tap <b>Choose photos</b> again. With hundreds of photos, try 50 to 100 at a time."; return; }
+    pg.innerHTML = `<b style="color:var(--ink)">Getting your photos from your phone…</b> ${sec >= 3 ? `<span style="font-variant-numeric:tabular-nums">${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}</span>` : ""}<div class="ldbar busy"><i></i></div>Your phone copies them over first, and downloads any that are only in iCloud. With lots of photos this can take a minute or two. The count starts as soon as they arrive.`; };
+  draw(); GET_T = setInterval(draw, 1000); }
+document.addEventListener("cancel", e => { if (e.target && e.target.id === "ldFiles"){ stopGetting(); const pg = $("#ldProg"); if (pg && /Getting your photos/.test(pg.textContent)) pg.textContent = ""; } }, true);
+document.addEventListener("click", e => { const lb = e.target.closest && e.target.closest("label"); if (!lb || !lb.querySelector("#ldFiles")) return; let opened = false; PICKED = false; stopGetting(); const back = () => { window.removeEventListener("focus", back); document.removeEventListener("visibilitychange", vis); setTimeout(startGetting, 400); }; const vis = () => { if (document.visibilityState === "visible") back(); }; const on = () => { if (opened) return; opened = true; window.addEventListener("focus", back); document.addEventListener("visibilitychange", vis); setTimeout(() => { if (opened) startGetting(); }, 4000); };
   window.addEventListener("blur", on, {once:true}); document.addEventListener("visibilitychange", on, {once:true});
   setTimeout(() => { window.removeEventListener("blur", on); document.removeEventListener("visibilitychange", on); const pg = $("#ldProg"), inp = $("#ldFiles"); if (!opened && !PICKED && !(inp && inp.files && inp.files.length) && pg && !pg.textContent.trim()) pg.innerHTML = "No photo picker opened? Some browsers block it on this page. Try <b>sample photos</b>, or open the page in Chrome or Safari."; }, 2000); }, true);
 function openManual(){
@@ -1631,7 +1641,7 @@ function periodRange(){
 async function processFiles(files){
   const [a, b] = periodRange(); const prog = $("#ldProg"); const pts = []; let noLoc = 0, outside = 0, i = 0; const noLocNames = [], noLocPts = [], noLocAll = [], why = []; const nm = f => f.name || "a photo";
   for (const f of files){
-    i++; if (i % 5 === 0 || i === files.length){ prog.textContent = `Reading ${i} of ${plural(files.length, "photo")}…`; await new Promise(r => setTimeout(r, 0)); }
+    i++; if (i === 1 || i % 5 === 0 || i === files.length){ { const pc = Math.round(i / files.length * 100); prog.innerHTML = `<b style="color:var(--ink)">Reading ${i.toLocaleString()} of ${plural(files.length, "photo")}… ${pc}%</b><div class="ldbar"><i style="width:${pc}%"></i></div>`; } await new Promise(r => setTimeout(r, 0)); }
     let ex = {}, bad = false; try { ex = await readExif(f) || {}; } catch(e){ bad = true; }
     const t = ex.t || f.lastModified;
     if (loadState.sample) await new Promise(r => setTimeout(r, 25)); // the sample set reads at a pace you can see
