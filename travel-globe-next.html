@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe preview v0.13.3: 'Getting your photos' wait message and reading percentage -->
+<!-- Travel Globe preview v0.13.4: Remove photo button in the photo viewer -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -195,7 +195,7 @@ table.score input{width:26px;background:transparent;border:1px solid var(--line)
 .lightbox .cap span{font-size:12px;color:var(--muted)}
 .lightbox .lblab{display:block;margin:10px auto 0;width:min(100%,420px);text-align:center}
 .strip img.labeled{outline:2px solid var(--lit-soft);outline-offset:-2px}
-.lightbox .nav{display:flex;gap:10px}
+.lightbox .nav{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 
 /* replay */
 .replay{position:absolute;inset:0;pointer-events:none}
@@ -1222,7 +1222,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.13.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.13.4 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1369,8 +1369,23 @@ function renderLB(){
   let el = document.getElementById("lb"); if (!el){ el = document.createElement("div"); el.id = "lb"; document.body.appendChild(el); }
   const lab = it.id ? (phLabels[it.id] || "") : "";
   el.innerHTML = `<div class="lightbox" data-lb-bg><img src="${it.src}" alt="${esc(lab || it.cap)}"><div class="cap"><b id="lbCap">${esc(lab || it.cap)}</b><span>${esc(it.sub || "")}</span>${it.id ? `<input type="text" class="lblab" data-phlabel="${it.id}" value="${esc(lab)}" maxlength="60" placeholder="Label this photo: the beach, the ruins…" aria-label="Photo label">` : ""}</div>
-    <div class="nav">${lbList.length > 1 ? `<button class="btn" data-lb="-1">‹ Prev</button><button class="btn" data-lb="1">Next ›</button>` : ""}<button class="btn" data-lb-close>Close</button></div></div>`;
+    <div class="nav">${lbList.length > 1 ? `<button class="btn" data-lb="-1">‹ Prev</button><button class="btn" data-lb="1">Next ›</button>` : ""}${it.id && photoStop(it.id) ? `<button class="btn" data-lb-rm="${it.id}">🗑 Remove photo</button>` : ""}<button class="btn" data-lb-close>Close</button></div></div>`;
 }
+/* take one photo out of its stop from the photo viewer (kept in phHidden, so Undo or Go through photos can bring it back) */
+const photoStop = id => ALL_STOPS.find(st => (st.allPhotos || []).some(o => o.id === id)) || null;
+function setPhotoHidden(id, hide){ const s = photoStop(id); if (!s) return null;
+  if (hide) PH_HIDDEN[id] = true; else delete PH_HIDDEN[id]; store.set("phHidden", PH_HIDDEN);
+  s.allPhotos.forEach(o => { o.hidden = !!PH_HIDDEN[o.id]; }); if (s.allPhotos.every(o => o.hidden)) s.allPhotos[0].hidden = false;
+  s.photos = s.allPhotos.filter(o => !o.hidden); PHOTOS = TRIPS.flatMap(t => t.stops.flatMap(st => st.photos)); return s; }
+function redrawAfterPhoto(s, id){
+  if ($("#overlay").dataset.kind === "trip" && s.trip){ const sh = document.querySelector("#overlay .sheet"), si = document.querySelector("#overlay .sheet-in"); const y1 = sh ? sh.scrollTop : 0, y2 = si ? si.scrollTop : 0; openTrip(s.trip.id, true);
+    const sh2 = document.querySelector("#overlay .sheet"), si2 = document.querySelector("#overlay .sheet-in"); if (sh2) sh2.scrollTop = y1; if (si2) si2.scrollTop = y2; }
+  else document.querySelectorAll(`img[data-ph="${id}"]`).forEach(im => im.remove()); }
+function lbRemove(id){ const s = photoStop(id); if (!s) return;
+  if (s.photos.length <= 1){ toast("Each stop keeps at least one photo. To drop the whole stop, use \u201cNot part of this trip\u201d on the trip page."); return; }
+  setPhotoHidden(id, true); lbList = lbList.filter(x => x.id !== id); if (!lbList.length) closeLB(); else { lbIdx = Math.min(lbIdx, lbList.length - 1); renderLB(); }
+  redrawAfterPhoto(s, id);
+  toast("Photo removed from this stop", () => { const s2 = setPhotoHidden(id, false); if (s2) redrawAfterPhoto(s2, id); }); }
 function closeLB(){ const el = document.getElementById("lb"); if (el) el.remove(); }
 function photoLB(phId){
   const p = PHOTOS.find(x => x.id === phId); const s = p.stop;
@@ -2849,6 +2864,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-close]"))){ closeSheet(); return; }
   if (e.target.matches("[data-sheet-bg]")){ closeSheet(); return; }
   if ((b = g("[data-lb]"))){ lbIdx = (lbIdx + +b.dataset.lb + lbList.length) % lbList.length; renderLB(); return; }
+  if ((b = g("[data-lb-rm]"))){ lbRemove(b.dataset.lbRm); return; }
   if (g("[data-lb-close]") || e.target.matches("[data-lb-bg]")){ closeLB(); return; }
   if ((b = g("[data-confirm-golf]"))){ golfConfirmed = true; store.set("golfConfirmed", true); closePlace(); tab = "collections"; colFilter = "golf"; rerender(); toast("North Berwick added to your courses", () => { golfConfirmed = false; store.set("golfConfirmed", false); closeSheet(); rerender(); }); openCourse(SUGGEST.id); return; }
   if ((b = g("[data-fly]"))){ const [lo, la] = b.dataset.fly.split(",").map(Number); closeSheet(); if (b.dataset.layerOn && !layers[b.dataset.layerOn]){ layers[b.dataset.layerOn] = true; store.set("layers2", layers); renderLayers(); } showGlobe(); flyTo(lo, la, +(b.dataset.z || 8), 1200); return; }
