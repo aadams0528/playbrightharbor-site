@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe prototype v0.7.1 (working title; travel memories app, 2026-11-09). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
+<!-- Travel Globe prototype v0.7.2 (working title; travel memories app, 2026-11-09). Unlisted preview page (next version, so the reviewers keep travel-globe-test.html stable). Not linked from the site. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -653,9 +653,10 @@ const CONT_OF = (() => { const m = {}, add = (c, list) => list.split("|").forEac
   add("EU", "Russia|Norway|France|Sweden|Belarus|Ukraine|Poland|Austria|Hungary|Moldova|Romania|Lithuania|Latvia|Estonia|Germany|Bulgaria|Greece|Albania|Croatia|Switzerland|Luxembourg|Belgium|Netherlands|Portugal|Spain|Ireland|Italy|Denmark|United Kingdom|Iceland|Slovenia|Finland|Slovakia|Czechia|Bosnia and Herz.|Macedonia|Serbia|Montenegro|Kosovo");
   add("OC", "Fiji|Papua New Guinea|Vanuatu|New Caledonia|Solomon Is.|New Zealand|Australia");
   add("AN", "Antarctica|Fr. S. Antarctic Lands");
+  add("AS", "Kazakhstan|Uzbekistan|Indonesia|Timor-Leste|Israel|Lebanon|Palestine|Jordan|United Arab Emirates|Qatar|Kuwait|Iraq|Oman|Cambodia|Thailand|Laos|Myanmar|Vietnam|North Korea|South Korea|Mongolia|India|Bangladesh|Bhutan|Nepal|Pakistan|Afghanistan|Tajikistan|Kyrgyzstan|Turkmenistan|Iran|Syria|Armenia|Turkey|Sri Lanka|China|Taiwan|Azerbaijan|Georgia|Philippines|Malaysia|Brunei|Japan|Yemen|Saudi Arabia|N. Cyprus|Cyprus");
   add("AF", "Tanzania|W. Sahara|Dem. Rep. Congo|Somalia|Kenya|Sudan|Chad|South Africa|Lesotho|Zimbabwe|Botswana|Namibia|Senegal|Mali|Mauritania|Benin|Niger|Nigeria|Cameroon|Togo|Ghana|Côte d'Ivoire|Guinea|Guinea-Bissau|Liberia|Sierra Leone|Burkina Faso|Central African Rep.|Congo|Gabon|Eq. Guinea|Zambia|Malawi|Mozambique|eSwatini|Angola|Burundi|Madagascar|Gambia|Tunisia|Algeria|Eritrea|Morocco|Egypt|Libya|Ethiopia|Djibouti|Somaliland|Uganda|Rwanda|S. Sudan");
   return m; })();
-const contOf = name => CONT_OF[name] || "AS";
+const contOf = name => CONT_OF[name] || null; // unknown countries are not guessed into a continent
 const COUNTRY_ALIAS = {"United States":"United States of America"};
 function beenPoints(){
   const pts = [[HOME.lon, HOME.lat]];
@@ -674,7 +675,7 @@ function beenWorld(){
     const c = countries.find(f => d3.geoContains(f, p)); if (c) ct.add(c.properties.name); });
   TRIPS.forEach(t => { if (stopsOf(t).length) ct.add(COUNTRY_ALIAS[t.country] || t.country); });
   if (st.size) ct.add("United States of America");
-  const co = new Set([...ct].map(contOf));
+  const co = new Set([...ct].map(contOf).filter(Boolean));
   worldCache = {key, v:{states:st, countries:ct, continents:co}}; return worldCache.v;
 }
 function drawStates(x, th){
@@ -841,7 +842,7 @@ function loop(t){
   const dt = Math.min(64, t - (lastT || t)); lastT = t;
   if (anim && replayState && replayState.paused) anim.t0 += dt;
   if (anim){ const k = Math.min(1, (t - anim.t0) / anim.ms); anim.step(k); dirty = true; if (k >= 1){ const a = anim; anim = null; a.done && a.done(); } }
-  else if (spinning && !dragging && !REDUCED()){ rot[0] += dt * .006; dirty = true; spinFor += dt; if (spinFor > 20000 && !introRunning){ spinning = false; spinFor = 0; } }
+  else if (spinning && !dragging && !REDUCED()){ rot[0] += dt * .006; dirty = true; spinFor += dt; if (spinFor > 12000 && !introRunning){ spinning = false; spinFor = 0; } }
   if (!spinning) spinFor = 0;
   if (document.hidden){ requestAnimationFrame(loop); return; }
   if (introRunning || selectedTrip || replayState || Math.abs(shiftY) > .5 || TH().animated) dirty = true;
@@ -940,7 +941,8 @@ function sheetHead(title){ return `<div style="display:flex;justify-content:spac
 function golfCounts(){ const played = COURSES.length + (golfConfirmed ? 1 : 0); const rounds = COURSES.reduce((a, c) => a + allRounds(c).length, 0) + (golfConfirmed ? allRounds(confirmedCourse()).length : 0); return {played, rounds}; }
 function statDefs(){
   const ctry = new Set(TRIPS.map(t => t.country)); const n = PHOTOS.length + allSnaps().length;
-  const places = TRIPS.reduce((a, t) => a + stopsOf(t).length, 0) + (diaryOn ? DIARY.length : 0) + allSnaps().length;
+  const places = (() => { const pts = [...TRIPS.flatMap(t => stopsOf(t).map(s => [s.lon, s.lat])), ...(diaryOn ? DIARY.map(d => [d.lon, d.lat]) : []), ...allSnaps().map(x => [x.lon, x.lat])], uniq = [];
+    pts.forEach(p => { if (!uniq.some(q => d3.geoDistance(p, q) < 2 / 6371)) uniq.push(p); }); return uniq.length; })();
   const miles = TRIPS.reduce((a, t) => a + tripMiles(t), 0);
   return [
     {k:"countries", label:"Countries", v:beenWorld().countries.size, tab:"trips", world:true},
@@ -1026,7 +1028,7 @@ function days(t){ return Math.round((new Date(t.end) - new Date(t.start)) / 864e
 const catLabel = k => (CATS.find(c => c.k === k) || {label:"Place"}).label;
 function collectionItems(k){
   const fromPhotos = PHOTOS.filter(p => p.col === k && stopState[p.stop.id] !== "ignored").map(p => ({img:photoURL(p), name:p.caption, sub:`${stopName(p.stop)} · ${fmt(p.date)}`, rating:p.rating, ph:p.id}));
-  const fromSnaps = allSnaps().filter(s => s.cat === k).sort((a, b) => b.date.localeCompare(a.date)).map(s => ({img:snapImg(s), name:s.name, sub:s.time ? `${s.dist} · ${s.time} · ${fmt(s.date)}` : `${s.place || s.near || "Added by you"} · ${fmt(s.date)}`, badge:s.by ? `${s.by}'s race` : "", rating:s.rating, mem:s.id}));
+  const fromSnaps = allSnaps().filter(s => s.cat === k).sort((a, b) => b.date.localeCompare(a.date)).map(s => ({img:snapImg(s), name:s.name, sub:s.time ? `${s.dist} · ${s.time} · ${fmt(s.date)}` : `${s.place || s.near || "Added by you"} · ${fmt(s.date)}`, badge:s.by ? `${s.by}'s race` : (s.cat === "race" && !s.sample ? "Added by you" : ""), rating:s.rating, mem:s.id}));
   return [...fromSnaps, ...fromPhotos];
 }
 const itemHTML = it => `<button class="item" ${it.ph ? `data-ph="${it.ph}"` : `data-mem="${it.mem}"`}><img src="${it.img}" alt=""><div class="txt"><div class="t">${esc(it.name)}${it.badge ? ` <span class="badge">${esc(it.badge)}</span>` : ""}</div><div class="s">${esc(it.sub)}${it.rating ? ` · <span class="stars">${"★".repeat(it.rating)}</span>` : ""}</div></div></button>`;
@@ -1062,7 +1064,7 @@ function renderBody(){
     h += `<div id="colList" style="display:contents">`;
     if (k === "golf") h += golfHTML();
     else {
-      if (k === "race" && allSnaps().some(r => r.cat === "race" && r.by === PARTNER)){ const rs = allSnaps().filter(r => r.cat === "race" && r.by === PARTNER); h += `<div class="suggest" style="border-color:rgba(255,122,184,.4);background:rgba(255,122,184,.07)"><b>${PARTNER}'s races · ${plural(rs.length, "finish", "finishes")} · ${rs.filter(r => r.dist === "13.1 mi").length} halves · ${rs.filter(r => r.dist.startsWith("140")).length} full IRONMAN</b><p>${(() => { const hv = rs.filter(r => r.dist === "13.1 mi" && r.time).sort((a, b) => a.time.localeCompare(b.time))[0]; return hv ? `Best half: ${esc(hv.time)} at ${esc(hv.name.replace(/ Half( Marathon)?$/, ""))}. ` : ""; })()}Sample races are shared from ${PARTNER}'s globe; races you add are marked "added by you". The results stay ${PARTNER}'s.</p></div>`; }
+      if (k === "race" && allSnaps().some(r => r.cat === "race" && r.by === PARTNER)){ const rs = allSnaps().filter(r => r.cat === "race" && r.by === PARTNER); h += `<div class="suggest" style="border-color:rgba(255,122,184,.4);background:rgba(255,122,184,.07)"><b>${(() => { const all = allSnaps().filter(r => r.cat === "race"), mine = all.filter(r => !r.by && !r.sample).length; return `Races · ${plural(all.length, "finish", "finishes")} · ${PARTNER}'s ${rs.length}${mine ? ` · added by you ${mine}` : ""}`; })()} · ${rs.filter(r => r.dist === "13.1 mi").length} of ${PARTNER}'s are halves · ${rs.filter(r => (r.dist || "").startsWith("140")).length} full IRONMAN</b><p>${(() => { const hv = rs.filter(r => r.dist === "13.1 mi" && r.time).sort((a, b) => a.time.localeCompare(b.time))[0]; return hv ? `Best half: ${esc(hv.time)} at ${esc(hv.name.replace(/ Half( Marathon)?$/, ""))}. ` : ""; })()}Sample races are shared from ${PARTNER}'s globe; races you add are marked "added by you". The results stay ${PARTNER}'s.</p></div>`; }
       const items = collectionItems(k);
       h += `<div class="sec">${esc(catLabel(k))} · ${items.length}</div>`;
       items.forEach(it => h += itemHTML(it));
@@ -1099,7 +1101,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.7.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.7.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1151,7 +1153,7 @@ function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.d
 
 /* ---------------- overlays ---------------- */
 function openSheet(html, kind = ""){ $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true">${html}</div></div>`; }
-function closeSheet(){ const wasTrip = $("#overlay").dataset.kind === "trip"; $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(centerLonLat()[0], 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
+function closeSheet(){ const wasTrip = $("#overlay").dataset.kind === "trip"; $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
 function flyToStops(st, ms = 1300){ if (!st.length) return; const lats = st.map(s => s.lat), lons = st.map(s => s.lon);
   flyTo(d3.mean(lons), d3.mean(lats), Math.min(14, 2.2 / Math.max(.15, d3.geoDistance([d3.min(lons), d3.min(lats)], [d3.max(lons), d3.max(lats)]) * 3)), ms); }
 function stopHTML(s){
@@ -1238,14 +1240,16 @@ function photoLB(phId){
   lightbox(list, s.photos.indexOf(p));
 }
 function toast(msg, undo){
-  document.querySelectorAll(".toast").forEach(x => x.remove());
+  // a pending Undo is only replaced by another Undo or ended by your next tap; plain messages show alongside it
+  document.querySelectorAll(undo ? ".toast" : ".toast:not(.undo)").forEach(x => x.remove());
   const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg;
-  if (undo){ const b = document.createElement("button"); b.textContent = "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b); }
+  if (!undo && document.querySelector(".toast.undo")) t.style.transform = "translate(-50%, 56px)";
+  if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b); }
   document.body.appendChild(t);
   if (!undo){ setTimeout(() => t.remove(), 2600); return; }
-  // Undo stays until your next tap somewhere else (or 30 seconds), so it can be caught
+  // Undo stays until your next tap somewhere else, with no timer, so it can always be caught
   const off = ev => { if (t.contains(ev.target)) return; t.remove(); document.removeEventListener("pointerdown", off, true); };
-  setTimeout(() => document.addEventListener("pointerdown", off, true), 0); setTimeout(() => { t.remove(); document.removeEventListener("pointerdown", off, true); }, 30000);
+  setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
 }
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
 
@@ -1557,16 +1561,16 @@ const TRIP_MOOD = {banff:"north", italy:"piazza", iceland:"north", maui:"island"
 TRIPS.forEach(t => { if (t.real && !TRIP_MOOD[t.id]){ const la = Math.abs(d3.mean(t.stops, s => s.lat)); TRIP_MOOD[t.id] = la > 55 ? "north" : la < 24 ? "island" : t.stops.length > 2 ? "city" : "warm"; } });
 /* Private test only: real recordings from Alan's Epidemic Sound account, to judge the feel. Not licensed for a shipped app yet. */
 const REAL = {
-  highlands:{name:"Highland air", title:"Farewell to Ennerdale Water", artist:"Moorland Songs", desc:"Gentle Scottish and Irish folk"},
-  island:{name:"Island breeze", title:"The Duke of Uke", artist:"Mica Emory", desc:"Easy Hawaiian ukulele"},
-  piazza:{name:"Piazza evening", title:"Waltz for Little Italy", artist:"Bireli Snow", desc:"Solo Italian guitar waltz"},
-  blossom:{name:"Cherry blossom", title:"Song of Hope (Kigan)", artist:"Isaku Kageyama", desc:"Koto and Japanese flute"},
-  mountain:{name:"Mountain morning", title:"Heart & Soul", artist:"Roots and Recognition", desc:"Quiet acoustic guitar"},
-  nordic:{name:"Northern quiet", title:"PAUS", artist:"369", desc:"Soft solo piano"},
-  desert:{name:"Desert road", title:"A Steep Path", artist:"Northside", desc:"Slow country guitar"},
-  city:{name:"City lights", title:"I Will Be Right Here With You", artist:"Wendy Marcini", desc:"Mellow late-night jazz"},
-  beach:{name:"Beach day", title:"Song for Jenny", artist:"OTE", desc:"Sunny 60s surf-pop, for a Florida beach"},
-  keys:{name:"Island time", title:"Dearest Friend", artist:"Plain Strolls", desc:"Laid-back Caribbean, a Key West feel"}
+  highlands:{name:"Highland air", desc:"Gentle Scottish and Irish folk"},
+  island:{name:"Island breeze", desc:"Easy Hawaiian ukulele"},
+  piazza:{name:"Piazza evening", desc:"Solo Italian guitar waltz"},
+  blossom:{name:"Cherry blossom", desc:"Koto and Japanese flute"},
+  mountain:{name:"Mountain morning", desc:"Quiet acoustic guitar"},
+  nordic:{name:"Northern quiet", desc:"Soft solo piano"},
+  desert:{name:"Desert road", desc:"Slow country guitar"},
+  city:{name:"City lights", desc:"Mellow late-night jazz"},
+  beach:{name:"Beach day", desc:"Sunny 60s surf-pop, for a Florida beach"},
+  keys:{name:"Island time", desc:"Laid-back Caribbean, a Key West feel"}
 };
 const REAL_ORDER = ["highlands","island","piazza","blossom","mountain","nordic","desert","city","beach","keys"];
 const TRIP_REAL = {banff:"mountain", italy:"piazza", iceland:"nordic", maui:"island", nyc:"city", japan:"blossom", scotland:"highlands", arizona:"desert"};
@@ -1671,7 +1675,7 @@ function openMusicPicker(tripId, fromReplay){
   const t = TRIPS.find(x => x.id === tripId); const cur = musicChoice(tripId); const auto = TRIP_REAL[tripId] || "mountain"; const autoMood = TRIP_MOOD[tripId] || "warm";
   const row = (val, title, sub, extra = "") => `<div class="tripitem"><button class="item musicopt" data-music-set="${val}" aria-pressed="${cur === val}"><div class="flag ring">${cur === val ? "✓" : "♪"}</div><div class="txt"><div class="t">${title}</div><div class="s">${sub}</div></div></button>${extra}</div>`;
   const prev = k => `<button class="playbtn" data-music-preview="${k}" aria-label="Preview ${esc(choiceName(k))}">▶</button>`;
-  const rsub = k => esc(REAL[k].desc) + " · “" + esc(REAL[k].title) + "”, " + esc(REAL[k].artist);
+  const rsub = k => esc(REAL[k].desc);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Music for this story")}<p class="note" style="margin:0">${esc(t.title)}. ${REAL_MUSIC ? "Quiet music that feels like the place." : "Built-in music is made right on your device, so it works offline."}</p>
     ${REAL_MUSIC ? `${row("auto", `Match the place · ${esc(REAL[auto].name)}`, rsub(auto), prev("real:" + auto))}
     <div class="sec">Real recordings · private test</div>
@@ -1771,7 +1775,7 @@ function momentPhoto(el, src){
   const img = new Image(); img.src = src; img.alt = ""; img.className = "kb"; el.querySelector(".pics").appendChild(img);
   const pics = el.querySelectorAll(".pics img"); if (pics.length > 2) pics[0].remove();
 }
-const PACE = {slow:1.45, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
+const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 async function replay(id, opts = {}){
   const t = TRIPS.find(x => x.id === id); const st = stopsOf(t); $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
@@ -1794,7 +1798,7 @@ async function replay(id, opts = {}){
   while (i < st.length){
     if (!alive()) return;
     const s = st[i], story = getStory(s), to = [s.lon, s.lat];
-    const prev = i ? [st[i-1].lon, st[i-1].lat] : [HOME.lon, HOME.lat], prevName = i ? stopName(st[i-1]) : "Home";
+    const prev = i ? [st[i-1].lon, st[i-1].lat] : [HOME.lon, HOME.lat], prevName = i ? stopName(st[i-1]) : HOME.name.replace(/^Home · /, "");
     const dist = d3.geoDistance(prev, to), car = dist < DRIVE_MAX;
     (replayState.roads = replayState.roads || []).length = i; replayState.leg = i - 1; mom.classList.remove("on");
     if (replayState.repause) jump = true; // Previous/Next pressed while paused: go straight to the stop
@@ -1809,16 +1813,16 @@ async function replay(id, opts = {}){
     replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true;
     await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 1); jump = true; continue; }
     mom.querySelector(".pics").innerHTML = "";
-    const per = Math.max(2200, 7000 / s.photos.length); let back = false;
+    const per = j0 => j0 === 0 ? 7000 : 3200; let back = false; // the story card gets its own reading time on the first photo
     for (let j = 0; j < s.photos.length; j++){
       const ph = s.photos[j], last = j === s.photos.length - 1;
       momentPhoto(mom, photo(ph.scene, ph.id, 1280, 960));
-      const main = story.best || (ph.scene === "real" ? "" : ph.caption);
-      mtxt.innerHTML = `<div class="d">${fmt(s.date)} · Stop ${i+1} of ${st.length}</div><h2>${esc(stopName(s))}</h2>${main ? `<p class="best">${esc(main)}</p>` : ""}${story.who ? `<div class="who">With ${esc(story.who)}</div>` : ""}${last && story.note ? `<p class="n">${esc(story.note)}</p>` : story.best ? `<p class="n">${esc(ph.caption)}</p>` : ""}`;
+      const main = story.best;
+      mtxt.innerHTML = `<div class="d">${fmt(s.date)} · Stop ${i+1} of ${st.length}</div><h2>${esc(stopName(s))}</h2>${main ? `<p class="best">${esc(main)}</p>` : ""}${story.who ? `<div class="who">With ${esc(story.who)}</div>` : ""}${last && story.note ? `<p class="n">${esc(story.note)}</p>` : ph.scene !== "real" ? `<p class="n">${esc(ph.caption)}</p>` : ""}`;
       if (j === 0){ mtxt.classList.remove("show"); void mtxt.offsetWidth; mtxt.classList.add("show"); } else mtxt.classList.add("show", "still");
       mom.classList.add("on"); prog((i + (j+1)/s.photos.length) / st.length);
       if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
-      await wait(last && story.note ? per + 1500 : per); if (!alive()) return;
+      await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
       if (goBack()){ back = true; break; }
       if (replayState.next){ replayState.next = false; break; }
     }
