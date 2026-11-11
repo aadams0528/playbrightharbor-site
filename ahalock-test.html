@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.16 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from /mnt/project-files/ideas/truthlock/ (node build.js). -->
+<!-- Ahalock prototype v0.16 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,6 +61,9 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .howrow{display:flex;gap:10px}
 .howrow .btn{flex:1}
 .foot{font-size:12px;color:#8d9ab6;text-align:center;margin-top:20px}
+#cloudRow{margin-top:18px;text-align:center}
+#cloudRow .cloudnote{font-size:13px;color:#b9c3da;line-height:1.45;margin:8px 4px 0}
+#cloudRow .linkbtn{color:var(--gold2);text-decoration:underline;font-size:13px;padding:2px 4px}
 
 /* ---------- puzzle ---------- */
 .pz-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -2294,10 +2297,11 @@ html,body{overflow-anchor:none}
 'use strict';
 const TEST_BUILD = true;
 // ---------- store helper (single place for saved state) ----------
+let cloudApplying = false;
 const store = {
   pre: 'tl.v1.',
   get(k, d) { try { const v = localStorage.getItem(this.pre + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(this.pre + k, JSON.stringify(v)); } catch (e) {} },
+  set(k, v) { try { localStorage.setItem(this.pre + k, JSON.stringify(v)); } catch (e) {} if (!cloudApplying && window.BHCloud && BHCloud.changed) BHCloud.changed(); },
   clear() { try { Object.keys(localStorage).filter(k => k.indexOf(this.pre) === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
 };
 const $app = document.getElementById('app');
@@ -2399,11 +2403,13 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
+    '<div id="cloudRow"></div>' +
     '<div class="foot">Ahalock prototype v0.16' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
+  renderCloud();
   document.getElementById('logo').onclick = () => { if (++titleTaps >= 5) { titleTaps = 0; testerMenu(); } };
   if (homeInt) clearInterval(homeInt);
   homeInt = setInterval(() => { const c = document.getElementById('cd'); if (!c) { clearInterval(homeInt); homeInt = null; return; } c.innerHTML = iconize(nextLine()); }, 30000);
@@ -3340,8 +3346,89 @@ function endTutorial(markSeen) {
 const isPat = (pz) => TL.PATTERN.indexOf(pz.type) >= 0;
 const solEntry = (pz) => pz.type === 'letters' ? pz.sol.split('') : String(pz.sol);
 const wrongEntry = (pz) => pz.type === 'letters' ? [pz.sol[0] === 'A' ? 'B' : 'A'].concat(pz.sol.slice(1).split('')) : String(pz.sol + 1);
-window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults };
+
+// =================== CLOUD SAVE (phone app only) ===================
+// Shared Bright Harbor cloud save (src/cloudsave.js). In a browser BHCloud is missing or unavailable,
+// so none of this shows. The merge keeps the best of both phones: every finished puzzle from either,
+// every story stop and lesson seen on either.
+const CLOUD_KEYS = ['results', 'archive', 'story', 'tut', 'shareTime', 'sdraft'];
+function cloudGet() { const o = {}; CLOUD_KEYS.forEach(k => { const v = store.get(k, undefined); if (v !== undefined) o[k] = v; }); return o; }
+function mergeDays(a, b) {
+  const out = Object.assign({}, a || {});
+  for (const ds of Object.keys(b || {})) {
+    const x = out[ds], y = b[ds];
+    if (!y || !Array.isArray(y.s)) continue;
+    if (!x || !Array.isArray(x.s)) { out[ds] = JSON.parse(JSON.stringify(y)); continue; }
+    const e = { s: [0, 1, 2].map(i => x.s[i] || y.s[i] || null) };
+    const on = x.on && y.on ? (x.on < y.on ? x.on : y.on) : (x.on || y.on);
+    if (on) e.on = on;
+    out[ds] = e;
+  }
+  return out;
+}
+function mergeAhalock(local, cloud) {
+  if (!cloud || typeof cloud !== 'object') return local;
+  const out = Object.assign({}, local);
+  out.results = mergeDays(local.results, cloud.results);
+  out.archive = mergeDays(local.archive, cloud.archive);
+  const ls = local.story && typeof local.story === 'object' ? local.story : null, cs = cloud.story && typeof cloud.story === 'object' ? cloud.story : null;
+  if (ls || cs) {
+    const st = Object.assign({}, cs || {}, ls || {});
+    st.done = Object.assign({}, (cs && cs.done) || {}, (ls && ls.done) || {});
+    ['intro', 'finSeen'].forEach(k => { if ((ls && ls[k]) || (cs && cs[k])) st[k] = 1; });
+    out.story = st;
+  }
+  if (local.tut || cloud.tut) out.tut = Object.assign({}, cloud.tut || {}, local.tut || {});
+  if (out.shareTime === undefined && cloud.shareTime !== undefined) out.shareTime = cloud.shareTime;
+  if (!out.sdraft && cloud.sdraft) out.sdraft = cloud.sdraft;
+  return out;
+}
+let cloudChanged = false;
+window.BH_SAVE = { game: 'ahalock', version: 1, get: cloudGet,
+  merge(cloud) {
+    const before = JSON.stringify(cloudGet()); cloudApplying = true;
+    try {
+      const m = mergeAhalock(cloudGet(), cloud);
+      CLOUD_KEYS.forEach(k => { if (m[k] !== undefined) store.set(k, m[k]); });
+      // A copy from a phone with older puzzles gets the same check as an app update.
+      if (JSON.stringify(cloudGet()) !== before) { store.set('cver', 0); migrateResults(); }
+    } finally { cloudApplying = false; }
+    cloudChanged = JSON.stringify(cloudGet()) !== before; return cloudGet();
+  } };
+// If the cloud copy brought anything back, reload once so every screen shows it.
+function afterSync() { if (!cloudChanged) return; cloudChanged = false; try { sessionStorage.setItem('ahalock-restored', '1'); } catch (e) {} location.reload(); }
+function cloudEsc(t) { return String(t).replace(/[<>&"]/g, ''); }
+function renderCloud() {
+  const box = document.getElementById('cloudRow'); if (!box || !window.BHCloud || !BHCloud.available) return;
+  const who = BHCloud.provider === 'apple' ? 'Apple' : 'Google', u = BHCloud.user;
+  box.innerHTML = u
+    ? '<p class="cloudnote">☁️ Your streak, results and story are saved to your ' + who + ' account' + (u.email ? ' (' + cloudEsc(u.email) + ')' : '') + '. Sign in on a new phone to pick up where you left off.<br><button class="linkbtn" id="cloudOut">Sign out</button>' + (typeof BHCloud.deleteAccount === 'function' ? ' <button class="linkbtn" id="cloudDel">Delete my account</button>' : '') + '</p>'
+    : '<button class="btn ghost small" id="cloudIn">☁️ Save progress to the cloud</button><p class="cloudnote">Sign in with ' + who + ' to keep your streak and story if you get a new phone. Playing never needs an account.</p>';
+  const i = document.getElementById('cloudIn'), o = document.getElementById('cloudOut'), d = document.getElementById('cloudDel');
+  if (i) i.onclick = async () => { i.disabled = true;
+    try { await BHCloud.signIn(); toast('☁️ Progress saved to the cloud.'); afterSync(); }
+    catch (e) { if (!/cancel/i.test(String((e && e.message) || e))) toast(BHCloud.user ? "Signed in, but the cloud couldn't be reached. It will try again next time." : "Couldn't sign in right now. Try again soon."); }
+    renderCloud(); };
+  if (o) o.onclick = async () => { try { await BHCloud.signOut(); } catch (e) {} renderCloud(); };
+  if (d) d.onclick = confirmDelete;
+}
+// Apple requires an in-app way to delete an account made by signing in. This removes the cloud copy and
+// the sign-in account; progress on this phone stays.
+function confirmDelete() {
+  openSheet('<h2>Delete your account?</h2><div class="sub">This permanently deletes your sign-in account and its cloud saves, for Ahalock and any other Bright Harbor game. It can\'t be undone.</div><div class="sub">Your streak, results and story stay on this phone. You can sign in again later to start a new cloud save.</div><div class="col"><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="delYes">Delete my account</button><button class="btn small" id="delNo">Keep my account</button><div id="delErr" class="sub"></div></div>');
+  document.getElementById('delNo').onclick = closeSheet;
+  const y = document.getElementById('delYes');
+  y.onclick = async () => { y.disabled = true; y.textContent = 'Deleting…';
+    try { await BHCloud.deleteAccount(); closeSheet(); toast('Your account and cloud save were deleted.'); }
+    catch (e) { y.disabled = false; y.textContent = 'Delete my account';
+      if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
+    renderCloud(); };
+}
+window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet };
 { const moved = migrateResults(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300); }
+// Sign in with Apple is set up for Ahalock (entitlement in ios/App/App/App.entitlements).
+if (window.BHCloud) { BHCloud.config.appleReady = true; BHCloud.onChange(() => { if (S.screen === 'home') renderCloud(); }); BHCloud.init().then(afterSync); document.addEventListener('visibilitychange', () => { if (document.hidden) BHCloud.flush(); }); }
+try { if (sessionStorage.getItem('ahalock-restored')) { sessionStorage.removeItem('ahalock-restored'); setTimeout(() => toast('☁️ Progress restored!'), 600); } } catch (e) {}
 })();
 </script>
 </body>
