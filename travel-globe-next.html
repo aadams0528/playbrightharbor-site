@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe preview v0.13.5: clearer trip review steps, photo thumbnails for no-location photos -->
+<!-- Travel Globe preview v0.13.6: trip book dedication and closing reflection; round 8 build -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -389,12 +389,18 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
 .bookpages blockquote{margin:12px 0 0;font-family:var(--display);font-size:24px;line-height:1.2;color:#2b2720;border-left:3px solid #e2b766;padding-left:12px}
 .bday,.bwho,.bnote,.bmore{margin:10px 0 0;font-size:14px;line-height:1.5;color:#3b362e} .bwho{color:#8a6a2c;font-weight:600}
 .bend p{margin:0;text-align:center;font-size:12px;color:#8b8477}
+.bded{text-align:center;padding:48px 28px!important}.bdedtext{font-family:var(--display);font-style:italic;font-size:26px;line-height:1.3;color:#2b2720;margin-top:12px}
+.bword{outline:none;border-radius:4px;min-height:1.4em;white-space:pre-wrap;overflow-wrap:anywhere}.bword:focus{box-shadow:0 0 0 2px #e2b766}
+.bword:empty::before{content:attr(data-hint);color:#a39a8a;font-style:italic;font-size:15px;font-family:var(--body)}
+.breftext{margin-top:12px;font-size:17px;line-height:1.55;color:#2b2720}
+.bbest{margin-top:16px}.bbest ul{margin:6px 0 0;padding-left:20px;font-size:15px;line-height:1.5;color:#3b362e}.bbest span{color:#8b8477;font-size:12px;margin-left:4px}
 @media print{
   @page{margin:14mm}
   html,body{height:auto!important;overflow:visible!important;background:#fff!important}
   body.booking>*:not(#book){display:none!important}
   #book{position:static;overflow:visible;background:#fff}
   .booktools{display:none!important}
+  .bded.empty,.bclose.empty{display:none!important} .bword:empty{display:none} .bded{break-after:page}
   .bookpages{max-width:none;padding:0;display:block}
   .bookpages section{box-shadow:none;border-radius:0;padding:0;margin:0 0 9mm}
   .bookpages section{background:#fff!important}
@@ -1237,7 +1243,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.13.5 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  h += `<div class="foot">Travel Globe prototype v0.13.6 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1861,7 +1867,7 @@ function realAddedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.ge
   else toast(`Added ${plural(v.n, "trip")} from your photos${v.heicUsed ? ` (${plural(v.heicUsed, "iPhone photo")} converted on this device)` : ""}`);
   if (!store.get("guideShown", false) && !store.get("guided", false)) setTimeout(() => { if (!document.querySelector(".sheet")){ store.set("guideShown", true); guideAll = true; openGuide(1); } }, 1600); }
 // everything saved about some trips: photos, captions, covers, order, turns, stories, names, voice notes
-async function forgetTrips(trips){ const tids = new Set(trips.map(t => t.id)), sids = trips.flatMap(t => t.stops.map(s => s.id));
+async function forgetTrips(trips){ const tids = new Set(trips.map(t => t.id)), sids = trips.flatMap(t => t.stops.map(s => s.id)); { const bw = store.get("bookWords", {}) || {}; let ch = false; tids.forEach(id => { if (bw[id]){ delete bw[id]; delete BOOK_WORDS[id]; ch = true; } }); if (ch) store.set("bookWords", bw); }
   const hit = k => tids.has(k) || sids.some(sid => k === sid || k.startsWith(sid + "-") || k === "vn:stop:" + sid);
   for (const t of trips) for (const s of t.stops){ const n = (s.allPhotos || s.photos).length + 25; for (let i = 0; i < n; i++){ try { await idb.del("rp:" + s.id + "-" + i); } catch(e){} } try { await idb.del("vn:stop:" + s.id); } catch(e){} }
   ["stories", "stopState", "stopNames", "phLabels", "phHidden", "phRot", "phOrder", "covers", "tripMusic", "backSeen", "voiceLen", "notes"].forEach(k => { const o = store.get(k, {}); if (!o || typeof o !== "object" || Array.isArray(o)) return; let ch = false; Object.keys(o).forEach(x => { if (hit(x)){ delete o[x]; ch = true; } }); if (ch) store.set(k, o); });
@@ -2564,16 +2570,28 @@ function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; c
       ${oth.map(o => `<p class="bnote">“${esc(o.text)}” <i>From ${esc(o.by)}</i></p>`).join("")}</section>`; }).join("");
   const el = document.createElement("div"); el.id = "book"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Trip book");
   el.innerHTML = `<div class="booktools"><button class="btn primary" data-book-print>🖨 Print or save as PDF</button><button class="btn" data-book-all aria-pressed="${bookAll}">${bookAll ? "Every photo" : "Up to 5 photos a stop"}</button><button class="btn" data-book-close>Close</button>
-      <p class="note">To make a PDF, pick <b>Save as PDF</b> as the printer${/iPhone|iPad/.test(navigator.userAgent) ? " (on iPhone, tap Share in the print preview, then Save to Files)" : ""}.${window.self !== window.top ? " If nothing opens here, open the trip book on playbrightharbor.com." : ""}</p></div>
+      <p class="note">Tap the <b>Dedication</b> or <b>Looking back</b> page to write your own words. To make a PDF, pick <b>Save as PDF</b> as the printer${/iPhone|iPad/.test(navigator.userAgent) ? " (on iPhone, tap Share in the print preview, then Save to Files)" : ""}.${window.self !== window.top ? " If nothing opens here, open the trip book on playbrightharbor.com." : ""}</p></div>
     <div class="bookpages" data-book-id="${t.id}">
       <section class="bcover"><img src="${photo(cov.scene, cov.id, 1600, 1100)}" alt=""><div class="bnum">${fmt(t.start)} – ${fmt(t.end)}${t.country ? " · " + esc(t.country) : ""}</div><h1>${esc(t.title)}</h1>
         ${ppl.length ? `<p>With ${esc(ppl.join(", "))}</p>` : ""}${chs.length ? `<p class="bnum">${chs.map(c => esc(c.name)).join(" · ")}</p>` : ""}
         <div class="bfacts">${plural(days(t), "day")} · ${plural(st.length, "place")} · ${plural(n, "photo")} · ${plural(tripMiles(t), "mile")}</div>
         ${bookMap(st)}
         <ol class="btoc">${st.map(s => `<li>${esc(stopName(s))} <span>${fmtShort(s.date)}</span></li>`).join("")}</ol></section>
+      ${(() => { const w = bookWords(t); return `<section class="bded${w.ded ? "" : " empty"}"><div class="bnum">Dedication</div><div class="bword bdedtext" contenteditable="true" role="textbox" aria-label="Dedication" data-book-word="ded" data-trip="${t.id}" data-hint="Tap to write a dedication, like “For Steph, who planned every stop.”">${esc(w.ded)}</div></section>`; })()}
       ${stops}
+      ${(() => { const w = bookWords(t), best = st.map(s => ({s, b:getStory(s).best})).filter(x => x.b).slice(0, 3); return `<section class="bclose${w.ref || best.length ? "" : " empty"}"><div class="bnum">Looking back</div><h2>${esc(t.title)}</h2>
+        <div class="bword breftext" contenteditable="true" role="textbox" aria-label="Closing reflection" data-book-word="ref" data-trip="${t.id}" data-hint="Tap to write what you'll remember most, or what you'd tell someone going next.">${esc(w.ref)}</div>
+        ${best.length ? `<div class="bbest"><div class="bnum">Best moments</div><ul>${best.map(x => `<li>${esc(x.b)} <span>${esc(stopName(x.s))}</span></li>`).join("")}</ul></div>` : ""}
+        <p class="bfacts">${plural(days(t), "day")} · ${plural(st.length, "place")} · ${plural(n, "photo")}. Until next time.</p></section>`; })()}
       <section class="bend"><p>Made with Travel Globe · ${fmt(new Date().toISOString().slice(0, 10))}</p></section></div>`;
   document.body.appendChild(el); document.body.classList.add("booking"); el.querySelector("[data-book-print]").focus(); }
+/* the trip book's own words: a dedication up front and a reflection at the end, typed right on the page */
+const BOOK_WORDS = store.get("bookWords", {}) || {};
+const BOOK_SAMPLE = {italy:{ded:"For Sam, who said yes to every gelato.", ref:"Rome was louder than I pictured and Florence was quieter. Next time: more slow mornings, fewer museums."}};
+function bookWords(t){ const w = BOOK_WORDS[t.id]; if (w) return {ded:w.ded || "", ref:w.ref || ""}; return !t.real && BOOK_SAMPLE[t.id] ? Object.assign({}, BOOK_SAMPLE[t.id]) : {ded:"", ref:""}; }
+document.addEventListener("input", e => { const el = e.target.closest && e.target.closest("[data-book-word]"); if (!el) return; const id = el.dataset.trip, k = el.dataset.bookWord, t = TRIPS.find(x => x.id === id); if (!t) return;
+  const w = bookWords(t); w[k] = el.innerText.replace(/\u00a0/g, " ").trim().slice(0, 600); BOOK_WORDS[id] = w; store.set("bookWords", BOOK_WORDS); const sec = el.closest("section"); if (sec) sec.classList.toggle("empty", !w[k] && !(k === "ref" && sec.querySelector(".bbest"))); });
+document.addEventListener("focusout", e => { const el = e.target.closest && e.target.closest("[data-book-word]"); if (el && !el.innerText.trim()) el.innerHTML = ""; });
 function closeBook(){ const el = $("#book"); if (el) el.remove(); document.body.classList.remove("booking"); }
 async function printBook(){ const imgs = [...document.querySelectorAll("#book img")]; await Promise.race([Promise.all(imgs.map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; }))), new Promise(r => setTimeout(r, 4000))]);
   const t0 = performance.now(); let ok = true; try { window.print(); } catch(e){ ok = false; }
@@ -2655,7 +2673,7 @@ async function exportBackup(){
   } catch(e){ toast("This browser blocked the download"); }
 }
 // what a backup would leave in place: data this browser has that the file doesn't
-const DATA_KEYS = {"tg.snaps":"memories", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections", "tg.chapters":"life chapters", "tg.covers":"trip covers", "tg.phHidden":"photos removed from trips", "tg.phOrder":"photo order", "tg.phRot":"turned photos", "tg.backSeen":"hidden Back again cards"};
+const DATA_KEYS = {"tg.snaps":"memories", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections", "tg.chapters":"life chapters", "tg.covers":"trip covers", "tg.phHidden":"photos removed from trips", "tg.phOrder":"photo order", "tg.phRot":"turned photos", "tg.backSeen":"hidden Back again cards", "tg.bookWords":"trip book dedications and reflections"};
 function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
 function restoreKeptHTML(d){ const kept = restoreKept(d); const has = Object.keys(DATA_KEYS).filter(k => k in d.keys).map(k => DATA_KEYS[k]);
   return `This replaces ${has.length ? has.join(", ") : "nothing but settings"} in this browser. ${kept.length ? `The backup has no ${kept.map(x => x.label).join(", ")}, so the ones in this browser (${kept.map(x => x.label.split(" ")[0] + ": " + x.n).join(", ")}) stay unless you tick below.</p><label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="rsWipe" style="width:20px;height:20px;accent-color:var(--lit)"><span>Remove them too, so this browser matches the backup exactly</span></label><p class="note" style="margin:0">` : ""}Settings like your globe style stay as they are. `; }
