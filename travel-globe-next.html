@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.17 (Muse round 14 fixes) -->
+<!-- Tripsake v0.17.1 (photo wait card, music stop) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -234,6 +234,11 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .movestop{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:calc(14px * var(--fs,1));padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}.movestop select{font-size:calc(14px * var(--fs,1));max-width:150px;background:transparent;color:inherit;border:0}
 .ldfound{margin:0;font-size:calc(17px * var(--fs,1));line-height:1.4;color:var(--ink)}
 .ldsum{margin:0;font-size:calc(17px * var(--fs,1));line-height:1.45;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+#getting{position:fixed;inset:0;z-index:600;display:grid;place-items:center;padding:16px;background:rgba(6,10,20,.72);backdrop-filter:blur(3px)}
+#getting .gcard{max-width:380px;width:100%;background:var(--panel,#111a30);color:var(--ink);border:1px solid var(--line);border-radius:20px;padding:24px 20px;text-align:center;display:grid;gap:8px;justify-items:center}
+#getting h3{margin:0;font-size:calc(22px * var(--fs,1))} #getting p{margin:0;font-size:calc(16.5px * var(--fs,1));line-height:1.45;color:var(--muted)} #getting .gtime{font-variant-numeric:tabular-nums;font-size:calc(18px * var(--fs,1));color:var(--ink)}
+#getting .btn{min-height:48px;margin-top:6px} .gspin{width:44px;height:44px;border-radius:50%;border:4px solid color-mix(in srgb,var(--ink) 18%,transparent);border-top-color:var(--lit,#e2b766);animation:gspin 1s linear infinite} @keyframes gspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.gspin{animation-duration:3s}}
 .ldgo{align-self:stretch;justify-content:center;font-size:calc(18px * var(--fs,1));min-height:56px}
 .ldtips summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:600;font-size:calc(16px * var(--fs,1))}
 .ldhow{margin:0;font-size:calc(15.5px * var(--fs,1));line-height:1.45;color:var(--muted)}
@@ -1358,7 +1363,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.17 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.17.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1804,18 +1809,21 @@ function openLoader(){
 document.addEventListener("focusin", e => { if (e.target.id === "myName" && e.target.value) setTimeout(() => { try { e.target.select(); } catch(er){} }, 0); });
 document.addEventListener("input", e => { const lt = e.target.dataset && e.target.dataset.ldTitle; if (lt != null){ const nm = document.querySelector(`[data-ld-name="${lt}"]`); if (nm) nm.textContent = e.target.value || "Untitled trip"; } if (e.target.id === "ldManTitle") try { sessionStorage.setItem("tgManName", e.target.value); } catch(er){} });
 // a picker that never opens fails silently in some browsers: after two seconds with no picker, say so
-let PICKED = false; document.addEventListener("change", e => { if (e.target && e.target.type === "file"){ PICKED = true; stopGetting(); const pg = $("#ldProg"); if (pg && /No photo picker opened|Getting your photos|Nothing arrived/.test(pg.textContent)) pg.textContent = ""; } }, true);
+let PICKED = false; document.addEventListener("change", e => { if (e.target && e.target.type === "file"){ PICKED = true; stopGetting(); const pg = $("#ldProg"); if (pg && /No photo picker opened|Getting your photos|Nothing arrived|never arrived/.test(pg.textContent)) pg.textContent = ""; if (pg && e.target.id === "ldFiles") setTimeout(() => { try { pg.scrollIntoView({block:"center", behavior:"smooth"}); } catch(er){} }, 60); } }, true);
 /* After you tap Add in the phone's picker, the phone copies the photos over (and downloads any kept only in iCloud) before the page gets anything, so show that wait instead of looking frozen */
 let GET_T = null, GET_T0 = 0;
-function stopGetting(){ if (GET_T){ clearInterval(GET_T); GET_T = null; } }
+function stopGetting(){ if (GET_T){ clearInterval(GET_T); GET_T = null; } const ov = document.getElementById("getting"); if (ov) ov.remove(); }
 function startGetting(){ if (PICKED || GET_T) return; const pg = $("#ldProg"); if (!pg || $("#overlay").dataset.kind !== "loader") return; GET_T0 = Date.now();
   const draw = () => { const pg = $("#ldProg"); if (PICKED || !pg || $("#overlay").dataset.kind !== "loader"){ stopGetting(); return; } const sec = Math.round((Date.now() - GET_T0) / 1000);
     if (sec > 300){ stopGetting(); pg.innerHTML = "<b style=\"color:var(--ink)\">Nothing arrived from the photo picker.</b> If you closed it, tap <b>Choose photos</b> again. With hundreds of photos, try 50 to 100 at a time."; return; }
-    pg.innerHTML = `<b style="color:var(--ink)">Getting your photos from your phone…</b> ${sec >= 3 ? `<span style="font-variant-numeric:tabular-nums">${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}</span>` : ""}<div class="ldbar busy"><i></i></div>Your phone copies them over first, and downloads any that are only in iCloud. With lots of photos this can take a minute or two. The count starts as soon as they arrive.`; };
+    let ov = document.getElementById("getting"); if (!ov){ ov = document.createElement("div"); ov.id = "getting"; ov.setAttribute("role", "status"); ov.setAttribute("aria-live", "polite"); document.body.appendChild(ov); }
+    ov.innerHTML = `<div class="gcard"><div class="gspin" aria-hidden="true"></div><h3>Bringing in your photos…</h3><p class="gtime">${sec >= 2 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}` : "&nbsp;"}</p><p>Your phone hands the photos over first, and downloads any that are only in iCloud. With lots of photos this takes a little while. It isn't stuck.</p><button class="btn" data-get-stop>Stop waiting</button></div>`; };
   draw(); GET_T = setInterval(draw, 1000); }
+document.addEventListener("click", e => { if (e.target.closest && e.target.closest("[data-get-stop]")){ stopGetting(); PICKED = true; const pg = $("#ldProg"); if (pg) pg.innerHTML = "If the photos never arrived, tap <b>Choose photos</b> again. With hundreds of photos, try 50 to 100 at a time."; } });
 document.addEventListener("cancel", e => { if (e.target && e.target.id === "ldFiles"){ stopGetting(); const pg = $("#ldProg"); if (pg && /Getting your photos/.test(pg.textContent)) pg.textContent = ""; } }, true);
 document.addEventListener("click", e => { const lb = e.target.closest && e.target.closest("label"); if (!lb || !lb.querySelector("#ldFiles")) return; let opened = false; PICKED = false; stopGetting(); const back = () => { window.removeEventListener("focus", back); document.removeEventListener("visibilitychange", vis); setTimeout(startGetting, 400); }; const vis = () => { if (document.visibilityState === "visible") back(); }; const on = () => { if (opened) return; opened = true; window.addEventListener("focus", back); document.addEventListener("visibilitychange", vis); setTimeout(() => { if (opened) startGetting(); }, 4000); };
   window.addEventListener("blur", on, {once:true}); document.addEventListener("visibilitychange", on, {once:true});
+  if (isIOS()){ opened = true; setTimeout(startGetting, 700); } /* the iPhone picker is a sheet over the page and often sends no blur: start the wait now; it stays hidden behind the picker until the picker closes */
   setTimeout(() => { window.removeEventListener("blur", on); document.removeEventListener("visibilitychange", on); const pg = $("#ldProg"), inp = $("#ldFiles"); if (!opened && !PICKED && !(inp && inp.files && inp.files.length) && pg && !pg.textContent.trim()) pg.innerHTML = `No photo picker opened? Some browsers block it on this page. Try <b>sample photos</b>, or ${isIOS() && /CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent) ? "open this page in Safari" : "reload the page and try again"}.`; }, 2000); }, true);
 function openManual(){
   loadState = {period:"all", from:"", to:"", manual:true};
@@ -2288,7 +2296,7 @@ function musicLabel(id){ const c = musicChoice(id); return c === "auto" ? choice
 
 let voiceNow = null;
 const music = (() => {
-  let ac = null, master = null, timer = null, song = null, songURL = null, playingKey = null, out = null, recDest = null;
+  let ac = null, master = null, timer = null, song = null, songURL = null, playingKey = null, out = null, recDest = null; const ALL = new Set(); /* every recording ever started, so nothing is left playing on its own */
   const midi = n => 440 * Math.pow(2, (n - 69) / 12);
   function ctx(){
     if (!ac){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ac = new AC(); }
@@ -2341,8 +2349,9 @@ const music = (() => {
     return () => { if (drone) drone.o.forEach(o => { try { o.stop(); } catch(e){} }); };
   }
   let stopMood = null;
+  let FADE = null; function canFade(){ if (FADE === null){ try { const t = new Audio(); t.volume = .5; FADE = Math.abs(t.volume - .5) < .01; } catch(e){ FADE = false; } } return FADE; } /* iPhone Safari ignores volume on audio elements */
   function fadeTo(v, s){ if (master){ const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(Math.max(.0001, master.gain.value), t); master.gain.exponentialRampToValueAtTime(Math.max(.0001, v), t + s); } if (song){ const a = song, from = a.volume, t0 = performance.now(); (function f(){ const k = Math.min(1, (performance.now() - t0) / (s*1000)); a.volume = from + (v - from)*k; if (k < 1) requestAnimationFrame(f); })(); } }
-  function hardStop(){ clearInterval(timer); timer = null; if (stopMood){ stopMood(); stopMood = null; } if (master){ try { master.disconnect(); } catch(e){} master = null; } if (song){ song.pause(); song = null; } if (songURL){ URL.revokeObjectURL(songURL); songURL = null; } playingKey = null; }
+  function hardStop(){ clearInterval(timer); timer = null; if (stopMood){ stopMood(); stopMood = null; } if (master){ try { master.disconnect(); } catch(e){} master = null; } if (song){ song.pause(); song = null; } ALL.forEach(a => { try { a.pause(); } catch(e){} }); ALL.clear(); if (songURL){ URL.revokeObjectURL(songURL); songURL = null; } playingKey = null; }
   return {
     get playing(){ return playingKey; },
     async play(tripId, opts = {}){
@@ -2351,7 +2360,7 @@ const music = (() => {
       const asked = choice; if (choice === "auto") choice = autoChoice(tripId);
       if (!REAL_MUSIC && choice.startsWith("real:")) choice = realToMood(choice.slice(5));
       if (choice.startsWith("real:")){
-        const k = choice.slice(5); const a = new Audio(realFile(k)); a.loop = true; a.volume = 0; a.preload = "auto"; song = a; playingKey = asked === "auto" ? choice : asked;
+        const k = choice.slice(5); const a = new Audio(realFile(k)); a.loop = true; a.volume = 0; a.preload = "auto"; song = a; ALL.add(a); playingKey = asked === "auto" ? choice : asked;
         const fallback = () => { if (song !== a) return; hardStop(); if (!opts.preview) toast("The recording couldn't load here, so built-in music is playing"); this.play(tripId, {...opts, choice: k in MOODS ? k : (TRIP_MOOD[tripId] || "warm")}); };
         a.addEventListener("error", fallback);
         try { await a.play(); } catch(e){ if (e && e.name === "NotAllowedError"){ toast("Tap ♪ to start the music"); return; } fallback(); return; }
@@ -2360,7 +2369,7 @@ const music = (() => {
       if (choice === "song"){
         let blob = null; try { blob = await idb.get("song:" + tripId); } catch(e){}
         if (!blob){ if (!opts.preview) toast("Your song couldn't be found, so a built-in one is playing"); return this.play(tripId, {...opts, choice:"auto"}); }
-        songURL = URL.createObjectURL(blob); song = new Audio(songURL); song.loop = true; song.volume = 0; playingKey = "song";
+        songURL = URL.createObjectURL(blob); song = new Audio(songURL); song.loop = true; song.volume = 0; playingKey = "song"; ALL.add(song);
         try { await song.play(); } catch(e){ toast("This browser blocked the song"); return; }
         fadeTo(vol * .6, 2); return;
       }
@@ -2370,7 +2379,7 @@ const music = (() => {
     },
     setMuted(m){ musicMuted = m; store.set("musicMuted", m); if (playingKey) fadeTo(m ? .0001 : (playingKey === "song" ? .6 : song ? .55 : .4), .5); },
     soften(){ if (playingKey && !musicMuted) fadeTo(playingKey === "song" ? .35 : song ? .32 : .22, 2); },
-    stop(s = 1.2){ if (!playingKey) return; fadeTo(.0001, s); const k = playingKey; setTimeout(() => { if (playingKey === k) hardStop(); }, s*1000 + 80); },
+    stop(s = 1.2){ if (!playingKey && !ALL.size) return; if (song && !canFade()){ hardStop(); return; } fadeTo(.0001, s); const k = playingKey; setTimeout(() => { if (playingKey === k) hardStop(); }, s*1000 + 80); },
     stopNow: hardStop,
     // the story video records exactly what you hear: built-in music or your own song
     recTrack(){ if (!ctx()) return null; const dest = ac.createMediaStreamDestination(); recDest = dest; if (!playingKey) return dest.stream.getAudioTracks()[0] || null;
@@ -2578,7 +2587,7 @@ async function replay(id, opts = {}){
 function endReplay(){
   if (voiceNow){ voiceNow.pause(); voiceNow._done && voiceNow._done(); voiceNow = null; }
   if (rec && rec.mr.state !== "inactive" && !rec.finishing) recAbort();
-  music.stop();
+  music.stop(); setTimeout(() => { if (!replayState) music.stopNow(); }, 1500);
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
