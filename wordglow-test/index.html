@@ -342,6 +342,8 @@ body.tut .tools { display: none; }
 button.pill { cursor: pointer; }
 .pill .plus { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); color: #1d2150; font-size: 0.85rem; line-height: 1; }
 .shop-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); text-align: left; }
+.shop-note { color: var(--fg); font-size: 0.9rem; margin: 8px 0 0; }
+.shop-owned { font-weight: 700; margin: 4px 0 0; }
 .shop-row .what { font-weight: 700; }
 .shop-row .what small { display: block; font-weight: 400; opacity: 0.75; }
 .shop-row .btn { width: auto; min-width: 5.5rem; margin: 0; }
@@ -2390,7 +2392,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.1";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "dd3cd0f 2026-11-12 03:28Z";
+const BUILD_STAMP = "2a3c71d 2026-11-12 04:27Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -2546,27 +2548,32 @@ async function restore() {
   if (!Purchases) { toast("Restore works in the\niPhone and Android apps.", false, READ_MS); return; }
   try { await Purchases.restorePurchases(); } catch {}
   await checkOwnedRemoveAds();
-  toast(noAds() ? "Remove ads restored." : "Nothing to restore.");
+  toast(noAds() ? "Remove ads restored." : "No Remove ads purchase found.");
   closeSheet();
 }
 function openShop() {
   const bonus = firstBonus();
-  const rows = PRODUCTS.filter(p => !(p.id === REMOVE_ADS && noAds())).map(p => {
+  // Apple 3.1.1 (2026-11-12): only Remove ads can be restored. It has its own section and restore link;
+  // coin packs are consumable, are used up when bought, and say so.
+  const row = p => {
     const name = bonus && p.coins ? `<s>${p.name}</s> ${(p.coins * 2).toLocaleString()} coins` : p.name;
     return `<div class="shop-row"><div class="what">${name}${p.note ? `<small>${p.note}</small>` : ""}</div><button class="btn" data-buy="${p.id}">${p.price}</button></div>`;
-  }).join("");
+  };
+  const rows = PRODUCTS.filter(p => p.coins).map(row).join("");
+  const ads = noAds() ? `<p class="shop-owned">✓ Ads removed</p>`
+    : row(PRODUCTS.find(p => p.id === REMOVE_ADS)) + `<p style="margin:2px 0 0;text-align:right"><button class="linkbtn" id="shop-restore">Restore Remove ads</button></p>`;
   // Tools cost coins here, the same as the "Out of ..." offer: one at a time, when you have none left.
   const tools = Object.keys(TOOLS).map(k => {
     const n = toolCount(k), ok = !n && coins >= POWER_COST && !over && !tut;
     return `<div class="shop-row"><div class="what">${k[0].toUpperCase() + k.slice(1)}<small>${TOOLS[k]} You have ${n}.</small></div><button class="btn" data-tool="${k}" ${ok ? "" : "disabled"}>${POWER_COST} 🪙</button></div>`;
   }).join("");
-  openSheet(`<h3>Shop</h3>${bonus ? `<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>` : ""}<p>You have ${coins.toLocaleString()} 🪙. Spend coins on erasers, shuffles, rotates and second chances. You can buy a tool when you've used up all of that kind.</p>${tools}<h4 class="shop-h">Coin packs</h4>${rows}
-    <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>
-    <p style="margin:6px 0 0;text-align:center"><button class="linkbtn" id="shop-restore">Restore purchases</button></p>`);
+  openSheet(`<h3>Shop</h3>${bonus ? `<p class="offer">🎉 Welcome offer: double coins on your first pack!</p>` : ""}<p>You have ${coins.toLocaleString()} 🪙. Spend coins on erasers, shuffles, rotates and second chances. You can buy a tool when you've used up all of that kind.</p>${tools}<h4 class="shop-h">Remove ads</h4>${ads}<h4 class="shop-h">Coin packs</h4>${rows}
+    <p class="shop-note">Coins are added to your game right away and used up as you spend them, so coin packs can't be restored. Cloud save keeps your coins on a new phone.</p>
+    <div class="btns"><button class="btn plain" id="shop-close">Close</button></div>`);
   document.querySelectorAll("[data-buy]").forEach(b => b.onclick = () => buy(b.dataset.buy));
   document.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { if (spendCoins(POWER_COST)) { closeSheet(); giveTool(b.dataset.tool); } });
   document.getElementById("shop-close").onclick = closeSheet;
-  document.getElementById("shop-restore").onclick = restore;
+  const rb = document.getElementById("shop-restore"); if (rb) rb.onclick = restore;
 }
 document.getElementById("coinpill").onclick = openShop;
 initAds(); finishUnfinishedPurchases(); loadPrices(); checkOwnedRemoveAds();
