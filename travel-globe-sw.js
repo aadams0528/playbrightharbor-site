@@ -1,4 +1,4 @@
-// Travel Globe offline support. Scope: /travel-globe* pages only; the rest of the site is left alone.
+// Tripsake offline support. Scope: /travel-globe* pages only; the rest of the site is left alone.
 // Pages: network first (so updates arrive), falling back to the saved copy offline.
 // Libraries and fonts from the CDNs: saved the first time, then served from the saved copy.
 const CACHE = "travel-globe-v1";
