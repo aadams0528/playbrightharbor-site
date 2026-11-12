@@ -220,6 +220,8 @@ details.how{font-size:14px;color:var(--muted)}details.how summary{cursor:pointer
 .row .btn{flex:1;min-width:140px}
 .next{font-size:14px;color:var(--muted)}
 .points{margin:0;font-size:14px;background:var(--plate);border-radius:10px;padding:8px 10px}
+.firstday{margin:0;font-size:16px;line-height:1.4}
+.tomorrow.gift{border-style:solid;background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
 .tomorrow{margin:0;padding:10px 12px;border-radius:12px;border:2px dashed var(--accent);font-size:15px}
 .badges{display:flex;gap:8px;flex-wrap:wrap}.badges span{font-size:13px;padding:6px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}.badges span.got{background:var(--accent);color:#1b1b1b;border-color:var(--accent);font-weight:700}
 .next b{font-family:var(--mono);color:var(--ink)}
@@ -350,7 +352,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 29</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 30</span></footer>
 </div>
 
 <script>
@@ -894,11 +896,18 @@ let cloudApplying=false;
 // ---------- funnel analytics ----------
 // Every event goes to Firebase Analytics in the apps (once its config files are added) and to gtag on
 // the web if the page loads it. A local tally (tester tools) shows the events fire.
+let sessT0=Date.now(),sessDone=0;
 function track(name,params={}){
+  if(name==="puzzle_done")sessDone++;
   try{S.ev=S.ev||{};S.ev[name]=(S.ev[name]||0)+1;save()}catch(e){}
   try{if(window.Capacitor?.isNativePlatform?.())window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({name,params}).catch(()=>{})}catch(e){}
   try{window.gtag&&gtag("event",name,params)}catch(e){}
 }
+// Where players stop (keep-playing plan, Nov 12): one session_end each time the app goes to the background.
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){const scr=!$("#archive").hidden?"archive":!$("#expert").hidden?"expert":document.querySelector(".sheet")?"sheet":G&&G.done?"result":"puzzle";
+    track("session_end",{minutes:Math.round((Date.now()-sessT0)/6000)/10,mode:G?G.kind:"none",screen:scr,try:G&&!G.done?G.attempt:0,done:sessDone})}
+  else{sessT0=Date.now();sessDone=0}});
 // Day-2 return: the first time a player opens the daily on the day after their first daily.
 function trackOpen(n){
   if(S.lastOpen===n)return;
@@ -1156,6 +1165,8 @@ for(const n in S.days||{}){const d=S.days[n];if(d&&d.g&&(!d.g.done||d.g.ids!==un
 function newDaily(){
   const n=dayNum(),wd=today().getDay();
   trackOpen(n);
+  if(S.giftDay!=null&&n>=S.giftDay&&!S.giftPaid){S.giftPaid=true;S.freezes=Math.min(2,(S.freezes||0)+1);save();track("day2_gift",{puzzle:n});
+    setTimeout(()=>toast("🎁 Welcome back! Here's your free ❄️ streak freeze. It saves your streak on a day you miss."),700)}
   const saved=S.days[n];
   if(saved&&saved.g&&(!saved.g.done||saved.g.ids!==undefined)&&!okIds(saved.g))delete saved.g;
   if(saved&&saved.g){G=saved.g=filled(saved.g);G.n=n;G.wd=wd;return}
@@ -1456,6 +1467,8 @@ function recordDaily(){
   else if(missed>0&&S.freezes>=missed&&S.streak>0){S.freezes-=missed;S.streak++;note=`❄️ A streak freeze saved your streak.`}
   else S.streak=1;
   S.best=Math.max(S.best,S.streak);S.lastDay=n;S.played++;S.total+=G.score;
+  // Day-2 gift (Alan chose it, Nov 12): a first-ever Daily promises a free ❄️ freeze for coming back.
+  if(S.played===1){track("first_daily_done",{puzzle:n});if(S.giftDay==null)S.giftDay=n+1}
   const tn=tier(G.score);S.tiers[tn]=(S.tiers[tn]||0)+1;
   if(S.streak%7===0&&S.freezes<2){S.freezes++;note+=(note?" ":"")+`❄️ You earned a streak freeze (you have ${S.freezes}).`}
   if(MILESTONES.includes(S.streak))G.milestone=S.streak;
@@ -1500,19 +1513,21 @@ function showResult(){
   r.innerHTML=`${G.milestone?`<div class="milestone">🎉 ${G.milestone}-day streak!</div>`:""}
     <div class="scoreline"><span class="score">${G.score}<small>/100</small></span><span class="tier">${tier(G.score)}</span></div>
     ${hideTags()?`<p class="hardnote"><span class="hardtag">Hard · counts only</span> Your checks showed how many pairs were in order, not which.</p>`:""}
+    ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 <b>Remind me when tomorrow's puzzle is ready?</b></p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
     ${G.rows&&G.rows.length?`<div class="pairs rows" aria-label="Your tries, one row per try">${G.rows.map(r=>`<span>${r}</span>`).join("")}</div>`:`<div class="pairs" aria-label="Your result">${G.tiles}</div>`}
     <p class="star why" style="margin:0">${how}. ${whyLine()}</p>
     ${timeline()}
     ${G.kind==="practice"?"":`<p class="connect">${nearMiss()}</p>`}
     <div class="row">
-      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">Practice</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
+      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
+    ${daily&&S.giftDay===G.n+1&&!S.giftPaid?`<p class="tomorrow gift">🎁 <b>Day 1 done!</b> Come back tomorrow for puzzle #${G.n+1} and get a free ❄️ streak freeze.</p>`:""}
+    ${daily&&S.played===1?`<p class="firstday">🎲 <b>Play more</b> gives you ${EXTRA_A_DAY} extra puzzles a day that earn history points. Past days are in <b>Archive</b>, and <b>Expert</b> asks for exact years. Both are in the bar at the bottom.</p>`:""}
     ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
     ${pointsLine(G.gain)}
     ${dorA||G.kind==="practice"?`<p class="crowd" id="crowd" hidden></p>`:""}
     ${daily&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:""}
     ${daily?`${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b> · ${LEVELS[dayLevel(G.n+1)]}<br>${teaserOf(G.n+1)}</p>`:""}<p class="next">${G.note?G.note+"<br>":""}Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Puzzle #${G.n+1} in <b id="cd"></b></p>`:""}
-    ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 Want a nudge when the next puzzle is ready?</p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
     <details class="how"><summary>More: how scoring works${dorA?", this week's stories":""}</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 out of order.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty (Easy ×1, Medium ×1.15, Tricky ×1.3, Hard ×1.5), rounded to the nearest point. Archive, Practice and Expert earn at half rate, and Practice and Expert each earn points for your first 3 games a day.</p>
       ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
       ${dorA&&!(daily&&S.streak%7===0)?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
@@ -1524,7 +1539,7 @@ function showResult(){
   if($("#bReplay"))$("#bReplay").onclick=replayPuzzle;
   if($("#bWeek"))$("#bWeek").onclick=weekStories;
   if(replay){$("#again").onclick=()=>replayPuzzle();$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
-  if($("#rYes")){$("#rYes").onclick=()=>setRemind($("#rTime").value).then(()=>$("#remind").remove());$("#rNo").onclick=()=>{setRemind(false);$("#remind").remove()}}
+  if($("#rYes")){track("remind_prompt_shown",{puzzle:G.n});$("#rYes").onclick=()=>setRemind($("#rTime").value).then(()=>$("#remind").remove());$("#rNo").onclick=()=>{setRemind(false);$("#remind").remove()}}
   if(G.kind==="daily"){$("#share").onclick=()=>{track("share_tap",{mode:"daily",puzzle:G.n});copy(share)};$("#more").onclick=()=>interstitial(()=>setMode("practice"));tick()}
   if(G.kind==="archive"){$("#share").onclick=()=>{track("share_tap",{mode:"archive",puzzle:G.n});copy(share)};$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
   if(G.kind==="daily"||G.kind==="archive"||G.kind==="practice")showCrowd();
@@ -1922,6 +1937,7 @@ function mergeWhenly(a,b){
   out.xPlayed=Math.max(a.xPlayed||0,b.xPlayed||0);out.xBest=Math.max(a.xBest||0,b.xBest||0);
   out.hp=Math.max(a.hp||0,b.hp||0);const aw=a.wk,bw=b.wk;if(aw||bw)out.wk=!aw?bw:!bw?aw:aw.w!==bw.w?(aw.w>bw.w?aw:bw):(aw.pts>=bw.pts?aw:bw);
   out.noAds=!!(a.noAds||b.noAds);out.tutorialDone=!!(a.tutorialDone||b.tutorialDone);
+  if(a.giftDay!=null||b.giftDay!=null)out.giftDay=a.giftDay??b.giftDay;out.giftPaid=!!(a.giftPaid||b.giftPaid);
   if(b.firstDay!=null)out.firstDay=a.firstDay==null?b.firstDay:Math.min(a.firstDay,b.firstDay);
   return out;
 }
