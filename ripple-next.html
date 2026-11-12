@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.11.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.12.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -163,6 +163,16 @@ body.still #board .glint,body.still #board .caustic,body.still #scene .sway,body
 @keyframes glow{50%{box-shadow:0 0 0 6px rgba(240,180,41,.55),var(--shadow)}}
 #btnUndo.glow{outline:3px solid #f0b429;outline-offset:2px} /* v0.6.6 (Muse r7): a steady gold ring, so the Undo nudge shows even in a still screenshot */
 /* overlay */
+#winCard .btn.dailygo:not(.primary){display:block;width:100%;margin:0 0 10px;background:#fff4d6;color:#1f3d37;border:2px solid #e0a82e;font-size:17px;min-height:48px;animation:glow 1.6s ease-in-out 2}
+.tomorrow{display:flex;align-items:center;gap:10px;margin:8px 0 0}
+.tomorrow svg{width:46px;height:46px;flex:0 0 46px;border-radius:50%;background:#dfeee9}
+.tomorrow svg .vg{filter:brightness(0);opacity:.4}
+.tomorrow span{font-size:16px;font-weight:750;color:var(--ink);line-height:1.3}
+body[data-theme="moon"] #winCard .tomorrow span{color:#eef3fb}
+.daily.fresh{border-color:#e0a82e;animation:glow 1.6s ease-in-out 2}
+#remindCard{align-items:center}
+#remindCard .card p{font-size:17px;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){#winCard .dailygo,.daily.fresh{animation:none}}
 .cloud{margin:10px 0 0;text-align:center} .cloud:empty{display:none} .cloud .btn{width:100%;max-width:340px} .cloudnote{margin:6px 0 0;font-size:13.5px;line-height:1.35;color:var(--ink-soft)} .linkbtn{border:0;background:none;padding:2px 4px;font:inherit;font-weight:750;color:var(--accent);text-decoration:underline;cursor:pointer}
 .overlay{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(24,52,46,.18);z-index:10;pointer-events:none}
 .overlay .card{pointer-events:auto}
@@ -271,10 +281,11 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     <div class="opts">
       <button class="btn" id="btnHowTo">How to play</button>
       <button class="btn" id="btnPreviewSet" aria-pressed="true">Hold to preview: On</button>
+      <button class="btn hidden" id="btnRemind" aria-pressed="false">Daily reminder: Off</button>
     </div>
     <div class="cloud" id="cloudRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.11.0 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.12.0 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -336,9 +347,19 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
           <div class="stars" id="winStars"></div>
           <p id="winLine"></p>
           <p id="winTip"></p>
+          <div id="winTomorrow" class="tomorrow hidden"></div>
         </div>
       </div>
+      <button class="btn dailygo hidden" id="btnDailyNow">📅 Try today’s Daily pond</button>
       <div class="row"><button class="btn" id="btnReplay">Play again</button><button class="btn primary" id="btnNext">Next pond</button></div>
+    </div>
+  </div>
+
+  <div id="remindCard" class="overlay hidden">
+    <div class="card" role="dialog" aria-labelledby="remTitle">
+      <h2 id="remTitle">See you tomorrow?</h2>
+      <p>Would you like a gentle reminder when tomorrow’s pond is ready? One note a day. You can turn it off on the Home screen.</p>
+      <div class="row"><button class="btn" id="btnRemindNo">No thanks</button><button class="btn primary" id="btnRemindYes">Yes, remind me</button></div>
     </div>
   </div>
 </div>
@@ -1802,6 +1823,7 @@ function startDaily() {
   enterPond(dailyLevel(key), 'Daily pond', dailyLevel(key).name);
   G.coach = null; $('btnHelp').classList.remove('hidden'); setTimeout(previewNudge, 0);
   showCoach(); hud();
+  if (!seen.dailyIntro) { seen.dailyIntro = true; store.set('seen', seen); toast('The Daily pond: a new pond every day. Solve it to start a streak and bring a visitor.', 4200); }
 }
 
 function tap(idx, fromSolver) {
@@ -1906,6 +1928,7 @@ function win() {
     daily.done[key] = Math.max(daily.done[key] || 0, s);
     daily.best[key] = Math.min(daily.best[key] || 999, G.taps);
     store.set('daily', daily);
+    remindPlan();
   } else {
     first = !progress.stars[id];
     progress.stars[id] = Math.max(progress.stars[id] || 0, s);
@@ -1925,19 +1948,28 @@ function win() {
     if (G.hinted && G.solved) $('winTip').textContent = 'Solve (tester) played this pond, so it tops out at 2 stars. Play again on your own for 3.'; // v0.9.1 (Muse r10)
     else if (G.hinted) $('winTip').textContent = s === 2 ? 'Show me was used, so this pond tops out at 2 stars. Play again without it for 3.' : 'You used Show me and went past par. Try again at par without it for 3 stars.';
     if (G.mode === 'chapter' && G.li === 0 && first) $('winTip').textContent = 'Undo takes back a tap. Restart starts the pond again.';
+    $('btnDailyNow').classList.add('hidden'); $('winTomorrow').classList.add('hidden'); G.offerRemind = false;
+    if (G.mode === 'chapter' && first && G.li === 3 && !daily.done[todayKey()]) { // v0.12.0: the Daily pond opens here, so say so on the card
+      $('winTip').textContent = 'New: the Daily pond. A fresh pond every day, with a streak and a visitor.';
+      $('btnDailyNow').classList.remove('hidden');
+    }
     if (first) {
       var nv = G.mode === 'daily' ? noteVisitor('daily', Object.keys(daily.done).length - 1) : noteVisitor('ch', G.li);
       showVisitor(nv);
     } else $('winVisitor').classList.add('hidden');
     if (G.mode === 'daily') {
       var sk = streakNow();
-      $('winTip').textContent += sk > 1 ? ' Daily streak: ' + sk + ' days.' : '';
+      if (first) { // v0.12.0: the day's first win says what tomorrow brings
+        $('winTip').textContent += ' 🔥 ' + sk + '-day streak!';
+        showTomorrow(sk);
+        G.offerRemind = remindAvail() && !remind.asked;
+      } else $('winTip').textContent += sk > 1 ? ' Daily streak: ' + sk + ' days.' : '';
       $('btnNext').textContent = 'Home';
     } else {
       $('btnNext').textContent = lastOfChapter(G.li) ? 'Finish chapter' : 'Next pond';
     }
     $('winCard').classList.remove('hidden');
-    fitVisitor();
+    fitVisitor(); fitTomorrow();
     placeWinCard();
   }, RM ? 600 : 1700); // v0.6.4: the solved pond shows a moment longer before the card rises
 }
@@ -1966,6 +1998,16 @@ function placeWinCard() { // v0.6.7 (Cooper r7): the win card must not cover the
   wc.classList.add('compact'); if (!hit()) return;
   var c = card.getBoundingClientRect(), over = b.bottom - (c.top - 30) + 8, up = Math.max(0, b.top - 4);
   bw.classList.add('lift'); bw.style.transform = 'translateY(' + (-Math.min(over, up)) + 'px)';
+}
+function showTomorrow(sk) { // tomorrow's visitor as a shadow, so there is something to come back for (this line stays on the compact card)
+  var n = Object.keys(daily.done).length; // daily visitor number n arrives with the next new daily pond
+  $('winTomorrow').innerHTML = '<svg viewBox="0 0 320 140" aria-hidden="true"><g class="vg">' + dailyItem(n) + '</g></svg><span>🔥 ' + sk + '-day streak! Tomorrow: a new pond and a new visitor.</span>';
+  $('winTomorrow').classList.remove('hidden');
+}
+function fitTomorrow() {
+  var sv = $('winTomorrow').querySelector('svg'), g = sv && sv.querySelector('.vg'); if (!g || $('winTomorrow').classList.contains('hidden')) return;
+  try { var b = g.getBBox(), side = Math.max(b.width, b.height) * 1.6 + 6, cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    sv.setAttribute('viewBox', f(cx - side / 2) + ' ' + f(cy - side / 2) + ' ' + f(side) + ' ' + f(side)); } catch (e) {}
 }
 function fitVisitor() { // zoom the picture onto the visitor (it is drawn at its place in the habitat scene)
   var sv = $('winVisitor').querySelector('svg'), g = sv && sv.querySelector('.vg'); if (!g || $('winVisitor').classList.contains('hidden')) return;
@@ -2478,7 +2520,8 @@ function showSelect() {
   if (G.busy) return;
   hideHold(); setPlaying(false); applyTheme(null);
   $('screenPlay').classList.add('hidden'); $('screenSelect').classList.remove('hidden');
-  ['winCard', 'chapterCard'].forEach(function (id) { $(id).classList.add('hidden'); }); clearWinPlace();
+  ['winCard', 'chapterCard', 'remindCard'].forEach(function (id) { $(id).classList.add('hidden'); }); clearWinPlace();
+  renderRemindBtn();
   // habitat
   var hc = habitatCounts(), vis = hc.chapter + hc.daily;
   $('habitatArt').innerHTML = habitatSVG(false); depthify($('habitatArt'), '.hab-item,.hab-feat');
@@ -2498,6 +2541,7 @@ function showSelect() {
   var d = $('daily'); d.innerHTML = '';
   var open = dailyUnlocked();
   d.classList.toggle('locked', !open);
+  d.classList.toggle('fresh', open && !Object.keys(daily.done).length); // v0.12.0: until the first Daily pond, its box glows
   var txt = document.createElement('div'); txt.className = 'dtxt'; d.appendChild(txt);
   var hd = document.createElement('b'); hd.textContent = 'Daily pond'; txt.appendChild(hd);
   var l1 = document.createElement('span'), l2 = document.createElement('span'); txt.appendChild(l1); txt.appendChild(l2);
@@ -2700,8 +2744,10 @@ $('btnBig').addEventListener('click', function () {
 $('btnReplay').addEventListener('click', function () { if (G.mode === 'daily') startDaily(); else startLevel(G.li); });
 function chapterOf(i) { return (LEVELS[i] && LEVELS[i].chapter) || 1; }
 function lastOfChapter(i) { return i === LEVELS.length - 1 || chapterOf(i + 1) !== chapterOf(i); }
+$('btnDailyNow').addEventListener('click', function () { $('winCard').classList.add('hidden'); clearWinPlace(); startDaily(); });
 $('btnNext').addEventListener('click', function () {
-  if (G.mode === 'daily') showSelect();
+  if (G.mode === 'daily' && G.offerRemind) { G.offerRemind = false; showSelect(); $('remindCard').classList.remove('hidden'); } // asked on the Home screen, once
+  else if (G.mode === 'daily') showSelect();
   else if (!lastOfChapter(G.li)) startLevel(G.li + 1);
   else showChapterDone();
 });
@@ -2757,6 +2803,43 @@ window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' :
    start: function (i) { startLevel(i); }, startDaily: startDaily,
   dailyLevel: function () { return dailyLevel(todayKey()); },
   coachTarget: function () { var c = G.coach; return c && c.steps[c.i] && c.steps[c.i].target != null ? c.steps[c.i].target : -1; }, hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
+
+/* ---------- v0.12.0 daily reminder: phone app only (remind.js gives window.BHRemind), asked after the first Daily win ---------- */
+var remind = store.get('remind', {}) || {}; // { on, asked, hour }
+function remindAvail() { return !!(window.BHRemind && BHRemind.available); }
+function remindHour() { return Math.min(20, Math.max(9, new Date().getHours())); } // about when they play, never before 9 am or after 8 pm
+function remindPlan() { // up to 3 notes, one a day; a player who stops coming hears nothing after that
+  if (!remindAvail()) return;
+  if (!remind.on) { BHRemind.off(); return; }
+  var now = Date.now(), t = new Date(), h = remind.hour || 10, doneToday = !!daily.done[todayKey()], sk = streakNow(), list = [];
+  for (var d = 0; d < 4 && list.length < 3; d++) {
+    var at = new Date(t.getFullYear(), t.getMonth(), t.getDate() + d, h, 0, 0).getTime();
+    if (at <= now + 60000 || (d === 0 && doneToday)) continue;
+    var alive = sk > 0 && (d === 0 || (d === 1 && doneToday)); // the streak can still be kept on that day
+    list.push({ at: at, title: 'Pebble Pond', body: alive ? 'Today’s pond is ready 🐸 Keep your ' + sk + '-day streak going.' : 'A new pond is ready 🐸 Come and splash a few pebbles.' });
+  }
+  BHRemind.set(list);
+}
+function renderRemindBtn() {
+  var b = $('btnRemind'); if (!remindAvail()) { b.classList.add('hidden'); return; }
+  b.classList.remove('hidden'); b.textContent = 'Daily reminder: ' + (remind.on ? 'On' : 'Off'); b.setAttribute('aria-pressed', remind.on ? 'true' : 'false');
+}
+function remindTurnOn(done) {
+  remind.asked = true; store.set('remind', remind);
+  BHRemind.enable().then(function (ok) {
+    remind.on = !!ok; if (ok && !remind.hour) remind.hour = remindHour(); store.set('remind', remind);
+    remindPlan(); renderRemindBtn();
+    toast(ok ? '🔔 We’ll remind you when tomorrow’s pond is ready.' : 'Reminders need permission. You can allow notifications for Pebble Pond in the iPhone Settings app.', ok ? 2600 : 4200);
+    if (done) done();
+  });
+}
+$('btnRemind').addEventListener('click', function () {
+  if (remind.on) { remind.on = false; store.set('remind', remind); remindPlan(); renderRemindBtn(); toast('Daily reminder is off.', 1800); }
+  else remindTurnOn();
+});
+$('btnRemindNo').addEventListener('click', function () { remind.asked = true; store.set('remind', remind); $('remindCard').classList.add('hidden'); });
+$('btnRemindYes').addEventListener('click', function () { $('btnRemindYes').disabled = true; remindTurnOn(function () { $('btnRemindYes').disabled = false; $('remindCard').classList.add('hidden'); }); });
+if (remindAvail()) { remindPlan(); document.addEventListener('visibilitychange', function () { if (document.hidden) remindPlan(); }); }
 
 /* ---------- phone app: cloud save (shared BHCloud module; in a browser BHCloud is absent and this does nothing) ---------- */
 function cloudData() { return { progress: store.get('progress', { stars: {}, best: {} }), daily: store.get('daily', {}), seen: store.get('seen', {}) }; }
