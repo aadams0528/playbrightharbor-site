@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.16.1 (renamed from Travel Globe) -->
+<!-- Tripsake v0.17 (Muse round 14 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -240,7 +240,7 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .ldtrip{display:flex;flex-direction:column;gap:8px;border-color:var(--line);background:var(--panel-2)}
 .ldtick{flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-4px 0 0 -6px;cursor:pointer}.ldtick input{width:26px;height:26px;accent-color:var(--lit)}
 .ldname{font-weight:700;font-size:calc(17px * var(--fs,1));line-height:1.3;overflow-wrap:anywhere}
-.ldline{font-size:calc(15px * var(--fs,1));line-height:1.4;color:var(--muted);margin-top:2px}
+.ldline{font-size:calc(15px * var(--fs,1));line-height:1.4;color:var(--muted);margin-top:2px}.ldcount:empty{display:none}.ldcount b{color:var(--ink)}
 .ldwarn{font-size:calc(15px * var(--fs,1));line-height:1.4;color:var(--lit-soft)}.ldwarn:empty{display:none}
 .ldfixbtn{align-self:flex-start;min-height:44px}
 .catchips [data-tgroup]{min-height:44px}
@@ -350,6 +350,9 @@ label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;marg
 .tripitem{display:flex;align-items:center;gap:6px}
 .tripitem .item{flex:1;min-width:0}
 .playbtn{width:44px;height:44px;border-radius:50%;background:rgba(242,178,74,.16);color:var(--lit-soft);flex:none;font-size:calc(15.5px * var(--fs,1))}
+.stopmore{border:1px solid var(--line);border-radius:14px;padding:0 12px}.stopmore[open]{padding-bottom:12px;display:grid;gap:8px}
+.stopmore>summary{list-style:none;cursor:pointer;min-height:48px;display:flex;flex-direction:column;justify-content:center;padding:8px 0}.stopmore>summary::-webkit-details-marker{display:none}
+.stopmore .sm-t{font-weight:600;font-size:calc(16px * var(--fs,1));color:var(--ink)}.stopmore .sm-s{font-size:calc(14.5px * var(--fs,1));color:var(--muted);line-height:1.35}
 .storyf{display:grid;gap:4px}
 .storyf .l{margin:4px 0 0}
 .stopbtns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -1355,7 +1358,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.16.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.17 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1421,6 +1424,8 @@ let SAVING = false;
 function closeSheet(force){ if (SAVING && force !== true){ toast("Saving your photos. One moment, it finishes by itself"); return; } if (typeof vrec !== "undefined" && vrec) vrecCancel(); if ($("#overlay").dataset.kind === "homeq" && loadState && loadState.awaitHome && loadState.pts && loadState.pts.length){ homeNext = null; openWelcome(); return; } /* closing the home question never loses the photos already read: back to the start, with a way to carry on */ const wasTrip = $("#overlay").dataset.kind === "trip"; if (["welcome", "loader", "home"].includes($("#overlay").dataset.kind)) setTimeout(() => { if (!document.querySelector(".sheet")) lightSample(); }, 0); $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip) document.querySelectorAll(".toast.undo").forEach(x => { if (!x.querySelector(".tbar") && !/Heads up/.test(x.textContent)) undoCountdown(x, 10000); }); /* leaving the trip never loses an Undo: it now counts down 10 seconds */ if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
 function flyToStops(st, ms = 1300){ if (!st.length) return; const lats = st.map(s => s.lat), lons = st.map(s => s.lon);
   flyTo(d3.mean(lons), d3.mean(lats), Math.min(14, 2.2 / Math.max(.15, d3.geoDistance([d3.min(lons), d3.min(lats)], [d3.max(lons), d3.max(lats)]) * 3)), ms); }
+const STOP_OPEN = new Set(); /* stops whose "Add details" you opened, so a redraw keeps them open */
+document.addEventListener("toggle", e => { const d = e.target; if (d && d.matches && d.matches("details.stopmore")){ if (d.open) STOP_OPEN.add(d.dataset.stopmore); else STOP_OPEN.delete(d.dataset.stopmore); } }, true);
 function stopHTML(s){
   if (stopState[s.id] === "ignored") return `<div class="stop ignored"><div><h4>${esc(stopName(s))}</h4><div class="d">Hidden from this trip</div></div><div class="stopbtns"><button data-stop-restore="${s.id}">Put it back</button></div></div>`;
   const st = getStory(s);
@@ -1428,6 +1433,8 @@ function stopHTML(s){
     <div class="strip" style="margin:0">${s.photos.map(ph => { const im = `<img src="${photoURL(ph)}" alt="${esc(phLabel(ph) || ph.caption)}" data-ph="${ph.id}"${phLabel(ph) ? ` class="labeled" title="${esc(phLabel(ph))}${ph.by ? " · photo: " + esc(ph.by) : ""}"` : ph.by ? ` title="Photo: ${esc(ph.by)}"` : ""}>`; return ph.by ? `<span class="byph">${im}<i>📷 ${esc(ph.by)}</i></span>` : im; }).join("")}</div>
     <div class="note" style="margin:-4px 0 0">${onceNote("stopPhotos", "Tap a photo to see it big. Label it or remove it there. To pick the cover, turn photos or change their order, use <b>Go through photos</b> under More for this trip.")}${s.allPhotos && s.allPhotos.length > s.photos.length ? ` ${plural(s.allPhotos.length - s.photos.length, "photo")} you removed ${s.allPhotos.length - s.photos.length === 1 ? "is" : "are"} hidden from this stop, not deleted. <button class="linkbtn" data-put-back="${s.id}">Put ${s.allPhotos.length - s.photos.length === 1 ? "it" : "them"} back</button>` : ""}</div>
     ${othersHTML(s)}
+    ${(() => { const has = !!(st.who || st.best || st.note || VOICE.has("vn:stop:" + s.id)), open = has || STOP_OPEN.has(s.id); const got = [st.who && "who was there", st.best && "best moment", st.note && "notes", VOICE.has("vn:stop:" + s.id) && "voice note"].filter(Boolean);
+      return `<details class="stopmore" data-stopmore="${s.id}"${open ? " open" : ""}><summary><span class="sm-t">${has ? "✎ Your details" : "＋ Add details"}</span><span class="sm-s">${has ? esc(got.join(", ")) : "Who was with you, best moment, notes, a voice note, or change this stop"}</span></summary>`; })()}
     <div class="storyf">
       <label class="l" for="who-${s.id}">Who was with you</label><input type="text" id="who-${s.id}" data-story="${s.id}" data-f="who" value="${esc(st.who)}" placeholder="Names, or just me">
       <label class="l" for="best-${s.id}">Best moment</label><input type="text" id="best-${s.id}" data-story="${s.id}" data-f="best" value="${esc(st.best)}" placeholder="The first thing you'd tell a friend">
@@ -1435,7 +1442,7 @@ function stopHTML(s){
     </div>
     ${(() => { const L = typeof dayLineForStop === "function" ? dayLineForStop(s) : null; return L && L.text ? `<div class="dayline"><div><div class="d">Best moment that day · trip journal</div><div>${esc(L.text)}</div></div>${VOICE.has("vn:day:" + s.date) ? `<button class="btn" data-vn-play="vn:day:${s.date}">▶</button>` : ""}</div>` : ""; })()}
     ${voiceUI("vn:stop:" + s.id, voiceLen("vn:stop:" + s.id))}
-    <div class="stopbtns"><button data-stop-rename="${s.id}">✎ Rename</button>${s.trip && s.trip.real && REAL_TRIPS.length > 1 ? `<label class="movestop" title="Moves this stop into another trip you loaded from your photos">↔ Move to <select data-stop-move="${s.id}" aria-label="Move this stop to another trip"><option value="">one of your other trips…</option>${REAL_TRIPS.filter(u => u !== s.trip).map(u => `<option value="${u.id}">${esc(u.title)} (${fmtShort(u.start)})</option>`).join("")}</select></label>` : ""}<button data-stop-ignore="${s.id}">Not part of this trip</button><span class="saved" id="saved-${s.id}"></span></div></div>`;
+    <div class="stopbtns"><button data-stop-rename="${s.id}">✎ Rename</button>${s.trip && s.trip.real && REAL_TRIPS.length > 1 ? `<label class="movestop" title="Moves this stop into another trip you loaded from your photos">↔ Move to <select data-stop-move="${s.id}" aria-label="Move this stop to another trip"><option value="">one of your other trips…</option>${REAL_TRIPS.filter(u => u !== s.trip).map(u => `<option value="${u.id}">${esc(u.title)} (${fmtShort(u.start)})</option>`).join("")}</select></label>` : ""}<button data-stop-ignore="${s.id}">Not part of this trip</button><span class="saved" id="saved-${s.id}"></span></div></details></div>`;
 }
 /* move one stop of your own trip into another of your trips, with Undo */
 function moveRealStop(sid, toId){ const raw = store.get("realTrips", []), before = JSON.stringify(raw); const a = raw.find(t => t.stops.some(s => s.id === sid)), b = raw.find(t => t.id === toId); if (!a || !b || a === b) return;
@@ -1475,7 +1482,7 @@ function openTrip(id, noFly){
     ${backAgainHTML(t)}${chs.length ? `<p class="note" style="margin:0">📚 ${chs.map(c => `${esc(c.name)} (${chapterYears(c)})`).join(" · ")}</p>` : ""}
     ${t.sharedWith && t.sharedWith.length ? `<p class="note" style="margin:0">👥 Shared with ${esc(t.sharedWith.join(", "))}. Send it again any time and your copies merge.</p>` : ""}
     ${dupesHTML(t)}
-    ${t.real ? `${onceNote("tripStops", `<p class="note" style="margin:0">Stops were grouped from your photo locations. Rename one, move it to another of your trips, or hide it if it doesn't belong. Each stop keeps up to ${PER_STOP} photos.</p>`)}${stopLimitLines(t) ? `<p class="note" style="margin:0">${stopLimitLines(t)}</p>` : ""}${(() => { const rt = (store.get("realTrips", []) || []).find(x => x.id === t.id); return rt && rt.titleOffer && rt.titleOffer !== t.title ? `<p class="note" style="margin:0">The copy you merged calls this trip <b>${esc(rt.titleOffer)}</b>. <button class="linkbtn" data-title-offer="${t.id}" data-use="1">Use that name</button> · <button class="linkbtn" data-title-offer="${t.id}" data-use="0">Keep “${esc(t.title)}”</button></p>` : ""; })()}` : onceNote("sampleTrip", `<p class="note" style="margin:0">This is a sample trip, so it stays as it is. With your own trips you can also <b>add photos</b>, <b>move a stop</b> and <b>delete the trip</b>. <button class="linkbtn" data-load-photos>Load trips from my photos</button></p>`)}
+    ${t.real ? `${onceNote("tripStops", `<p class="note" style="margin:0">Stops were grouped from your photo locations. To rename one, move it to another of your trips or hide it, open <b>Add details</b> under it. Each stop keeps up to ${PER_STOP} photos.</p>`)}${stopLimitLines(t) ? `<p class="note" style="margin:0">${stopLimitLines(t)}</p>` : ""}${(() => { const rt = (store.get("realTrips", []) || []).find(x => x.id === t.id); return rt && rt.titleOffer && rt.titleOffer !== t.title ? `<p class="note" style="margin:0">The copy you merged calls this trip <b>${esc(rt.titleOffer)}</b>. <button class="linkbtn" data-title-offer="${t.id}" data-use="1">Use that name</button> · <button class="linkbtn" data-title-offer="${t.id}" data-use="0">Keep “${esc(t.title)}”</button></p>` : ""; })()}` : onceNote("sampleTrip", `<p class="note" style="margin:0">This is a sample trip, so it stays as it is. With your own trips you can also <b>add photos</b>, <b>move a stop</b> and <b>delete the trip</b>. <button class="linkbtn" data-load-photos>Load trips from my photos</button></p>`)}
     ${golf.length ? `<div class="suggest" style="padding:10px"><b>⛳ Golf on this trip</b><div class="row-btns" style="margin-top:8px">${golf.map(c => `<button class="btn green" data-course="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     ${t.stops.map(stopHTML).join("")}
     ${hikesFor(t).length ? hikesHTML(hikesFor(t), false) : ""}
@@ -1544,7 +1551,7 @@ function redrawAfterPhoto(s, id){
   else document.querySelectorAll(`img[data-ph="${id}"]`).forEach(im => im.remove());
   try { worldCache.key = null; if (typeof renderBody === "function") renderBody(); renderStats(); } catch(e){} }
 function lbRemove(id){ const s = photoStop(id); if (!s) return;
-  if (s.photos.length <= 1){ toast("Each stop keeps at least one photo. To drop the whole stop, use \u201cNot part of this trip\u201d on the trip page."); return; }
+  if (s.photos.length <= 1){ toast("Each stop keeps at least one photo. To drop the whole stop, open \u201cAdd details\u201d under it on the trip page and tap \u201cNot part of this trip\u201d."); return; }
   setPhotoHidden(id, true); lbList = lbList.filter(x => x.id !== id); if (!lbList.length) closeLB(); else { lbIdx = Math.min(lbIdx, lbList.length - 1); renderLB(); }
   redrawAfterPhoto(s, id);
   toast("Photo removed from this stop", () => { const s2 = setPhotoHidden(id, false); if (s2) redrawAfterPhoto(s2, id); }); }
@@ -1900,7 +1907,7 @@ function openReview(){
       <div style="display:flex;gap:12px;align-items:flex-start"><label class="ldtick"><input type="checkbox" data-ld-keep="${i}" ${t.keep ? "checked" : ""} aria-label="Keep ${esc(t.title)}"></label>
       <img data-ld-cover="${i}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:12px;flex:none;background:var(--panel)">
       <div style="flex:1;min-width:0"><div class="ldname" data-ld-name="${i}">${esc(t.title)}</div>
-      <div class="ldline">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(t.stops.length, "stop")} · ${plural(t.photos, "photo")}</div>
+      <div class="ldline">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(t.stops.length, "stop")} · ${plural(t.photos, "photo")}</div><div class="ldline ldcount" data-ld-count="${i}">${tripCountLine(t)}</div>
       <div class="ldline">${t.stops.map(s => s.unsure ? `${esc(s.name)}? <span class="checktag">check</span>` : esc(s.name)).join(" → ")}${t.extraStops ? ` <b>+ ${plural(t.extraStops, "more stop")} not shown</b> (the first ${MAX_STOPS} are kept)` : ""}</div></div></div>
       ${!t.keep && t.photos < 2 ? `<div class="ldwarn" data-ld-one="${i}">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
       <div class="ldwarn ldcap" data-ld-cap="${i}">${capNote(t)}</div><div data-ld-joinbox="${i}">${joinNote(t, i)}</div>
@@ -1917,7 +1924,7 @@ function openReview(){
     <div id="ldHomePick" hidden>${whereHTML("Pick your home town. Trips are worked out again from it.")}<button class="btn" data-ld-home-set style="margin-top:6px">Use this as home</button></div>
     ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start">Name every trip by place and month</button>` : ""}
     ${tr.length ? `<p class="ldhow" style="margin:0">Each stop keeps up to ${stopCap()} photos. Every photo still helps find your trips and stops.</p><label class="switch" id="ldAllWrap" style="gap:10px;align-items:center;justify-content:flex-start"${tr.some(t => capInfo(t, PER_STOP).some(c => c.drop.length)) || L.bigCap ? "" : " hidden"}><input type="checkbox" id="ldAll"${L.bigCap ? " checked" : ""} style="width:22px;height:22px;accent-color:var(--lit)"><span>Keep every photo, up to ${BIG_STOP} a stop (uses more space on this device)</span></label>` : ""}
-    ${tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide" checked style="width:22px;height:22px;accent-color:var(--lit)"><span>Hide the ${plural(SAMPLE_TRIPS.length, "sample trip")}, so the globe shows only my trips (you can show them again under More)</span></label>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
+    ${tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide" checked style="width:22px;height:22px;accent-color:var(--lit)"><span>Hide the sample traveler's ${plural(SAMPLE_TRIPS.length, "example trip")} that came with the app, so the globe shows only my trips (you can show them again under More)</span></label>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
     <div id="ldProg" class="note" style="margin:0" aria-live="polite"></div></div>`, "loader");
   tr.forEach(async (t, i) => { const u = await thumb(t.stops[0].pts[0].file, 160); const im = document.querySelector(`[data-ld-cover="${i}"]`); if (im && u) im.src = u; });
   updateAddCount(); drawTiles(); fillThumbs();
@@ -1991,14 +1998,20 @@ function moveStop(i, si, j){ const snap = reviewSnap(); const tr = loadState.tri
   const rest = a.pts.filter(p => !st.pts.includes(p)); const nb = buildTrip([...b.pts, ...st.pts]); nb.keep = b.keep || a.keep;
   tr[j] = nb; if (rest.length){ const na = buildTrip(rest); na.keep = partKeep(rest, a.keep); tr[i] = na; } else tr.splice(i, 1);
   tr.sort((x, y) => x.pts[0].t - y.pts[0].t); reviewDone(snap, `Moved ${st.name}.${warn}`); }
+/* one trip's photos: how many will be saved, how many are already on the globe, how many are over a stop's limit (null while still checking) */
+function tripCounts(t, cap){ const info = capInfo(t, cap), all = info.reduce((b, c) => b + c.total, 0), keep = info.reduce((b, c) => b + c.keep, 0);
+  if (t.repeat){ if (t.repeat.pending) return null; const o = t.repeat.over || 0; return {all, saved:t.repeat.newPts.length, over:o, already:Math.max(0, all - t.repeat.newPts.length - o)}; }
+  if (t.dupe && t.dupe.pending) return null;
+  const dn = t.dupe ? t.dupe.drop.size : 0; if (dn){ const k2 = freshKeep(t, cap); return {all, saved:k2, already:dn, over:Math.max(0, all - dn - k2)}; }
+  return {all, saved:keep, already:0, over:all - keep}; }
+/* the line on each trip card that makes the headline add up: "2 new · 2 already on your globe" */
+function tripCountLine(t){ const c = tripCounts(t, stopCap()); if (!c || !c.already) return ""; return `<b>${c.saved ? plural(c.saved, "new photo") : "No new photos"}</b> · ${c.already.toLocaleString()} already on your globe, so not saved twice${c.over ? ` · ${c.over.toLocaleString()} over the photo limit` : ""}`; }
 // "You picked 102 photos. 96 will be saved…": what you picked, what the ticked trips will keep, and why the rest is left out
 function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; const cap = stopCap(); planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */
   let saved = 0, already = 0, unticked = 0, over = 0; const checking = L.trips.some((t, i) => live(t, i) && ((t.repeat && t.repeat.pending) || (t.dupe && t.dupe.pending)));
-  L.trips.forEach((t, i) => { const info = capInfo(t, cap), all = info.reduce((b, c) => b + c.total, 0), keep = info.reduce((b, c) => b + c.keep, 0);
-    if (!live(t, i)){ unticked += all; return; }
-    if (t.repeat){ if (t.repeat.pending) return; const o = t.repeat.over || 0; saved += t.repeat.newPts.length; over += o; already += Math.max(0, all - t.repeat.newPts.length - o); return; }
-    const dn = t.dupe && !t.dupe.pending ? t.dupe.drop.size : 0; if (dn){ const k2 = freshKeep(t, cap); saved += k2; already += dn; over += Math.max(0, all - dn - k2); return; }
-    saved += keep; over += all - keep; });
+  L.trips.forEach((t, i) => { const c = tripCounts(t, cap); if (!c) return;
+    if (!live(t, i)){ unticked += c.all; return; }
+    saved += c.saved; already += c.already; over += c.over; });
   const total = L.total || 0, rest = Math.max(0, total - saved - already - unticked - over);
   L.lastSaved = saved; L.lastAlready = already; L.lastChecking = checking; L.lastNewTrips = L.trips.filter((t, i) => live(t, i) && !t.repeat).length; /* ticked trips that are new, not photos joining a saved trip */
   if (checking) return `You picked ${plural(total, "photo")}. Checking which are already on your globe…`;
@@ -2006,7 +2019,7 @@ function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; cons
   const joins = L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => t.repeat.newPts.length ? `${plural(t.repeat.newPts.length, "new photo")} ${t.repeat.newPts.length === 1 ? "joins" : "join"} ${t.repeat.title}` : `${t.repeat.title} is already on your globe`);
   /* one plain sentence that adds up: picked = saved + each reason the rest is left out */
   return `You picked ${plural(total, "photo")}. ${saved.toLocaleString()} will be saved to your globe${joins.length ? ` (${joins.join("; ")})` : ""}.${why.length && total > saved ? ` Left out: ${why.join(", ")}.` : ""}`; }
-function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); }
+function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); const L = loadState; if (L && L.trips) document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); }
 // the Add button always agrees with the receipt: nothing new to save means nothing to add
 function syncAddBtn(){ const L = loadState; const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]");
   document.querySelectorAll("[data-ld-one]").forEach(el => { const k = document.querySelector(`[data-ld-keep="${el.dataset.ldOne}"]`); el.hidden = !!(k && k.checked); });
@@ -2042,7 +2055,7 @@ function capInfo(t, cap){ const ex = extraPts(t); return t.stops.map(s => { cons
 function capNote(t){ const cap = stopCap(), info = capInfo(t, cap).filter(c => c.drop.length); if (!info.length) return "";
   const nm = p => (p.file && p.file.name) || "a photo";
   return `Each stop keeps up to ${cap} photos. ${info.map(c => `<b>${esc(c.s.name)}</b> keeps ${c.keep} of ${c.total}, leaving out ${esc(c.drop.slice(0, 4).map(nm).join(", "))}${c.drop.length > 4 ? ` <details style="display:inline"><summary style="display:inline;cursor:pointer;text-decoration:underline">and ${c.drop.length - 4} more</summary>${esc(c.drop.slice(4).map(nm).join(", "))}</details>` : ""}`).join(". ")}. Photos you placed yourself are always kept.${cap < BIG_STOP ? " Tick <b>Keep every photo</b> below, or Split the trip, to keep more." : ""}`; }
-function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); document.querySelectorAll("[data-ld-cap]").forEach(el => { const t = L.trips[+el.dataset.ldCap]; if (t) el.innerHTML = capNote(t); }); document.querySelectorAll("[data-ld-joinbox]").forEach(el => { const i = +el.dataset.ldJoinbox, t = L.trips[i]; if (t && !el.contains(document.activeElement)) el.innerHTML = joinNote(t, i); });
+function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); document.querySelectorAll("[data-ld-cap]").forEach(el => { const t = L.trips[+el.dataset.ldCap]; if (t) el.innerHTML = capNote(t); }); document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); document.querySelectorAll("[data-ld-joinbox]").forEach(el => { const i = +el.dataset.ldJoinbox, t = L.trips[i]; if (t && !el.contains(document.activeElement)) el.innerHTML = joinNote(t, i); });
   const w = $("#ldAllWrap"); if (w) w.hidden = !(L.bigCap || L.trips.some(t => capInfo(t, PER_STOP).some(c => c.drop.length))); }
 /* a trip counts as already on your globe only if the dates match and each of its stops sits within 3 km of a stop of the saved trip; a Tokyo photo on the day of a saved Paris trip is a new trip */
 /* for a loader trip that matches a saved one: which of its photos are not in the saved trip yet (by picture fingerprint) */
@@ -2919,7 +2932,7 @@ async function bookPageHTML(){ const pages = $("#book .bookpages"); if (!pages) 
   await Promise.all([...c.querySelectorAll("img")].map(async im => { const u = im.getAttribute("src") || ""; if (u.startsWith("blob:")) im.setAttribute("src", await toData(u)); }));
   const css = [...document.querySelectorAll("style")].map(x => x.textContent).join("\n");
   const title = (c.querySelector(".bcover h1") || {}).textContent || "Trip book";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · trip book</title>${[...document.querySelectorAll('link[href*="fonts.googleapis"]')].map(l => l.outerHTML).join("")}<style>${css}
+  return `<!doctype html><html style="--fs:${BIG_TEXT ? "1.18" : "1"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · trip book</title>${[...document.querySelectorAll('link[href*="fonts.googleapis"]')].map(l => l.outerHTML).join("")}<style>${css}
 body{margin:0;background:#d9d4c9;overflow:auto!important;height:auto!important} #book{position:static!important;overflow:visible!important}
 .bpbar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:#0e1529;color:#e9eefb;font:14px system-ui,sans-serif}
 .bpbar button{font:600 15px system-ui,sans-serif;padding:10px 16px;border-radius:999px;border:0;background:#e2b766;color:#1c1914;cursor:pointer}
@@ -3004,7 +3017,7 @@ async function exportBackup(){
   const data = {app:"travel-globe", version:1, exported:new Date().toISOString(), keys, images};
   try {
     const blob = new Blob([JSON.stringify(data)], {type:"application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tripsake-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast(`Backup file saved: ${plural(snaps.length, "memory", "memories")} and ${plural(Object.keys(images).length, "photo")}. Keep it somewhere safe.`);
+    const nImg = Object.keys(images).filter(k => !String(k).startsWith("vn:")).length; toast(`Backup file saved: ${plural(snaps.length, "memory", "memories")} and ${nImg ? `${nImg.toLocaleString()} of your own photo${nImg === 1 ? "" : "s"}` : "no photos of your own yet"}${SAMPLE_TRIPS.length ? ". The example trips come with the app, so they don't need saving" : ""}. Keep it somewhere safe.`);
   } catch(e){ toast("This browser blocked the download"); }
 }
 // what a backup would leave in place: data this browser has that the file doesn't
@@ -3068,7 +3081,7 @@ function drawPhotoReview(){ const R = prev, ph = R.list[R.i], s = ph.stop, off =
     <div><label class="l" for="prCap">Caption</label><input type="text" id="prCap" data-phlabel="${ph.id}" maxlength="60" value="${esc(phLabel(ph))}" placeholder="${ph.scene === "real" ? "What's in this photo? Shows in your story and video" : esc(ph.caption)}"></div>
     <div class="row-btns" style="margin:0">${off ? `<button class="btn primary" data-pr-keep>✓ Put it back in the trip</button>` : `<button class="btn" data-pr-remove ${stopLeft <= 1 ? "disabled title=\"A stop keeps at least one photo\"" : ""}>✕ Remove from trip</button><button class="btn" data-pr-cover ${isCover ? "disabled" : ""}>${isCover ? "★ This is the cover" : "★ Make it the cover"}</button>`}</div>
     ${(() => { const arr = s.allPhotos || s.photos, k = arr.indexOf(ph); return `<div class="row-btns" style="margin:0"><button class="btn" data-pr-rot aria-label="Rotate a quarter turn">⟳ Rotate</button>${arr.length > 1 ? `<button class="btn" data-pr-move="-1" ${k <= 0 ? "disabled" : ""} aria-label="Move earlier in this stop">◀ Earlier</button><button class="btn" data-pr-move="1" ${k >= arr.length - 1 ? "disabled" : ""} aria-label="Move later in this stop">Later ▶</button><span class="note" style="align-self:center">Photo ${k + 1} of ${arr.length} at this stop</span>` : `<span class="note" style="align-self:center">Only photo at this stop, so there's nothing to reorder</span>`}</div>`; })()}
-    ${!off && stopLeft <= 1 ? `<p class="note" style="margin:0">This is the last photo at ${esc(stopName(s))}. To drop the whole stop, use <b>Not part of this trip</b> on the trip page.</p>` : ""}
+    ${!off && stopLeft <= 1 ? `<p class="note" style="margin:0">This is the last photo at ${esc(stopName(s))}. To drop the whole stop, open <b>Add details</b> under it on the trip page and tap <b>Not part of this trip</b>.</p>` : ""}
     <div class="row-btns" style="margin:0;justify-content:space-between"><button class="btn" data-pr-step="-1" ${R.i === 0 ? "disabled" : ""}>‹ Previous</button><button class="btn primary" data-pr-done>Done</button><button class="btn" data-pr-step="1" ${R.i === R.list.length - 1 ? "disabled" : ""}>Next ›</button></div></div>`, "prev"); }
 function prMove(d){ const ph = prev.list[prev.i], arr = ph.stop.allPhotos || ph.stop.photos, k = arr.indexOf(ph), j = k + d; if (j < 0 || j >= arr.length) return;
   [arr[k], arr[j]] = [arr[j], arr[k]]; const li = prev.list.indexOf(arr[k]), lj = prev.list.indexOf(arr[j]); [prev.list[li], prev.list[lj]] = [prev.list[lj], prev.list[li]];
