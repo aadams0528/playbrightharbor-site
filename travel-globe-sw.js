@@ -18,6 +18,7 @@ self.addEventListener("activate", e => e.waitUntil((async () => {
 self.addEventListener("fetch", e => { const r = e.request; if (r.method !== "GET") return; const u = new URL(r.url);
   if (u.origin === location.origin){
     if (!u.pathname.startsWith("/travel-globe")) return;
+    if (u.pathname.startsWith("/travel-globe-music/")) return; // place music streams straight from the site (audio uses partial requests, which can't be cached); offline, the built-in music plays instead
     e.respondWith(fetch(r).then(res => { if (res.ok){ const copy = res.clone(); caches.open(CACHE).then(c => c.put(r, copy)); } return res; })
       .catch(() => caches.match(r, {ignoreSearch:true}).then(hit => hit || caches.match(u.pathname, {ignoreSearch:true})).then(hit => hit || Response.error())));
     return; }

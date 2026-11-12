@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- v0.15.1: round 14 fixes -->
+<!-- v0.16: place music -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1355,7 +1355,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Travel Globe prototype v0.15.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Travel Globe prototype v0.16 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2209,28 +2209,67 @@ const MOODS = {
 const MOOD_ORDER = ["warm","north","piazza","island","blossom","highlands","desert","city"];
 const TRIP_MOOD = {banff:"north", italy:"piazza", iceland:"north", maui:"island", nyc:"city", japan:"blossom", scotland:"highlands", arizona:"desert", rockies2:"north"};
 const setMoods = () => TRIPS.forEach(t => { if (t.real && !TRIP_MOOD[t.id]){ const la = Math.abs(d3.mean(t.stops, s => s.lat)); TRIP_MOOD[t.id] = la > 55 ? "north" : la < 24 ? "island" : t.stops.length > 2 ? "city" : "warm"; } }); setMoods();
-/* Private test only: real recordings from Alan's Epidemic Sound account, to judge the feel. Not licensed for a shipped app yet. */
+/* Place music: 20 instrumental tracks made for Travel Globe (Suno Pro, commercial use; Alan 2026-11-12). Each trip gets the track for where it went; built-in music stays as the offline fallback. */
 const REAL = {
-  highlands:{name:"Highland air", desc:"Gentle Scottish and Irish folk"},
-  island:{name:"Island breeze", desc:"Easy Hawaiian ukulele"},
-  piazza:{name:"Piazza evening", desc:"Solo Italian guitar waltz"},
-  blossom:{name:"Cherry blossom", desc:"Koto and Japanese flute"},
-  mountain:{name:"Mountain morning", desc:"Quiet acoustic guitar"},
-  nordic:{name:"Northern quiet", desc:"Soft solo piano"},
-  desert:{name:"Desert road", desc:"Slow country guitar"},
-  city:{name:"City lights", desc:"Mellow late-night jazz"},
-  beach:{name:"Beach day", desc:"Sunny 60s surf-pop, for a Florida beach"},
-  keys:{name:"Island time", desc:"Laid-back Caribbean, a Key West feel"}
+  scotland:{name:"Highlands", desc:"Soft fiddle and distant pipes · Scotland"},
+  ireland:{name:"Green hills", desc:"Tin whistle and fiddle · Ireland, Wales, England"},
+  france:{name:"Café in Paris", desc:"Accordion waltz · France, Belgium"},
+  italy:{name:"Piazza", desc:"Mandolin and accordion · Italy"},
+  spain:{name:"Spanish evening", desc:"Flamenco guitar · Spain, Portugal"},
+  greece:{name:"Aegean blue", desc:"Bouzouki · Greece, Croatia, Cyprus"},
+  alps:{name:"Alpine morning", desc:"Accordion and guitar · the Alps, Central Europe"},
+  "middle-east":{name:"Desert sunrise", desc:"Oud and frame drum · Middle East, North Africa"},
+  india:{name:"Sitar and tabla", desc:"India, Nepal, Sri Lanka"},
+  "southeast-asia":{name:"Golden temples", desc:"Dulcimer and soft drums · Southeast Asia"},
+  japan:{name:"Temple garden", desc:"Koto and shakuhachi · Japan, East Asia"},
+  australia:{name:"Outback", desc:"Didgeridoo and guitar · Australia"},
+  "new-zealand":{name:"Lakes and peaks", desc:"Sweeping strings · New Zealand"},
+  "pacific-islands":{name:"Island breeze", desc:"Ukulele and slack-key · Hawaii, Pacific"},
+  caribbean:{name:"Steel drums", desc:"Caribbean, the Keys, cruises"},
+  mexico:{name:"Fiesta", desc:"Guitars and soft trumpet · Mexico, Central America"},
+  beach:{name:"Beach day", desc:"Marimba and guitar · any beach"},
+  roadtrip:{name:"Open road", desc:"Acoustic and slide guitar · US road trips"},
+  "big-city":{name:"City lights", desc:"Jazz piano · New York, London, big cities"},
+  mountains:{name:"Big views", desc:"Piano and strings · mountains, hiking, anywhere"}
 };
-const REAL_ORDER = ["highlands","island","piazza","blossom","mountain","nordic","desert","city","beach","keys"];
-const TRIP_REAL = {banff:"mountain", italy:"piazza", iceland:"nordic", maui:"island", nyc:"city", japan:"blossom", scotland:"highlands", arizona:"desert", rockies2:"mountain"};
-const realFile = k => "audio/" + k + ".mp3";
-const REAL_MUSIC = false; // Epidemic recordings are off until there is a licence for in-app use (Alan 2026-11-09). Built-in place music is the default.
-const realToMood = k => MOODS[k] ? k : ({mountain:"north", nordic:"north", beach:"island", keys:"island"}[k] || "warm");
+const REAL_ORDER = ["scotland","ireland","france","italy","spain","greece","alps","middle-east","india","southeast-asia","japan","australia","new-zealand","pacific-islands","caribbean","mexico","beach","roadtrip","big-city","mountains"];
+const realFile = k => "travel-globe-music/" + k + ".mp3";
+const REAL_MUSIC = true;
+// which track fits a place: broad boxes, checked in order (the first match wins)
+const BIG_CITIES = [[40.71,-74.01],[51.51,-0.13],[41.88,-87.63],[43.65,-79.38],[42.36,-71.06],[34.05,-118.24],[37.77,-122.42],[47.61,-122.33],[38.9,-77.04],[22.32,114.17]];
+function placeTrack(lat, lon){ const inB = (a, b, c, d) => lat >= a && lat <= b && lon >= c && lon <= d;
+  if (BIG_CITIES.some(([y, x]) => d3.geoDistance([lon, lat], [x, y]) * KM < 30)) return "big-city";
+  if (inB(18, 23, -161, -154) || (Math.abs(lat) < 25 && (lon > 165 || lon < -140))) return "pacific-islands";
+  if (inB(-48, -34, 165, 179)) return "new-zealand";
+  if (inB(-44, -10, 112, 154)) return "australia";
+  if (inB(24, 46.5, 122.9, 146)) return "japan";
+  if (inB(-11, 28, 92, 141)) return "southeast-asia";
+  if (inB(5, 36, 60, 92)) return "india";
+  if (inB(18, 54, 73, 135)) return "japan";
+  if (inB(54.6, 61, -8, -0.7)) return "scotland";
+  if (inB(49.8, 55.5, -10.7, 1.8)) return "ireland";
+  if (inB(45.8, 47.9, 5.9, 16.5)) return "alps";
+  if (inB(42.3, 51.2, -5, 8.2)) return "france";
+  if (inB(36, 43.8, -9.6, 3.4)) return "spain";
+  if (inB(36.5, 45.8, 6.6, 18.6)) return "italy";
+  if (inB(34.5, 46.5, 13.5, 28.3) || inB(34.5, 35.8, 32, 34.7)) return "greece";
+  if (inB(12, 42, 25, 63) || inB(20, 37.5, -17.5, 25)) return "middle-east";
+  if (inB(55, 72, -25, 45)) return "mountains"; /* Iceland, Norway, the north: big quiet views */
+  if (inB(35, 55, -25, 45)) return "alps";
+  if (inB(10, 27.5, -86.5, -59)) return "caribbean";
+  if (inB(7, 32.7, -118, -86.5)) return "mexico";
+  if (inB(24, 30.8, -87.7, -79.9)) return "beach";
+  if (inB(31, 70, -170, -104)) return lat < 37.5 && lon > -115 ? "roadtrip" : "mountains";
+  if (inB(25, 50, -104, -66)) return "roadtrip";
+  if (inB(-35, 5, -50, -34)) return "beach"; /* Brazil's coast */
+  return "mountains"; }
+// a trip's track: the place most of its photos were taken
+function tripTrack(t){ if (!t || !t.stops || !t.stops.length) return "mountains"; const w = {}; t.stops.forEach(s => { const k = placeTrack(s.lat, s.lon); w[k] = (w[k] || 0) + Math.max(1, (s.photos || []).length); }); return Object.entries(w).sort((a, b) => b[1] - a[1])[0][0]; }
+const realToMood = k => MOODS[k] ? k : ({mountains:"north", "new-zealand":"north", alps:"north", beach:"island", caribbean:"island", "pacific-islands":"island", japan:"blossom", italy:"piazza", scotland:"highlands", ireland:"highlands", "big-city":"city", roadtrip:"desert", "middle-east":"desert", mexico:"desert"}[k] || "warm");
 let tripMusic = store.get("tripMusic", {}); // tripId -> "auto" | "real:key" | mood key | "song" | "off"
 let musicMuted = store.get("musicMuted", false);
 const musicChoice = id => tripMusic[id] || "auto";
-const autoChoice = id => REAL_MUSIC ? "real:" + (TRIP_REAL[id] || "mountain") : (TRIP_MOOD[id] || "warm");
+const autoChoice = id => REAL_MUSIC ? "real:" + tripTrack(TRIPS.find(t => t.id === id)) : (TRIP_MOOD[id] || "warm");
 function choiceName(c){ if (c === "off") return "No music"; if (c === "song") return "Your song"; if (c.startsWith("real:")) return REAL_MUSIC ? ((REAL[c.slice(5)] || {}).name || "Music") : MOODS[realToMood(c.slice(5))].name; return (MOODS[c] || MOODS.warm).name; }
 function musicLabel(id){ const c = musicChoice(id); return c === "auto" ? choiceName(autoChoice(id)) + " (matched to the place)" : choiceName(c); }
 
@@ -2333,16 +2372,15 @@ const music = (() => {
   };
 })();
 function openMusicPicker(tripId, fromReplay){
-  const t = TRIPS.find(x => x.id === tripId); const cur = musicChoice(tripId); const auto = TRIP_REAL[tripId] || "mountain"; const autoMood = TRIP_MOOD[tripId] || "warm";
+  const t = TRIPS.find(x => x.id === tripId); const cur = musicChoice(tripId); const auto = tripTrack(t); const autoMood = TRIP_MOOD[tripId] || "warm";
   const row = (val, title, sub, extra = "") => `<div class="tripitem"><button class="item musicopt" data-music-set="${val}" aria-pressed="${cur === val}"><div class="flag ring">${cur === val ? "✓" : "♪"}</div><div class="txt"><div class="t">${title}</div><div class="s">${sub}</div></div></button>${extra}</div>`;
   const prev = k => `<button class="playbtn" data-music-preview="${k}" aria-label="Preview ${esc(choiceName(k))}">▶</button>`;
   const rsub = k => esc(REAL[k].desc);
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Music for this story")}<p class="note" style="margin:0">${esc(t.title)}. ${REAL_MUSIC ? "Quiet music that feels like the place." : "Built-in music is made right on your device, so it works offline."}</p>
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Music for this story")}<p class="note" style="margin:0">${esc(t.title)}. ${REAL_MUSIC ? "Soft music that sounds like the place. Tap ▶ to hear one." : "Built-in music is made right on your device, so it works offline."}</p>
     ${REAL_MUSIC ? `${row("auto", `Match the place · ${esc(REAL[auto].name)}`, rsub(auto), prev("real:" + auto))}
-    <div class="sec">Real recordings · private test</div>
+    <div class="sec">Music for places</div>
     ${REAL_ORDER.filter(k => k !== auto).map(k => row("real:" + k, esc(REAL[k].name), rsub(k), prev("real:" + k))).join("")}
-    <p class="note" style="margin:0">These come from Epidemic Sound for this private test only. Using them in the real app needs a different licence.</p>
-    <div class="sec">Made on your device</div>
+    <div class="sec">Made on your device · works offline</div>
     ${MOOD_ORDER.map(k => row(k, esc(MOODS[k].name), esc(MOODS[k].desc), prev(k))).join("")}` : `${row("auto", `Match the place · ${esc(MOODS[autoMood].name)}`, esc(MOODS[autoMood].desc), prev(autoMood))}
     <div class="sec">Built-in music</div>
     ${MOOD_ORDER.filter(k => k !== autoMood).map(k => row(k, esc(MOODS[k].name), esc(MOODS[k].desc), prev(k))).join("")}`}
