@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.17 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.18 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -540,6 +540,19 @@ html,body{overflow-anchor:none}
 .coach .cstep{font-size:14px}
 .coach .tcue{font-size:15px}
 .picker.two .pk{font-size:14px;white-space:nowrap;letter-spacing:-.2px}
+.tmrw{background:#fff3c4;border:2px solid #f4c430;border-radius:16px;padding:12px 14px;margin:4px 0 14px;text-align:center;color:var(--ink);font-weight:700;font-size:16px;line-height:1.4}
+.tmrw b{display:block;font-family:var(--disp);font-size:22px;margin-bottom:2px}
+.tmgift{margin-top:6px;background:#fff;border-radius:10px;padding:6px 8px}
+.remask{background:#eef3ff;border:2px solid #b9c8f0;border-radius:16px;padding:12px;margin:0 0 14px;text-align:center;color:var(--ink);font-size:16px}
+.remask b{display:block;margin-bottom:8px}
+.remask .row2{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.remask select,#remRow select{font:inherit;font-weight:700;border-radius:10px;border:2px solid var(--line);padding:6px 8px;background:#fff;color:var(--ink)}
+.remask .linkbtn{color:var(--ink2);text-decoration:underline;font-size:15px;margin-top:8px;padding:4px}
+#remRow{margin-top:18px;text-align:center}
+#remRow .cloudnote{font-size:15px;color:#dfe6f5}
+#remRow .linkbtn{color:var(--gold2);text-decoration:underline;font-size:15px;padding:4px}
+@keyframes goalglow{0%,40%{background:#fff3c4;box-shadow:0 0 0 4px rgba(244,196,48,.55)}100%{background:transparent;box-shadow:0 0 0 0 rgba(244,196,48,0)}}
+.goalglow .swrule,.goalglow .rulebox,.goalglow .trayhd:first-child{animation:goalglow 2.6s ease-out 1;border-radius:10px}
 .tdots{display:inline-flex;gap:3px;margin-left:4px;vertical-align:middle}
 .tdots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25)}
 .tdots i.on{background:var(--gold)}
@@ -2345,6 +2358,13 @@ html,body{overflow-anchor:none}
 'use strict';
 const TEST_BUILD = true;
 // ---------- store helper (single place for saved state) ----------
+// ---------- anonymous play stats (phone app only, @capacitor-firebase/analytics) ----------
+// Shows where players stop: no account, no ad ID, nothing linked to the player. Fails quietly offline or in a browser.
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function track(name, params) {
+  try { const A = NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAnalytics; if (A) A.logEvent({ name, params: params || {} }).catch(() => {}); } catch (e) {}
+  try { if (window.__events) window.__events.push([name, params || {}]); } catch (e) {}
+}
 let cloudApplying = false;
 const store = {
   pre: 'tl.v1.',
@@ -2404,17 +2424,38 @@ function migrateResults() {
 }
 function saveResult(ds, slot, r) {
   const all = results(); const e = all[ds] || { s: [null, null, null] };
-  e.s[slot] = r; if (e.s.every(Boolean) && !e.on) e.on = trueToday;
+  e.s[slot] = r; const justDone = e.s.every(Boolean) && !e.on; if (justDone) e.on = trueToday;
   all[ds] = e; store.set('results', all);
+  if (justDone) { track('day_done', { streak: streak() }); if (shieldEarn() && P) P.newShield = true; remindSync(); }
 }
 function dayDone(e) { return e && e.s.every(Boolean); }
 function streak() {
   const all = results(); let n = 0; let d = trueToday;
-  const arch = archived();
+  const arch = archived(); const used = shieldGet().used;
   const counted = (d) => (dayDone(all[d]) && all[d].on === d) || (arch[d] && arch[d].on === d);
+  // a day saved by a streak shield keeps the streak alive but doesn't add to it
+  const kept = (d) => counted(d) || used.indexOf(d) >= 0;
   if (!counted(d)) d = addDays(d, -1);
-  while (counted(d)) { n++; d = addDays(d, -1); }
+  while (kept(d)) { if (counted(d)) n++; d = addDays(d, -1); }
   return n;
+}
+// Streak shield (come-back gift): earned when the streak reaches 2 days, and again at every 7 days,
+// if none is held (hold at most 1). It saves the streak once when exactly one day is missed.
+function shieldGet() { const v = store.get('shield', null); return v && typeof v === 'object' ? { n: v.n ? 1 : 0, used: Array.isArray(v.used) ? v.used : [] } : { n: 0, used: [] }; }
+function shieldEarn() {
+  const sh = shieldGet(); if (sh.n) return false;
+  const st = streak(); if (st !== 2 && !(st > 2 && st % 7 === 0)) return false;
+  sh.n = 1; store.set('shield', sh); track('shield_earned', { streak: st }); return true;
+}
+// On opening the app: if yesterday was missed but the day before was played, spend the shield on yesterday.
+function shieldApply() {
+  const sh = shieldGet(); if (!sh.n) return 0;
+  const all = results(), arch = archived();
+  const counted = (d) => (dayDone(all[d]) && all[d].on === d) || (arch[d] && arch[d].on === d) || sh.used.indexOf(d) >= 0;
+  const y = addDays(trueToday, -1), y2 = addDays(trueToday, -2);
+  if (counted(y) || !counted(y2)) return 0;
+  sh.n = 0; sh.used = sh.used.concat([y]).slice(-30); store.set('shield', sh);
+  const st = streak(); track('shield_used', { streak: st }); return st;
 }
 
 // ---------- icons ----------
@@ -2439,7 +2480,7 @@ function renderHome() {
   const st = streak();
   const next = e ? e.s.findIndex(x => !x) : 0;
   $app.innerHTML = iconize(
-    '<div class="home-top"><div class="logo" id="logo">' + lockIcon(40) + '<h1>Aha<span>lock</span></h1></div><div class="streak" title="Days in a row">🔥 ' + st + '</div></div>' +
+    '<div class="home-top"><div class="logo" id="logo">' + lockIcon(40) + '<h1>Aha<span>lock</span></h1></div><div class="streak" title="Days in a row">🔥 ' + st + (shieldGet().n ? ' <span title="Streak shield: saves your streak once if you miss a day">🛡️</span>' : '') + '</div></div>' +
     '<div class="tag">Three little logic puzzles a day. No guessing needed.</div>' +
     '<div class="today"><div class="when"><h2>' + (ds === realToday ? 'Today' : nice(ds)) + '</h2><div class="mood">' + TL.DAYMOOD[TL.weekday(ds)] + ' day</div></div>' +
     '<div class="trio">' + day.map((p, i) => '<div class="tile' + (e && e.s[i] ? ' done' : '') + '"><div class="ico">' + typeIcon(p.type, 44) + '</div><div class="nm">' + TYPENAME[p.type] + '</div><div class="dots">' + [1, 2, 3, 4].slice(0, p.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[p.tier] ? 'on' : '') + '"></i>').join('') + '</div></div>').join('') + '</div>' +
@@ -2451,13 +2492,13 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.17' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div id="remRow"></div><div id="cloudRow"></div>' +
+    '<div class="foot">Ahalock prototype v0.18' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
-  renderCloud();
+  renderCloud(); renderRemind();
   document.getElementById('logo').onclick = () => { if (++titleTaps >= 5) { titleTaps = 0; testerMenu(); } };
   if (homeInt) clearInterval(homeInt);
   homeInt = setInterval(() => { const c = document.getElementById('cd'); if (!c) { clearInterval(homeInt); homeInt = null; return; } c.innerHTML = iconize(nextLine()); }, 30000);
@@ -2492,6 +2533,8 @@ function startPuzzle(ds, slot) {
   P = { ds, slot, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false,
     entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null,
     ex: TYPES[pz.type].explain(pz) };
+  P.glow = true;
+  track('puzzle_start', { slot: slot + 1, type: pz.type, tier: pz.tier, today: ds === realToday ? 1 : 0 });
   renderPuzzle();
   stopTimer(); timerInt = setInterval(() => { const t = document.getElementById('tm'); if (t && !P.solved) t.textContent = fmtT(Date.now() - P.t0); }, 500);
 }
@@ -2512,12 +2555,13 @@ function renderPuzzle() {
   const msgH = inBoard ? '' : pz.kind === 'order' || SO || P.tutorial ? iconize(msg) : msg;
   const IZ = SO || P.tutorial;
   const actsH = IZ ? iconize(acts) : acts;
-  $app.innerHTML = (IZ ? iconize(head) : head) + '<div class="board' + (pz.kind === 'order' ? ' compact' : '') + '">' + introH + (IZ ? iconize(body) : body) + (P.tip ? '<div class="ftip">' + esc(P.tip) + '</div>' : '') + '</div>' + (P.tutorial ? msgH + actsH : actsH.replace('<div class="actions stick">', '<div class="actions stick"><div class="actmsg">' + msgH + '</div>')) + (P.tutorial ? '<div class="tutpad"></div>' : '');
+  $app.innerHTML = (IZ ? iconize(head) : head) + '<div class="board' + (pz.kind === 'order' ? ' compact' : '') + (P.glow ? ' goalglow' : '') + '">' + introH + (IZ ? iconize(body) : body) + (P.tip ? '<div class="ftip">' + esc(P.tip) + '</div>' : '') + '</div>' + (P.tutorial ? msgH + actsH : actsH.replace('<div class="actions stick">', '<div class="actions stick"><div class="actmsg">' + msgH + '</div>')) + (P.tutorial ? '<div class="tutpad"></div>' : '');
   document.getElementById('bk').onclick = () => { if (P.tutorial) { endTutorial(false); } else if (P.story) renderStop(P.story.s); else renderHome(); };
   document.getElementById('chk').onclick = check;
   document.getElementById('hint').onclick = hint;
   if (P.tutorial) { document.getElementById('hint').classList.add('hidden'); }
   TYPES[pz.type].wire();
+  P.glow = false; // the how-to-play line glows once when a puzzle starts, then stays plain
   if (P.tutorial) { if (P.msg && P.msg.k === 'bad') msgByClue(); tutAfterRender(); }
   else {
     const near = P.msg && (P.msg.k === 'bad' || P.msg.k === 'hint') ? msgByClue() : false;
@@ -2644,6 +2688,7 @@ function solved() {
   stopTimer();
   if (P.tutorial) { renderPuzzle(); ahaPop(); setTimeout(tutSolved, 900); return; }
   if (P.story) { renderPuzzle(); ahaPop(); setTimeout(storySolved, 900); return; }
+  track('puzzle_done', { slot: P.slot + 1, type: P.pz.type, tier: P.pz.tier, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
   saveResult(P.ds, P.slot, { id: TL.pid(P.pz), ms, miss: P.miss, hints: P.hints });
   renderPuzzle(); ahaPop();
   setTimeout(() => showSolved(ms), 900);
@@ -2679,16 +2724,95 @@ function showDaySummary(ds) {
   const sh = shareText(ds); const e = results()[ds];
   openSheet('<h2>Daily Three done!</h2><div class="sub">' + nice(ds) + ' · ' + TL.DAYMOOD[TL.weekday(ds)] + ' day</div>' +
     '<div class="sharecard" id="card"><div class="t">Aha<span>lock</span> · ' + esc(nice(ds)) + '</div><div class="mood2">' + esc(sh.mood) + '</div><div class="row">' + sh.marks + '</div><div class="s">' + [sh.showTime ? '⏱ ' + sh.time : '', sh.st ? '🔥 ' + sh.st + ' day' + (sh.st > 1 ? 's' : '') + ' in a row' : ''].filter(Boolean).join(' · ') + '</div><div class="s ch">' + esc(sh.challenge) + '</div></div>' +
-    '<div class="sub" style="margin-top:-6px;font-size:13px">✅ solved clean · 💡 used a hint · 🟨 had a miss</div>' +
+    '<div class="sub" style="margin-top:-6px;font-size:14px">✅ solved clean · 💡 used a hint · 🟨 had a miss</div>' +
     '<label class="tgl"><input type="checkbox" id="stime"' + (sh.showTime ? ' checked' : '') + '> Show my time when I share</label>' +
-    '<div class="col"><button class="btn" id="share">Share result</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>' +
-    '<div class="sub" style="margin-top:12px;font-size:13px">' + (ds === realToday ? 'New puzzles in ' + untilMidnight() + '. ' + teaser() : '') + '</div>');
+    tomorrowCard(ds) +
+    '<div class="col"><button class="btn" id="share">Share result</button>' + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>');
+  const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
+  wireRemindAsk(() => showDaySummary(ds));
   document.getElementById('share').onclick = async () => {
     try { if (navigator.share) { await navigator.share({ text: sh.text }); return; } } catch (err) { if (err && err.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(sh.text); toast('Copied! Paste it anywhere.'); } catch (err) { toast('Could not copy'); }
   };
   document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
   document.getElementById('stime').onchange = (ev) => { store.set('shareTime', ev.target.checked); showDaySummary(ds); };
+}
+// "See you tomorrow": the first thing after today's result says what tomorrow brings and keeps the streak in view.
+function tomorrowCard(ds) {
+  if (ds !== realToday) return '';
+  const st = streak(); const tm = addDays(realToday, 1);
+  return '<div class="tmrw"><b>🔥 Day ' + Math.max(1, st) + ' streak!</b>' +
+    '<div>Tomorrow: ' + TL.DAYMOOD[TL.weekday(tm)] + ' day ' + getDay(tm).map(p => TYPEEMOJI[p.type]).join(' ') + '</div>' +
+    '<div>New puzzles in ' + untilMidnight() + '.</div>' +
+    (P && P.newShield ? '<div class="tmgift">🛡️ You earned a streak shield! It saves your streak once if you miss a day.</div>'
+      : st <= 1 && !shieldGet().n ? '<div>Come back tomorrow to make it 2 days in a row and earn a 🛡️ streak shield.</div>'
+      : st <= 1 ? '<div>Come back tomorrow to make it 2 days in a row.</div>' : '') + '</div>' + remindAsk();
+}
+// ---------- daily reminder (phone app only, @capacitor/local-notifications) ----------
+// remind: { asked: 1, t: 'HH:MM' | null }. Asked once, after the first finished Daily Three. The next 7 days are
+// scheduled as separate notes (skipping today once it's played) and rebuilt on every open and every finished day.
+function remindGet() { const v = store.get('remind', null); return v && typeof v === 'object' ? v : { asked: 0, t: null }; }
+const REMIND_TIMES = [7, 8, 9, 10, 12, 15, 17, 18, 19, 20, 21].map(h => [String(h).padStart(2, '0') + ':00', (h % 12 || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM')]);
+function timeLabel(t) { const o = REMIND_TIMES.find(x => x[0] === t); return o ? o[1] : t; }
+function lnotes() { return NATIVE && window.Capacitor.Plugins ? window.Capacitor.Plugins.LocalNotifications : null; }
+function remindAsk() {
+  if (!lnotes() || remindGet().asked) return '';
+  return '<div class="remask"><b>⏰ Want a reminder when tomorrow\'s puzzles are ready?</b><div class="row2"><button class="btn small" id="remYes">Yes, at 9:00 AM</button><select id="remPick" aria-label="Reminder time"><option value="">Other time…</option>' + REMIND_TIMES.map(x => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '</select></div><button class="linkbtn" id="remNo">No thanks</button></div>';
+}
+function wireRemindAsk(after) {
+  const y = document.getElementById('remYes'), pk = document.getElementById('remPick'), no = document.getElementById('remNo');
+  if (y) y.onclick = async () => { await setRemind('09:00'); after(); };
+  if (pk) pk.onchange = async () => { if (pk.value) { await setRemind(pk.value); after(); } };
+  if (no) no.onclick = () => { store.set('remind', { asked: 1, t: null }); track('reminder_opt_in', { on: 0 }); after(); };
+}
+async function setRemind(t) {
+  const LN = lnotes();
+  if (t && LN) {
+    let p = { display: 'denied' }; try { p = await LN.requestPermissions(); } catch (e) {}
+    if (p.display !== 'granted') { toast('Notifications are off for Ahalock. Turn them on in your phone\'s Settings.'); t = null; }
+  }
+  store.set('remind', { asked: 1, t }); track('reminder_opt_in', { on: t ? 1 : 0, time: t || '' });
+  await remindSync();
+  if (t) toast('We\'ll remind you at ' + timeLabel(t) + ' each day.');
+}
+async function remindSync() {
+  const LN = lnotes(); if (!LN) return;
+  try {
+    await LN.cancel({ notifications: Array.from({ length: 7 }, (_, i) => ({ id: 100 + i })) });
+    const t = remindGet().t; if (!t) return;
+    const hm = t.split(':').map(Number), now = new Date(), doneToday = dayDone(results()[trueToday]), st = streak();
+    const list = [];
+    for (let i = 0; i < 7; i++) {
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, hm[0], hm[1]);
+      if (at <= now || (i === 0 && doneToday)) continue;
+      const ds = addDays(trueToday, i); let icons = ''; try { icons = getDay(ds).map(p => TYPEEMOJI[p.type]).join(' '); } catch (e) {}
+      // only the next reminder can know the streak for sure
+      const keep = st >= 1 && (i === 0 || (i === 1 && doneToday));
+      list.push({ id: 100 + i, title: 'Ahalock', body: (keep ? 'Keep your ' + st + '-day streak 🔥 ' : '') + 'Today\'s three are ready: ' + icons, schedule: { at, allowWhileIdle: true } });
+    }
+    if (list.length) await LN.schedule({ notifications: list });
+  } catch (e) {}
+}
+function renderRemind() {
+  const box = document.getElementById('remRow'); if (!box || !lnotes()) return;
+  const r = remindGet();
+  box.innerHTML = r.t
+    ? '<p class="cloudnote">⏰ Daily reminder at <select id="remT" aria-label="Reminder time">' + REMIND_TIMES.map(x => '<option value="' + x[0] + '"' + (x[0] === r.t ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select> <button class="linkbtn" id="remOff">Turn off</button></p>'
+    : '<button class="linkbtn" id="remOn">⏰ Turn on a daily reminder</button>';
+  const on = document.getElementById('remOn'), off = document.getElementById('remOff'), tt = document.getElementById('remT');
+  if (on) on.onclick = async () => { await setRemind('09:00'); renderRemind(); };
+  if (off) off.onclick = async () => { await setRemind(null); renderRemind(); toast('Daily reminder is off.'); };
+  if (tt) tt.onchange = async () => { await setRemind(tt.value); renderRemind(); };
+}
+let sessionT0 = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) track('session_end', { screen: S.screen + (P && !P.solved && S.screen === 'puzzle' ? (P.tutorial ? '_lesson' : P.story ? '_story' : '_daily' + (P.slot + 1)) : ''), minutes: Math.round((Date.now() - sessionT0) / 6000) / 10 });
+  else sessionT0 = Date.now();
+});
+// "Keep playing now": the day summary always offers one more thing to do.
+function keepGoingBtn() {
+  const st = sget(); const n = [0, 1, 2].filter(s => stopDone(st, s)).length;
+  return '<button class="btn ghost" style="color:var(--ink);background:#fff3c4" id="kgo">' + (n === 3 ? '📖 Replay the Story' : '📖 Keep going: Story stop ' + (n + 1)) + '</button>';
 }
 // ----- sheet -----
 function openSheet(html) { closeSheet(); const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov'; ov.innerHTML = '<div class="sheet">' + iconize(html) + '</div>'; document.body.appendChild(ov); }
@@ -3163,7 +3287,7 @@ function startStory(s, o) {
 }
 function storySolved() {
   const { s, o } = P.story; const O = STORY[s].objs[o];
-  const st = sget(); const wasDone = sdone(st, s, o); st.done[s + '-' + o] = 1; sset(st); store.set('sdraft', null);
+  const st = sget(); const wasDone = sdone(st, s, o); if (!wasDone) track('story_stop_done', { stop: s + 1, step: o + 1 }); st.done[s + '-' + o] = 1; sset(st); store.set('sdraft', null);
   const ex = P.ex;
   if (!O.fin) {
     openSheet(iconize('<h2>' + esc(O.name) + ' solved! ' + O.e + '</h2>') + '<div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' +
@@ -3386,6 +3510,7 @@ function tutSolved() {
 function endTutorial(markSeen) {
   removeCoach();
   if (markSeen) { const tut = store.get('tut', {}); tut[tutState.type] = 1; store.set('tut', tut); }
+  track('tutorial_done', { type: tutState.type, finished: markSeen ? 1 : 0 });
   tutState.def.steps.forEach(s => delete s.passed);
   const a = markSeen ? tutState.after : null, back = tutState.story; tutState = null;
   if (a) a(); else if (back && back.s !== undefined) renderStop(back.s); else renderHome();
@@ -3400,7 +3525,7 @@ const wrongEntry = (pz) => pz.type === 'letters' ? [pz.sol[0] === 'A' ? 'B' : 'A
 // Shared Bright Harbor cloud save (src/cloudsave.js). In a browser BHCloud is missing or unavailable,
 // so none of this shows. The merge keeps the best of both phones: every finished puzzle from either,
 // every story stop and lesson seen on either.
-const CLOUD_KEYS = ['results', 'archive', 'story', 'tut', 'shareTime', 'sdraft'];
+const CLOUD_KEYS = ['results', 'archive', 'story', 'tut', 'shareTime', 'sdraft', 'shield'];
 function cloudGet() { const o = {}; CLOUD_KEYS.forEach(k => { const v = store.get(k, undefined); if (v !== undefined) o[k] = v; }); return o; }
 function mergeDays(a, b) {
   const out = Object.assign({}, a || {});
@@ -3430,6 +3555,11 @@ function mergeAhalock(local, cloud) {
   if (local.tut || cloud.tut) out.tut = Object.assign({}, cloud.tut || {}, local.tut || {});
   if (out.shareTime === undefined && cloud.shareTime !== undefined) out.shareTime = cloud.shareTime;
   if (!out.sdraft && cloud.sdraft) out.sdraft = cloud.sdraft;
+  if (local.shield || cloud.shield) {
+    const a = local.shield || {}, b = cloud.shield || {};
+    const used = (a.used || []).concat((b.used || []).filter(d => (a.used || []).indexOf(d) < 0)).sort().slice(-30);
+    out.shield = { n: a.n || b.n ? 1 : 0, used };
+  }
   return out;
 }
 let cloudChanged = false;
@@ -3473,8 +3603,10 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet };
-{ const moved = migrateResults(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300); }
+window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet };
+{ const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
+  if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
+  remindSync(); track('app_open', { streak: streak() }); }
 // Sign in with Apple is set up for Ahalock (entitlement in ios/App/App/App.entitlements).
 if (window.BHCloud) { BHCloud.config.appleReady = true; BHCloud.onChange(() => { if (S.screen === 'home') renderCloud(); }); BHCloud.init().then(afterSync); document.addEventListener('visibilitychange', () => { if (document.hidden) BHCloud.flush(); }); }
 try { if (sessionStorage.getItem('ahalock-restored')) { sessionStorage.removeItem('ahalock-restored'); setTimeout(() => toast('☁️ Progress restored!'), 600); } } catch (e) {}
