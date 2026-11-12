@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.12.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.13.0 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -104,6 +104,7 @@ body.still #board .glint,body.still #board .caustic,body.still #scene .sway,body
 .cluetray .btn{min-height:44px;padding:0 14px;font-size:16px}
 .cluetray .btn.showme{flex-direction:column;gap:0;line-height:1.05;background:#fff6d6;color:var(--ink)}
 .cluetray .btn.showme small{font-size:12.5px;font-weight:700;color:var(--ink)}
+.cluetray .btn.showme.vid{background:#e3f1ec;border:2px solid var(--accent)} /* v0.13.0: phone app only, a video keeps Show me from capping the stars */
 .cluetray .btn.trayclose{background:#3b6a5f;color:#fff}
 #screenPlay{position:relative} .cluetray{position:absolute;left:50%;transform:translateX(-50%);width:calc(100% - 20px);max-width:520px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:6;margin:0} /* v0.10.1 (Cooper r11): on every screen the tray floats over the buttons, so opening a clue or the plan never shrinks the pond unless they would touch */
 .planList{margin:0;padding:0 4px 0 22px;max-height:min(16vh,7.5em);overflow-y:auto;font-size:14px;line-height:1.35;font-weight:600} /* v0.10.1 (Cooper r11): the whole plan scrolls in its own box, so the pond keeps its size */
@@ -173,6 +174,7 @@ body[data-theme="moon"] #winCard .tomorrow span{color:#eef3fb}
 #remindCard{align-items:center}
 #remindCard .card p{font-size:17px;color:var(--ink)}
 @media (prefers-reduced-motion:reduce){#winCard .dailygo,.daily.fresh{animation:none}}
+.shop{margin:12px 0 0;text-align:center} .shop:empty{display:none} .shop .btn{width:100%;max-width:340px} .shop .cloudnote{font-size:15px}
 .cloud{margin:10px 0 0;text-align:center} .cloud:empty{display:none} .cloud .btn{width:100%;max-width:340px} .cloudnote{margin:6px 0 0;font-size:13.5px;line-height:1.35;color:var(--ink-soft)} .linkbtn{border:0;background:none;padding:2px 4px;font:inherit;font-weight:750;color:var(--accent);text-decoration:underline;cursor:pointer}
 .overlay{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(24,52,46,.18);z-index:10;pointer-events:none}
 .overlay .card{pointer-events:auto}
@@ -284,8 +286,9 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="btn hidden" id="btnRemind" aria-pressed="false">Daily reminder: Off</button>
     </div>
     <div class="cloud" id="cloudRow"></div>
+    <div class="shop" id="storeRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.12.0 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.13.0 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -301,7 +304,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="stone" id="btnBig" aria-pressed="false"><svg viewBox="0 0 30 30"><ellipse cx="15" cy="16" rx="12.5" ry="10" fill="#7d8a8c" stroke="#4b5557" stroke-width="2.2"/><ellipse cx="11" cy="12" rx="4" ry="2.5" fill="#b8c2c3"/></svg>Big stone <b id="bigCount">1</b></button>
     </div>
     <button class="stagePill hidden" id="stagePill" aria-label="Show the stage plan"></button>
-    <div id="clueTray" class="cluetray hidden" role="status" aria-live="polite"><p id="clueText"></p><ol id="planList" class="planList hidden"></ol><div class="trayRow"><button class="btn trayclose hidden" id="btnPlanAll" aria-expanded="false">Whole plan</button><button class="btn showme hidden" id="btnShowMe" aria-label="Show me: highlights the exact cell to tap. Using it caps this pond at 2 stars.">Show me<small>max 2 stars</small></button><button class="btn trayclose" id="btnClueClose" aria-label="Close the clue">Got it</button></div></div>
+    <div id="clueTray" class="cluetray hidden" role="status" aria-live="polite"><p id="clueText"></p><ol id="planList" class="planList hidden"></ol><div class="trayRow"><button class="btn trayclose hidden" id="btnPlanAll" aria-expanded="false">Whole plan</button><button class="btn showme vid hidden" id="btnShowMeAd" aria-label="Watch a short video, then Show me points at the exact cell and the pond can still earn 3 stars.">▶ Video<small>keep 3 stars</small></button><button class="btn showme hidden" id="btnShowMe" aria-label="Show me: highlights the exact cell to tap. Using it caps this pond at 2 stars.">Show me<small>max 2 stars</small></button><button class="btn trayclose" id="btnClueClose" aria-label="Close the clue">Got it</button></div></div>
     <div id="coach" class="coach hidden" role="status" aria-live="polite">
       <p id="coachText"></p>
       <div class="coachRow"><span id="coachStep"></span><button class="btn primary" id="coachNext">Next</button></div>
@@ -1761,7 +1764,7 @@ function visSeed(lv) { return typeof lv.id === 'number' ? lv.id : (lv.seed || 7)
 function enterPond(level, title, sub) {
   G.level = level; G.board = L.makeBoard(level); G.st = L.initialState(level);
   G.hist = []; G.stageHist = []; G.stuckSaid = false; G.stageMax = 0; G.taps = 0; G.busy = false; G.splashing = false; G.queued = null; G.queuedUndo = false; G.won = false; G.useBig = false;
-  G.restarted = false; G.hinted = false; G.solved = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {}; G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; G.pillGlowed = false; hideTray();
+  G.restarted = false; G.hinted = false; G.solved = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {}; G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; G.pillGlowed = false; G.freeShow = false; hideTray();
   $('coach').classList.remove('slot');
   hideHold();
   $('screenSelect').classList.add('hidden'); $('screenPlay').classList.remove('hidden');
@@ -1931,6 +1934,7 @@ function win() {
     remindPlan();
   } else {
     first = !progress.stars[id];
+    if (G.li >= 5 && !lv.intro) { ads.won = (ads.won || 0) + 1; adsSave(); } // v0.13.0: lesson ponds and the first five never count toward an ad
     progress.stars[id] = Math.max(progress.stars[id] || 0, s);
     progress.best[id] = Math.min(progress.best[id] || 999, G.taps);
     store.set('progress', progress);
@@ -2200,7 +2204,7 @@ function showMe() {
   if (G.busy || G.won || !hintReady()) return;
   var sol = solveNow(); if (!sol || !sol.length) return;
   clearHL();
-  G.hinted = true;
+  if (G.freeShow) G.freeShow = false; else G.hinted = true; // v0.13.0: after a rewarded video this Show me keeps 3 stars
   G.hintStage = 2; G.hint = sol[0].idx;
   hlCell(sol[0].idx, true);
   var w = G.level.w, where = 'Tap row ' + (((sol[0].idx / w) | 0) + 1) + ', column ' + (sol[0].idx % w + 1) + '.';
@@ -2521,7 +2525,7 @@ function showSelect() {
   hideHold(); setPlaying(false); applyTheme(null);
   $('screenPlay').classList.add('hidden'); $('screenSelect').classList.remove('hidden');
   ['winCard', 'chapterCard', 'remindCard'].forEach(function (id) { $(id).classList.add('hidden'); }); clearWinPlace();
-  renderRemindBtn();
+  renderRemindBtn(); renderStoreRow();
   // habitat
   var hc = habitatCounts(), vis = hc.chapter + hc.daily;
   $('habitatArt').innerHTML = habitatSVG(false); depthify($('habitatArt'), '.hab-item,.hab-feat');
@@ -2609,6 +2613,7 @@ function clueAboveControls(t) {
 }
 function tray(text, showMe, plan) { // v0.9.1: the clue tray (word clue, Show me answer, stage plan)
   $('clueText').textContent = text; $('btnShowMe').classList.toggle('hidden', !showMe); $('clueTray').classList.remove('hidden');
+  $('btnShowMeAd').classList.toggle('hidden', !showMe || !window.BHAds || G.hinted);
   $('clueTray').classList.remove('tip');
   $('btnPlanAll').classList.toggle('hidden', !plan); $('planList').classList.add('hidden'); $('clueText').classList.remove('hidden'); $('btnPlanAll').setAttribute('aria-expanded', 'false'); $('btnPlanAll').textContent = 'Whole plan';
   fitTray();
@@ -2723,6 +2728,7 @@ $('btnUndo').addEventListener('click', undo);
 $('btnRestart').addEventListener('click', restart);
 $('btnHint').addEventListener('click', showHint);
 $('btnShowMe').addEventListener('click', showMe);
+$('btnShowMeAd').addEventListener('click', showMeVideo);
 $('btnClueClose').addEventListener('click', function () { hideTray(); clearHL(); });
 $('btnSolve').addEventListener('click', solvePlay);
 $('btnMenu').addEventListener('click', function () { if (!G.busy) showSelect(); });
@@ -2748,8 +2754,7 @@ $('btnDailyNow').addEventListener('click', function () { $('winCard').classList.
 $('btnNext').addEventListener('click', function () {
   if (G.mode === 'daily' && G.offerRemind) { G.offerRemind = false; showSelect(); $('remindCard').classList.remove('hidden'); } // asked on the Home screen, once
   else if (G.mode === 'daily') showSelect();
-  else if (!lastOfChapter(G.li)) startLevel(G.li + 1);
-  else showChapterDone();
+  else afterWinAd(function () { if (!lastOfChapter(G.li)) startLevel(G.li + 1); else showChapterDone(); });
 });
 $('btnChapterClose').addEventListener('click', function () { $('chapterCard').classList.add('hidden'); showSelect(); });
 $('btnHowTo').addEventListener('click', function () { $('howCard').classList.remove('hidden'); });
@@ -2840,6 +2845,41 @@ $('btnRemind').addEventListener('click', function () {
 $('btnRemindNo').addEventListener('click', function () { remind.asked = true; store.set('remind', remind); $('remindCard').classList.add('hidden'); });
 $('btnRemindYes').addEventListener('click', function () { $('btnRemindYes').disabled = true; remindTurnOn(function () { $('btnRemindYes').disabled = false; $('remindCard').classList.add('hidden'); }); });
 if (remindAvail()) { remindPlan(); document.addEventListener('visibilitychange', function () { if (document.hidden) remindPlan(); }); }
+
+/* ---------- v0.13.0 ads and Remove ads: phone app only (native.js gives window.BHAds and window.BHStore; in a browser there are none) ----------
+   A short ad may follow a won pond when Next pond is tapped: never in the first app session, never for ponds 1-5,
+   lesson ponds or the Daily pond, at most every 3rd counted win and at least 4 minutes apart. Never mid-pond. */
+var ads = store.get('ads', {}) || {}; // { won, last, sessions } on this phone only
+ads.sessions = (ads.sessions || 0) + 1;
+function adsSave() { try { localStorage.setItem(store.prefix + 'ads', JSON.stringify(ads)); } catch (e) {} } // not part of cloud save
+adsSave();
+var noAds = !!store.get('noads', false);
+function adDue() { return !!window.BHAds && !noAds && ads.sessions > 1 && (ads.won || 0) >= 3 && Date.now() - (ads.last || 0) >= 240000; }
+function afterWinAd(go) {
+  if (G.mode !== 'chapter' || !adDue()) return go();
+  ads.won = 0; ads.last = Date.now(); adsSave();
+  $('winCard').classList.add('hidden'); clearWinPlace();
+  BHAds.interstitial(go); // always carries on, ad or not
+}
+function showMeVideo() {
+  if (!window.BHAds || G.busy || G.won || G.hinted) return;
+  BHAds.rewarded(function () { G.freeShow = true; showMe(); }, function () { toast('No video right now. Show me still works (it caps this pond at 2 stars).', 3000); });
+}
+function renderStoreRow() {
+  var box = $('storeRow'); if (!box) return;
+  if (!window.BHStore) { box.innerHTML = ''; return; }
+  box.innerHTML = (noAds ? '<p class="cloudnote">✓ Ads removed. Thank you for supporting Pebble Pond!</p>'
+    : '<button class="btn" id="btnNoAds">Remove ads' + (BHStore.price ? ' · ' + esc(BHStore.price) : '') + '</button><p class="cloudnote">One purchase turns off the short ads between ponds for good.</p>')
+    + '<p class="cloudnote"><button class="linkbtn" id="btnRestore">Restore purchases</button></p>';
+  var b = $('btnNoAds'), r = $('btnRestore');
+  if (b) b.onclick = function () { b.disabled = true; BHStore.buy().then(renderStoreRow, renderStoreRow); };
+  r.onclick = function () { r.disabled = true; BHStore.restore().then(renderStoreRow, renderStoreRow); };
+}
+window.PP_APP = { // native.js talks to the game through this
+  toast: function (m, ms) { toast(m, ms); },
+  grantNoAds: function () { if (!noAds) { noAds = true; store.set('noads', true); } renderStoreRow(); },
+  refresh: function () { renderStoreRow(); }
+};
 
 /* ---------- phone app: cloud save (shared BHCloud module; in a browser BHCloud is absent and this does nothing) ---------- */
 function cloudData() { return { progress: store.get('progress', { stars: {}, best: {} }), daily: store.get('daily', {}), seen: store.get('seen', {}) }; }
