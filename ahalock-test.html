@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.18 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.19 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ahalock (test version)</title>
+<title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
 <style>
@@ -548,7 +548,10 @@ html,body{overflow-anchor:none}
 .remask .row2{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .remask select,#remRow select{font:inherit;font-weight:700;border-radius:10px;border:2px solid var(--line);padding:6px 8px;background:#fff;color:var(--ink)}
 .remask .linkbtn{color:var(--ink2);text-decoration:underline;font-size:15px;margin-top:8px;padding:4px}
-#remRow{margin-top:18px;text-align:center}
+#remRow,#adsRow{margin-top:18px;text-align:center}
+#adsRow .cloudnote{font-size:15px;color:#dfe6f5;margin:8px 4px 0}
+#adsRow .linkbtn,.sheet .linkbtn{color:var(--gold2);text-decoration:underline;font-size:15px;padding:4px}
+.sheet .linkbtn{color:#7a5a00}
 #remRow .cloudnote{font-size:15px;color:#dfe6f5}
 #remRow .linkbtn{color:var(--gold2);text-decoration:underline;font-size:15px;padding:4px}
 @keyframes goalglow{0%,40%{background:#fff3c4;box-shadow:0 0 0 4px rgba(244,196,48,.55)}100%{background:transparent;box-shadow:0 0 0 0 rgba(244,196,48,0)}}
@@ -2362,6 +2365,8 @@ const TEST_BUILD = true;
 // Shows where players stop: no account, no ad ID, nothing linked to the player. Fails quietly offline or in a browser.
 const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 function track(name, params) {
+  // Phone app with ads: events wait in a queue until the ad consent step is done (src/native.js sends or drops them).
+  if (window.AL_ANALYTICS_WAIT) { try { (window.__alq = window.__alq || []).push([name, params || {}]); if (window.__events) window.__events.push([name, params || {}]); } catch (e) {} return; }
   try { const A = NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAnalytics; if (A) A.logEvent({ name, params: params || {} }).catch(() => {}); } catch (e) {}
   try { if (window.__events) window.__events.push([name, params || {}]); } catch (e) {}
 }
@@ -2470,6 +2475,39 @@ let timerInt = null;
 function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 1800); }
 
+// ---------- ads and Remove ads (phone app only; the ad code is src/native.js, not on the test page) ----------
+// Calm rules: at most one ad every 3 finished puzzles, only after a Next tap, never in the first session,
+// never before a lesson or over a result. The first 2 hints on each puzzle are free; after that a short
+// video gives the next one. If no video can load, the hint is free. Remove ads ($3.99 once) ends both.
+const FREE_HINTS = 2, AD_EVERY = 3;
+const noAds = () => !!store.get('noads', false);
+const adsOn = () => !!(window.AL_ADS && AL_ADS.ready() && !noAds());
+const adsGet = () => store.get('ads', { c: 0, s: 0 });
+function adCount() { const a = adsGet(); a.c = (a.c || 0) + 1; store.set('ads', a); }
+function adNext(nextType, then) {
+  const a = adsGet(); const lesson = nextType && !store.get('tut', {})[nextType];
+  if (!adsOn() || (a.s || 0) < 2 || (a.c || 0) < AD_EVERY || lesson) return then();
+  a.c = 0; store.set('ads', a); AL_ADS.interstitial(then);
+}
+const hintNeedsAd = () => !!(P && !P.tutorial && !P.paidHint && P.hints >= FREE_HINTS && adsOn());
+function giveHint() { if (!P || P.solved) return; P.paidHint = true; hint(); P.paidHint = false; }
+function hintAsk() {
+  const buy = window.AL_STORE ? '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="hbuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '<br><small>every hint free, no ads</small></button>' : '';
+  openSheet('<h2>Need another hint?</h2><div class="sub">The first ' + FREE_HINTS + ' hints on each puzzle are free. Watch a short video to get the next step.</div>' +
+    '<div class="col"><button class="btn" id="hvid">▶ Watch a video for a hint</button>' + buy + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="hno">Not now</button></div>');
+  document.getElementById('hno').onclick = closeSheet;
+  document.getElementById('hvid').onclick = () => { closeSheet(); track('hint_video'); AL_ADS.rewarded(giveHint, () => toast('No hint this time. Watch to the end to get one.'), giveHint); };
+  const b = document.getElementById('hbuy'); if (b) b.onclick = async () => { closeSheet(); if (await AL_STORE.buy()) giveHint(); };
+}
+function renderAdsRow() {
+  const box = document.getElementById('adsRow'); if (!box || !window.AL_STORE) return;
+  if (noAds()) { box.innerHTML = '<p class="cloudnote">✓ Ads are off. Thank you for supporting Ahalock!</p>'; return; }
+  box.innerHTML = '<button class="btn ghost small" id="adsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button>' +
+    '<p class="cloudnote">One-time purchase: no ads, and every hint is free.<br><button class="linkbtn" id="adsRes">Restore purchases</button></p>';
+  document.getElementById('adsBuy').onclick = async e => { e.target.disabled = true; await AL_STORE.buy(); renderAdsRow(); };
+  document.getElementById('adsRes').onclick = async e => { e.target.disabled = true; await AL_STORE.restore(); renderAdsRow(); };
+}
+
 // =================== HOME ===================
 let titleTaps = 0;
 function renderHome() {
@@ -2492,13 +2530,13 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
-    '<div id="remRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.18' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
+    '<div class="foot">Ahalock prototype v0.19' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
   $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
-  renderCloud(); renderRemind();
+  renderCloud(); renderRemind(); renderAdsRow();
   document.getElementById('logo').onclick = () => { if (++titleTaps >= 5) { titleTaps = 0; testerMenu(); } };
   if (homeInt) clearInterval(homeInt);
   homeInt = setInterval(() => { const c = document.getElementById('cd'); if (!c) { clearInterval(homeInt); homeInt = null; return; } c.innerHTML = iconize(nextLine()); }, 30000);
@@ -2549,7 +2587,7 @@ function renderPuzzle() {
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
-  const acts = '<div class="actions' + (P.tutorial ? '' : ' stick') + '"><button class="btn ghost" id="hint">💡 Hint</button><button class="btn" id="chk">Lock it in!</button></div>';
+  const acts = '<div class="actions' + (P.tutorial ? '' : ' stick') + '"><button class="btn ghost" id="hint">💡 Hint' + (hintNeedsAd() ? ' ▶' : '') + '</button><button class="btn" id="chk">Lock it in!</button></div>';
   const inBoard = false;
   const introH = SO && P.intro ? iconize('<div class="msg info inb">' + P.intro.t + '</div>') : '';
   const msgH = inBoard ? '' : pz.kind === 'order' || SO || P.tutorial ? iconize(msg) : msg;
@@ -2675,6 +2713,7 @@ function hint() {
   let k = P.hintPos;
   const quoted = (st) => P.toldClue !== null && P.toldClue !== undefined && st.kind === 'clue' && st.clues && st.clues.length === 1 && st.clues[0] === P.toldClue;
   while (k < steps.length && (P.told.indexOf(steps[k].text) >= 0 || (quoted(steps[k]) && k + 1 < steps.length))) k++;
+  if (k < steps.length && hintNeedsAd()) { hintAsk(); return; }
   P.toldClue = null;
   if (k >= steps.length) { P.msg = { k: 'hint', t: '💡 You have every step now. Fill in the answer!' }; renderPuzzle(); return; }
   const s = steps[k]; P.hintPos = k + 1; P.hints++;
@@ -2686,6 +2725,7 @@ function solved() {
   P.solved = true; P.msg = null; P.bad = null; P.hl = null;
   const ms = Date.now() - P.t0;
   stopTimer();
+  if (!P.tutorial) adCount();
   if (P.tutorial) { renderPuzzle(); ahaPop(); setTimeout(tutSolved, 900); return; }
   if (P.story) { renderPuzzle(); ahaPop(); setTimeout(storySolved, 900); return; }
   track('puzzle_done', { slot: P.slot + 1, type: P.pz.type, tier: P.pz.tier, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
@@ -2704,7 +2744,7 @@ function showSolved(ms) {
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>MISSES</span></div><div class="stat"><b>' + P.hints + '</b><span>HINTS</span></div></div>' +
     '<div class="col"><button class="btn" id="nx">' + (allDone ? 'See today\'s results' : 'Next puzzle') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
-  document.getElementById('nx').onclick = () => { closeSheet(); if (allDone) showDaySummary(P.ds); else { const e = results()[P.ds]; startPuzzle(P.ds, e.s.findIndex(x => !x)); } };
+  document.getElementById('nx').onclick = () => { closeSheet(); const ds = P.ds; if (allDone) showDaySummary(ds); else { const sl = results()[ds].s.findIndex(x => !x); adNext(getDay(ds)[sl].type, () => startPuzzle(ds, sl)); } };
 }
 const PLAY_URL = 'https://playbrightharbor.com/ahalock-test.html';
 const markOf = r => r.miss ? '🟨' : r.hints ? '💡' : '✅';
@@ -2727,7 +2767,9 @@ function showDaySummary(ds) {
     '<div class="sub" style="margin-top:-6px;font-size:14px">✅ solved clean · 💡 used a hint · 🟨 had a miss</div>' +
     '<label class="tgl"><input type="checkbox" id="stime"' + (sh.showTime ? ' checked' : '') + '> Show my time when I share</label>' +
     tomorrowCard(ds) +
-    '<div class="col"><button class="btn" id="share">Share result</button>' + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>');
+    '<div class="col"><button class="btn" id="share">Share result</button>' + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>' +
+    (adsOn() && window.AL_STORE ? '<div class="sub" style="text-align:center;font-size:15px;margin-top:8px">Enjoying Ahalock? <button class="linkbtn" id="dsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button></div>' : ''));
+  const db = document.getElementById('dsBuy'); if (db) db.onclick = async () => { if (await AL_STORE.buy()) showDaySummary(ds); };
   const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
   wireRemindAsk(() => showDaySummary(ds));
   document.getElementById('share').onclick = async () => {
@@ -3243,7 +3285,7 @@ function renderMap() {
   const notes = [0, 1].filter(k => stopDone(st, k));
   if (notes.length) h += '<div class="trayhd">Keeper\'s log pages for the Lighthouse</div><div class="etray">' + notes.map(k => '<div class="ecard"><div class="et">' + esc(STORY[k].note.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(2, 2), STORY[k].note.clue)) + '</div></div>').join('') + '</div>';
   if (cur !== undefined) h += '<button class="btn wide" id="gost">Go to ' + esc(STORY[cur].name) + '</button>';
-  h += '<div class="foot" style="margin-top:10px">' + (cur === undefined ? 'Tap any stop on the map to play it again.' : 'Finishing a stop opens the next one. Hints are always free.') + '</div>';
+  h += '<div class="foot" style="margin-top:10px">' + (cur === undefined ? 'Tap any stop on the map to play it again.' : 'Finishing a stop opens the next one. ' + (adsOn() ? 'The first ' + FREE_HINTS + ' hints on each puzzle are free.' : 'Hints are always free.')) + '</div>';
   if (Object.keys(st.done).length) h += '<div class="col" style="margin-top:10px"><button class="btn ghost small" id="restart" style="color:var(--ink);background:var(--panel2)">↺ Start Chapter 1 over</button></div>';
   $app.innerHTML = iconize(h);
   st.intro = 1; sset(st);
@@ -3295,7 +3337,7 @@ function storySolved() {
       (O.log ? iconize('<div class="klog">📜 ' + esc(O.log) + '</div>') : '') +
       '<div class="col"><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(ex) + '</div></div><div class="sfoot"><button class="btn" id="nx">Back to ' + esc(STORY[s].name) + '</button></div>');
     document.getElementById('why').onclick = whyToggle;
-    document.getElementById('nx').onclick = () => { scenePop = wasDone ? null : s + '-' + o; renderStop(s); scenePop = null; };
+    document.getElementById('nx').onclick = () => adNext(null, () => { scenePop = wasDone ? null : s + '-' + o; renderStop(s); scenePop = null; });
     return;
   }
   const last = s === 2;
@@ -3308,7 +3350,7 @@ function storySolved() {
   document.getElementById('why').onclick = whyToggle;
   const fpz = P.pz;
   document.getElementById('rpl2').onclick = () => { document.getElementById('rpbox').innerHTML = repairScene(s, fpz); };
-  document.getElementById('nx').onclick = last && !wasDone ? chapterDone : renderMap;
+  document.getElementById('nx').onclick = last && !wasDone ? chapterDone : () => adNext(null, renderMap);
 }
 function chapterDone() {
   openSheet('<div class="chbig">' + LH + '<h2>Chapter 1 complete!</h2><div class="sub">Bright Harbor is lit again, and Lantern Night is saved.</div>' +
@@ -3603,10 +3645,12 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet };
+window.__TL = { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk };
+window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
-  remindSync(); track('app_open', { streak: streak() }); }
+  remindSync(); track('app_open', { streak: streak() });
+  { const a = adsGet(); a.s = (a.s || 0) + 1; store.set('ads', a); } }
 // Sign in with Apple is set up for Ahalock (entitlement in ios/App/App/App.entitlements).
 if (window.BHCloud) { BHCloud.config.appleReady = true; BHCloud.onChange(() => { if (S.screen === 'home') renderCloud(); }); BHCloud.init().then(afterSync); document.addEventListener('visibilitychange', () => { if (document.hidden) BHCloud.flush(); }); }
 try { if (sessionStorage.getItem('ahalock-restored')) { sessionStorage.removeItem('ahalock-restored'); setTimeout(() => toast('☁️ Progress restored!'), 600); } } catch (e) {}
