@@ -249,6 +249,10 @@ body.tut .tools { display: none; }
 .cell.softhint { background: rgba(255, 214, 102, 0.16); box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.4); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .rot-gift { margin: 6px auto; }
+.daily-intro, .tomorrow { font-size: 1rem; line-height: 1.4; margin: 10px auto 4px; }
+.tomorrow b { white-space: nowrap; }
+#remind-help { margin: 4px 0; text-align: center; }
+#remind-help .btn { width: 100%; }
 .rot-gift b { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255, 214, 102, 0.18); animation: chipIn 0.2s ease-out both; }
 .rot-gift:nth-of-type(2) b { animation-delay: 0.06s; } .rot-gift:nth-of-type(3) b { animation-delay: 0.12s; } .rot-gift:nth-of-type(4) b { animation-delay: 0.18s; }
 @keyframes chipIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
@@ -477,6 +481,7 @@ button.pill { cursor: pointer; }
   <h3>How to play</h3>
   <a class="btn feedback" id="feedback" href="#">✉️ Send feedback or ideas</a>
   <div id="cloud-help"></div>
+  <div id="remind-help"></div>
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> spell words with the letter blocks, then tap them to score points.</li>
@@ -548,7 +553,7 @@ const pick = arr => arr[Math.floor(rng() * arr.length)];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} if (!LOCAL_ONLY.test(k)) window.BHCloud?.changed(); } };
 // Kept on this phone only, never in the cloud save: daily free-ad allowance, session count, promo snooze, delivered purchases.
-const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$)/;
+const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$|remind$|tmr-over$)/;   // the reminder is per phone (its permission is)
 
 const VOWELS = "aaaaeeeeeiiiooou";
 const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
@@ -753,6 +758,7 @@ function newGame(m, replay = false) {
   defGen++;
   mode = m; levelNewWords = []; dropRotGuide(); dryMoves = 0; softHint = null;
   track("game_start", { mode });
+  if (m === "daily" && !store.get("wb-daily-started", false)) { store.set("wb-daily-started", true); track("first_daily_start", { day: daysSinceFirst() }); }
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
   board = Array.from({ length: N }, () => Array(N).fill(null));
   chain = 0; chainMoves = 0; score = 0; shownScore = 0; found = []; movable = null; resetGoals(); erasers = 0; shuffles = 0; toShuffle = 0; erasing = false; rotates = 0; rotating = false; rotPaid = null; over = false; busy = false; level = 1; levelBase = 0; continued = false; levelsSinceAd = 0; closeSheet();
@@ -1390,7 +1396,7 @@ function showHelp() {
   if (!INVITES_LIVE) document.getElementById("invite-help").remove();
   if (promoReady()) { document.getElementById("promo-help").outerHTML = promoCard("promo-help"); wirePromo("promo-help", "help"); }
   document.getElementById("feedback").href = feedbackLink();
-  renderCloudHelp();
+  renderCloudHelp(); renderRemindHelp();
   document.getElementById("app-ver").textContent = `Wordglow ${APP_VERSION}${ADS_TESTING ? " (test version)" : ""}${BUILD_STAMP.startsWith("__") ? "" : ` · build ${BUILD_STAMP}`}`;
   document.getElementById("help-x").onclick = document.getElementById("help-close").onclick = () => closeSheet();
   document.getElementById("tut-replay").onclick = () => { if (busy) return; store.set("wb-tutorial-done", false); newGame("endless"); scrollTo({ top: 0, behavior: "smooth" }); };
@@ -1819,7 +1825,8 @@ function markPlayed() {
   streak.days = [...streak.days.filter(d => d >= dayKey(-62)), dayKey()];
   const bonus = 5 * Math.min(streak.n, 7);
   saveStreak(); addCoins(bonus);
-  return [`🔥 Day ${streak.n} streak!\n+${bonus} 🪙`, false];   // shown in turn with the other cash-in bonuses
+  scheduleReminders();   // today is played, so today's reminder is dropped
+  return [`🔥 Day ${streak.n} streak!\n+${bonus} 🪙` + payDay2Gift(), false];   // shown in turn with the other cash-in bonuses
 }
 // Missed exactly one day: offer to save the streak with an ad or coins, once a week.
 const STREAK_SAVE_COST = 100;
@@ -1847,6 +1854,31 @@ function showCalendar() {
   document.getElementById("cal-ok").onclick = closeSheet;
 }
 document.getElementById("streakbtn").onclick = showCalendar;
+
+// ---------- come back tomorrow (studio rule, Alan 2026-11-12) ----------
+// Every daily game tells players what tomorrow brings, so day 1 isn't the last day.
+// The first day this phone played (from the streak calendar for players who had 1.1), for the day-2 gift
+// and the day_n count in analytics.
+if (!store.get("wb-first-day", null)) store.set("wb-first-day", streak.days[0] || dayKey());
+const daysSinceFirst = () => Math.max(0, Math.round((new Date(dayKey()) - new Date(store.get("wb-first-day", dayKey()))) / 864e5));
+// The welcome gift is promised once, on the "come back tomorrow" line, and paid with the first word on a later day.
+// wb-gift2: the day it was promised, then "paid".
+const GIFT_COINS = 25;
+function tomorrowLine() {
+  if (streak.last !== dayKey()) return "";
+  let g = store.get("wb-gift2", null);
+  if (!g) { g = dayKey(); store.set("wb-gift2", g); }
+  const next = 5 * Math.min(streak.n + 1, 7);
+  return `🔥 Day ${streak.n} streak! Come back tomorrow for <b>+${next} 🪙</b>${g === dayKey() ? ", a welcome gift 🎁" : ""} and Daily Board #${dailyNo() + 1}.`;
+}
+function payDay2Gift() {
+  const g = store.get("wb-gift2", null);
+  if (!g || g === "paid" || g >= dayKey()) return "";
+  store.set("wb-gift2", "paid"); addCoins(GIFT_COINS);
+  const rot = rotates < MAX_ROTATES; if (rot) { rotates++; renderTools(); }
+  track("day2_gift", { day: daysSinceFirst() });
+  return `\n🎁 Welcome back gift: +${GIFT_COINS} 🪙${rot ? " and +1 ↻ Rotate" : ""}`;
+}
 
 // ---------- invite friends: both players get coins once the friend finishes level 1 ----------
 // The real app checks codes on a small server; this prototype only shows the flow.
@@ -1916,6 +1948,8 @@ function levelUp() {
   const msLevel = level + 1, msCoins = mode === "endless" && !store.get("wb-level-ms-" + msLevel, false) ? LEVEL_MILESTONES[msLevel] || 0 : 0;
   if (invitePending) { invitePending = false; store.set("wb-invite-pending", false); kept.push(`🎁 Friend bonus: +${INVITE_REWARD} 🪙`); setTimeout(() => { addCoins(INVITE_REWARD); toast(`🎁 Friend bonus!\n+${INVITE_REWARD} 🪙`, false, READ_MS); }, 400); }
   const dailyEnd = mode === "daily" && level >= DAILY_LEVELS;
+  // New players meet the Daily Board after their first level, once (it was only behind the 📅 tab).
+  const dailyIntro = mode === "endless" && level === 1 && !store.get("wb-daily-intro", false) && !store.get(DAILY_KEY(), null);
   setTimeout(() => {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
     if (dailyEnd) return dailyDone(earned, kept);
@@ -1923,12 +1957,17 @@ function levelUp() {
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox" style="background:none;color:inherit;padding:6px"><span class="count">+${earned + msCoins} 🪙</span></div>
       ${msCoins ? `<p style="color:var(--muted);font-size:0.85rem;margin:0">Level clear +${earned} · milestone +${msCoins}</p>` : ""}
       ${[rotLine, msLine].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}
-      ${kept.length ? `<p style="color:var(--muted);font-size:0.8rem;margin:8px 0 0">Also earned (already added):</p>` + kept.map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("") : ""}${newWordsRecap()}<div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">Watch an ad: get +${earned} more 🪙</button></div>`, true);
-    const go = n => {
+      ${kept.length ? `<p style="color:var(--muted);font-size:0.8rem;margin:8px 0 0">Also earned (already added):</p>` + kept.map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("") : ""}${newWordsRecap()}${dailyIntro ? `<p class="daily-intro">📅 <b>Today's Daily Board</b> is ready: the same pieces for everyone, 3 levels, then share your score. Your game here stays saved.</p>` : ""}<div class="btns"><button class="btn" id="next">Next level</button>${dailyIntro ? `<button class="btn plain" id="todaydaily">📅 Try today's Daily Board</button>` : ""}<button class="btn plain ad" id="dbl">Watch an ad: get +${earned} more 🪙</button></div>`, true);
+    if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); }
+    // After the 3rd Endless level, ask once about a daily reminder (phone apps only).
+    const askRemind = mode === "endless" && level >= 3;
+    const go = (n, then = startNextLevel) => {
       closeSheet(); addCoins(n + msCoins);
       if (msCoins) store.set("wb-level-ms-" + msLevel, true);
-      maybeInterstitial(startNextLevel);
+      maybeInterstitial(() => { then(); if (askRemind) setTimeout(maybeAskReminder, 1500); });
     };
+    const td = document.getElementById("todaydaily");
+    if (td) td.onclick = () => go(earned, () => { startNextLevel(); switchMode("daily"); });
     document.getElementById("dbl").onclick = () => watchAd(() => go(earned * 2), () => go(earned));
     document.getElementById("next").onclick = () => go(earned);
   }, 900 + left.length * 40);
@@ -2051,6 +2090,9 @@ function gameOver() {
   let showPromo = false;
   // Not while the keep-playing offer is up: that screen is busy and the player may want to carry on.
   if (!canContinue && promoReady()) { const n = store.get("wb-promo-overs", 0) + 1; store.set("wb-promo-overs", n); showPromo = n % 3 === 0; }
+  // What tomorrow brings, on the first game over of the day (not beside the keep-playing offer).
+  const tmr = !canContinue && store.get("wb-tmr-over", null) !== dayKey() ? tomorrowLine() : "";
+  if (tmr) store.set("wb-tmr-over", dayKey());
   el.innerHTML = `<div>
     <h2>${close ? "So close!" : "Board full"}</h2>
     <p>${close ? `Only <b>${need} points</b> from level ${level + 1}` : `You reached <b>level ${level}</b>`}</p>
@@ -2062,6 +2104,7 @@ function gameOver() {
       <button class="btn ghost-btn" id="copy">Share result</button>
       ${mode === "daily" ? `<button class="btn ghost-btn" id="endlessbtn">Play Endless levels</button>` : `<button class="btn ghost-btn" id="todaybtn">Play Daily Board</button>`}
     </div>
+    ${tmr ? `<p class="tomorrow">${tmr}</p>` : ""}
     ${showPromo ? promoCard("promo-over") : ""}
     <textarea id="sharetext" rows="5" readonly hidden>${share}</textarea>
   </div>`;
@@ -2112,11 +2155,11 @@ function showDailyResult(r, earned, fresh, kept = []) {
       <button class="btn ghost-btn" id="endlessbtn">Play Endless levels</button>
       <button class="btn ghost-btn" id="again">Play today's board again</button>
     </div>
-    <p style="opacity:.75">A new Daily Board comes out tomorrow.</p>
+    ${fresh && tomorrowLine() ? `<p class="tomorrow">${tomorrowLine()}</p>` : `<p style="opacity:.75">A new Daily Board comes out tomorrow.</p>`}
     <textarea id="sharetext" rows="5" readonly hidden>${share}</textarea>
   </div>`;
   el.hidden = false;
-  if (fresh) { SFX.big(); fireworks(); }
+  if (fresh) { SFX.big(); fireworks(); setTimeout(maybeAskReminder, 2500); }
   renderScores();
   document.getElementById("copy").onclick = e => shareResult(share, e.currentTarget);
   document.getElementById("endlessbtn").onclick = () => switchMode("endless");
@@ -2390,9 +2433,9 @@ const AD_UNITS = {
 // Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
 const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "f0d7274 2026-11-12 13:54Z";
+const BUILD_STAMP = "a5d3e01 2026-11-12 15:44Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -2408,7 +2451,10 @@ async function initAds() {
     if (info.isConsentFormAvailable && info.status === "REQUIRED") info = await AdMob.showConsentForm();
     // Analytics starts switched off (see Info.plist and AndroidManifest.xml) and turns on only after
     // the consent step is done: answered where it's required (EU, UK), or not needed at all.
-    if (info.status === "OBTAINED" || info.status === "NOT_REQUIRED") window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({ enabled: true }).catch(() => {});
+    if (info.status === "OBTAINED" || info.status === "NOT_REQUIRED") {
+      await window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({ enabled: true }).catch(() => {});
+      track("day_n", { day: daysSinceFirst() });   // which day since the first launch the player came back
+    }
   } catch (e) { adProblem("consent", e); }
   if (PLATFORM === "ios") await AdMob.requestTrackingAuthorization().catch(() => {});
   try {
@@ -2462,9 +2508,79 @@ const fromStore = sid => PRODUCTS.find(p => p.id === sid || p.ios === sid);  // 
 // Session end: logged each time the app goes to the background, with how long it was open.
 let sessionStart = Date.now();
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) track("session_end", { mode, level, score, seconds: Math.round((Date.now() - sessionStart) / 1000) });
+  if (document.hidden) { track("session_end", { mode, level, score, seconds: Math.round((Date.now() - sessionStart) / 1000), where: whereNow(), day: daysSinceFirst() }); scheduleReminders(); }
   else sessionStart = Date.now();
 });
+// ---------- daily reminder (opt-in, phone apps only; Alan OK'd the plugin 2026-11-12) ----------
+// One short note a day, at about the time the player said yes, and only on days they haven't played yet.
+// It lives on the phone (@capacitor/local-notifications): no server, no tracking. Asked once after a
+// win, never at launch, and switched on or off in Help.
+const Notes = IS_NATIVE ? window.Capacitor.Plugins.LocalNotifications : null;
+const REMIND_KEY = "wb-remind";   // { on, h, m } once the player has answered
+async function scheduleReminders() {
+  if (!Notes) return;
+  try {
+    const pending = await Notes.getPending();
+    if (pending.notifications.length) await Notes.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+    const r = store.get(REMIND_KEY, null);
+    if (!r?.on) return;
+    const list = [];
+    // The next 7 days; a fresh week is set up each time the app goes to the background.
+    for (let off = 0; off < 7; off++) {
+      if (off === 0 && streak.last === dayKey()) continue;   // played today already
+      const at = new Date(); at.setDate(at.getDate() + off); at.setHours(r.h, r.m, 0, 0);
+      if (at <= Date.now()) continue;
+      const alive = streak.n > 0 && (off === 0 ? streak.last === dayKey(-1) : off === 1 && streak.last === dayKey());
+      list.push({ id: 100 + off, title: "Wordglow", schedule: { at },
+        body: alive ? `Keep your ${streak.n}-day streak going 🔥 Today's Daily Board is ready.` : "Today's Daily Board is ready 📅 Spell one word to start or keep your streak 🔥" });
+    }
+    if (list.length) await Notes.schedule({ notifications: list });
+  } catch {}
+}
+async function setReminder(on) {
+  if (!Notes) return false;
+  const now = new Date();
+  if (on) {
+    let ok = false;
+    try { ok = (await Notes.requestPermissions()).display === "granted"; } catch {}
+    if (!ok) { store.set(REMIND_KEY, { on: false }); track("reminder_opt_in", { on: false, blocked: true }); toast("Notifications are off for Wordglow.\nTurn them on in your phone's Settings.", false, READ_MS); return false; }
+    store.set(REMIND_KEY, { on: true, h: now.getHours(), m: now.getMinutes() });
+    toast(`🔔 Daily reminder on\nabout ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`, false, READ_MS);
+  } else store.set(REMIND_KEY, { ...store.get(REMIND_KEY, {}), on: false });
+  track("reminder_opt_in", { on });
+  await scheduleReminders();
+  return on;
+}
+function maybeAskReminder() {
+  if (!Notes || store.get(REMIND_KEY, null) || !document.getElementById("modal").hidden || tut) return;
+  openSheet(`<h3>🔔 Want a daily reminder?</h3><p>We'll send one short note a day, around this time, when today's Daily Board is ready. Only on days you haven't played yet.</p><p>You can turn it off any time in Help.</p>
+    <div class="btns"><button class="btn" id="rm-yes">Yes, remind me</button><button class="btn plain" id="rm-no">No thanks</button></div>`);
+  document.getElementById("rm-yes").onclick = () => { closeSheet(); setReminder(true); };
+  document.getElementById("rm-no").onclick = () => { closeSheet(); store.set(REMIND_KEY, { on: false }); track("reminder_opt_in", { on: false }); };
+}
+function renderRemindHelp() {
+  const box = document.getElementById("remind-help");
+  if (!box) return;
+  if (!Notes) { box.remove(); return; }
+  const on = !!store.get(REMIND_KEY, null)?.on;
+  box.innerHTML = `<button type="button" class="btn plain" id="remind-toggle" aria-pressed="${on}">🔔 Daily reminder: <b>${on ? "On" : "Off"}</b></button>`;
+  document.getElementById("remind-toggle").onclick = async () => { await setReminder(!on); renderRemindHelp(); };
+}
+// Tapping the reminder opens today's Daily Board (unless it's already done).
+if (Notes) {
+  Notes.addListener("localNotificationActionPerformed", () => {
+    track("reminder_open", { day: daysSinceFirst() });
+    if (mode !== "daily" && !store.get(DAILY_KEY(), null) && !busy && !tut) switchMode("daily");
+  }).catch(() => {});
+  scheduleReminders();
+}
+// Where the player was when they left: mid-level, on the level card, at game over, or on the Daily result.
+function whereNow() {
+  if (tut) return "tutorial";
+  if (!document.getElementById("over").hidden) return mode === "daily" && store.get(DAILY_KEY(), null) ? "daily_result" : "game_over";
+  if (!document.getElementById("modal").hidden && document.getElementById("next")) return "level_card";
+  return "playing";
+}
 function track(name, params = {}) {
   try { window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({ name, params }); } catch {}
 }
@@ -2613,6 +2729,8 @@ function mergeKey(k, a, b) {           // a: this phone, b: the cloud
     return { ...later, best: Math.max(a.best, b.best), days: [...new Set([...a.days, ...b.days])].sort().slice(-62) };
   }
   if (k === "wb-streak-saved") return a > b ? a : b;
+  if (k === "wb-gift2") return a === "paid" || b === "paid" ? "paid" : (a < b ? a : b);   // the welcome gift is paid once
+  if (k === "wb-first-day") return a < b ? a : b;
   if (k === "wb-code") return b;      // the friend code stays the same on every phone
   return a;                           // settings and invite state: this phone's
 }
