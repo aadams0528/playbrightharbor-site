@@ -42,6 +42,8 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 @media (max-width:400px){.brand{font-size:22px;white-space:nowrap}.brand small{font-size:10px;letter-spacing:.8px}.top{gap:6px}.top .pill{padding:5px 9px}} @media (max-width:460px){.brand .proto{display:none}} /* Nikola, v0.74: the version line wrapped or lost "levels" */ /* 360px phones: the title wrapped to two lines and the subtitle lost the level count */
 .pill.done{border-color:rgba(63,214,138,.6)}
 .streak{font-size:15px;font-weight:800;margin:4px 0 2px}
+#card .tmrw{font-size:16px;font-weight:700;color:var(--lantern);opacity:1;line-height:1.35;margin:6px 0 2px}
+#card .daily1{border-color:var(--lantern);color:var(--lantern);font-weight:800}
 .iconbtn{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;font-size:17px;font-weight:800;padding:0}
 
 .tip{display:flex;flex-direction:column;gap:6px;min-height:52px;position:relative}
@@ -163,7 +165,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.80 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.81 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -555,6 +557,8 @@ function mergeProg(here,cloud){
   const far=furthest(out.stars);out.highest=far;out.highestId=far?LEVELS[far-1].id:undefined;
   const a=here.streak,b=cloud.streak;if(b&&(!a||b.last>a.last||(b.last===a.last&&b.n>a.n)))out.streak=Object.assign({},b);
   if(out.streak)out.streak.best=Math.max(a?a.best:0,b?b.best:0,out.streak.n);
+  const fd=[here.firstDay,cloud.firstDay].filter(x=>x!=null);if(fd.length)out.firstDay=Math.min(...fd);
+  out.gift=here.gift||cloud.gift||undefined; // the welcome-back gift is paid once, whichever phone paid it
   out.total=starSum(out.stars);
   return out;
 }
@@ -621,6 +625,8 @@ const SHAPES=["round","square","drop","star","diamond","hex"];
 const LV=()=>daily||bonus||LEVELS[lv]; // the level on the board: a chapter level, today's Daily River or a challenge river
 function startLevel(n,keep,cut,extra){
   if(n==="bonus")daily=null;else{bonus=null;if(n!=="daily"){daily=null;lv=n;}}
+  {const id=daily?"daily-"+daily.day:bonus?bonus.id:ID(lv);if(id!==session.last){session.last=id;const md=mode();
+    T("level_start",{level:md==="level"?lv+1:id,mode:md});if(md==="daily"&&!prog.daily&&!session.dailyStarted){session.dailyStarted=1;T("first_daily_start",{level:prog.highest||0});}}}
   store.set("onDaily",daily?daily.day:null);store.set("onChal",bonus?bonus.id:null); // a reload comes back to the Daily or challenge river being played
   const L=LV();G=parseLevel(L);bed=null;toolFx=null;{const same=nudge&&nudge.id===L.id;nudge={id:L.id,t0:performance.now(),strokes:0,restarts:same?nudge.restarts:0,done:same&&nudge.done,on:0};} // fresh riverbed picture: a sawn dam must come back on Restart
   if(keep&&cut!=null&&useTool(G,cut)){G.cutAt=cut;bed=null;}
@@ -1063,6 +1069,7 @@ function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":bonus?bonus.id:lv+1,stars:s,ink,hints:hintsUsed});
+  dayWin();session.wins++;
   if(bonus&&bonus.long){longWon(ink);return;}
   if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg();store.set("onChal",null); // challenge stars stay out of the total and the chapter gates
     setTimeout(()=>{if(bonus===at&&won)showBonusWin(s,ink,first);},800);return;}
@@ -1082,11 +1089,13 @@ function showWin(s,ink,fresh){
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`Solved! So close to a perfect route: just ${over} ink over. Three stars at ${G.par}.`:`Solved! Can you find a shorter river? Three stars at ${G.par} ink.`; // near-miss drives the retry
   openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${nextCh&&CHALLENGES.some(c=>c.after===LEVELS[lv].ch&&!prog.stars[c.id])?`<p>✦ <b>A challenge river is open</b> on the River map: an optional extra-hard bonus.</p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
    ${last?`<p>${LEVELS.every(L=>prog.stars[L.id])?"You've played every river so far.":"Final river complete!"} More rivers arrive with each update.</p>${dailyOpen()?`<button class="big" id="goDaily">☀︎ Play today's Daily River</button><button class="ghost" id="goLevels">See all levels</button>`:`<button class="big" id="goLevels">See all levels</button>`}`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
+   ${!last&&dailyOpen()&&!prog.daily?`<button class="ghost daily1" id="goDaily1">☀︎ Try today's Daily River: start your 🔥 streak</button>`:""}${tomorrowLine(false)}
    <button class="ghost" id="goRetry">${s===3||(prog.stars[ID(lv)]||0)===3?"Play again":"Play again for more stars"}</button>${last||locked?"":`<button class="ghost" id="goMap">River map</button>`}${last?`<button class="showme" id="goEnding" style="align-self:center">Watch the ending again</button>`:""}`);
   $("goRetry").onclick=()=>{closeSheet();startLevel(lv);};
   if(last||locked)$("goLevels").onclick=showLevels;else $("goNext").onclick=()=>{closeSheet();goNext();};
   if($("goMap"))$("goMap").onclick=()=>{closeSheet();showLevels();}; /* Nikola + Cooper, v0.74: a way to the map from every win */
   if(last&&$("goDaily"))$("goDaily").onclick=()=>{closeSheet();startDaily();};
+  if($("goDaily1"))$("goDaily1").onclick=()=>{closeSheet();startDaily();};
   if(last)$("goEnding").onclick=()=>{closeSheet();playFinale(()=>showWin(s,ink,fresh));};
 }
 // ---------- the ending ----------
@@ -1162,27 +1171,58 @@ function playFinale(done){
   if(!still)[523,659,784,1047,1319,1568].forEach((f,i)=>tone(f,.5,"sine",.06,.3+i*.22)); // a slow, rising chime as the river runs
   if(still){txt.classList.add("show");frame(t0);$("finGo").focus();}else{el.focus();finRaf=requestAnimationFrame(frame);}
 }
+// ---------- drop-off tracking (phone app only; keep-playing plan, Nov 12) ----------
+// session_end says where a player stopped: the level and mode on screen, minutes played and rivers won this visit.
+const session={t0:Date.now(),wins:0,last:null,dailyStarted:0};
+const mode=()=>daily?"daily":bonus?(bonus.long?"long":"challenge"):"level";
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){T("session_end",{level:mode()==="level"?lv+1:(daily?"daily":bonus.id),mode:mode(),minutes:Math.round((Date.now()-session.t0)/6000)/10,wins:session.wins,won:won?1:0});}
+  else{session.t0=Date.now();session.wins=0;welcomeBack();}});
 // ---------- Daily River ----------
 // One puzzle a day from the DAILY bank, the same for everyone on the same date. Slot = weekday (Monday gentle,
 // Sunday hardest), cycling through the bank's weeks. Opens once a player reaches level DAILY_AT (they know mixing).
+// Keep-playing plan (Alan, Nov 12): it opens right after the mixing lessons so day-1 players meet it, and until a
+// player has learned mud and bridges their Daily is a gentle board without them (pinned for the day in "dbank").
 // Streaks: play on consecutive days; one missed day is forgiven by a grace day, which refills every 7-day run.
 // prog.daily[day]=stars, prog.streak={n,best,last,grace}; total stars and highest level stay chapter-only.
-const DAILY_AT=10,DAILY_EPOCH=Date.UTC(2026,0,5); // a Monday
+const DAILY_AT=6,DAILY_EPOCH=Date.UTC(2026,0,5); // a Monday
 const dayNum=(d=new Date())=>Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-DAILY_EPOCH)/864e5);
 const dayLabel=n=>new Date(DAILY_EPOCH+n*864e5).toLocaleDateString(undefined,{month:"short",day:"numeric",timeZone:"UTC"});
 function dailyFor(n){const weeks=Math.max(1,Math.floor(DAILY.length/7)),wk=Math.floor(n/7),wd=((n%7)+7)%7;
-  const L=DAILY[(((wk%weeks)+weeks)%weeks)*7+wd];
-  return Object.assign({},L,{id:"daily-"+n,bank:L.id,name:"Daily River",day:n,tip:["Monday's river: a gentle start to the week.","Tuesday: make two mixes.","Wednesday: bridges today.","Thursday: four streams on one board.","Friday: watch out for mud.","Saturday: a big river with bridges.","Sunday: the week's toughest river."][wd]});}
+  let L=DAILY[(((wk%weeks)+weeks)%weeks)*7+wd],gentle=false;
+  const pin=store.get("dbank",null),pinned=pin&&pin.day===n&&DAILY.find(d=>d.id===pin.id);
+  if(pinned){gentle=!!pin.gentle;L=pinned;}
+  else{const at=name=>LEVELS.findIndex(x=>x.name===name)+1,h=prog.all?1e9:(prog.highest||0),mudOK=h>=at("Uh oh, mud"),brOK=h>=at("Bridge");
+    if((L.mud&&!mudOK)||(L.map.join("").includes("=")&&!brOK)){const easy=DAILY.filter(d=>(!d.mud||mudOK)&&(!d.map.join("").includes("=")||brOK));
+      if(easy.length){L=easy[((n%easy.length)+easy.length)%easy.length];gentle=true;}}
+    store.set("dbank",{day:n,id:L.id,gentle});}
+  return Object.assign({},L,{id:"daily-"+n,bank:L.id,name:"Daily River",day:n,tip:gentle?"A gentle river today: just mixing. Mud and bridges join in once you've met them.":["Monday's river: a gentle start to the week.","Tuesday: make two mixes.","Wednesday: bridges today.","Thursday: four streams on one board.","Friday: watch out for mud.","Saturday: a big river with bridges.","Sunday: the week's toughest river."][wd]});}
 const dailyOpen=()=>DAILY.length>0&&(prog.all||(prog.highest||0)>=DAILY_AT);
 const dailyDone=()=>!!(prog.daily&&prog.daily[dayNum()]);
 function streakNow(){const st=prog.streak;if(!st||!st.n)return 0;const gap=dayNum()-st.last;return gap<=1||(gap===2&&st.grace>0)?st.n:0;}
+// ---------- coming back tomorrow (keep-playing plan, Alan Nov 12) ----------
+// Day 1 (prog.firstDay): from the third river won, and on the Daily win, the win card says what tomorrow brings.
+// The first river on any later day pays a one-time welcome-back gift of 2 hints (prog.gift = the day it was paid).
+const GIFT_HINTS=2;
+const T=(name,params)=>{if(window.CR_NATIVE)CR_NATIVE.track(name,params||{});};
+function dayWin(){const d=dayNum();if(!prog.dayWins||prog.dayWins.day!==d)prog.dayWins={day:d,n:0};prog.dayWins.n++;}
+function tomorrowLine(isDaily){
+  if(prog.firstDay!==dayNum()||prog.gift)return"";const n=prog.dayWins&&prog.dayWins.day===dayNum()?prog.dayWins.n:0;
+  if(!isDaily&&n!==3)return"";
+  return `<p class="tmrw">🔥 See you tomorrow! ${dailyOpen()&&!isDaily?"A new Daily River and a":"A"} welcome-back gift of ${GIFT_HINTS} free hints will be waiting.</p>`;}
+function welcomeBack(){
+  if(prog.firstDay==null){prog.firstDay=dayNum();saveProg();return;}
+  if(prog.gift||dayNum()<=prog.firstDay)return;
+  prog.gift=dayNum();prog.bonusHints=(prog.bonusHints||0)+GIFT_HINTS;saveProg();updateHintBtn();T("welcome_gift",{day:dayNum()-prog.firstDay});
+  setTimeout(()=>toast(`🎁 Welcome back! ${GIFT_HINTS} free hints added.`,4000),900);}
 function recordDaily(n,s){store.set("onDaily",null); // done: a reload goes back to the chapter level
   prog.daily=prog.daily||{};const first=!prog.daily[n];prog.daily[n]=Math.max(prog.daily[n]||0,s);
   const st=prog.streak=prog.streak||{n:0,best:0,last:-9,grace:1};
   if(first&&n>st.last){const gap=n-st.last;
     if(gap===1)st.n++;else if(gap===2&&st.grace>0){st.n++;st.grace--;}else st.n=1;
     st.last=n;if(st.n%7===0)st.grace=1;st.best=Math.max(st.best,st.n);}
-  saveProg();updateDailyBtn();
+  saveProg();updateDailyBtn();if(first)T("daily_complete",{streak:st.n,stars:s});
+  if(window.CR_NATIVE&&CR_NATIVE.daily)CR_NATIVE.daily({done:true,streak:st.n});
 }
 function updateDailyBtn(){const b=$("dailyBtn");if(!b)return;b.hidden=!dailyOpen();if(b.hidden)return;
   const k=streakNow();b.innerHTML=`<span class="st">☀︎</span>${k?`🔥${k}`:dailyDone()?"✓":"Daily"}`;b.setAttribute("aria-label",`Daily River${dailyDone()?", done today":""}${k?`, ${k}-day streak`:""}`);b.classList.toggle("done",dailyDone());}
@@ -1261,9 +1301,10 @@ function showDailyWin(s,ink){
   const st=prog.streak||{n:0,best:0},over=ink-G.par;
   const note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close! Just ${over} ink over par.`:`${ink} ink. Three stars at ${G.par} or less.`;
   openSheet(`<div class="stars">${starRow(s)}</div><h3>Daily River done!</h3><p>${note}</p>
-   <p class="streak">🔥 ${st.n}-day streak${st.best>st.n?` · best ${st.best}`:""}</p><p>${st.grace>0?"Grace day ready: miss one day and your streak stays.":`${7-st.n%7} more day${7-st.n%7===1?"":"s"} in a row to earn a grace day.`} A new river comes tomorrow.</p>
+   <p class="streak">🔥 ${st.n}-day streak${st.best>st.n?` · best ${st.best}`:""}</p><p>${st.grace>0?"Grace day ready: miss one day and your streak stays.":`${7-st.n%7} more day${7-st.n%7===1?"":"s"} in a row to earn a grace day.`} A new river comes tomorrow.</p>${tomorrowLine(true)}
    <button class="big" id="goBack">Back to Level ${lv+1}</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
   $("goBack").onclick=()=>{closeSheet();resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();startDaily();};
+  if(window.CR_NATIVE&&CR_NATIVE.offerReminder)$("goBack").addEventListener("click",()=>CR_NATIVE.offerReminder(st.n),{once:true}); // asks once, after the first Daily win
 }
 $("dailyBtn").onclick=()=>{if(daily&&!won)return;startDaily();};
 // Levels: a saga map. Chapters sit along a winding river, one stop each; tap a stop to see its levels.
@@ -2082,6 +2123,7 @@ function boot(data){
   else if(onChal>=0){lv=start;startBonus(onChal);} // reloaded mid-challenge: back to it, drawing and all
   else if(onLong>=0){lv=start;resumeLong(onLong);} // reloaded mid-Long River: both boards come back (Cooper, v0.69)
   else startLevel(start,mine?dr.paths:data&&data.paths,mine?dr.cut:null,mine?dr:null);
+  welcomeBack();if(window.CR_NATIVE&&CR_NATIVE.daily)CR_NATIVE.daily({done:dailyDone(),streak:streakNow()});
   requestAnimationFrame(loop);
 }
 window.claude?.hot?.ready?window.claude.hot.ready(boot):boot(window.claude?.hot?.data??{});
