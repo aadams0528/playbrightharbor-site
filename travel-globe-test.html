@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Travel Globe v0.13.11: round 11 fixes (Cooper, Muse, Nikola) -->
+<!-- Travel Globe v0.14: simpler layout (bigger text, bottom bar, one Add, calm trip page) + round 12 fixes -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -15,7 +15,7 @@
 /* Layout: full-bleed night globe; a docked panel (bottom sheet on phones, right rail on wide screens) holds trips, collections, golf and diary. Deliberately one dark "night sky" look. */
 :root{
   --space:#060a14; --ocean:#0b1530; --land:#1b2741; --land-edge:#2b3a5c;
-  --lit:#f2b24a; --lit-soft:#ffd88c; --ink:#eef1f8; --muted:#97a3bd; --faint:#5d6a86;
+  --lit:#f2b24a; --lit-soft:#ffd88c; --ink:#eef1f8; --muted:#aab4ca; --faint:#8a97b3;
   --panel:#0e1529; --panel-2:#141d36; --line:rgba(190,205,240,.12);
   --golf:#6fd496; --food:#ff8f6b; --hike:#7cc4ff; --view:#c9a2ff; --bucket:#9fb3d9;
   --display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
@@ -24,7 +24,7 @@
   color-scheme:dark;
 }
 html,body{height:100%}
-body{background:var(--space);color:var(--ink);font-family:var(--body);font-size:15px;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{background:var(--space);color:var(--ink);font-family:var(--body);font-size:calc(17px * var(--fs,1));overflow:hidden;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--lit);outline-offset:2px}
 .app{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto}
@@ -37,14 +37,19 @@ canvas#globe.dragging{cursor:grabbing}
 .topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
   padding-top:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
 .brand{pointer-events:auto}
-.brand h1{margin:0;font-family:var(--display);font-weight:400;font-size:30px;line-height:1;letter-spacing:.2px}
+.brand h1{margin:0;font-family:var(--display);font-weight:400;font-size:calc(30px * var(--fs,1));line-height:1;letter-spacing:.2px}
 .brand h1 em{color:var(--lit-soft)}
-.brand p{margin:4px 0 0;font-size:12px;color:var(--muted)}
-.chip-tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-top:6px;white-space:nowrap;background:rgba(10,14,24,.4)}
+.brand p{margin:4px 0 0;font-size:calc(14px * var(--fs,1));color:var(--muted)}
+.chip-tag{display:inline-block;font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-top:6px;white-space:nowrap;background:rgba(10,14,24,.4)}
 .layers{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;pointer-events:auto;max-width:60%}
-.layer{font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(14,21,41,.7);color:var(--muted);display:flex;align-items:center;gap:6px;backdrop-filter:blur(6px)}
+.layer{font-size:calc(14px * var(--fs,1));font-weight:600;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(14,21,41,.7);color:var(--muted);display:flex;align-items:center;gap:6px;backdrop-filter:blur(6px)}
 .layer .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
 .layer[aria-pressed="true"]{color:var(--ink);border-color:rgba(242,178,74,.45)}
+.layer[aria-pressed="true"] .dot{width:13px;height:13px;display:grid;place-items:center;font-size:calc(14px * var(--fs,1));font-weight:800;color:#0b0f1a;background:var(--lit-soft)}
+.layer[aria-pressed="false"] .dot{background:transparent;border:1.5px solid currentColor;box-sizing:border-box}
+.layer[aria-pressed="false"]{opacity:.8}
+.toast:has(.tkeep){flex-wrap:wrap}
+.toast .tkeep{display:block;flex-basis:100%;font-size:calc(14px * var(--fs,1));opacity:.75;margin-top:2px}
 .layer[data-k="trips"] .dot{background:var(--lit)} .layer[data-k="golf"] .dot{background:var(--golf)}
 .layer[data-k="diary"] .dot{background:var(--lit-soft)} .layer[data-k="bucket"] .dot{background:transparent;border:1.5px solid var(--bucket)}
 .layer[data-k="snaps"] .dot{background:conic-gradient(var(--food) 0 25%,var(--hike) 0 50%,var(--view) 0 75%,#ff7ab8 0)}
@@ -52,48 +57,48 @@ canvas#globe.dragging{cursor:grabbing}
 .coltile.newcol::after{display:none}
 
 .scan{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);text-align:center;background:rgba(10,16,32,.82);border:1px solid var(--line);border-radius:14px;padding:12px 18px;min-width:250px;backdrop-filter:blur(6px)}
-.scan b{font-family:var(--display);font-weight:400;font-size:22px;display:block}
-.scan span{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.scan button{margin-top:8px;font-size:12px;color:var(--lit-soft);text-decoration:underline}
+.scan b{font-family:var(--display);font-weight:400;font-size:calc(24.5px * var(--fs,1));display:block}
+.scan span{font-family:var(--mono);font-size:calc(14px * var(--fs,1));color:var(--muted)}
+.scan button{margin-top:8px;font-size:calc(14px * var(--fs,1));color:var(--lit-soft);text-decoration:underline}
 
 .zoomctl{position:absolute;right:max(14px,env(safe-area-inset-right,0px));bottom:16px;display:flex;flex-direction:column;gap:6px}
-.zoomctl button,.fab{width:40px;height:40px;border-radius:12px;background:rgba(14,21,41,.8);border:1px solid var(--line);font-size:18px;display:grid;place-items:center;backdrop-filter:blur(6px)}
+.zoomctl button,.fab{width:40px;height:40px;border-radius:12px;background:rgba(14,21,41,.8);border:1px solid var(--line);font-size:calc(20px * var(--fs,1));display:grid;place-items:center;backdrop-filter:blur(6px)}
 .fab{position:absolute;left:max(14px,env(safe-area-inset-left,0px));bottom:16px;width:auto;padding:0 16px 0 12px;height:46px;border-radius:999px;background:var(--lit);color:#241603;font-weight:700;display:flex;gap:8px;align-items:center;border:0;box-shadow:0 6px 24px rgba(242,178,74,.35)}
 .fab svg{width:20px;height:20px}
 .panelAdd{display:none}
 .stage:has(#scan:not([hidden])) .fab,.stage:has(#scan:not([hidden])) .zoomctl{display:none}
-.wherechip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px}
+.wherechip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:calc(15.5px * var(--fs,1))}
 .wherechip b{font-weight:600;flex:1;min-width:120px}
 .wherechip.guess{border:1.5px dashed var(--lit);background:rgba(255,200,90,.08)}
-.checktag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#1a1408;background:var(--lit);border-radius:6px;padding:1px 5px;vertical-align:1px}
-.wherechip .guesstag{display:block;font-size:11px;font-weight:700;color:var(--lit);text-transform:uppercase;letter-spacing:.04em}
-.wherechip .btn{font-size:12px;padding:6px 10px}
+.checktag{display:inline-block;font-size:calc(14px * var(--fs,1));font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#1a1408;background:var(--lit);border-radius:6px;padding:1px 5px;vertical-align:1px}
+.wherechip .guesstag{display:block;font-size:calc(14px * var(--fs,1));font-weight:700;color:var(--lit);text-transform:uppercase;letter-spacing:.04em}
+.wherechip .btn{font-size:calc(14px * var(--fs,1));padding:6px 10px}
 .whereres{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .whereres:empty{display:none}
-.whereres button{text-align:left;padding:8px 10px;border-radius:10px;font-size:14px;background:var(--panel-2)}
-.whereres button small{color:var(--muted);margin-left:6px;font-size:12px}
+.whereres button{text-align:left;padding:8px 10px;border-radius:10px;font-size:calc(15.5px * var(--fs,1));background:var(--panel-2)}
+.whereres button small{color:var(--muted);margin-left:6px;font-size:calc(14px * var(--fs,1))}
 .pinmark,.pinbar{display:none}
 body.pinmode .pinmark{display:block;position:absolute;left:50%;top:50%;width:34px;height:44px;margin:-44px 0 0 -17px;pointer-events:none;z-index:4;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
 body.pinmode .pinbar{display:flex;position:absolute;left:50%;transform:translateX(-50%);bottom:14px;z-index:5;width:min(94%,420px);flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
-body.pinmode .pinbar b{font-size:15px}
-body.pinmode .pinbar span{font-size:12px;color:var(--muted)}
+body.pinmode .pinbar b{font-size:calc(17px * var(--fs,1))}
+body.pinmode .pinbar span{font-size:calc(14px * var(--fs,1));color:var(--muted)}
 body.pinmode .pinbar div{display:flex;gap:8px;justify-content:flex-end}
 body.pinmode .fab,body.pinmode .layers,body.pinmode .panelAdd,body.pinmode #placecard,body.pinmode .zoomctl button:nth-child(n+3){display:none!important}
 body.pinmode .zoomctl{bottom:auto;top:50%;transform:translateY(-50%)}
 body.tinystage .fab,body.tinystage .zoomctl,body.tinystage .layers,body.tinystage .brand p,body.tinystage .chip-tag,body.tinystage #placecard{display:none!important}
-body.tinystage .brand h1{font-size:20px}
-body.tinystage .panelAdd{display:flex;position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:max(12px,env(safe-area-inset-top,0px));z-index:3;font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;background:var(--lit);color:#241603;gap:4px;align-items:center}
+body.tinystage .brand h1{font-size:calc(22.5px * var(--fs,1))}
+body.tinystage .panelAdd{display:flex;position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:max(12px,env(safe-area-inset-top,0px));z-index:3;font-size:calc(14px * var(--fs,1));font-weight:700;padding:6px 12px;border-radius:999px;background:var(--lit);color:#241603;gap:4px;align-items:center}
 body.shortstage .zoomctl button:nth-child(n+3){display:none}
 
 /* place card over the globe */
 .placecard{position:absolute;left:50%;transform:translateX(-50%);bottom:72px;width:min(92%,380px);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
-.placecard h3{margin:0;font-family:var(--display);font-weight:400;font-size:24px;line-height:1.1}
-.placecard .meta{font-size:12px;color:var(--muted);margin-top:2px}
+.placecard h3{margin:0;font-family:var(--display);font-weight:400;font-size:calc(24px * var(--fs,1));line-height:1.1}
+.placecard .meta{font-size:calc(14px * var(--fs,1));color:var(--muted);margin-top:2px}
 .placecard .x{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:8px;color:var(--muted)}
 .strip{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px}
 .strip img{width:84px;height:63px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer}
 .row-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.btn{font-size:13px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}
+.btn{font-size:calc(14.5px * var(--fs,1));font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}
 .btn.primary{background:var(--lit);color:#241603;border-color:transparent}
 .btn.green{background:var(--golf);color:#06210f;border-color:transparent}
 
@@ -106,40 +111,40 @@ body.shortstage .zoomctl button:nth-child(n+3){display:none}
 button.stat:hover{background:var(--panel-2)}
 .stat span{display:flex;align-items:center;gap:5px;line-height:1.2}
 .stat span i{flex:none;width:7px;height:7px;border-radius:50%}
-.editstats{width:34px;height:34px;align-self:center;border-radius:10px;border:1px solid var(--line);color:var(--muted);font-size:15px}
-.stat b{display:block;font-family:var(--display);font-weight:400;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
-.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.stat em{display:block;font-style:normal;font-size:10.5px;color:var(--muted);opacity:.85;line-height:1.2;margin-top:2px}
+.editstats{width:34px;height:34px;align-self:center;border-radius:10px;border:1px solid var(--line);color:var(--muted);font-size:calc(17px * var(--fs,1))}
+.stat b{display:block;font-family:var(--display);font-weight:400;font-size:calc(26px * var(--fs,1));line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:calc(14px * var(--fs,1));color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat em{display:block;font-style:normal;font-size:calc(14px * var(--fs,1));color:var(--muted);opacity:.85;line-height:1.2;margin-top:2px}
 .tabs{display:flex;gap:2px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line)}
-.tab{flex:1;padding:10px 4px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
+.tab{flex:1;padding:10px 4px;font-size:calc(14.5px * var(--fs,1));font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--lit)}
 .tabbody{overflow-y:auto;flex:1;min-height:0;padding-block:12px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:10px}
 .otd{display:flex;gap:12px;align-items:center;background:linear-gradient(120deg,rgba(242,178,74,.16),rgba(242,178,74,.02));border:1px solid rgba(242,178,74,.3);border-radius:14px;padding:10px;text-align:left}
 .otd img{width:70px;height:54px;border-radius:9px;object-fit:cover;flex:none}
-.otd small{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
+.otd small{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
 .otd div{min-width:0}
-.otd p{margin:2px 0 0;font-size:14px}
+.otd p{margin:2px 0 0;font-size:calc(15.5px * var(--fs,1))}
 .item{display:flex;gap:12px;align-items:center;padding:8px;border-radius:12px;text-align:left;width:100%}
 .item:hover{background:var(--panel-2)}
 .item img{width:64px;height:48px;border-radius:8px;object-fit:cover;flex:none}
 .item .txt{min-width:0;flex:1}
-.item .t{font-weight:600;font-size:14px}
-.item .s{font-size:12px;color:var(--muted)}
+.item .t{font-weight:600;font-size:calc(15.5px * var(--fs,1))}
+.item .s{font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .item .flag{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;background:rgba(111,212,150,.12);color:var(--golf)}
 .item .flag.ring{background:transparent;border:1.5px dashed var(--bucket);color:var(--bucket)}
-.sec{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:6px}
+.sec{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:6px}
 .suggest{border:1px solid rgba(111,212,150,.35);background:rgba(111,212,150,.07);border-radius:14px;padding:12px}
 .suggest b{font-weight:600}
-.suggest p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.suggest p{margin:4px 0 0;font-size:calc(14.5px * var(--fs,1));color:var(--muted)}
 .colgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .coltile{position:relative;border-radius:14px;overflow:hidden;aspect-ratio:4/3;max-width:100%;text-align:left}
 .coltile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .coltile::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(6,10,20,.85))}
-.coltile span{position:absolute;left:10px;bottom:8px;z-index:1;font-weight:700;font-size:14px}
-.coltile small{display:block;font-weight:500;font-size:11px;color:#d6dbe8}
+.coltile span{position:absolute;left:10px;bottom:8px;z-index:1;font-weight:700;font-size:calc(15.5px * var(--fs,1))}
+.coltile small{display:block;font-weight:500;font-size:calc(14px * var(--fs,1));color:#d6dbe8}
 .coltile[aria-pressed="true"]{outline:2px solid var(--lit);outline-offset:-2px}
-.note{font-size:12.5px;color:var(--muted);line-height:1.45}
-.stars{color:var(--lit);letter-spacing:1px;font-size:12px}
+.note{font-size:calc(14px * var(--fs,1));color:var(--muted);line-height:1.45}
+.stars{color:var(--lit);letter-spacing:1px;font-size:calc(14px * var(--fs,1))}
 .switch{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--panel-2);border-radius:12px;padding:12px}
 .switch input{width:44px;height:24px;accent-color:var(--lit)}
 
@@ -156,30 +161,30 @@ button.stat:hover{background:var(--panel-2)}
 .hero img{width:100%;height:100%;object-fit:cover;display:block}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(14,21,41,.95))}
 .hero .cap{position:absolute;left:18px;right:18px;bottom:14px;z-index:1}
-.hero h2{margin:0;font-family:var(--display);font-weight:400;font-size:36px;line-height:1;text-wrap:balance}
-.hero .cap p{margin:6px 0 0;color:#cfd6e6;font-size:13px}
-.close{position:absolute;top:10px;right:10px;z-index:2;width:36px;height:36px;border-radius:10px;background:rgba(6,10,20,.6);font-size:18px}
+.hero h2{margin:0;font-family:var(--display);font-weight:400;font-size:calc(36px * var(--fs,1));line-height:1;text-wrap:balance}
+.hero .cap p{margin:6px 0 0;color:#cfd6e6;font-size:calc(14.5px * var(--fs,1))}
+.close{position:absolute;top:10px;right:10px;z-index:2;width:36px;height:36px;border-radius:10px;background:rgba(6,10,20,.6);font-size:calc(20px * var(--fs,1))}
 .sheet .pad{padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));padding-block:14px 0;display:flex;flex-direction:column;gap:14px}
 .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .facts div{background:var(--panel-2);border-radius:10px;padding:8px}
-.facts b{display:block;font-family:var(--display);font-weight:400;font-size:22px;font-variant-numeric:tabular-nums}
-.facts span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.facts b{display:block;font-family:var(--display);font-weight:400;font-size:calc(24.5px * var(--fs,1));font-variant-numeric:tabular-nums}
+.facts span{font-size:calc(14px * var(--fs,1));color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .stop{border-left:2px solid rgba(242,178,74,.35);padding-left:14px;position:relative;display:flex;flex-direction:column;gap:8px}
 .stop::before{content:"";position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--lit);box-shadow:0 0 10px var(--lit)}
-.stop h4{margin:0;font-size:16px;font-weight:600}
-.stop .d{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.stop h4{margin:0;font-size:calc(18px * var(--fs,1));font-weight:600}
+.stop .d{font-family:var(--mono);font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .prompts{display:flex;gap:6px;flex-wrap:wrap}
-.prompts button{font-size:12px;padding:4px 9px;border-radius:999px;border:1px dashed var(--line);color:var(--muted)}
-textarea,input[type=text],input[type=search]{width:100%;box-sizing:border-box;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:14px;padding:9px 10px;resize:vertical}
+.prompts button{font-size:calc(14px * var(--fs,1));padding:4px 9px;border-radius:999px;border:1px dashed var(--line);color:var(--muted)}
+textarea,input[type=text],input[type=search]{width:100%;box-sizing:border-box;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:calc(15.5px * var(--fs,1));padding:9px 10px;resize:vertical}
 textarea{min-height:58px}
-.saved{font-size:11px;color:var(--golf);height:14px}
+.saved{font-size:calc(14px * var(--fs,1));color:var(--golf);height:14px}
 
 /* scorecard */
 .scorewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
-table.score{border-collapse:collapse;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;min-width:100%}
+table.score{border-collapse:collapse;font-family:var(--mono);font-size:calc(14px * var(--fs,1));font-variant-numeric:tabular-nums;min-width:100%}
 table.score th,table.score td{padding:6px 5px;text-align:center;border-right:1px solid var(--line);white-space:nowrap}
 table.score th{color:var(--muted);font-weight:500;background:var(--panel-2)}
-table.score td.lbl,table.score th.lbl{text-align:left;padding-left:10px;position:sticky;left:0;background:var(--panel);font-family:var(--body);font-weight:600;font-size:12px}
+table.score td.lbl,table.score th.lbl{text-align:left;padding-left:10px;position:sticky;left:0;background:var(--panel);font-family:var(--body);font-weight:600;font-size:calc(14px * var(--fs,1))}
 table.score th.lbl{background:var(--panel-2)}
 table.score tr+tr td{border-top:1px solid var(--line)}
 td.b{color:#06210f;background:var(--golf);border-radius:50%}
@@ -191,8 +196,8 @@ table.score input{width:26px;background:transparent;border:1px solid var(--line)
 .lightbox{position:fixed;inset:0;z-index:30;background:rgba(3,5,10,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .lightbox img{max-width:100%;max-height:70vh;border-radius:12px}
 .lightbox .cap{text-align:center;max-width:520px}
-.lightbox .cap b{font-family:var(--display);font-weight:400;font-size:24px;display:block}
-.lightbox .cap span{font-size:12px;color:var(--muted)}
+.lightbox .cap b{font-family:var(--display);font-weight:400;font-size:calc(24px * var(--fs,1));display:block}
+.lightbox .cap span{font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .lightbox .lblab{display:block;margin:10px auto 0;width:min(100%,420px);text-align:center}
 .strip img.labeled{outline:2px solid var(--lit-soft);outline-offset:-2px}
 .lightbox .nav{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
@@ -202,9 +207,9 @@ table.score input{width:26px;background:transparent;border:1px solid var(--line)
 .replay .card{position:absolute;left:50%;top:76px;transform:translateX(-50%);width:min(88%,360px);background:rgba(10,15,30,.9);border:1px solid var(--line);border-radius:16px;overflow:hidden;pointer-events:auto;transition:opacity .4s}
 .replay .card img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
 .replay .card .c{padding:10px 14px 12px}
-.replay .card h3{margin:0;font-family:var(--display);font-weight:400;font-size:24px}
-.replay .card p{margin:4px 0 0;font-size:13px;color:#cfd6e6;font-style:italic}
-.replay .card .d{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.replay .card h3{margin:0;font-family:var(--display);font-weight:400;font-size:calc(24px * var(--fs,1))}
+.replay .card p{margin:4px 0 0;font-size:calc(14.5px * var(--fs,1));color:#cfd6e6;font-style:italic}
+.replay .card .d{font-family:var(--mono);font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .replay .bar{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;background:rgba(10,15,30,.88);border:1px solid var(--line);border-radius:14px;padding:8px 10px}
 .replay .prog{flex:1;height:4px;border-radius:4px;background:var(--line);overflow:hidden}
 .replay .prog i{display:block;height:100%;width:0;background:var(--lit)}
@@ -212,33 +217,33 @@ table.score input{width:26px;background:transparent;border:1px solid var(--line)
 body.replaying .panel,body.replaying .topbar,body.replaying .fab,body.replaying .zoomctl,body.replaying .scan{display:none!important}
 body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .replay .card{top:auto;bottom:84px;width:min(90%,420px)}
-.legchip{position:absolute;top:max(18px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:3;background:rgba(10,15,30,.86);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13px;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(6px)}
+.legchip{position:absolute;top:max(18px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:3;background:rgba(10,15,30,.86);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:calc(14.5px * var(--fs,1));white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(6px)}
 .legchip span{margin-right:4px}
 #replay.recording .bar,#replay.recording .card{display:none}
-.vnrow{display:flex;gap:8px;flex-wrap:wrap}.vnrow .btn{font-size:13px;padding:6px 12px}
-.dayline{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-2);border-radius:12px;padding:10px 12px;font-size:14px}
-.dayline .d{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--lit-soft);text-transform:uppercase;margin-bottom:2px}
-.vrec{display:flex;align-items:center;gap:16px}.vrec b{font-family:var(--mono);font-size:26px;font-weight:500}
-.vbig{width:78px;height:78px;border-radius:50%;font-size:30px;background:var(--lit);color:#1a1205;flex:none;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.vnrow{display:flex;gap:8px;flex-wrap:wrap}.vnrow .btn{font-size:calc(14.5px * var(--fs,1));padding:6px 12px}
+.dayline{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-2);border-radius:12px;padding:10px 12px;font-size:calc(15.5px * var(--fs,1))}
+.dayline .d{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.05em;color:var(--lit-soft);text-transform:uppercase;margin-bottom:2px}
+.vrec{display:flex;align-items:center;gap:16px}.vrec b{font-family:var(--mono);font-size:calc(26px * var(--fs,1));font-weight:500}
+.vbig{width:78px;height:78px;border-radius:50%;font-size:calc(30px * var(--fs,1));background:var(--lit);color:#1a1205;flex:none;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 .vbig.on{background:#ff5a5a;color:#fff;animation:recblink 1.2s infinite}
-.recchip{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:4;background:rgba(10,15,30,.9);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.recchip{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:4;background:rgba(10,15,30,.9);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:calc(15.5px * var(--fs,1));white-space:nowrap;display:flex;align-items:center;gap:6px}
 .recchip i{width:10px;height:10px;border-radius:50%;background:#ff5a5a;animation:recblink 1.2s infinite}
 .recchip button{color:var(--lit-soft);font-weight:700;text-decoration:underline}
 .row-btns a.btn{text-decoration:none;display:inline-flex;align-items:center}
 @keyframes recblink{50%{opacity:.25}}
-.movestop{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}.movestop select{font-size:12px;max-width:150px;background:transparent;color:inherit;border:0}
-.ldsteps{margin:6px 0 0;padding-left:22px;font-size:14px;line-height:1.45;color:var(--ink)}.ldsteps li{margin:2px 0}
+.movestop{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:calc(14px * var(--fs,1));padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}.movestop select{font-size:calc(14px * var(--fs,1));max-width:150px;background:transparent;color:inherit;border:0}
+.ldsteps{margin:6px 0 0;padding-left:22px;font-size:calc(15.5px * var(--fs,1));line-height:1.45;color:var(--ink)}.ldsteps li{margin:2px 0}
 .ldnoloc{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--panel-2)}
 .ldgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin-top:10px}
 .ldtile{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:2px solid transparent;padding:0;background:var(--panel);cursor:pointer}
 .ldtile img{width:100%;height:100%;object-fit:cover;display:block;opacity:.55}.ldtile.placed{border-color:var(--lit)}.ldtile.placed img{opacity:1}
-.ldtile.nothumb::before{content:attr(data-name);position:absolute;inset:6px 6px 24px;font-size:10px;color:var(--muted);overflow:hidden;overflow-wrap:anywhere;text-align:left}
-.ldtag{position:absolute;left:0;right:0;bottom:0;font-size:10.5px;line-height:1.2;padding:3px 4px;background:rgba(0,0,0,.62);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}.ldtile.placed .ldtag{background:var(--lit);color:#1a1405;font-weight:600}
+.ldtile.nothumb::before{content:attr(data-name);position:absolute;inset:6px 6px 24px;font-size:calc(14px * var(--fs,1));color:var(--muted);overflow:hidden;overflow-wrap:anywhere;text-align:left}
+.ldtag{position:absolute;left:0;right:0;bottom:0;font-size:calc(14px * var(--fs,1));line-height:1.2;padding:3px 4px;background:rgba(0,0,0,.62);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}.ldtile.placed .ldtag{background:var(--lit);color:#1a1405;font-weight:600}
 #pv{position:fixed;inset:0;z-index:80;background:rgba(5,8,16,.88);display:flex;align-items:center;justify-content:center;padding:12px}
 .pvbox{width:100%;max-width:520px;max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:8px}
-.pvtop{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}.pvtop .btn{padding:4px 10px}
-.pvimg{display:flex;align-items:center;justify-content:center;min-height:180px;background:#000;border-radius:12px;overflow:hidden}.pvimg img{max-width:100%;max-height:48vh;object-fit:contain;display:block}.pvimg span{color:#ccc;font-size:13px;padding:20px}
-.pvname{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.pvq{font-weight:600}
+.pvtop{display:flex;justify-content:space-between;align-items:center;font-size:calc(14.5px * var(--fs,1));color:var(--muted)}.pvtop .btn{padding:4px 10px}
+.pvimg{display:flex;align-items:center;justify-content:center;min-height:180px;background:#000;border-radius:12px;overflow:hidden}.pvimg img{max-width:100%;max-height:48vh;object-fit:contain;display:block}.pvimg span{color:#ccc;font-size:calc(14.5px * var(--fs,1));padding:20px}
+.pvname{font-size:calc(14px * var(--fs,1));color:var(--muted);overflow-wrap:anywhere}.pvq{font-weight:600}
 .pvbtns{display:flex;flex-direction:column;gap:6px}.pvbtns .btn{text-align:left;justify-content:flex-start}.pvbtns small{opacity:.7;margin-left:4px}
 .pvnav{display:flex;justify-content:space-between;gap:8px}
 .sheet .note,#ldWhy li{overflow-wrap:anywhere}
@@ -257,7 +262,7 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .mtxt .who{font-size:clamp(15px,2vw,18px);color:#f2cf8a;margin-top:8px;font-weight:600}
 .mtxt.still > *{animation:none;opacity:1}
 .mtxt p.n{font-style:normal;font-size:clamp(14px,1.8vw,17px);color:#c9d1e3}
-.mtxt .d{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:#d9c9a5;margin-top:8px}
+.mtxt .d{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.06em;color:#d9c9a5;margin-top:8px}
 .mtxt > *{opacity:0}
 .mtxt.show > *{animation:rise .8s ease forwards}
 .mtxt.show > :nth-child(2){animation-delay:.15s}.mtxt.show > :nth-child(3){animation-delay:.6s}.mtxt.show > :nth-child(4){animation-delay:1.1s}.mtxt.show > :nth-child(5){animation-delay:1.4s}
@@ -270,8 +275,8 @@ body.rpaused .moment .pics img{animation-play-state:running,paused!important}
 .titlecard{position:absolute;inset:0;z-index:2;display:grid;place-items:center;text-align:center;padding:24px;background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.35),rgba(6,10,20,.88));transition:opacity .9s ease;pointer-events:none}
 .titlecard.out{opacity:0}
 .titlecard h2{margin:6px 0 0;font-family:var(--display);font-weight:400;font-size:clamp(40px,8vw,72px);line-height:1;text-wrap:balance}
-.titlecard p{margin:10px 0 0;color:#d6dbe8;font-size:16px}
-.titlecard .d{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--lit-soft)}
+.titlecard p{margin:10px 0 0;color:#d6dbe8;font-size:calc(18px * var(--fs,1))}
+.titlecard .d{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.08em;color:var(--lit-soft)}
 .replay .bar{z-index:4}
 .replay .bar .btn{padding:6px 10px;min-width:38px}
 @media (prefers-reduced-motion:reduce){.moment .pics img{animation:mfade .3s forwards}}
@@ -280,25 +285,25 @@ body.rpaused .moment .pics img{animation-play-state:running,paused!important}
 .themegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .themeopt{display:flex;flex-direction:column;gap:4px;text-align:left;padding:8px;border-radius:14px;border:1px solid var(--line);background:var(--panel-2)}
 .themeopt img{width:100%;aspect-ratio:1/1;border-radius:10px;max-width:100%}
-.themeopt b{font-size:14px} .themeopt span{font-size:12px;color:var(--muted);line-height:1.35}
+.themeopt b{font-size:calc(15.5px * var(--fs,1))} .themeopt span{font-size:calc(14px * var(--fs,1));color:var(--muted);line-height:1.35}
 .themeopt[aria-pressed="true"]{border-color:var(--lit);box-shadow:0 0 0 1px var(--lit)}
-.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 96px);transform:translateX(-50%);z-index:40;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 96px);transform:translateX(-50%);z-index:40;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:calc(14.5px * var(--fs,1));box-shadow:0 8px 30px rgba(0,0,0,.5)}
 
 .catchips{display:flex;flex-wrap:wrap;gap:6px}
-.catchips .chip{padding:6px 11px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
+.catchips .chip{padding:6px 11px;border-radius:999px;border:1px solid var(--line);font-size:calc(14.5px * var(--fs,1));font-weight:600;color:var(--muted)}
 .catchips .chip.on{color:#1a1205;background:var(--lit);border-color:transparent}
 .stategrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px}
-.stategrid .st{font-family:var(--mono);font-size:12px;text-align:center;padding:7px 0;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+.stategrid .st{font-family:var(--mono);font-size:calc(14px * var(--fs,1));text-align:center;padding:7px 0;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
 .stategrid .st.on{background:var(--lit);color:#1a1205;border-color:transparent;font-weight:700}
-.catchips button{padding:7px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
+.catchips button{padding:7px 12px;border-radius:999px;border:1px solid var(--line);font-size:calc(14.5px * var(--fs,1));font-weight:600;color:var(--muted)}
 .catchips button[aria-pressed="true"]{color:#1a1205;background:var(--lit);border-color:transparent}
-.snapprev{width:100%;aspect-ratio:4/3;max-width:100%;border-radius:14px;border:1.5px dashed var(--line);display:grid;place-items:center;overflow:hidden;color:var(--muted);font-size:13px;position:relative}
+.snapprev{width:100%;aspect-ratio:4/3;max-width:100%;border-radius:14px;border:1.5px dashed var(--line);display:grid;place-items:center;overflow:hidden;color:var(--muted);font-size:calc(14.5px * var(--fs,1));position:relative}
 .snapprev img{width:100%;height:100%;object-fit:cover}
 .snapprev input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.ratepick button{font-size:22px;color:var(--faint);padding:0 2px}
+.ratepick button{font-size:calc(24.5px * var(--fs,1));color:var(--faint);padding:0 2px}
 .ratepick button.on{color:var(--lit)}
-label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-.foot{font-family:var(--mono);font-size:10px;color:var(--faint);text-align:center;padding-top:8px}
+label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;margin-bottom:4px}
+.foot{font-family:var(--mono);font-size:calc(14px * var(--fs,1));color:var(--faint);text-align:center;padding-top:8px}
 .grab{display:none}
 @media (max-width:899px){
  .panel{height:var(--ph,50dvh);max-height:none;transition:height .25s ease}
@@ -306,71 +311,71 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
  .grab{display:flex;justify-content:center;width:100%;padding:8px 0 2px;touch-action:none;cursor:grab}
  .grab i{width:44px;height:5px;border-radius:3px;background:var(--faint)}
  .layers{max-width:56%}
- .layer{padding:5px 8px;font-size:11px}
+ .layer{padding:5px 8px;font-size:calc(14px * var(--fs,1))}
 }
 .otdhero{position:relative;border-radius:16px;overflow:hidden;border:1px solid rgba(242,178,74,.35);background:var(--panel-2);flex:none}
 .otdhero img{width:100%;aspect-ratio:2/1;object-fit:cover;display:block}
 .otdhero .c{padding:10px 12px 12px}
-.otdhero small{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
-.otdhero h3{margin:2px 0 0;font-family:var(--display);font-weight:400;font-size:26px;line-height:1.1}
-.otdhero p{margin:4px 0 0;font-size:13px;color:#cfd6e6}
+.otdhero small{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
+.otdhero h3{margin:2px 0 0;font-family:var(--display);font-weight:400;font-size:calc(26px * var(--fs,1));line-height:1.1}
+.otdhero p{margin:4px 0 0;font-size:calc(14.5px * var(--fs,1));color:#cfd6e6}
 .postcard{position:relative;border-radius:16px;border:1.5px dashed rgba(242,178,74,.45);background:linear-gradient(160deg,rgba(242,178,74,.10),rgba(242,178,74,.02));padding:12px 14px;flex:none}
 .postcard > small{display:block;padding-right:50px}
-.postcard small{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
-.postcard h3{margin:2px 0 6px;font-family:var(--display);font-weight:400;font-size:22px;line-height:1.15;padding-right:46px}
-.postcard .stamp{position:absolute;top:10px;right:12px;width:38px;height:44px;border:2px dotted rgba(242,178,74,.6);border-radius:4px;display:grid;place-items:center;font-size:20px}
-.postcard .yr{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.postcard small{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.08em;text-transform:uppercase;color:var(--lit-soft)}
+.postcard h3{margin:2px 0 6px;font-family:var(--display);font-weight:400;font-size:calc(24.5px * var(--fs,1));line-height:1.15;padding-right:46px}
+.postcard .stamp{position:absolute;top:10px;right:12px;width:38px;height:44px;border:2px dotted rgba(242,178,74,.6);border-radius:4px;display:grid;place-items:center;font-size:calc(22.5px * var(--fs,1))}
+.postcard .yr{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line);font-size:calc(14.5px * var(--fs,1))}
 .postcard .yr:first-of-type{border-top:0}
-.postcard .yr b{font-family:var(--mono);font-size:12px;color:var(--lit-soft);min-width:38px;padding-top:1px}
+.postcard .yr b{font-family:var(--mono);font-size:calc(14px * var(--fs,1));color:var(--lit-soft);min-width:38px;padding-top:1px}
 .postcard .yr span{flex:1;color:var(--ink)}
-.postcard .yr button{font-size:12px;color:var(--lit-soft);text-decoration:underline;white-space:nowrap}
+.postcard .yr button{font-size:calc(14px * var(--fs,1));color:var(--lit-soft);text-decoration:underline;white-space:nowrap}
 .postcard .note{margin:6px 0 0}
 .otdhero .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:10px;background:rgba(6,10,20,.65)}
 .tripitem{display:flex;align-items:center;gap:6px}
 .tripitem .item{flex:1;min-width:0}
-.playbtn{width:40px;height:40px;border-radius:50%;background:rgba(242,178,74,.16);color:var(--lit-soft);flex:none;font-size:14px}
+.playbtn{width:40px;height:40px;border-radius:50%;background:rgba(242,178,74,.16);color:var(--lit-soft);flex:none;font-size:calc(15.5px * var(--fs,1))}
 .storyf{display:grid;gap:4px}
 .storyf .l{margin:4px 0 0}
 .stopbtns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.stopbtns button{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.stopbtns button{font-size:calc(14px * var(--fs,1));padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .stop.ignored{opacity:.55}
 .stop.ignored::before{background:var(--faint);box-shadow:none}
 .guide-stop{display:flex;gap:10px;align-items:center;background:var(--panel-2);border-radius:12px;padding:8px}
 .guide-stop img{width:56px;height:42px;border-radius:8px;object-fit:cover;flex:none}
 .guide-stop .txt{flex:1;min-width:0}
-.guide-stop .t{font-weight:600;font-size:14px}
-.guide-stop .s{font-size:12px;color:var(--muted)}
+.guide-stop .t{font-weight:600;font-size:calc(15.5px * var(--fs,1))}
+.guide-stop .s{font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .guide-stop.ok{box-shadow:inset 0 0 0 1.5px rgba(111,212,150,.6)}
 .guide-stop.ignored{opacity:.5}
 .seg{display:flex;gap:4px;flex:none}
-.seg button{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);font-size:14px}
+.seg button{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);font-size:calc(15.5px * var(--fs,1))}
 .seg button[aria-pressed="true"]{background:var(--golf);color:#06210f;border-color:transparent}
 .seg.lab button{width:auto;min-width:58px;height:auto;padding:5px 7px;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}
-.seg.lab small{font-size:10.5px;font-weight:600}
+.seg.lab small{font-size:calc(14px * var(--fs,1));font-weight:600}
 .guide-stop{flex-wrap:wrap}
 @media (max-width:520px){.guide-stop .seg.lab{width:100%;justify-content:flex-end}}
 .seg button[data-gs="ignored"][aria-pressed="true"]{background:#ff8f6b;color:#2a0d04}
-.steps{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--lit-soft)}
+.steps{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.1em;text-transform:uppercase;color:var(--lit-soft)}
 .toast .tbar{position:absolute;left:10px;right:10px;bottom:3px;height:2px;border-radius:2px;background:var(--lit-soft);transform-origin:left;animation:tbar linear forwards;opacity:.7}@keyframes tbar{to{transform:scaleX(0)}}
 .toast{position:fixed}.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
 .toast{display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box}
 .toast button{color:var(--lit-soft);font-weight:700;text-decoration:underline;flex:none}
 .toast button.tx{color:var(--muted);text-decoration:none;font-weight:400;padding:2px 4px;margin-left:-4px}
-.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,122,184,.18);color:#ffb3d4;vertical-align:1px}
+.badge{display:inline-block;font-size:calc(14px * var(--fs,1));font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,122,184,.18);color:#ffb3d4;vertical-align:1px}
 .morerow{display:flex;gap:12px;align-items:center;padding:10px;border-radius:12px;background:var(--panel-2);text-align:left;width:100%;position:relative;box-sizing:border-box}
 .morerow .txt{flex:1;min-width:0}
-.morerow .t{font-weight:600;font-size:14px}
-.morerow .s{font-size:12px;color:var(--muted)}
+.morerow .t{font-weight:600;font-size:calc(15.5px * var(--fs,1))}
+.morerow .s{font-size:calc(14px * var(--fs,1));color:var(--muted)}
 .morerow .flag,.tripitem .flag{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none}
 .flag.ring{border:1.5px dashed var(--bucket);color:var(--bucket)}
-.rdel{color:var(--muted);font-size:11px;padding:0 2px}
+.rdel{color:var(--muted);font-size:calc(14px * var(--fs,1));padding:0 2px}
 .replay .card p.n{font-style:normal;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-.byph{position:relative;flex:none;display:block} .byph i{position:absolute;left:4px;bottom:4px;font-style:normal;font-size:10px;font-weight:600;background:rgba(6,10,20,.78);color:#fff;padding:1px 5px;border-radius:6px;pointer-events:none}
-@media (max-width:420px){ .replay .bar{gap:5px;padding-left:6px;padding-right:6px} .replay .bar .btn{padding:6px 7px;min-width:32px;font-size:13px} }
+.byph{position:relative;flex:none;display:block} .byph i{position:absolute;left:4px;bottom:4px;font-style:normal;font-size:calc(14px * var(--fs,1));font-weight:600;background:rgba(6,10,20,.78);color:#fff;padding:1px 5px;border-radius:6px;pointer-events:none}
+@media (max-width:420px){ .replay .bar{gap:5px;padding-left:6px;padding-right:6px} .replay .bar .btn{padding:6px 7px;min-width:32px;font-size:calc(14.5px * var(--fs,1))} }
 .sharesteps{margin:0;padding-left:20px;display:grid;gap:3px}
 .duplist{display:flex;flex-direction:column;gap:12px}.duprow{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}.duprow>.btn,.duprow>.note{grid-column:1/-1;justify-self:start}
-.dupfig{display:flex;flex-direction:column;gap:4px;padding:3px;border-radius:12px;border:2px solid transparent;background:none;color:var(--ink-soft,inherit);font-size:13px;text-align:left}.dupfig img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;display:block}.dupfig.on{border-color:var(--lit)}.dupfig.on span{color:var(--ink);font-weight:600}.dupfig:disabled{cursor:default;opacity:1}
+.dupfig{display:flex;flex-direction:column;gap:4px;padding:3px;border-radius:12px;border:2px solid transparent;background:none;color:var(--ink-soft,inherit);font-size:calc(14.5px * var(--fs,1));text-align:left}.dupfig img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;display:block}.dupfig.on{border-color:var(--lit)}.dupfig.on span{color:var(--ink);font-weight:600}.dupfig:disabled{cursor:default;opacity:1}
 .linkbtn{color:var(--lit-soft);font-weight:600;text-decoration:underline;text-underline-offset:2px;font-size:inherit;padding:0}
 .backcard{border-color:rgba(242,178,74,.4);background:rgba(242,178,74,.08)}
 #book{position:fixed;inset:0;z-index:400;overflow:auto;background:#d9d4c9;color:#24211c;font-family:var(--body);-webkit-overflow-scrolling:touch}
@@ -379,26 +384,26 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
 .bookpages{max-width:780px;margin:0 auto;padding:16px;display:grid;gap:16px}
 .bookpages section{background:#fffdf8;padding:28px;border-radius:4px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 .bookpages h1,.bookpages h2{font-family:var(--display);font-weight:400;margin:4px 0 0;line-height:1.05;color:#1c1914}
-.bookpages h1{font-size:clamp(38px,8vw,64px)} .bookpages h2{font-size:34px}
-.bnum{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a6a2c}
+.bookpages h1{font-size:clamp(38px,8vw,64px)} .bookpages h2{font-size:calc(34px * var(--fs,1))}
+.bnum{font-family:var(--mono);font-size:calc(14px * var(--fs,1));letter-spacing:.08em;text-transform:uppercase;color:#8a6a2c}
 .bcover img{width:100%;aspect-ratio:16/11;object-fit:cover;border-radius:3px;margin-bottom:16px;display:block}
-.bcover p{margin:8px 0 0;font-size:16px}
+.bcover p{margin:8px 0 0;font-size:calc(18px * var(--fs,1))}
 .bmap{margin:16px 0 0}.bmap svg{width:100%;height:auto;display:block;border-radius:3px;border:1px solid #e4ddcf}
-.bfacts{margin-top:14px;padding-top:12px;border-top:1px solid #e4ddcf;font-size:14px;color:#5b544a}
-.btoc{margin:14px 0 0;padding-left:20px;columns:2;font-size:14px;color:#3b362e} .btoc span{color:#8b8477;font-size:12px}
+.bfacts{margin-top:14px;padding-top:12px;border-top:1px solid #e4ddcf;font-size:calc(15.5px * var(--fs,1));color:#5b544a}
+.btoc{margin:14px 0 0;padding-left:20px;columns:2;font-size:calc(15.5px * var(--fs,1));color:#3b362e} .btoc span{color:#8b8477;font-size:calc(14px * var(--fs,1))}
 .bphotos{display:grid;gap:8px;margin-top:14px;grid-template-columns:repeat(2,1fr)}
 .bphotos figure{margin:0;break-inside:avoid} .bphotos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:3px;display:block;background:#eee}
 .bphotos figure:first-child{grid-column:1/-1} .bphotos.n1 img,.bphotos figure:first-child img{aspect-ratio:7/5}
 .bphotos.n2{grid-template-columns:1fr} .bphotos.n2 figure:first-child{grid-column:auto}
-.bphotos figcaption{font-size:12px;color:#5b544a;margin-top:4px} .bphotos figcaption i,.bnote i{color:#8b8477}
-.bookpages blockquote{margin:12px 0 0;font-family:var(--display);font-size:24px;line-height:1.2;color:#2b2720;border-left:3px solid #e2b766;padding-left:12px}
-.bday,.bwho,.bnote,.bmore{margin:10px 0 0;font-size:14px;line-height:1.5;color:#3b362e} .bwho{color:#8a6a2c;font-weight:600}
-.bend p{margin:0;text-align:center;font-size:12px;color:#8b8477}
-.bded{text-align:center;padding:48px 28px!important}.bdedtext{font-family:var(--display);font-style:italic;font-size:26px;line-height:1.3;color:#2b2720;margin-top:12px}
+.bphotos figcaption{font-size:calc(14px * var(--fs,1));color:#5b544a;margin-top:4px} .bphotos figcaption i,.bnote i{color:#8b8477}
+.bookpages blockquote{margin:12px 0 0;font-family:var(--display);font-size:calc(24px * var(--fs,1));line-height:1.2;color:#2b2720;border-left:3px solid #e2b766;padding-left:12px}
+.bday,.bwho,.bnote,.bmore{margin:10px 0 0;font-size:calc(15.5px * var(--fs,1));line-height:1.5;color:#3b362e} .bwho{color:#8a6a2c;font-weight:600}
+.bend p{margin:0;text-align:center;font-size:calc(14px * var(--fs,1));color:#8b8477}
+.bded{text-align:center;padding:48px 28px!important}.bdedtext{font-family:var(--display);font-style:italic;font-size:calc(26px * var(--fs,1));line-height:1.3;color:#2b2720;margin-top:12px}
 .bword{outline:none;border-radius:4px;min-height:1.4em;white-space:pre-wrap;overflow-wrap:anywhere}.bword:focus{box-shadow:0 0 0 2px #e2b766}
-.bword:empty::before{content:attr(data-hint);color:#a39a8a;font-style:italic;font-size:15px;font-family:var(--body)}
-.breftext{margin-top:12px;font-size:17px;line-height:1.55;color:#2b2720}
-.bbest{margin-top:16px}.bbest ul{margin:6px 0 0;padding-left:20px;font-size:15px;line-height:1.5;color:#3b362e}.bbest span{color:#8b8477;font-size:12px;margin-left:4px}
+.bword:empty::before{content:attr(data-hint);color:#a39a8a;font-style:italic;font-size:calc(17px * var(--fs,1));font-family:var(--body)}
+.breftext{margin-top:12px;font-size:calc(19px * var(--fs,1));line-height:1.55;color:#2b2720}
+.bbest{margin-top:16px}.bbest ul{margin:6px 0 0;padding-left:20px;font-size:calc(17px * var(--fs,1));line-height:1.5;color:#3b362e}.bbest span{color:#8b8477;font-size:calc(14px * var(--fs,1));margin-left:4px}
 @media print{
   @page{margin:14mm}
   html,body{height:auto!important;overflow:visible!important;background:#fff!important}
@@ -417,6 +422,52 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   .bphotos.n1 figure:first-child img{height:110mm}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* v0.14 simple layout: big readable text, 44px+ targets, one slim header, one bar along the bottom */
+.brand p,.chip-tag{display:none!important}
+.brand h1{font-size:calc(28px * var(--fs,1))}
+.topbar{align-items:center;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+.layersbtn{pointer-events:auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;background:rgba(14,21,41,.82);border:1px solid var(--line);font-weight:700;font-size:calc(16px * var(--fs,1));backdrop-filter:blur(6px)}
+.layersbtn svg{width:20px;height:20px}
+.fab,.panelAdd,body.tinystage .panelAdd{display:none!important}
+.zoomctl button{width:48px;height:48px;font-size:calc(22px * var(--fs,1))}
+.btn{min-height:44px;padding:10px 14px;display:inline-flex;align-items:center;gap:6px}
+.btn.playbig{width:100%;justify-content:center;min-height:56px;font-size:calc(19px * var(--fs,1));border-radius:14px}
+.tripmore{display:flex;flex-direction:column;gap:6px}
+.tripmore[hidden]{display:none}
+.morerow{min-height:56px}
+.morerow.big{min-height:68px}
+.morerow.big .t{font-size:calc(18px * var(--fs,1))}
+.morerow .flag,.tripitem .flag{width:36px;height:36px}
+.switchrow{cursor:pointer}.switchrow input{width:26px;height:26px;accent-color:var(--lit);flex:none}
+.close{width:44px;height:44px}
+.item{min-height:56px}
+.editstats{width:44px;height:44px}
+.backrow{align-self:flex-start;min-height:44px;font-weight:700;color:var(--lit-soft);font-size:calc(16px * var(--fs,1))}
+.tabtitle{margin:0;font-family:var(--display);font-weight:400;font-size:calc(28px * var(--fs,1))}
+.layerlist{display:flex;flex-direction:column;gap:6px}
+.layerlist .layer{width:100%;min-height:56px;padding:0 14px;border-radius:14px;font-size:calc(17px * var(--fs,1));gap:12px;background:var(--panel-2);backdrop-filter:none}
+.layerlist .layer .dot{width:22px;height:22px;display:grid;place-items:center;font-size:calc(14px * var(--fs,1))}
+.layerlist .layer .lst{margin-left:auto;font-size:calc(15px * var(--fs,1));font-weight:600;color:var(--muted)}
+.layerlist .layer[aria-pressed="true"] .lst{color:var(--lit-soft)}
+.tabs{order:9;border-bottom:0;border-top:1px solid var(--line);gap:0;padding-bottom:env(safe-area-inset-bottom,0px);background:var(--panel)}
+.tabs .tab{flex:1;min-height:60px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-bottom:0;border-top:3px solid transparent;font-size:calc(15px * var(--fs,1));font-weight:700;color:var(--muted)}
+.tabs .tab svg{width:24px;height:24px}
+.tabs .tab[aria-selected="true"]{color:var(--ink);border-top-color:var(--lit)}
+.tabs .addtab svg{background:var(--lit);color:#241603;border-radius:50%;padding:3px;width:28px;height:28px;box-sizing:border-box}
+@media (min-width:900px){.tabs .globetab{display:none}}
+.foot{font-size:calc(14px * var(--fs,1))}
+.stat span,.facts span{letter-spacing:.03em}
+.stat span{text-transform:none;letter-spacing:0;font-weight:600}
+.stat em{display:none}
+@media (max-width:899px){.stats{gap:2px;padding-block:8px 6px}}
+.panel[data-pos="peek"] .tabbody{display:none}
+@media (max-width:899px){.panel[data-pos="peek"]:not(.dragging){height:auto}}
+.tabs{flex:none}
+button.x{min-width:44px;min-height:44px}
+@media (max-width:899px){.grab{padding:12px 0 8px}}
+.brand h1,.layersbtn{white-space:nowrap}
+@media (max-width:380px){.brand h1{font-size:calc(24px * var(--fs,1))}.layersbtn{padding:0 12px;font-size:calc(15px * var(--fs,1))}}
 </style>
 
 </style>
@@ -431,7 +482,7 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
         <p>Everywhere you've been, lit up.</p>
         <span class="chip-tag" id="chipTag">Sample traveler · Denver</span>
       </div>
-      <div class="layers" id="layers"></div>
+      <button class="layersbtn" id="layersBtn" data-open-layers aria-label="Layers: choose what shows on the globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/></svg><span>Layers</span></button>
     </div>
     <div class="scan" id="scan">
       <b id="scanTitle">Reading your photo locations</b>
@@ -446,7 +497,6 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
       <button id="zin" aria-label="Zoom in">+</button>
       <button id="zout" aria-label="Zoom out">−</button>
       <button id="zhome" aria-label="Show whole globe" title="Whole globe">◎</button>
-      <button id="zstyle" aria-label="Change globe style" title="Globe style">◐</button>
     </div>
     <div id="placecard" hidden></div>
     <svg class="pinmark" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 43C17 43 3 26 3 16a14 14 0 0 1 28 0c0 10-14 27-14 27z" fill="#f2b24a" stroke="#241603" stroke-width="2"/><circle cx="17" cy="16" r="5" fill="#241603"/></svg>
@@ -456,8 +506,8 @@ label.l{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   <aside class="panel" id="panel">
     <button class="grab" id="grab" aria-label="Grow the panel"><i></i></button>
     <div class="stats" id="stats"></div>
-    <div class="tabs" role="tablist" id="tabs"></div>
     <div class="tabbody" id="tabbody"></div>
+    <nav class="tabs" id="tabs" aria-label="Main"></nav>
   </aside>
 </div>
 <div id="overlay"></div>
@@ -718,7 +768,7 @@ function photo(scene, seed, w = 480, h = 360){
   for (let i = 0; i < 900; i++){ x.fillStyle = `rgba(255,255,255,${r()*.05})`; x.fillRect(r()*w, r()*h, 1.2, 1.2); }
   const url = (rot ? rotCanvas(c, rot) : c).toDataURL("image/jpeg", .82); photoCache.set(key, url); return url;
 }
-function missingTile(w, h){ const key = "missing|" + w; if (photoCache.has(key)) return photoCache.get(key);
+function missingTile(w, h){ const key = "missing|" + w + "|" + h; if (photoCache.has(key)) return photoCache.get(key);
   const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.fillStyle = "#1b2233"; x.fillRect(0, 0, w, h);
   x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = Math.max(2, w / 160); x.setLineDash([w / 40, w / 60]); x.strokeRect(w * .06, h * .08, w * .88, h * .84);
   x.fillStyle = "rgba(255,255,255,.55)"; x.textAlign = "center"; x.textBaseline = "middle"; x.font = `${Math.round(h / 5)}px system-ui,sans-serif`; x.fillText("🖼", w / 2, h * .4);
@@ -829,7 +879,7 @@ function openWorldSheet(){
   const w = beenWorld(); const names = Object.keys(STATE_AB).sort();
   const ctry = [...w.countries].map(n => n === "United States of America" ? "United States" : n).sort();
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Your world so far")}
-    <div class="stats" style="padding:10px;background:var(--panel-2);border-radius:12px"><div class="stat"><b>${w.states.size}<small style="font-size:13px;opacity:.6">/50</small></b><span>US states</span></div><div class="stat"><b>${w.countries.size}</b><span>Countries</span></div><div class="stat"><b>${w.continents.size}<small style="font-size:13px;opacity:.6">/7</small></b><span>Continents</span></div></div>
+    <div class="stats" style="padding:10px;background:var(--panel-2);border-radius:12px"><div class="stat"><b>${w.states.size}<small style="font-size:calc(14.5px * var(--fs,1));opacity:.6">/50</small></b><span>US states</span></div><div class="stat"><b>${w.countries.size}</b><span>Countries</span></div><div class="stat"><b>${w.continents.size}<small style="font-size:calc(14.5px * var(--fs,1));opacity:.6">/7</small></b><span>Continents</span></div></div>
     <div class="sec">US states · ${w.states.size} of 50</div>
     <div class="stategrid">${names.map(n => `<span class="st${w.states.has(n) ? " on" : ""}" title="${esc(n)}">${STATE_AB[n]}</span>`).join("")}</div>
     <button class="btn" data-world-us style="align-self:flex-start">Show the US on the globe</button>
@@ -900,7 +950,7 @@ function themeThumb(key){
   return c.toDataURL("image/png");
 }
 function openThemePicker(){
-  openSheet(`<div class="pad" style="padding-top:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-family:var(--display);font-weight:400;font-size:30px">Globe style</h2><button class="close" style="position:static" data-close aria-label="Close">✕</button></div>
+  openSheet(`<div class="pad" style="padding-top:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-family:var(--display);font-weight:400;font-size:calc(30px * var(--fs,1))">Globe style</h2><button class="close" style="position:static" data-close aria-label="Close">✕</button></div>
     <div class="themegrid">${THEME_ORDER.map(k => `<button class="themeopt" data-theme="${k}" aria-pressed="${k === themeKey}"><img src="${themeThumb(k)}" alt=""><b>${THEMES[k].name}</b><span>${THEMES[k].desc}</span></button>`).join("")}</div></div>`);
 }
 function applyTheme(){ $("#stage").dataset.look = themeKey; $("#stage").classList.toggle("light", !TH().dark); dirty = true; }
@@ -1083,7 +1133,7 @@ if (!headerPicks.length || headerPicks.join() === "countries,places,golf,race" |
 const SHORT = {food:"Food spots", race:"Races", hike:"Hikes", view:"Views"};
 const isPhone = () => innerWidth < 900;
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-function sheetHead(title){ return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0;font-family:var(--display);font-weight:400;font-size:30px;line-height:1.05">${title}</h2><button class="close" style="position:static;flex:none" data-close aria-label="Close">✕</button></div>`; }
+function sheetHead(title){ return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0;font-family:var(--display);font-weight:400;font-size:calc(30px * var(--fs,1));line-height:1.05">${title}</h2><button class="close" style="position:static;flex:none" data-close aria-label="Close">✕</button></div>`; }
 function golfCounts(){ const gc = golfConfirmed && !NOSAMPLE; const played = COURSES.length + (gc ? 1 : 0); const rounds = COURSES.reduce((a, c) => a + allRounds(c).length, 0) + (gc ? allRounds(confirmedCourse()).length : 0); return {played, rounds}; }
 function statDefs(){
   const ctry = new Set(TRIPS.map(t => t.country)); const n = PHOTOS.length + snapPhotos();
@@ -1119,9 +1169,22 @@ function openHeaderEdit(){
   openHeaderEdit.save = () => { headerPicks = picks.length ? picks : ["countries"]; store.set("header", headerPicks); closeSheet(); renderStats(); toast("Header updated"); };
   draw();
 }
-function renderTabs(){
-  $("#tabs").innerHTML = TABS.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${tab === k || (tab === "diary" && k === "more")}" data-tab="${k}">${l}</button>`).join("");
+// one bar along the bottom: Globe · Trips · Add · More (Collections, Diary and settings live under More)
+const NAV_ICON = {globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>', trips:'<path d="M4 6h16M4 12h16M4 18h10"/>', add:'<path d="M12 5v14M5 12h14"/>', more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'};
+function renderTabs(){ const peek = isPhone() && sheetPos === "peek"; const sel = k => k === "globe" ? peek : k === "trips" ? !peek && tab === "trips" : k === "more" ? !peek && ["more", "collections", "diary"].includes(tab) : false;
+  $("#tabs").innerHTML = [["globe", "Globe"], ["trips", "Trips"], ["add", "Add"], ["more", "More"]].map(([k, l]) => `<button class="tab${k === "add" ? " addtab" : ""}${k === "globe" ? " globetab" : ""}" ${k === "trips" || k === "more" ? `data-tab="${k}"` : `data-nav="${k}"`} aria-current="${sel(k) ? "page" : "false"}" aria-selected="${sel(k)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">${NAV_ICON[k]}</svg><span>${l}</span></button>`).join("");
 }
+// the one Add button: four big choices
+function openAddMenu(){ const row = (attr, icon, t, sub) => `<button class="morerow big" ${attr}><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">${icon}</div><div class="txt"><div class="t">${t}</div><div class="s">${sub}</div></div></button>`;
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Add")}
+    ${row("data-load-photos", "⤓", "Photos from a trip", "Pick photos. We find the trips and places in them")}
+    ${row("data-add-memory", "✦", "A memory", "A meal, a view, a hike, anything you want to keep")}
+    ${row("data-bucket-add", "◌", "A place I want to visit", "Goes on your bucket list")}
+    ${row("data-add-manual", "✎", "A trip by hand", "For a trip whose photos have no locations")}
+    <p class="note" style="margin:0">To add photos to a trip you already have, open the trip and tap <b>Add photos</b>.</p></div>`, "add"); }
+// Layers: what shows on the globe, and the globe's style, in one place
+function openLayers(){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Layers")}<p class="note" style="margin:0">Choose what shows on the globe. Tap a row to show or hide it.</p><div class="layerlist" id="layers"></div>
+    <button class="morerow big" data-open-style><div class="flag ring">◐</div><div class="txt"><div class="t">Globe style</div><div class="s">${esc(TH().name)}</div></div></button></div>`, "layers"); renderLayers(); }
 function otdPick(){
   const now = new Date(); const doy = d => { const x = new Date(d + "T12:00:00"); return Math.floor((Date.UTC(2001, x.getMonth(), x.getDate()) - Date.UTC(2001,0,1)) / 864e5); };
   const today = Math.floor((Date.UTC(2001, now.getMonth(), now.getDate()) - Date.UTC(2001,0,1)) / 864e5);
@@ -1165,7 +1228,7 @@ function postcardHTML(){
   const o = store.get("otdHidden", "") === todayStr() ? null : otdPick();
   if (o && p.years.every(y => y.items.every(i => i.trip === o.best.stop.trip.id))) return "";
   const rows = p.years.map(({y, items}) => { const names = [...new Set(items.map(i => i.name))]; const trip = items.find(i => i.trip);
-    return `<div class="yr"><b>${y}</b><span>${esc(names.slice(0, 3).join(" · "))}${names.length > 3 ? ` · +${names.length - 3} more` : ""}<br><small style="text-transform:none;letter-spacing:0;font-family:inherit;color:var(--muted);font-size:11px">${thisYearAgo(y)}</small></span>${trip ? `<button data-replay="${trip.trip}">▶ Play</button>` : items[0].mem ? `<button data-mem="${items[0].mem}">Open</button>` : ""}</div>`; }).join("");
+    return `<div class="yr"><b>${y}</b><span>${esc(names.slice(0, 3).join(" · "))}${names.length > 3 ? ` · +${names.length - 3} more` : ""}<br><small style="text-transform:none;letter-spacing:0;font-family:inherit;color:var(--muted);font-size:calc(14px * var(--fs,1))">${thisYearAgo(y)}</small></span>${trip ? `<button data-replay="${trip.trip}">▶ Play</button>` : items[0].mem ? `<button data-mem="${items[0].mem}">Open</button>` : ""}</div>`; }).join("");
   return `<div class="postcard" aria-label="Sunday postcard"><div class="stamp" aria-hidden="true">✉</div><small>${p.sunday ? "Your Sunday postcard" : "Sunday postcard · preview"}${p.span ? " · " + esc(p.span) : ""}</small><h3>${esc(p.label)}</h3>${rows}
     <p class="note">${p.sunday ? "A new one arrives every Sunday." : "In the app this arrives every Sunday morning."} <button style="text-decoration:underline;color:var(--muted);font-size:inherit" data-postcard-off>Turn off</button></p></div>`;
 }
@@ -1193,6 +1256,10 @@ function golfHTML(){
   if (gb.length){ h += `<div class="sec">Golf bucket list</div>`; gb.forEach(x => { h += `<button class="item" data-fly="${x.lon},${x.lat}" data-layer-on="bucket"><div class="flag ring">⛳</div><div class="txt"><div class="t">${esc(x.name)}</div><div class="s">Not yet</div></div></button>`; }); }
   return h;
 }
+// help lines show the first time you see them, then stay out of the way ("Show tips again" in More brings them back)
+let HELP_SEEN = Object.assign({}, store.get("helpSeen", {}) || {}); const HELP_NOW = {};
+function onceNote(key, html){ if (HELP_SEEN[key] && !HELP_NOW[key]) return ""; if (!HELP_NOW[key]){ HELP_NOW[key] = true; const m = store.get("helpSeen", {}) || {}; m[key] = 1; store.set("helpSeen", m); } return html; }
+let BIG_TEXT = !!store.get("bigText", false); function applyTextSize(){ document.documentElement.style.setProperty("--fs", BIG_TEXT ? "1.18" : "1"); document.body.classList.toggle("bigtext", BIG_TEXT); } applyTextSize();
 function renderBody(){
   const b = $("#tabbody"); let h = "";
   if (tab === "trips"){
@@ -1201,7 +1268,7 @@ function renderBody(){
     h += backAgainHomeHTML();
     h += tripsListHTML();
   } else if (tab === "collections"){
-    const k = colFilter || "food";
+    const k = colFilter || "food"; h += `<button class="backrow" data-tab="more">‹ More</button><h3 class="tabtitle">Collections</h3>`;
     h += `<div class="colgrid">`;
     CATS.forEach(c => { const items = collectionItems(c.k); const img = items[0] ? items[0].img : photo(c.scene || "lake", c.k);
       const count = c.k === "golf" ? plural(golfCounts().played, "course") : c.k === "hike" && hikes.length ? `${plural(hikes.length, "trail")} · ${items.length} saved` : `${items.length} saved`;
@@ -1219,7 +1286,7 @@ function renderBody(){
     }
     h += `<button class="btn primary" data-snap-open="${esc(k)}" style="align-self:flex-start">+ Add a memory</button></div>`;
   } else if (tab === "diary"){
-    h += `<button class="btn" data-tab="more" style="align-self:flex-start;font-size:13px">‹ More</button>`;
+    h += `<button class="btn" data-tab="more" style="align-self:flex-start;font-size:calc(14.5px * var(--fs,1))">‹ More</button>`;
     if (!diaryOn){
       h += `<div class="switch" style="flex-direction:column;align-items:flex-start"><div><b>Travel Diary is off</b><div class="note">Nothing is being recorded. Turn it on to fill in the places you went but didn't photograph, like airports, road-trip stops and towns you passed through.</div></div><button class="btn primary" data-diary-ask>Turn on Travel Diary…</button></div>`;
     } else {
@@ -1234,6 +1301,9 @@ function renderBody(){
     h += `<p class="note">Home stays private: shared globes never show your home area.</p>`;
   } else if (tab === "more"){
     const defs = statDefs();
+    h += `<button class="morerow" data-tab="collections"><div class="flag ring" style="color:var(--golf);border-color:var(--golf)">▦</div><div class="txt"><div class="t">Collections</div><div class="s">Golf courses, food spots, hikes, views and your bucket list</div></div></button>`;
+    h += `<label class="morerow switchrow"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
+    h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     h += `<button class="morerow" data-guide><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">▶</div><div class="txt"><div class="t">Relive a trip, step by step</div><div class="s">The guided first session: pick a trip, check it, watch it</div></div></button>`;
     h += `<button class="morerow" data-tab="diary"><div class="flag ring">•</div><div class="txt"><div class="t">Travel Diary</div><div class="s">${diaryOn ? `On · ${plural(DIARY.length, "place")} with no photos` : "Off · fill in places you went but didn't photograph"}</div></div></button>`;
     h += `<button class="morerow" data-open-style><div class="flag ring">◐</div><div class="txt"><div class="t">Globe style</div><div class="s">${esc(TH().name)}</div></div></button>`;
@@ -1256,7 +1326,7 @@ function renderBody(){
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  h += `<div class="foot">Travel Globe prototype v0.13.11 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Travel Globe prototype v0.14 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1265,8 +1335,10 @@ const LAYER_ONE = {trips:"trip stop", snaps:"memory", golf:"golf course", diary:
 const LAYER_NOUN = {trips:"trip stops", snaps:"memories", golf:"golf courses", diary:"Travel Diary places", bucket:"bucket list places"};
 const KIND_OF = {trips:["stop"], snaps:["snap"], golf:["course","suggest"], diary:["diary"], bucket:["bucket"]};
 function renderLayers(){
-  const L = ["trips","snaps","golf","bucket"].concat(diaryOn ? ["diary"] : []);
-  $("#layers").innerHTML = L.map(k => `<button class="layer" data-k="${k}" aria-pressed="${!!layers[k]}"><span class="dot"></span>${LAYER_LABEL[k]}</button>`).join("");
+  const L = ["trips","snaps","golf","bucket"].concat(diaryOn ? ["diary"] : []); const off = L.filter(k => !layers[k]).length;
+  { const lb = $("#layersBtn"); if (lb) lb.querySelector("span").textContent = off ? `Layers · ${off} hidden` : "Layers"; }
+  if (!$("#layers")) return;
+  $("#layers").innerHTML = L.map(k => `<button class="layer" data-k="${k}" aria-pressed="${!!layers[k]}"><span class="dot">${layers[k] ? "✓" : ""}</span>${LAYER_LABEL[k]}<span class="lst">${layers[k] ? "Shown" : "Hidden"}</span></button>`).join("");
 }
 function revealLayer(k, quiet){
   const pts = allPins().filter(p => KIND_OF[k].includes(p.kind));
@@ -1281,7 +1353,7 @@ function rerender(){ renderStats(); renderTabs(); renderBody(); renderLayers(); 
 /* ---------------- tall sheet (phone) ---------------- */
 const SHEET_H = {peek:26, half:50, full:86};
 let sheetPos = "half";
-function setSheet(pos){ sheetPos = pos; const p = $("#panel"); p.style.setProperty("--ph", SHEET_H[pos] + "dvh"); p.dataset.pos = pos; $("#grab").setAttribute("aria-label", pos === "full" ? "Shrink the panel" : "Grow the panel"); }
+function setSheet(pos){ sheetPos = pos; try { renderTabs(); } catch(e){} const p = $("#panel"); p.style.setProperty("--ph", SHEET_H[pos] + "dvh"); p.dataset.pos = pos; $("#grab").setAttribute("aria-label", pos === "full" ? "Shrink the panel" : "Grow the panel"); }
 (function(){
   const gr = $("#grab"), pn = $("#panel"); let y0 = null, h0 = 0, mv = 0;
   gr.addEventListener("pointerdown", e => { gr.setPointerCapture(e.pointerId); y0 = e.clientY; h0 = pn.getBoundingClientRect().height; mv = 0; pn.classList.add("dragging"); });
@@ -1324,7 +1396,7 @@ function stopHTML(s){
   const st = getStory(s);
   return `<div class="stop"><div><h4>${esc(stopName(s))}</h4><div class="d">${fmt(s.date)} · ${s.photos.length} photo${s.photos.length > 1 ? "s" : ""}</div></div>
     <div class="strip" style="margin:0">${s.photos.map(ph => { const im = `<img src="${photoURL(ph)}" alt="${esc(phLabel(ph) || ph.caption)}" data-ph="${ph.id}"${phLabel(ph) ? ` class="labeled" title="${esc(phLabel(ph))}${ph.by ? " · photo: " + esc(ph.by) : ""}"` : ph.by ? ` title="Photo: ${esc(ph.by)}"` : ""}>`; return ph.by ? `<span class="byph">${im}<i>📷 ${esc(ph.by)}</i></span>` : im; }).join("")}</div>
-    <div class="note" style="margin:-4px 0 0;font-size:12px">Tap a photo to see it big. Label it or remove it there. To pick the cover, turn photos or change their order, use <b>Go through photos</b> above.${s.allPhotos && s.allPhotos.length > s.photos.length ? ` ${plural(s.allPhotos.length - s.photos.length, "photo")} you removed ${s.allPhotos.length - s.photos.length === 1 ? "is" : "are"} hidden from this stop, not deleted. <button class="linkbtn" data-put-back="${s.id}">Put ${s.allPhotos.length - s.photos.length === 1 ? "it" : "them"} back</button>` : ""}</div>
+    <div class="note" style="margin:-4px 0 0">${onceNote("stopPhotos", "Tap a photo to see it big. Label it or remove it there. To pick the cover, turn photos or change their order, use <b>Go through photos</b> under More for this trip.")}${s.allPhotos && s.allPhotos.length > s.photos.length ? ` ${plural(s.allPhotos.length - s.photos.length, "photo")} you removed ${s.allPhotos.length - s.photos.length === 1 ? "is" : "are"} hidden from this stop, not deleted. <button class="linkbtn" data-put-back="${s.id}">Put ${s.allPhotos.length - s.photos.length === 1 ? "it" : "them"} back</button>` : ""}</div>
     ${othersHTML(s)}
     <div class="storyf">
       <label class="l" for="who-${s.id}">Who was with you</label><input type="text" id="who-${s.id}" data-story="${s.id}" data-f="who" value="${esc(st.who)}" placeholder="Names, or just me">
@@ -1347,6 +1419,7 @@ function moveRealStop(sid, toId){ const raw = store.get("realTrips", []), before
   const gone = !a.stops.length; const out = gone ? raw.filter(t => t !== a) : raw; if (!store.set("realTrips", out)){ toast("Couldn't save: this browser's storage is full"); return; }
   refreshTrips(b.id).then(() => toast(`Moved ${st.name} to ${b.title}.${gone ? ` ${a.title} had only that stop, so it's gone now.` : ""}${warn}`, () => { store.set("realTrips", JSON.parse(before)); refreshTrips(a.id, "Move undone"); })); }
 document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.stopMove && e.target.value) moveRealStop(e.target.dataset.stopMove, e.target.value); });
+let tripMoreOpen = !!store.get("tripMore", false); /* "More for this trip" stays as you left it */
 function openTrip(id, noFly){
   const t = TRIPS.find(x => x.id === id); selectedTrip = t; closePlace();
   const st = stopsOf(t); const n = st.reduce((a, s) => a + s.photos.length, 0); const coverPh = tripCover(t); const ppl = tripPeople(t), chs = chaptersOf(t);
@@ -1356,15 +1429,23 @@ function openTrip(id, noFly){
   openSheet(`<div class="hero"><img src="${photo(coverPh.scene, coverPh.id, 960, 540)}" alt=""><div class="cap"><h2>${esc(t.title)}</h2><p>${fmt(t.start)} – ${fmt(t.end)} · ${esc(t.country)}${ppl.length ? " · with " + esc(ppl.join(", ")) : ""}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
    <div class="pad">
     <div class="facts"><div><b>${days(t)}</b><span>${days(t) === 1 ? "Day" : "Days"}</span></div><div><b>${st.length}</b><span>${st.length === 1 ? "Place" : "Places"}</span></div><div><b>${n}</b><span>${n === 1 ? "Photo" : "Photos"}</span></div><div><b>${tripMiles(t).toLocaleString()}</b><span>${tripMiles(t) === 1 ? "Mile" : "Miles"}</span></div></div>
-    <div class="row-btns" style="margin:0"><button class="btn primary" data-replay="${t.id}">▶ Play my story</button><button class="btn" data-music="${t.id}">♪ ${esc(choiceName(musicChoice(t.id) === "auto" ? autoChoice(t.id) : musicChoice(t.id)))}</button><button class="btn" data-share="${t.id}">🎬 Make a video</button><button class="btn" data-tshare="${t.id}">👥 Share this trip</button><button class="btn" data-prev="${t.id}">🖼 Go through photos</button><button class="btn" data-book="${t.id}">📖 Trip book</button>${t.real ? `<label class="btn" style="cursor:pointer">＋ Add photos<input type="file" id="tripAddFiles" data-trip="${t.id}" accept="image/*,.heic,.heif" multiple hidden></label><button class="btn" data-trip-del="${t.id}">🗑 Delete trip</button>` : ""}</div>
+    <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>
+    <div class="row-btns" style="margin:0">${t.real ? `<label class="btn" style="cursor:pointer;flex:1;justify-content:center">＋ Add photos<input type="file" id="tripAddFiles" data-trip="${t.id}" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}<button class="btn" style="flex:1" data-trip-more aria-expanded="${tripMoreOpen}">${tripMoreOpen ? "Fewer options ▴" : "More for this trip ▾"}</button></div>
+    <div class="tripmore" ${tripMoreOpen ? "" : "hidden"}>
+      <button class="morerow" data-music="${t.id}"><div class="flag ring">♪</div><div class="txt"><div class="t">Music</div><div class="s">${esc(choiceName(musicChoice(t.id) === "auto" ? autoChoice(t.id) : musicChoice(t.id)))}</div></div></button>
+      <button class="morerow" data-share="${t.id}"><div class="flag ring">🎬</div><div class="txt"><div class="t">Make a video</div><div class="s">Your story as a video to send or post</div></div></button>
+      <button class="morerow" data-tshare="${t.id}"><div class="flag ring">👥</div><div class="txt"><div class="t">Share this trip</div><div class="s">Send it to someone who was there</div></div></button>
+      <button class="morerow" data-prev="${t.id}"><div class="flag ring">🖼</div><div class="txt"><div class="t">Go through photos</div><div class="s">Pick the cover, turn, reorder or remove photos</div></div></button>
+      <button class="morerow" data-book="${t.id}"><div class="flag ring">📖</div><div class="txt"><div class="t">Trip book</div><div class="s">A printable book of this trip</div></div></button>
+      ${t.real ? `<button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete trip</div><div class="s">You can undo it right after</div></div></button>` : ""}
+    </div>
     ${backAgainHTML(t)}${chs.length ? `<p class="note" style="margin:0">📚 ${chs.map(c => `${esc(c.name)} (${chapterYears(c)})`).join(" · ")}</p>` : ""}
     ${t.sharedWith && t.sharedWith.length ? `<p class="note" style="margin:0">👥 Shared with ${esc(t.sharedWith.join(", "))}. Send it again any time and your copies merge.</p>` : ""}
     ${dupesHTML(t)}
-    ${t.real ? `<p class="note" style="margin:0">Stops were grouped from your photo locations. Rename one, move it to another of your trips, or hide it if it doesn't belong. Each stop keeps up to ${PER_STOP} photos.${stopLimitLines(t) ? " " + stopLimitLines(t) : ""}</p>${(() => { const rt = (store.get("realTrips", []) || []).find(x => x.id === t.id); return rt && rt.titleOffer && rt.titleOffer !== t.title ? `<p class="note" style="margin:0">The copy you merged calls this trip <b>${esc(rt.titleOffer)}</b>. <button class="linkbtn" data-title-offer="${t.id}" data-use="1">Use that name</button> · <button class="linkbtn" data-title-offer="${t.id}" data-use="0">Keep “${esc(t.title)}”</button></p>` : ""; })()}` : `<p class="note" style="margin:0">This is a sample trip, so it stays as it is. With your own trips you can also <b>add photos</b>, <b>move a stop</b> and <b>delete the trip</b>. <button class="linkbtn" data-load-photos>Load trips from my photos</button></p>`}
+    ${t.real ? `${onceNote("tripStops", `<p class="note" style="margin:0">Stops were grouped from your photo locations. Rename one, move it to another of your trips, or hide it if it doesn't belong. Each stop keeps up to ${PER_STOP} photos.</p>`)}${stopLimitLines(t) ? `<p class="note" style="margin:0">${stopLimitLines(t)}</p>` : ""}${(() => { const rt = (store.get("realTrips", []) || []).find(x => x.id === t.id); return rt && rt.titleOffer && rt.titleOffer !== t.title ? `<p class="note" style="margin:0">The copy you merged calls this trip <b>${esc(rt.titleOffer)}</b>. <button class="linkbtn" data-title-offer="${t.id}" data-use="1">Use that name</button> · <button class="linkbtn" data-title-offer="${t.id}" data-use="0">Keep “${esc(t.title)}”</button></p>` : ""; })()}` : onceNote("sampleTrip", `<p class="note" style="margin:0">This is a sample trip, so it stays as it is. With your own trips you can also <b>add photos</b>, <b>move a stop</b> and <b>delete the trip</b>. <button class="linkbtn" data-load-photos>Load trips from my photos</button></p>`)}
     ${golf.length ? `<div class="suggest" style="padding:10px"><b>⛳ Golf on this trip</b><div class="row-btns" style="margin-top:8px">${golf.map(c => `<button class="btn green" data-course="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     ${t.stops.map(stopHTML).join("")}
     ${hikesFor(t).length ? hikesHTML(hikesFor(t), false) : ""}
-    ${t.real ? `<button class="btn" data-trip-del="${t.id}" style="align-self:flex-start;font-size:13px;opacity:.85">🗑 Delete this trip</button>` : ""}
    </div>`, "trip");
   if (scroll) document.querySelector(".sheet-in").scrollTop = scroll;
 }
@@ -1397,7 +1478,7 @@ function openMemory(id){
    <div class="pad">
     ${s.time ? `<div class="facts" style="grid-template-columns:repeat(2,1fr)"><div><b>${esc(s.dist || "—")}</b><span>Distance</span></div><div><b>${esc(s.time)}</b><span>Finish time</span></div></div>` : ""}
     ${s.by ? `<p class="note" style="margin:0"><span class="badge">${esc(s.by)}'s race</span> ${snaps.some(x => x.id === s.id) ? "Added by you." : `Shared from ${esc(s.by)}'s globe.`} The result stays ${esc(s.by)}'s.</p>` : (mine ? `<p class="note" style="margin:0"><span class="badge">Added by you</span></p>` : "")}
-    ${s.rating ? `<div class="stars" style="font-size:16px">${"★".repeat(s.rating)}</div>` : ""}
+    ${s.rating ? `<div class="stars" style="font-size:calc(18px * var(--fs,1))">${"★".repeat(s.rating)}</div>` : ""}
     ${s.note ? `<p style="margin:0">“${esc(s.note)}”</p>` : ""}
     <div class="row-btns" style="margin:0"><button class="btn" data-fly="${s.lon},${s.lat}" data-z="6">Show on globe</button>${mine ? `<button class="btn" data-mem-edit="${s.id}">Edit</button><button class="btn" data-mem-del="${s.id}">Delete</button>` : ""}</div>
     ${mine ? "" : `<p class="note" style="margin:0">Sample memory. Ones you add can be edited or deleted.</p>`}
@@ -1415,7 +1496,7 @@ function renderLB(){
   const it = lbList[lbIdx];
   let el = document.getElementById("lb"); if (!el){ el = document.createElement("div"); el.id = "lb"; document.body.appendChild(el); }
   const lab = it.id ? (phLabels[it.id] || "") : "";
-  el.innerHTML = `<div class="lightbox" data-lb-bg><img src="${it.src}" alt="${esc(lab || it.cap)}"><div class="cap"><b id="lbCap">${esc(lab || it.cap)}</b><span>${esc(it.sub || "")}</span>${it.id ? `<input type="text" class="lblab" data-phlabel="${it.id}" value="${esc(lab)}" maxlength="60" placeholder="Label this photo: the beach, the ruins…" aria-label="Photo label">` : ""}</div>
+  el.innerHTML = `<div class="lightbox" data-lb-bg><img src="${it.src}" alt="${esc(lab || it.cap)}"><div class="cap"><b id="lbCap">${esc(lab || it.cap)}</b><span>${lbList.length > 1 ? `Photo ${lbIdx + 1} of ${lbList.length}${it.sub ? " · " : ""}` : ""}${esc(it.sub || "")}</span>${it.id ? `<input type="text" class="lblab" data-phlabel="${it.id}" value="${esc(lab)}" maxlength="60" placeholder="Add a label" aria-label="Photo label">` : ""}</div>
     <div class="nav">${lbList.length > 1 ? `<button class="btn" data-lb="-1">‹ Prev</button><button class="btn" data-lb="1">Next ›</button>` : ""}${it.id && photoStop(it.id) ? `<button class="btn" data-lb-rm="${it.id}">🗑 Remove photo</button>` : ""}<button class="btn" data-lb-close>Close</button></div></div>`;
 }
 /* take one photo out of its stop from the photo viewer (kept in phHidden, so Undo or Go through photos can bring it back) */
@@ -1440,7 +1521,7 @@ function photoLB(phId){
   const list = s.photos.map(ph => ({id:ph.id, src:photo(ph.scene, ph.id, 960, 720), cap:ph.scene === "real" ? stopName(s) : ph.caption, sub:`${stopName(s)} · ${fmt(s.date)}${ph.scene === "real" ? "" : " · sample photo"}`}));
   lightbox(list, s.photos.indexOf(p));
 }
-function undoCountdown(t, ms){ const bar = document.createElement("i"); bar.className = "tbar"; bar.style.animationDuration = ms + "ms"; t.appendChild(bar); const ub = t.querySelector("button:not(.tx)"), end = Date.now() + ms;
+function undoCountdown(t, ms){ const bar = document.createElement("i"); bar.className = "tbar"; bar.style.animationDuration = ms + "ms"; t.appendChild(bar); const ub = t.querySelector("button:not(.tx)"), end = Date.now() + ms; { const k = t.querySelector(".tkeep"); if (k) k.remove(); }
   const tick = () => { if (!t.isConnected) return; const left = Math.ceil((end - Date.now()) / 1000); if (left <= 0){ t.remove(); return; } if (ub) ub.textContent = `Undo · ${left}s`; setTimeout(tick, 250); }; tick(); }
 function toast(msg, undo, sticky){
   // a pending Undo is only replaced by another Undo or ended by your next tap; plain messages show alongside it
@@ -1450,8 +1531,8 @@ function toast(msg, undo, sticky){
   if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b);
     const x = document.createElement("button"); x.className = "tx"; x.textContent = "✕"; x.setAttribute("aria-label", "Close"); x.onclick = () => t.remove(); t.appendChild(x); }
   document.body.appendChild(t);
-  if (!undo && !sticky){ setTimeout(() => t.remove(), 2600); return; }
-  if (undo){ const inTrip = $("#overlay").dataset.kind === "trip"; if (/Heads up/.test(msg) || inTrip) return; // a warning, or an Undo on an open trip, stays until you tap Undo or ✕ or leave the trip
+  if (!undo && !sticky){ setTimeout(() => t.remove(), 5000); return; } /* long enough to read */
+  if (undo){ const inTrip = $("#overlay").dataset.kind === "trip"; if (/Heads up/.test(msg)) return; if (inTrip){ const k = document.createElement("small"); k.className = "tkeep"; k.textContent = "Undo stays while this trip is open, then 10 seconds"; t.appendChild(k); return; } // a warning, or an Undo on an open trip, stays until you tap Undo or ✕ or leave the trip
     undoCountdown(t, msg.length > 90 ? 16000 : 10000); return; } // Undo stays 10 seconds (a tap elsewhere can't lose it); a "Heads up" warning stays until you tap Undo or ✕
   if (sticky) t.style.pointerEvents = "none"; // a sticky message never blocks the tap that dismisses it
   // a sticky message goes on your next tap
@@ -1558,7 +1639,7 @@ function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where<
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
 function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
 document.addEventListener("change", e => { if (e.target.id === "ldAll" && loadState){ loadState.bigCap = e.target.checked; refreshCapNotes(); return; } }, true);
-document.addEventListener("change", e => { if (e.target.id === "tripAddFiles" && e.target.files.length){ addPhotosToTrip(e.target.dataset.trip, [...e.target.files]); e.target.value = ""; return; } if (e.target.id === "tripFile" && e.target.files.length){ readTripFile(e.target.files[0]); e.target.value = ""; } if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else { const t = loadState.trips[v]; loadState.placed.set(p.file, t.pts[0]); const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${fmtShort(t.start)} – ${fmt(t.end)}). It's added anyway; set it back to Leave out if that's wrong.`); } } refreshWhy(); } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState){ $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); refreshWhy(); } if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
+document.addEventListener("change", e => { if (e.target.id === "bigText"){ BIG_TEXT = e.target.checked; store.set("bigText", BIG_TEXT); applyTextSize(); toast(BIG_TEXT ? "Larger text on" : "Larger text off"); return; } if (e.target.id === "tripAddFiles" && e.target.files.length){ addPhotosToTrip(e.target.dataset.trip, [...e.target.files]); e.target.value = ""; return; } if (e.target.id === "tripFile" && e.target.files.length){ readTripFile(e.target.files[0]); e.target.value = ""; } if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else { const t = loadState.trips[v]; loadState.placed.set(p.file, t.pts[0]); const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${fmtShort(t.start)} – ${fmt(t.end)}). It's added anyway; set it back to Leave out if that's wrong.`); } } refreshWhy(); } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState){ $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); refreshWhy(); } if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
   if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
   if (e.target.dataset && e.target.dataset.ldMove !== undefined && e.target.value){ const [si, j] = e.target.value.split(":").map(Number); moveStop(+e.target.dataset.ldMove, si, j); } });
@@ -1788,12 +1869,12 @@ function openReview(){
       <div style="flex:1;min-width:0"><input type="text" data-ld-title="${i}" value="${esc(t.title)}" aria-label="Trip name" style="font-weight:600">
       <div class="note" style="margin:4px 0 0">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(t.stops.length, "stop")} · ${plural(t.photos, "photo")}</div>
       <div class="note" style="margin:2px 0 0">${t.stops.map(s => s.unsure ? `${esc(s.name)}? <span class="checktag">check</span>` : esc(s.name)).join(" → ")}${t.extraStops ? ` <b>+ ${plural(t.extraStops, "more stop")} not shown</b> (the first ${MAX_STOPS} are kept)` : ""}</div>
-      ${!t.keep && t.photos < 2 ? `<div class="note" style="margin:2px 0 0">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
+      ${!t.keep && t.photos < 2 ? `<div class="note" style="margin:2px 0 0" data-ld-one="${i}">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
       <div class="note ldcap" data-ld-cap="${i}" style="margin:2px 0 0">${capNote(t)}</div>
-      <div class="row-btns" style="margin:6px 0 0">${i < tr.length - 1 ? `<button class="btn" data-ld-merge="${i}" style="font-size:12px;padding:5px 10px">Merge with next trip</button>` : ""}${days(t) > 1 ? `<label class="btn" style="font-size:12px;padding:5px 10px">Split from <select data-ld-split="${i}" style="font-size:12px;background:transparent;color:inherit;border:0">
-        <option value="">day…</option>${[...new Set(t.pts.map(p => new Date(p.t).toDateString()))].slice(1).map(d => `<option value="${esc(d)}">${new Date(d).toLocaleDateString("en-US", {month:"short", day:"numeric"})}</option>`).join("")}</select></label>` : ""}${tr.length > 1 ? `<label class="btn" style="font-size:12px;padding:5px 10px">Move a stop <select data-ld-move="${i}" style="font-size:12px;background:transparent;color:inherit;border:0;max-width:150px"><option value="">to…</option>${t.stops.map((s, si) => tr.map((u, j) => j === i ? "" : `<option value="${si}:${j}">${esc(s.name)} → ${esc(u.title)}</option>`).join("")).join("")}</select></label>` : ""}</div></div></div>`).join("")}
+      <div class="row-btns" style="margin:6px 0 0">${i < tr.length - 1 ? `<button class="btn" data-ld-merge="${i}" style="font-size:calc(14px * var(--fs,1));padding:5px 10px">Merge with next trip</button>` : ""}${days(t) > 1 ? `<label class="btn" style="font-size:calc(14px * var(--fs,1));padding:5px 10px">Split from <select data-ld-split="${i}" style="font-size:calc(14px * var(--fs,1));background:transparent;color:inherit;border:0">
+        <option value="">day…</option>${[...new Set(t.pts.map(p => new Date(p.t).toDateString()))].slice(1).map(d => `<option value="${esc(d)}">${new Date(d).toLocaleDateString("en-US", {month:"short", day:"numeric"})}</option>`).join("")}</select></label>` : ""}${tr.length > 1 ? `<label class="btn" style="font-size:calc(14px * var(--fs,1));padding:5px 10px">Move a stop <select data-ld-move="${i}" style="font-size:calc(14px * var(--fs,1));background:transparent;color:inherit;border:0;max-width:150px"><option value="">to…</option>${t.stops.map((s, si) => tr.map((u, j) => j === i ? "" : `<option value="${si}:${j}">${esc(s.name)} → ${esc(u.title)}</option>`).join("")).join("")}</select></label>` : ""}</div></div></div>`).join("")}
     ${L.noLoc ? `<div class="ldnoloc"><div class="l" style="margin:0">📍 No location · ${plural(L.noLoc, "photo")}</div><p class="note" style="margin:4px 0 0"><span id="ldNoLocFate">${noLocFate(L)}</span></p>${pinnable(L) ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:6px 0 0"><input type="checkbox" id="ldPin" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Add the ${plural(pinnable(L), "photo")} taken during a trip to that trip, by date</span></label>` : ""}${placeHTML(L)}${whyHTML(L)}</div>` : ""}
-    ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start;font-size:13px">Name every trip by place and month</button>` : ""}
+    ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start;font-size:calc(14.5px * var(--fs,1))">Name every trip by place and month</button>` : ""}
     ${tr.length ? `<label class="switch" id="ldAllWrap" style="gap:10px;align-items:center;justify-content:flex-start"${tr.some(t => capInfo(t, PER_STOP).some(c => c.drop.length)) || L.bigCap ? "" : " hidden"}><input type="checkbox" id="ldAll"${L.bigCap ? " checked" : ""} style="width:20px;height:20px;accent-color:var(--lit)"><span>Keep every photo, up to ${BIG_STOP} a stop (uses more space on this device)</span></label>` : ""}
     ${tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Hide the ${plural(SAMPLE_TRIPS.length, "sample trip")}, so the globe shows only my trips (you can show them again under More)</span></label>
     <p class="note" id="ldTotal" style="margin:0">${ldTotalText()}</p><button class="btn primary" data-ld-add style="align-self:flex-start">Add ${plural(kept, "trip")}</button>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
@@ -1814,7 +1895,7 @@ function splitTrip(i, day){ const snap = reviewSnap(); const tr = loadState.trip
 function outsideNoLoc(L){ return (L.noLocAll || []).filter(p => !(p.t && (L.trips || []).some(t => { const [a, b] = tripDayRange(t); return p.t >= a && p.t < b; }))); }
 function placeHTML(L){ const list = outsideNoLoc(L); if (!list.length || !(L.trips || []).length) return "";
   const lim = placeHTML.all ? list.length : Math.min(list.length, 24);
-  return `<div class="ldgrid" id="ldGrid">${list.slice(0, lim).map(p => { const k = (L.noLocAll || []).indexOf(p); return `<button class="ldtile" data-ld-tile="${k}" aria-label="${esc(p.name)}"><img data-ld-thumb="${k}" alt=""><span class="ldtag" data-ld-tag="${k}">${esc(placeTag(L, p))}</span></button>`; }).join("")}</div>${list.length > lim ? `<button class="btn" data-ld-allthumbs style="font-size:13px;margin-top:6px">Show all ${list.length.toLocaleString()} photos</button>` : ""}`; }
+  return `<div class="ldgrid" id="ldGrid">${list.slice(0, lim).map(p => { const k = (L.noLocAll || []).indexOf(p); return `<button class="ldtile" data-ld-tile="${k}" aria-label="${esc(p.name)}"><img data-ld-thumb="${k}" alt=""><span class="ldtag" data-ld-tag="${k}">${esc(placeTag(L, p))}</span></button>`; }).join("")}</div>${list.length > lim ? `<button class="btn" data-ld-allthumbs style="font-size:calc(14.5px * var(--fs,1));margin-top:6px">Show all ${list.length.toLocaleString()} photos</button>` : ""}`; }
 placeHTML.all = false;
 function placeTrip(L, p){ const cur = L.placed.get(p.file); return cur ? L.trips.find(t => t.pts[0] === cur) || null : null; }
 function placeTag(L, p){ const t = placeTrip(L, p); return t ? "✓ " + t.title : "Left out"; }
@@ -1870,10 +1951,26 @@ function moveStop(i, si, j){ const snap = reviewSnap(); const tr = loadState.tri
   const rest = a.pts.filter(p => !st.pts.includes(p)); const nb = buildTrip([...b.pts, ...st.pts]); nb.keep = b.keep || a.keep;
   tr[j] = nb; if (rest.length){ const na = buildTrip(rest); na.keep = partKeep(rest, a.keep); tr[i] = na; } else tr.splice(i, 1);
   tr.sort((x, y) => x.pts[0].t - y.pts[0].t); reviewDone(snap, `Moved ${st.name}.${warn}`); }
-// "102 selected · 102 will be saved": what you picked, and what the ticked trips will actually keep after the stop limit
-function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; const cap = stopCap(); planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */ const saved = L.trips.filter((t, i) => live(t, i)).reduce((a, t) => a + (t.repeat ? (t.repeat.pending ? 0 : t.repeat.newPts.length) : capInfo(t, cap).reduce((b, c) => b + c.keep, 0)), 0); const checking = L.trips.some((t, i) => live(t, i) && t.repeat && t.repeat.pending);
-  return `${(L.total || 0).toLocaleString()} selected · ${checking ? "checking photos already on your globe…" : saved.toLocaleString() + " will be saved"}${L.trips.some((t, i) => live(t, i) && t.repeat && !t.repeat.pending) ? ` (${L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => t.repeat.newPts.length ? `${plural(t.repeat.newPts.length, "new photo")} ${t.repeat.newPts.length === 1 ? "joins" : "join"} ${t.repeat.title}` : `${t.repeat.title} is already on your globe`).join("; ")})` : ""}`; }
-function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]"); if (b){ b.textContent = n ? `Add ${plural(n, "trip")}` : "Tick a trip to add"; b.disabled = !n; } }
+// "You picked 102 photos. 96 will be saved…": what you picked, what the ticked trips will keep, and why the rest is left out
+function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; const cap = stopCap(); planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */
+  let saved = 0, already = 0, unticked = 0, over = 0; const checking = L.trips.some((t, i) => live(t, i) && ((t.repeat && t.repeat.pending) || (t.dupe && t.dupe.pending)));
+  L.trips.forEach((t, i) => { const info = capInfo(t, cap), all = info.reduce((b, c) => b + c.total, 0), keep = info.reduce((b, c) => b + c.keep, 0);
+    if (!live(t, i)){ unticked += all; return; }
+    if (t.repeat){ if (t.repeat.pending) return; const o = t.repeat.over || 0; saved += t.repeat.newPts.length; over += o; already += Math.max(0, all - t.repeat.newPts.length - o); return; }
+    const dn = t.dupe && !t.dupe.pending ? t.dupe.drop.size : 0; if (dn){ const k2 = freshKeep(t, cap); saved += k2; already += dn; over += Math.max(0, all - dn - k2); return; }
+    saved += keep; over += all - keep; });
+  const total = L.total || 0, rest = Math.max(0, total - saved - already - unticked - over);
+  L.lastSaved = saved; L.lastChecking = checking;
+  if (checking) return `You picked ${plural(total, "photo")}. Checking which are already on your globe…`;
+  const why = [already && `${already.toLocaleString()} already on your globe`, unticked && `${unticked.toLocaleString()} in trips you didn't tick`, over && `${over.toLocaleString()} over a stop's photo limit`, rest && `${rest.toLocaleString()} not part of any trip`].filter(Boolean);
+  const joins = L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => t.repeat.newPts.length ? `${plural(t.repeat.newPts.length, "new photo")} ${t.repeat.newPts.length === 1 ? "joins" : "join"} ${t.repeat.title}` : `${t.repeat.title} is already on your globe`);
+  /* one plain sentence that adds up: picked = saved + each reason the rest is left out */
+  return `You picked ${plural(total, "photo")}. ${saved.toLocaleString()} will be saved to your globe${joins.length ? ` (${joins.join("; ")})` : ""}.${why.length && total > saved ? ` Left out: ${why.join(", ")}.` : ""}`; }
+function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); }
+// the Add button always agrees with the receipt: nothing new to save means nothing to add
+function syncAddBtn(){ const L = loadState; const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]");
+  document.querySelectorAll("[data-ld-one]").forEach(el => { const k = document.querySelector(`[data-ld-keep="${el.dataset.ldOne}"]`); el.hidden = !!(k && k.checked); });
+  if (!b) return; const none = n && L && !L.lastChecking && L.lastSaved === 0; b.textContent = !n ? "Tick a trip to add" : L && L.lastChecking ? "Checking…" : none ? "Nothing new to add" : `Add ${plural(n, "trip")}`; b.disabled = !n || none || !!(L && L.lastChecking); }
 const PER_STOP = 20; // photos kept for each stop (the rest still count toward finding trips and stops)
 const BIG_STOP = 60;  // the "keep every photo" limit you can choose in the review
 const stopCap = () => (loadState && loadState.bigCap) ? BIG_STOP : PER_STOP;
@@ -1900,11 +1997,12 @@ function extraPts(t){ const L = loadState, out = new Map(); if (!L) return out; 
   if (pin && !t.pinnedDone) (L.noLocPts || []).filter(p => p.t >= a && p.t < b).forEach(p => add(nearest(p), p));
   if (L.placed) L.placed.forEach((first, file) => { if (first !== t.pts[0]) return; const p = (L.noLocAll || []).find(x => x.file === file); if (p) add(nearest(p), p); });
   return out; }
+function freshKeep(t, cap){ const drop = (t.dupe && t.dupe.drop) || new Set(); return t.stops.reduce((a, s) => a + stopPick(s.pts.filter(p => !drop.has(p)), cap).keep.length, 0); }
 function capInfo(t, cap){ const ex = extraPts(t); return t.stops.map(s => { const all = [...s.pts, ...(ex.get(s) || [])]; const r = stopPick(all, cap); return {s, total:all.length, keep:r.keep.length, drop:r.drop}; }); }
 function capNote(t){ const cap = stopCap(), info = capInfo(t, cap).filter(c => c.drop.length); if (!info.length) return "";
   const nm = p => (p.file && p.file.name) || "a photo";
   return `Each stop keeps up to ${cap} photos. ${info.map(c => `<b>${esc(c.s.name)}</b> keeps ${c.keep} of ${c.total}, leaving out ${esc(c.drop.slice(0, 4).map(nm).join(", "))}${c.drop.length > 4 ? ` <details style="display:inline"><summary style="display:inline;cursor:pointer;text-decoration:underline">and ${c.drop.length - 4} more</summary>${esc(c.drop.slice(4).map(nm).join(", "))}</details>` : ""}`).join(". ")}. Photos you placed yourself are always kept.${cap < BIG_STOP ? " Tick <b>Keep every photo</b> below, or Split the trip, to keep more." : ""}`; }
-function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } document.querySelectorAll("[data-ld-cap]").forEach(el => { const t = L.trips[+el.dataset.ldCap]; if (t) el.innerHTML = capNote(t); });
+function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); document.querySelectorAll("[data-ld-cap]").forEach(el => { const t = L.trips[+el.dataset.ldCap]; if (t) el.innerHTML = capNote(t); });
   const w = $("#ldAllWrap"); if (w) w.hidden = !(L.bigCap || L.trips.some(t => capInfo(t, PER_STOP).some(c => c.drop.length))); }
 /* a trip counts as already on your globe only if the dates match and each of its stops sits within 3 km of a stop of the saved trip; a Tokyo photo on the day of a saved Paris trip is a new trip */
 /* for a loader trip that matches a saved one: which of its photos are not in the saved trip yet (by picture fingerprint) */
@@ -1912,9 +2010,25 @@ async function repeatPlan(t, e){ const prints = []; for (const o of e.stops) for
   const out = []; for (const s of t.stops) for (const p of s.pts){ let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) continue; out.push({s, p}); }
   return out; }
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = store.get("realTrips", []) || [];
-  (async () => { for (const t of L.trips){ const e = existing.find(x => sameTripAs(x, t)); if (!e) continue; t.repeat = {eid:e.id, title:e.title, pending:true}; refreshCapNotes(); t.repeat.newPts = await repeatPlan(t, e); t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; })(); }
-function sameTripAs(e, t){ if (e.start !== t.start || e.end !== t.end || !e.stops || !e.stops.length || !t.stops.length) return false; const near = s => Math.min(...e.stops.map(q => d3.geoDistance([q.lon, q.lat], [s.lon, s.lat]) * KM));
-  const d = t.stops.map(near); if (d.some(x => x > 300)) return false; /* a stop far from every saved one: a different trip, even on the same dates */ return d.filter(x => x < 3).length * 2 >= t.stops.length; /* most stops in the same places */ }
+  (async () => { for (const t of L.trips){ const e = existing.find(x => sameTripAs(x, t));
+    if (!e){ if (!existing.length) continue; t.dupe = {pending:true, drop:new Set()}; refreshCapNotes(); try { t.dupe.drop = await dupeScan(t, existing); } catch(err){} t.dupe.pending = false; refreshCapNotes(); continue; }
+    t.repeat = {eid:e.id, title:e.title, pending:true}; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; })(); }
+function sameTripAs(e, t){ if (!e.stops || !e.stops.length || !t.stops.length || !e.start || !t.start || e.start > t.end || t.start > e.end) return false; /* the dates must overlap */
+  const hit = e.stops.filter(q => Math.min(...t.stops.map(s => d3.geoDistance([q.lon, q.lat], [s.lon, s.lat]) * KM)) < 3).length;
+  return hit >= 1 && hit * 2 >= e.stops.length; /* most of the saved trip's stops are in this batch again: the same trip, even with an extra place or day (those join it) */ }
+// which new photos actually fit when they join a saved trip: the same nearest-stop and stop-limit rules Add uses, so the receipt never promises more than Add saves
+function fitJoin(e, plan, cap){ const vis = new Map(e.stops.map(q => [q.id, {q, n:q.photos.filter((ph, k) => !PH_HIDDEN[q.id + "-" + k]).length, lim:Math.max(stopLimit(q), cap)}])); const extra = []; const keep = []; let over = 0;
+  for (const it of plan){ const {s, p} = it; const all = [...vis.values()].map(v => ({v, d:d3.geoDistance([v.q.lon, v.q.lat], [s.lon, s.lat]) * KM})).concat(extra.map(v => ({v, d:d3.geoDistance([v.q.lon, v.q.lat], [s.lon, s.lat]) * KM}))).sort((a, b) => a.d - b.d);
+    let v = all[0] && all[0].d < 15 ? all[0].v : null; if (!v){ v = {q:{lat:s.lat, lon:s.lon}, n:0, lim:cap}; extra.push(v); }
+    if (v.n >= v.lim && !p.pinned){ over++; continue; } v.n++; keep.push(it); }
+  return {keep, over}; }
+// photos in a new trip that are already saved somewhere on your globe (same picture, any name or time). Trips near these dates are checked first; up to 1,500 saved photos in all
+async function dupeScan(t, existing){ const lo = new Date(new Date(t.start).getTime() - 3 * DAY).toISOString().slice(0, 10), hi = new Date(new Date(t.end).getTime() + 3 * DAY).toISOString().slice(0, 10); const prints = []; let n = 0;
+  const order = [...existing].sort((a, b) => ((b.start <= hi && b.end >= lo) ? 1 : 0) - ((a.start <= hi && a.end >= lo) ? 1 : 0));
+  for (const e of order) for (const o of e.stops || []){ if (n >= 1500) break; for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; n++; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); } }
+  const drop = new Set(); if (!prints.length) return drop;
+  for (const s of t.stops) for (const p of s.pts){ let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) drop.add(p); }
+  return drop; }
 async function addRealTrips(){
   const L = loadState; const pick = L.trips.map((t, i) => ({t, i})).filter(({i}) => document.querySelector(`[data-ld-keep="${i}"]`).checked);
   if (!pick.length){ toast("Tick at least one trip"); return; }
@@ -1925,17 +2039,19 @@ async function addRealTrips(){
   const cap = stopCap(); const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + stopPick(s.pts, cap).keep.length, 0), 0);
   for (const {t, i} of pick){
     { const e = existing.find(x => sameTripAs(x, t)); if (e){ /* already saved: same dates and places, so only its new photos join that trip */
-      const plan = t.repeat && !t.repeat.pending ? t.repeat.newPts : await repeatPlan(t, e); let got = 0;
+      const plan = t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep; let got = 0;
       for (const {s, p} of plan){ let es = e.stops.map(q => ({q, d:d3.geoDistance([q.lon, q.lat], [s.lon, s.lat])})).sort((a, b) => a.d - b.d)[0]; es = es.d * KM < 15 ? es.q : null;
         if (!es){ const dd = new Date(s.t); es = {id:e.id + "x" + Date.now().toString(36) + e.stops.length, name:s.name, lat:+s.lat.toFixed(5), lon:+s.lon.toFixed(5), date:dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"), photos:[]}; e.stops.push(es); e.stops.sort((a, b) => a.date.localeCompare(b.date)); } /* a new place on the same trip becomes a new stop */
         const vis = es.photos.filter((ph, k) => !PH_HIDDEN[es.id + "-" + k]).length; if (vis >= Math.max(stopLimit(es), cap) && !p.pinned) continue;
         let url = await thumb(p.file, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e2){ url = null; } } if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ failed++; continue; }
         try { await idb.put("rp:" + es.id + "-" + es.photos.length, url); } catch(e2){ failed++; continue; } es.photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); got++; done++; prog.textContent = `Saving photos ${done} of ${total}…`; }
-      if (got){ joined.push({title:e.title, n:got}); } continue; } }
+      if (got){ joined.push({title:e.title, n:got}); const ds = e.stops.map(q => q.date).concat(plan.map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
+    const drop = t.dupe && !t.dupe.pending ? t.dupe.drop : (existing.length ? await dupeScan(t, existing) : new Set()); /* never save a photo twice, whatever its name or time */
+    if (drop.size && t.stops.every(s => s.pts.every(p => drop.has(p)))) continue;
     const id = "rt" + base + i; const title = (document.querySelector(`[data-ld-title="${i}"]`).value || t.title).trim().slice(0, 80);
     const stops = [];
     for (let si = 0; si < t.stops.length; si++){
-      const s = t.stops[si]; const sid = id + "s" + si; const chosen = stopPick(s.pts, cap).keep;
+      const s = t.stops[si]; const sid = id + "s" + si; const fresh = s.pts.filter(p => !drop.has(p)); if (!fresh.length) continue; const chosen = stopPick(fresh, cap).keep;
       const photos = [];
       for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); }
         if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
@@ -2363,7 +2479,8 @@ const dayKey = d => { const x = d instanceof Date ? d : new Date(d); return x.ge
 const lineFor = date => dayLines[date] || null;
 // tonight's prompt: only when you've turned it on, said you're away, it's after your chosen hour, and today has no line yet
 function journalDue(){ const now = new Date(); return journal.on && journal.away && now.getHours() >= journal.hour && !lineFor(dayKey(now)) && store.get("jSkip", "") !== dayKey(now); }
-function journalCheck(){ if (journalDue() && !document.querySelector(".sheet") && !replayState) openDayPrompt(); }
+function journalCheck(){ if (!journalDue() || document.querySelector(".sheet") || replayState || document.getElementById("jnudge")) return; /* a small reminder, never a window in your face when the app opens */
+  const t = document.createElement("div"); t.className = "toast"; t.id = "jnudge"; t.setAttribute("role", "status"); t.textContent = "✎ Best moment today?"; const b = document.createElement("button"); b.textContent = "Write it"; b.onclick = () => { t.remove(); openDayPrompt(); }; const x = document.createElement("button"); x.className = "tx"; x.textContent = "✕"; x.setAttribute("aria-label", "Not now"); x.onclick = () => { t.remove(); store.set("jSkip", dayKey(new Date())); }; t.append(b, x); document.body.appendChild(t); }
 
 /* voice recorder (60 s max), used for tonight's line and for any stop */
 var vrec = null;
@@ -2653,7 +2770,8 @@ function bookMap(st){ if (!st.length) return ""; const W0 = 640, H0 = 400, pad =
   const xy = pts.map(p => pr(p)); const line = xy.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + "," + q[1].toFixed(1)).join("");
   const dots = xy.map((q, i) => { const nm = esc(stopName(st[i])), right = q[0] < W0 - 150; return `<g><circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="11" fill="#b5542c" stroke="#fff" stroke-width="2"/><text x="${q[0].toFixed(1)}" y="${(q[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${i + 1}</text><text x="${(q[0] + (right ? 16 : -16)).toFixed(1)}" y="${(q[1] + 4).toFixed(1)}" text-anchor="${right ? "start" : "end"}" font-size="13" fill="#3b352d" stroke="#f7f3ea" stroke-width="3" paint-order="stroke">${nm}</text></g>`; }).join("");
   return `<figure class="bmap"><svg viewBox="0 0 ${W0} ${H0}" role="img" aria-label="Map of the trip"><rect width="${W0}" height="${H0}" fill="#dfe8ec"/><path d="${land}" fill="#f1ebdd" stroke="#c9bfa9" stroke-width=".8"/>${st.length > 1 ? `<path d="${line}" fill="none" stroke="#b5542c" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round"/>` : ""}${dots}</svg></figure>`; }
-function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const st = stopsOf(t); closeSheet();
+let bookFrom = null;
+function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const st = stopsOf(t); bookFrom = $("#overlay").dataset.kind === "trip" ? id : (bookFrom === id ? id : null); closeSheet();
   const n = st.reduce((a, s) => a + s.photos.length, 0), cov = tripCover(t), ppl = tripPeople(t), chs = chaptersOf(t);
   const pic = (ph, w, h) => `<figure><img src="${photo(ph.scene, ph.id, w, h)}" alt="">${phLabel(ph) || ph.by || ph.scene !== "real" ? `<figcaption>${esc(phLabel(ph) || (ph.scene !== "real" ? ph.caption : ""))}${ph.by ? ` <i>Photo: ${esc(ph.by)}</i>` : ""}</figcaption>` : ""}</figure>`;
   const stops = st.map((s, i) => { const story = getStory(s), dl = dayLineForStop(s), oth = othersLines(s), max = bookAll ? s.photos.length : 5; const ps = s.photos.slice(0, max); const ba = backAgain(t).find(h => h.stop === s);
@@ -2706,7 +2824,7 @@ async function openBookPage(){ const btn = document.querySelector("#book [data-b
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], {type:"text/html"})); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000); window.__tgBookPage = "download";
     toast(`Saved ${name}. Open it and tap Print or save as PDF.`);
   } finally { if (btn){ btn.disabled = false; btn.textContent = "🖨 Print or save as PDF"; } } }
-function closeBook(){ const el = $("#book"); if (el) el.remove(); document.body.classList.remove("booking"); }
+function closeBook(stay){ const el = $("#book"); if (el) el.remove(); document.body.classList.remove("booking"); const back = bookFrom; if (!stay){ bookFrom = null; if (back && TRIPS.find(x => x.id === back)) openTrip(back); } } /* closing the book takes you back to the trip you opened it from */
 /* the app page itself never calls window.print(): a print window there can hold the whole app, so Print always goes through the book's own page (openBookPage) */
 
 // Install to home screen (works on playbrightharbor.com, not inside the Claude viewer)
@@ -2858,7 +2976,7 @@ async function prRotate(){ const ph = prev.list[prev.i];
 function prStep(d){ if (!prev) return; prev.i = Math.max(0, Math.min(prev.list.length - 1, prev.i + d)); drawPhotoReview(); }
 function prSetHidden(on){ const ph = prev.list[prev.i]; if (on) prev.hidden[ph.id] = true; else delete prev.hidden[ph.id]; prev.changed = true;
   if (on && COVERS[prev.trip.id] === ph.id){ delete COVERS[prev.trip.id]; store.set("covers", COVERS); }
-  store.set("phHidden", prev.hidden); drawPhotoReview(); }
+  store.set("phHidden", prev.hidden); try { setPhotoHidden(ph.id, on); worldCache.key = null; if (typeof renderBody === "function") renderBody(); renderStats(); } catch(e){} drawPhotoReview(); }
 function prDone(){ if (!prev) return; const R = prev; prev = null;
   if (R.changed){ refreshTrips(R.trip.id); return; }
   openTrip(R.trip.id, true); }
@@ -2887,11 +3005,11 @@ function openTripAfterReload(){ let id = null, msg = null; try { id = sessionSto
 const myName = () => String(store.get("myName", "") || "").trim();
 function othersHTML(s){ const o = s.others || {}; const rows = Object.entries(o).filter(([n, v]) => v && (v.best || v.who || v.note)); const by = s.photos.filter(p => p.by).length;
   return rows.map(([n, v]) => `<div class="dayline"><div><div class="d">From ${esc(n)}</div>${v.best ? `<div>“${esc(v.best)}”</div>` : ""}${v.note ? `<div class="note" style="margin:2px 0 0">${esc(v.note)}</div>` : ""}${v.who ? `<div class="note" style="margin:2px 0 0">With ${esc(v.who)}</div>` : ""}</div></div>`).join("")
-    + (by ? `<div class="note" style="margin:-4px 0 0;font-size:12px">${plural(by, "photo")} added by ${esc([...new Set(s.photos.filter(p => p.by).map(p => p.by))].join(" and "))}</div>` : ""); }
+    + (by ? `<div class="note" style="margin:-4px 0 0;font-size:calc(14px * var(--fs,1))">${plural(by, "photo")} added by ${esc([...new Set(s.photos.filter(p => p.by).map(p => p.by))].join(" and "))}</div>` : ""); }
 function othersLines(s){ return Object.entries(s.others || {}).filter(([n, v]) => v && v.best).map(([n, v]) => ({by:n, text:v.best})); }
 const tripShareId = t => t.shareId || (t.sample ? "sample-" + t.id : t.id);
 // add more photos to a trip you already have (yours, or one someone shared with you): each joins the nearest stop, or makes a new one
-function fullText(m){ const a = [...m.entries()]; if (!a.length) return "That stop is full"; return a.map(([n, c]) => `${n} already has ${c} photos`).join(", ") + (a.length === 1 ? " (its limit)" : " (their limit)"); }
+function fullText(m){ const a = [...m.entries()]; if (!a.length) return "That stop is full"; return a.map(([n, c]) => typeof c === "number" ? `${n} already has ${c} photos (its limit)` : c.vis > c.cap ? `${n} already has ${c.vis} photos, over its limit of ${c.cap}` : `${n} already has ${c.vis} photos (its limit)`).join(", "); }
 async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []) || []; const t = raw.find(x => x.id === id); if (!t){ toast("Photos can be added to your own trips and to trips shared with you. Sample trips stay as they are."); return; }
   const ds = ms => { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   let added = 0, newStops = 0, skipped = 0, full = 0, same = 0, left = 0, i = 0, capHit = PER_STOP; const fullAt = new Map();
@@ -2913,7 +3031,7 @@ async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []
       if (near && near.d < 15) st = near.o;
       else { const pl = nearestPlace([ex.lon, ex.lat]); st = {id:t.id + "x" + Date.now().toString(36) + i, name:pl && pl.d < .02 ? pl.p[0] : "New stop", lat:+ex.lat.toFixed(5), lon:+ex.lon.toFixed(5), date:ds(when), photos:[]}; t.stops.push(st); newStops++; } }
     else { st = [...t.stops].sort((a, b) => Math.abs(new Date(a.date + "T12:00") - when) - Math.abs(new Date(b.date + "T12:00") - when))[0]; } // no location: the stop nearest in time
-    if (!st){ skipped++; continue; } { const vis = st.photos.filter((p, k) => !PH_HIDDEN[st.id + "-" + k]).length, cap = stopLimit(st); if (vis >= cap){ full++; capHit = Math.max(capHit, cap); fullAt.set(st.name || "That stop", cap); continue; } } /* photos you removed don't take a place */
+    if (!st){ skipped++; continue; } { const vis = st.photos.filter((p, k) => !PH_HIDDEN[st.id + "-" + k]).length, cap = stopLimit(st); if (vis >= cap){ full++; capHit = Math.max(capHit, cap); fullAt.set(st.name || "That stop", {vis, cap}); continue; } } /* photos you removed don't take a place */
     let url = await thumb(f, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } }
     if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ skipped++; continue; }
     { const fp = await picPrint(url); if (fp && prints.some(q => samePic(fp, q))){ same++; if (!st.photos.length){ t.stops.splice(t.stops.indexOf(st), 1); newStops--; } continue; } }
@@ -2972,15 +3090,16 @@ async function picPrint(url){ if (typeof url !== "string" || !url.startsWith("da
     let mean = 0; for (const v of g) mean += v; mean /= g.length; let sd = 0; for (const v of g) sd += (v - mean) ** 2; sd = Math.sqrt(sd / g.length) || 1; const z = g.map(v => (v - mean) / sd);
     const rot = b => { const o = new Float32Array(N * N); for (let r = 0; r < N; r++) for (let q = 0; q < N; q++) o[q * N + (N - 1 - r)] = b[r * N + q]; return o; };
     const all = [z]; for (let k = 0; k < 3; k++) all.push(rot(all[k])); return all; };
-  const out = {z:pattern(24), f:pattern(48), px:(im.naturalWidth || im.width) * (im.naturalHeight || im.height)}; PH_FP.set(key, out); return out; }
+  const tint = (() => { const c = document.createElement("canvas"); c.width = c.height = 16; const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, 16, 16); const d = x.getImageData(0, 0, 16, 16).data; let r = 0, g = 0, b = 0; for (let i = 0; i < d.length; i += 4){ r += d[i]; g += d[i+1]; b += d[i+2]; } const t = r + g + b || 1; return [r / t, g / t, b / t]; })(); /* the overall colour: the light/dark pattern alone can't tell a blue picture from an orange one */
+  const out = {c:tint, z:pattern(24), f:pattern(48), px:(im.naturalWidth || im.width) * (im.naturalHeight || im.height)}; PH_FP.set(key, out); return out; }
 const dotz = (v, w) => { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * w[i]; return s / v.length; };
 // the same picture if some quarter turn of one lines up almost exactly with the other. Returns the turn (0-3) that matched, or -1.
 // Tested on 36 real photos: re-saved, filtered, turned and messaging-size copies score .965+ coarse, or .966+ fine when the coarse score is borderline.
 // Near-twins (the camera moved 2-4%) that pass the coarse check sit at .946-.961 coarse and .90-.94 fine, so only 2 of 36 still merge (was 8 of 36).
-function picTurn(a, b){ if (!a || !b) return -1; let bk = -1, bc = .945; a.z.forEach((v, k) => { const c = dotz(v, b.z[0]); if (c > bc){ bc = c; bk = k; } }); if (bk < 0) return -1; return bc < .965 && a.f && b.f && dotz(a.f[bk], b.f[0]) <= .955 ? -1 : bk; }
+function picTurn(a, b){ if (!a || !b) return -1; if (a.c && b.c && Math.max(...a.c.map((v, i) => Math.abs(v - b.c[i]))) > .1) return -1; /* clearly different colours: not the same picture (filters and re-saves shift colour far less) */ let bk = -1, bc = .945; a.z.forEach((v, k) => { const c = dotz(v, b.z[0]); if (c > bc){ bc = c; bk = k; } }); if (bk < 0) return -1; return bc < .965 && a.f && b.f && dotz(a.f[bk], b.f[0]) <= .955 ? -1 : bk; }
 function picCorr(a, b){ if (!a || !b) return 0; return Math.max(...a.z.map(v => dotz(v, b.z[0]))); }
 function samePic(a, b){ return picTurn(a, b) >= 0; }
-function imgHash(u){ if (typeof u !== "string" || !u) return null; let h = 2166136261; for (let i = 0; i < u.length; i += 61){ h ^= u.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ":" + u.length; }
+function imgHash(u){ if (typeof u !== "string" || !u) return null; let h = 2166136261; for (let i = 0; i < u.length; i++){ h ^= u.charCodeAt(i); h = Math.imul(h, 16777619); } /* every character: two same-size pictures never share a key */ return (h >>> 0).toString(36) + ":" + u.length; }
 const sampleFor = d => String(d.trip.shareId || "").startsWith("sample-") ? TRIPS.find(x => x.sample && "sample-" + x.id === d.trip.shareId) || null : null;
 let pendingTrip = null;
 function openTripImport(d){ pendingTrip = d; const local = findLocalShared(d) || sampleFor(d); const nPh = d.trip.stops.reduce((a, s) => a + s.photos.length, 0);
@@ -3024,7 +3143,7 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
       s.photos.push([ip.scene === "real" ? "real" : String(ip.scene || "city"), String(ip.caption || "").slice(0, 120), null, 0, ip.uid, by]); have.add(ip.uid); added++;
       if (ip.label && !labels[s.id + "-" + idx]) labels[s.id + "-" + idx] = String(ip.label).slice(0, 60); }
   }
-  t.stops.forEach(s => { if (s.big) return; const vis = s.photos.filter((p, k) => !PH_HIDDEN[s.id + "-" + k]).length; if (vis > PER_STOP){ const who = [...new Set(s.photos.map(p => p[5]).filter(Boolean))]; s.mergedOver = who.length ? who : [d.from || "they"]; } });
+  t.stops.forEach(s => { if (stopKind(s) === "big"){ s.big = true; return; } /* an old Keep-every-photo stop with no flag stays big */ const vis = s.photos.filter((p, k) => !PH_HIDDEN[s.id + "-" + k]).length; if (vis > PER_STOP){ const who = [...new Set(s.photos.map(p => p[5]).filter(Boolean))]; s.mergedOver = who.length ? who : [d.from || "they"]; } });
   t.stops = t.stops.filter(s => s.photos.length); t.stops.sort((a, b) => a.date.localeCompare(b.date));
   if (!t.stops.length){ toast("That trip had no photos this browser can show"); return; }
   t.start = t.stops[0].date < t.start ? t.stops[0].date : t.start; t.end = t.stops[t.stops.length - 1].date > t.end ? t.stops[t.stops.length - 1].date : t.end;
@@ -3046,7 +3165,8 @@ function sharedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getIt
 // saved with the trip (the two copies in the photo store as "dup:" keys), so a swap or Keep both still works after a reload
 var MERGE_DUPES = (store.get("mergeDupes", []) || []).filter(x => x && typeof x.id === "string" && typeof x.trip === "string" && typeof x.key === "string");
 const dupImg = (x, w) => x[w] || imgCache.get("dup:" + x.id + ":" + (w === "mine" ? "m" : "t")) || "";
-async function saveDupes(){ for (const x of MERGE_DUPES){ if (x.id) continue; x.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); if (x.removed) continue;
+async function saveDupes(){ { const seen = new Set(); MERGE_DUPES = MERGE_DUPES.filter(x => { const k = [x.trip, x.sid, x.i, x.by || "", x.removed ? 1 : 0].join("|"); if (seen.has(k)) return false; seen.add(k); return true; }); } /* the same pair from a second merge is counted once */
+  for (const x of MERGE_DUPES){ if (x.id) continue; x.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); if (x.removed) continue;
     try { await idb.put("dup:" + x.id + ":m", x.mine); await idb.put("dup:" + x.id + ":t", x.theirs); imgCache.set("dup:" + x.id + ":m", x.mine); imgCache.set("dup:" + x.id + ":t", x.theirs); } catch(e){} }
   store.set("mergeDupes", MERGE_DUPES.map(({mine, theirs, ...r}) => r)); }
 function dropDupes(tripIds){ const ids = new Set(tripIds); const gone = MERGE_DUPES.filter(x => ids.has(x.trip)); if (!gone.length) return;
@@ -3084,8 +3204,14 @@ document.addEventListener("click", e => {
   if ((b = g("[data-title-offer]"))){ titleOffer(b.dataset.titleOffer, b.dataset.use === "1"); return; }
   if ((b = g("[data-dup-use]"))){ dupUse(+b.dataset.dupUse, b.dataset.which); return; }
   if ((b = g("[data-dup-both]"))){ dupKeepBoth(+b.dataset.dupBoth); return; }
+  if ((b = g("[data-nav]"))){ const k = b.dataset.nav; if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
+  if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; store.set("tripMore", tripMoreOpen); const b2 = g("[data-trip-more]"); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = tripMoreOpen ? "Fewer options ▴" : "More for this trip ▾"; const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
+  if (g("[data-open-layers]")){ openLayers(); return; }
+  if (g("[data-add-memory]")){ closeSheet(); openSnap("food"); return; }
+  if (g("[data-add-manual]")){ closeSheet(); openManual(); return; }
+  if (g("[data-tips-again]")){ store.set("helpSeen", {}); HELP_SEEN = {}; toast("Tips will show again"); renderBody(); return; }
   if ((b = g("[data-tab]"))){ tab = b.dataset.tab; store.set("tab", tab); renderTabs(); renderBody(); showList(); $("#tabbody").scrollTop = 0; return; }
-  if ((b = g(".layer"))){ const k = b.dataset.k; layers[k] = !layers[k]; store.set("layers2", layers); renderLayers(); if (layers[k]) revealLayer(k); else toast(`${LAYER_LABEL[k]} hidden from the globe`); dirty = true; return; }
+  if ((b = g(".layer"))){ const k = b.dataset.k; layers[k] = !layers[k]; store.set("layers2", layers); renderLayers(); if (layers[k]){ revealLayer(k); toast(`${LAYER_LABEL[k]} shown on the globe`); } else toast(`${LAYER_LABEL[k]} hidden from the globe. Tap ${LAYER_LABEL[k]} again to show them`); dirty = true; return; }
   if ((b = g("[data-replay-done]"))){ endReplay(); return; }
   if ((b = g("[data-open-trip]"))){ closeLB(); openTrip(b.dataset.openTrip); return; }
   if ((b = g("[data-replay]"))){ replay(b.dataset.replay); return; }
@@ -3127,7 +3253,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-book]"))){ openBook(b.dataset.book); return; }
   if (g("[data-book-close]")){ closeBook(); return; }
   if (g("[data-book-page]")){ openBookPage(); return; }
-  if (g("[data-book-all]")){ bookAll = !bookAll; store.set("bookAll", bookAll); const id = $("#book .bookpages").dataset.bookId; closeBook(); openBook(id); return; }
+  if (g("[data-book-all]")){ bookAll = !bookAll; store.set("bookAll", bookAll); const id = $("#book .bookpages").dataset.bookId; closeBook(true); openBook(id); return; }
   if ((b = g("[data-back-dismiss]"))){ const o = store.get("backSeen", {}) || {}; o[b.dataset.backDismiss] = 1; store.set("backSeen", o); renderBody(); return; }
   if ((b = g("[data-tgroup]"))){ tripGroup = b.dataset.tgroup; store.set("tripGroup", tripGroup); renderBody(); return; }
   if (g("[data-ch-new]")){ openChapter(); return; }
@@ -3342,9 +3468,9 @@ function openWelcome(){
   if (!store.get("realHome", null) && !store.get("homeSkipped", false)){ openHomeSheet("welcome"); return; }
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Your travels, on a globe")}
     <p style="margin:0">Travel Globe reads where and when your photos were taken, and turns them into trips you can relive.</p>
-    <button class="btn primary" data-load-photos style="align-self:stretch;font-size:16px;padding:14px">Load trips from my photos</button>
+    <button class="btn primary" data-load-photos style="align-self:stretch;font-size:calc(18px * var(--fs,1));padding:14px">Load trips from my photos</button>
     <button class="btn" data-sample-photos style="align-self:stretch">Try it with sample photos</button>
-    <button class="btn" data-sample-look style="align-self:flex-start;font-size:13px;opacity:.85">Or look around with a sample traveler</button>
+    <button class="btn" data-sample-look style="align-self:flex-start;font-size:calc(14.5px * var(--fs,1));opacity:.85">Or look around with a sample traveler</button>
     <p class="note" style="margin:0">🔒 Your photos stay on this device. Nothing is uploaded, and there's no account.</p></div>`, "welcome");
 }
 /* ---------------- home: asked once, first thing; change it under More ---------------- */
@@ -3356,7 +3482,7 @@ function openHomeSheet(next){ homeNext = next; const rh = store.get("realHome", 
     <p style="margin:0">${rh ? "Change it any time. Trips are the places you went away from home." : "Travel Globe finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
     ${whereHTML("Your home stays on this device.").replace(/<button class="btn" data-where-map>[^<]*<\/button>/, "").replace('<small class="guesstag">Not set yet</small>', '<small class="guesstag">Not set yet · </small>')}
     <div class="row-btns" style="margin:0"><button class="btn" data-home-geo>📍 Use my location</button><button class="btn primary" data-home-save>${next === "review" ? "Set home and find my trips" : "Set as home"}</button></div>
-    ${next === "welcome" ? `<div class="row-btns" style="margin:0"><button class="btn" data-home-skip style="font-size:13px;opacity:.85">Skip for now</button><button class="btn" data-sample-look style="font-size:13px;opacity:.85">Look around with a sample traveler</button></div>` : ""}
+    ${next === "welcome" ? `<div class="row-btns" style="margin:0"><button class="btn" data-home-skip style="font-size:calc(14.5px * var(--fs,1));opacity:.85">Skip for now</button><button class="btn" data-sample-look style="font-size:calc(14.5px * var(--fs,1));opacity:.85">Look around with a sample traveler</button></div>` : ""}
     <div id="homeMsg" class="note" style="margin:0"></div></div>`, next === "review" ? "loader" : "home"); }
 function homeGeo(){ const m = $("#homeMsg"); if (!navigator.geolocation){ m.textContent = "This browser can't share your location. Search for your city instead."; return; }
   m.textContent = "Finding you…"; navigator.geolocation.getCurrentPosition(pos => { const lat = pos.coords.latitude, lon = pos.coords.longitude; const lab = whereLabel([lon, lat]), far = /^\d|^Open water/.test(lab), pl = far ? nearestPlace([lon, lat]) : null; setWhere(lon, lat, pl ? pl.p[0] + ", " + pl.p[1] : homeClean(lab) || "Your location"); m.textContent = far ? `Closest town we know: ${lab}. Is that right? If not, search for your city.` : "Found you. Tap Set as home if that's right."; },
