@@ -505,7 +505,8 @@ button.pill { cursor: pointer; }
       <li>Drag a piece onto the board. Words read left to right, or top to bottom, with 3 or more letters touching (4 or more in Expert mode).</li>
       <li>Real words <b>glow</b>. Nothing disappears on its own: tap a glowing word when you want to score it and clear its blocks.</li>
       <li>Or keep building: TEA can grow into TEASE. Longer words multiply their points: 4 letters x2, 5 letters x3, 6 or more x4. Rare letters (the small number on each block) score more.</li>
-      <li><b>⚡ Challenge levels:</b> from level 30, every 3rd level has a twist (like 4+ letter words only, or every word needs an E) and pays +20 🪙 bonus.</li>
+      <li><b>⚡ Challenge levels:</b> from level 30, every 3rd level has a twist (like 4+ letter words only, or every word needs an E) and pays +20 🪙 bonus. Every 3rd challenge, you pick the twist.</li>
+      <li><b>Level bonuses:</b> once a level, +10 🪙 for scoring two words that cross (✚ Crossword), and +10 🪙 for growing a glowing 3-letter word into 5 or more letters (🌱).</li>
       <li><b>🗓️ Weekly words:</b> every week has 5 themed words (see 🎯 Quests). Spell one on the board for +15 🪙, and all 5 for +75 🪙 and a Rotate.</li>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
       <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total.</li>
@@ -596,9 +597,20 @@ let expert = store.get(EXPERT_KEY, false);   // the switch as it applies to the 
 const expertOn = () => expert && mode === "endless" && !tut;
 function twist() {
   if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
+  if (picked?.level === level) return TWISTS.find(t => t.id === picked.id);   // the player chose this one
   const t = TWISTS[(level / 3) % TWISTS.length];
   return t.id === "long4" && expertOn() ? TWISTS[3] : t;   // Expert already needs 4+ letters
 }
+// Every 3rd challenge level (36, 45, 54...) the player picks between this level's twist and the next one (Cooper round 13).
+let picked = null;
+const PICK_EVERY = 9;
+function twistChoices() {
+  const a = twist(), b = TWISTS[(TWISTS.indexOf(a) + 1) % TWISTS.length];
+  return [a, b.id === "long4" && expertOn() ? TWISTS[(TWISTS.indexOf(b) + 1) % TWISTS.length] : b];
+}
+// Small once-a-level bonuses (Cooper round 13): two scored words that cross, and growing a glowing 3-letter word to 5+.
+const CROSS_COINS = 10, GROW_COINS = 10;
+let lvBonus = { cross: false, grow: false }, glowMemory = [];
 const minLen = () => expertOn() || twist()?.id === "long4" ? 4 : 3;
 const target = () => expertOn() ? Math.round(baseTarget() * 1.25 / 5) * 5 : baseTarget();
 let levelBase = 0;                       // score when this level started
@@ -811,7 +823,7 @@ function newGame(m, replay = false) {
   if (m === "daily" && !store.get("wb-daily-started", false)) { store.set("wb-daily-started", true); track("first_daily_start", { day: daysSinceFirst() }); }
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
   board = Array.from({ length: N }, () => Array(N).fill(null));
-  chain = 0; chainMoves = 0; score = 0; shownScore = 0; found = []; movable = null; resetGoals(); erasers = 0; shuffles = 0; toShuffle = 0; erasing = false; rotates = 0; rotating = false; rotPaid = null; over = false; busy = false; level = 1; levelBase = 0; continued = false; levelsSinceAd = 0; expert = store.get(EXPERT_KEY, false); closeSheet();
+  chain = 0; chainMoves = 0; score = 0; shownScore = 0; found = []; movable = null; resetGoals(); erasers = 0; shuffles = 0; toShuffle = 0; erasing = false; rotates = 0; rotating = false; rotPaid = null; over = false; busy = false; level = 1; levelBase = 0; continued = false; levelsSinceAd = 0; expert = store.get(EXPERT_KEY, false); picked = null; lvBonus = { cross: false, grow: false }; glowMemory = []; closeSheet();
   best = Math.max(store.get(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", 0), mode === "daily" ? store.get(DAILY_KEY(), null)?.score || 0 : 0);
   tray = [makePiece(), makePiece(), makePiece()];
   tut = mode === "endless" && !store.get("wb-tutorial-done", false) ? { step: 0, phase: "place" } : null;
@@ -895,7 +907,7 @@ function saveGame() {
   if (tut || over) return;
   const save = {
     v: 1, day: todayKey(), mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, rotates,
-    continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(), expert,
+    continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(), expert, picked, lvBonus,
     tray: tray.map(p => ({ ...p, fresh: false })),
     goals: goals.map(g => ({ id: g.id, prog: g.prog, need: g.need, reward: g.reward })),
   };
@@ -931,13 +943,15 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   rng = mulberry(g.seed);
   // Expert as it was when this level started, so a reload never changes the goal or rules mid-level (Cooper round 13).
   expert = typeof g.expert === "boolean" ? g.expert : store.get(EXPERT_KEY, false);
+  picked = g.picked?.level === g.level ? g.picked : null; lvBonus = g.lvBonus || { cross: false, grow: false }; glowMemory = [];
   tut = null; movable = null; erasing = false; over = false; busy = false; shownScore = score;
   best = Math.max(store.get(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", 0), score, mode === "daily" ? store.get(DAILY_KEY(), null)?.score || 0 : 0);
   renderModeTab();
   document.getElementById("modelabel").textContent = mode === "daily" ? `Daily Board #${dailyNo()}` : "Score";
   document.getElementById("over").hidden = true;
   finishTurn();
-  if (!over && welcome) toast(`Welcome back!\nLevel ${level}` + (twist() ? `\n⚡ ${twist().short}` : ""), false, READ_MS);
+  // Minor: any other opening message (a holiday greeting, a challenge) replaces it, so only one shows (Cooper round 13).
+  if (!over && welcome) toast(`Welcome back!\nLevel ${level}` + (twist() ? `\n⚡ ${twist().short}` : ""), false, READ_MS, true);
   return true;
 }
 
@@ -1618,6 +1632,18 @@ function blastCells(group) {
   }));
   return [...blast.values()];   // every square in reach, empty or not
 }
+// Once a level: a crossword (two scored words that share a block) and growing a glowing 3-letter word into 5+ letters.
+function levelBonusLines(group) {
+  if (tut) return [];
+  const out = [], key = ([r, c]) => r + "," + c;
+  if (!lvBonus.cross && group.some(a => group.some(b => a !== b && a.dir !== b.dir && a.cells.some(x => b.cells.some(y => key(x) === key(y)))))) {
+    lvBonus.cross = true; addCoins(CROSS_COINS); track("bonus_cross", { level }); out.push(`✚ Crossword! +${CROSS_COINS} 🪙`);
+  }
+  if (!lvBonus.grow && group.some(g => g.w.length >= 5 && glowMemory.some(k => k.split("|").every(c => g.cells.some(x => x.join(",") === c))))) {
+    lvBonus.grow = true; addCoins(GROW_COINS); track("bonus_grow", { level }); out.push(`🌱 You grew a word! +${GROW_COINS} 🪙`);
+  }
+  return out;
+}
 function cashIn(group) {
   if (!Array.isArray(group)) group = [group];
   movable = null;
@@ -1680,7 +1706,7 @@ function cashIn(group) {
   // A tool word with that tool already full says so, the way quest rewards do (Muse round 12).
   const rewardLines = [earned ? "Eraser earned!" : eraserFull && `Erasers full (${MAX_ERASERS})`, shuffleEarned && "Shuffle earned!",
     rotEarned ? "Rotate earned!" : rotFull && `Rotates full (${MAX_ROTATES})`,
-    questLines.trim(), rare && `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙`, ...weekLines].filter(Boolean);
+    questLines.trim(), rare && `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙`, ...weekLines, ...levelBonusLines(group)].filter(Boolean);
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
     (extra.length ? `\nBOOM! +${extra.length * 3}` : "") + rewardLines.map(l => "\n" + MID + l).join(""),
     longest >= 5 || k > 1 || extra.length > 0 || weekLines.length > 0, CASH_MS + 600 * rewardLines.length);
@@ -1775,6 +1801,7 @@ function finishTurn() {
   if (tut) { if (tut.phase === "cashed") return nextLesson(); setHint(); return renderAll(); }
   if (rotGuide === 1 && ++rotGuideTurns > 2) rotGuide = 0;   // not tried after a few moves: stop asking
   setHint(); tutorialJustDone = false; levelStartHint = false;
+  for (const w of scanWords(board)) if (w.w.length === 3) { const k = w.cells.join("|"); if (!glowMemory.includes(k)) glowMemory.push(k); }
   if (movable && moveHints < 3) store.set("wb-move-hints", ++moveHints);
   if (!over && levelPts() >= target()) return levelUp();
   if (tray.every(p => p.used)) { tray = dealTray(); rotPaid = null; }
@@ -2194,9 +2221,24 @@ function maybeInterstitial(then) {
   watchAd(then, then, "Between-level ad", true);
 }
 function startNextLevel() {
+  level++; levelBase = score; levelNewWords = []; dryMoves = 0; softHint = null; expert = store.get(EXPERT_KEY, false);
+  lvBonus = { cross: false, grow: false }; glowMemory = []; picked = null;
+  track("level_up", { level, mode });
+  if (twist() && level % PICK_EVERY === 0) return pickTwist();
+  beginLevel();
+}
+function pickTwist() {
+  busy = true;
+  board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
+  const [a, b] = twistChoices();
+  openSheet(`<h3>⚡ Pick your challenge</h3><p>Level ${level} is a challenge level. Which twist do you want? Both pay +${CHALLENGE_COINS} 🪙.</p>
+    <div class="btns"><button class="btn" id="pick-a">${a.short}</button><button class="btn" id="pick-b">${b.short}</button></div>`, true);
+  const choose = t => { picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
+  document.getElementById("pick-a").onclick = () => choose(a);
+  document.getElementById("pick-b").onclick = () => choose(b);
+}
+function beginLevel() {
   {
-    level++; levelBase = score; levelNewWords = []; dryMoves = 0; softHint = null; expert = store.get(EXPERT_KEY, false);
-    track("level_up", { level, mode });
     board = Array.from({ length: N }, () => Array(N).fill(null));
     seedBoard();
     tray = dealTray();
@@ -2657,7 +2699,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "d14c741 2026-11-13 21:09Z";
+const BUILD_STAMP = "ca797ee 2026-11-13 21:40Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
