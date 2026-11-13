@@ -251,8 +251,20 @@ body.tut .tools { display: none; }
 .rot-gift { margin: 6px auto; }
 .daily-intro, .tomorrow { font-size: 1rem; line-height: 1.4; margin: 10px auto 4px; }
 .tomorrow b { white-space: nowrap; }
-#remind-help, #expert-help { margin: 4px 0; text-align: center; }
-#remind-help .btn, #expert-help .btn { width: 100%; }
+#remind-help, #expert-help, #deco-help { margin: 4px 0; text-align: center; }
+#remind-help .btn, #expert-help .btn, #deco-help .btn { width: 100%; }
+/* Weekly words in the Quests tab */
+.wk-note { color: var(--muted); font-size: 1rem; margin: 4px 0; }
+.wk-words { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.wk { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; padding: 6px 12px; border-radius: 10px; border: 2px dashed var(--line); }
+.wk.got { background: var(--gold); color: #3b2a00; border: 2px solid var(--gold); }
+/* Holiday decorations: a garland over the board, a colored frame, a few slow falling bits */
+body.deco .board { box-shadow: 0 0 0 4px var(--deco1), 0 0 0 7px var(--deco2); }
+#deco { position: absolute; top: -17px; left: 0; right: 0; text-align: center; font-size: 22px; letter-spacing: 0.35em; line-height: 1; pointer-events: none; z-index: 4; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+#deco-fall { position: fixed; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+#deco-fall span { position: absolute; top: -40px; font-size: 20px; opacity: 0.35; animation: decoFall linear infinite; }
+@keyframes decoFall { from { transform: translateY(0) rotate(0); } to { transform: translateY(110vh) rotate(300deg); } }
+@media (prefers-reduced-motion: reduce) { #deco-fall { display: none; } }
 .expert-note { color: var(--muted); font-size: 1rem; margin: 4px 0 8px; }
 #level .tw { color: #f5a623; font-weight: 700; }
 .rot-gift b { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255, 214, 102, 0.18); animation: chipIn 0.2s ease-out both; }
@@ -485,6 +497,7 @@ button.pill { cursor: pointer; }
   <div id="cloud-help"></div>
   <div id="remind-help"></div>
   <div id="expert-help"></div>
+  <div id="deco-help"></div>
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> spell words with the letter blocks, then tap them to score points.</li>
@@ -492,6 +505,7 @@ button.pill { cursor: pointer; }
       <li>Real words <b>glow</b>. Nothing disappears on its own: tap a glowing word when you want to score it and clear its blocks.</li>
       <li>Or keep building: TEA can grow into TEASE. Longer words multiply their points: 4 letters x2, 5 letters x3, 6 or more x4. Rare letters (the small number on each block) score more.</li>
       <li><b>⚡ Challenge levels:</b> from level 30, every 3rd level has a twist (like 4+ letter words only, or every word needs an E) and pays +20 🪙 bonus.</li>
+      <li><b>🗓️ Weekly words:</b> every week has 5 themed words (see 🎯 Quests). Spell one on the board for +15 🪙, and all 5 for +75 🪙 and a Rotate.</li>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
       <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total.</li>
       <li><b>Chains:</b> score another word within 2 moves of the last one and it scores more: x1.5, then x2, up to x3.</li>
@@ -557,7 +571,7 @@ const pick = arr => arr[Math.floor(rng() * arr.length)];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} if (!LOCAL_ONLY.test(k)) window.BHCloud?.changed(); } };
 // Kept on this phone only, never in the cloud save: daily free-ad allowance, session count, promo snooze, delivered purchases.
-const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$|remind$|tmr-over$)/;   // the reminder is per phone (its permission is)
+const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$|remind$|tmr-over$|week-seen$|deco-greet$)/;   // the reminder is per phone (its permission is)
 
 const VOWELS = "aaaaeeeeeiiiooou";
 const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
@@ -592,6 +606,7 @@ let rotGuide = 0, rotGuideTurns = 0, bombSeen = store.get("wb-bomb-seen", false)
 const levelPts = () => score - levelBase;
 const levelName = () => { const e = ease(); return e > 0.66 ? "Easy" : e > 0.25 ? "Medium" : "Hard"; };
 function randLetter() {
+  const wl = weeklyLetter(); if (wl) return wl;   // Endless only, now and then a letter from this week's words
   const e = ease();
   if (e > 0) {
     // Early on: more vowels and only friendly consonants. Fades to the full Scrabble mix.
@@ -1371,6 +1386,7 @@ function showQuests() {
   const alive = streak.last === dayKey() || streak.last === dayKey(-1);
   openTabSheet("quests", `<h3>🎯 Spell Quests</h3><p>Finish a quest to win its prize. A new one takes its place.</p>
     <ul class="qlist">${goals.map(g => `<li><span class="g-text">${g.text}</span><span class="g-reward">${rewardText(g.reward)}</span>${g.need > 1 ? bar(g.prog, g.need) + `<span class="g-sub">${g.prog} of ${g.need}</span>` : ""}</li>`).join("")}</ul>
+    ${weeklyHtml()}
     <h4>🏅 Big goals</h4>
     <ul class="qlist">
       ${nextWords ? `<li><span class="g-text">Spell ${nextWords.toLocaleString()} words</span><span class="g-reward">+50 coins</span>${bar(stats.words, nextWords)}<span class="g-sub">${stats.words.toLocaleString()} so far, across all games</span></li>` : ""}
@@ -1432,7 +1448,7 @@ function showHelp() {
   if (!INVITES_LIVE) document.getElementById("invite-help").remove();
   if (promoReady()) { document.getElementById("promo-help").outerHTML = promoCard("promo-help"); wirePromo("promo-help", "help"); }
   document.getElementById("feedback").href = feedbackLink();
-  renderCloudHelp(); renderRemindHelp(); renderExpertHelp();
+  renderCloudHelp(); renderRemindHelp(); renderExpertHelp(); renderDecoHelp();
   document.getElementById("app-ver").textContent = `Wordglow ${APP_VERSION}${ADS_TESTING ? " (test version)" : ""}${BUILD_STAMP.startsWith("__") ? "" : ` · build ${BUILD_STAMP}`}`;
   document.getElementById("help-x").onclick = document.getElementById("help-close").onclick = () => closeSheet();
   document.getElementById("tut-replay").onclick = () => { if (busy) return; store.set("wb-tutorial-done", false); newGame("endless"); scrollTo({ top: 0, behavior: "smooth" }); };
@@ -1612,13 +1628,14 @@ function cashIn(group) {
   dryMoves = 0; softHint = null; lastWordLines = [];
   score += total;
   let earned = false, rotEarned = false, eraserFull = false, rotFull = false;
-  const goalsDone = [];
+  const goalsDone = [], weekLines = [];
   for (const g of group) {
     g.isNew = addToBook(g.w);
     if (g.isNew && !tut) levelNewWords.unshift(g.w);
     found.push({ w: g.w, s: Math.round(g.s * comboMult * chainX) });   // what it actually scored, with combo and chain
     if (g.w.length >= 5) { if (erasers < MAX_ERASERS) { erasers++; earned = true; } else if (!tut) eraserFull = true; }
     if (g.w.length >= 6 && !tut) { if (rotates < MAX_ROTATES) { rotates++; rotEarned = true; } else rotFull = true; }
+    weekLines.push(...checkWeekly(g.w));
     goalsDone.push(...checkGoals({ ...g, s: Math.round(g.s * comboMult * chainX) }));   // quests count the score shown (Muse round 11)
   }
   let shuffleEarned = false;
@@ -1660,10 +1677,10 @@ function cashIn(group) {
   // A tool word with that tool already full says so, the way quest rewards do (Muse round 12).
   const rewardLines = [earned ? "Eraser earned!" : eraserFull && `Erasers full (${MAX_ERASERS})`, shuffleEarned && "Shuffle earned!",
     rotEarned ? "Rotate earned!" : rotFull && `Rotates full (${MAX_ROTATES})`,
-    questLines.trim(), rare && `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙`].filter(Boolean);
+    questLines.trim(), rare && `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙`, ...weekLines].filter(Boolean);
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
     (extra.length ? `\nBOOM! +${extra.length * 3}` : "") + rewardLines.map(l => "\n" + MID + l).join(""),
-    longest >= 5 || k > 1 || extra.length > 0, CASH_MS + 600 * rewardLines.length);
+    longest >= 5 || k > 1 || extra.length > 0 || weekLines.length > 0, CASH_MS + 600 * rewardLines.length);
   // Extra news after the main toast. To keep things quick, at most two items, shown together in one
   // more message, most important first. Every reward is still given; the coin count shows it.
   const extras = [];
@@ -1848,6 +1865,158 @@ function offerPowerup(kind) {
 // ---------- daily streak: spell one word a day ----------
 let dayShift = 0;                                  // for testing other days
 const dayKey = (off = 0) => { const d = new Date(); d.setDate(d.getDate() + dayShift + off); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+// ---------- Weekly words (Alan 2026-11-13): 5 themed words a week, built in so it works offline ----------
+// A holiday that falls in the week (Monday to Sunday) sets the theme; otherwise one of four themes for the month.
+// +15 coins for each word scored on the board (Endless or Daily), +75 coins and a Rotate for all 5.
+const WEEK_WORD_COINS = 15, WEEK_ALL_COINS = 75, WEEK_KEY = "wb-week";
+const HOLIDAY_THEMES = [
+  [y => new Date(y, 0, 1), "New Year", "party cheer hope toast goal"],
+  [y => new Date(y, 1, 14), "Valentine's Day", "love rose heart candy hug"],
+  [y => new Date(y, 2, 17), "St. Patrick's Day", "green luck gold clover harp"],
+  [y => easterDay(y), "Spring Eggs", "egg bunny hunt basket chick"],
+  [y => nthWeekday(y, 4, 0, 2), "Mother's Day", "mom hug card bloom tea"],
+  [y => nthWeekday(y, 5, 0, 3), "Father's Day", "dad tie grill fish hero"],
+  [y => new Date(y, 6, 4), "Fourth of July", "flag parade picnic spark star"],
+  [y => new Date(y, 9, 31), "Halloween", "ghost candy mask bat witch"],
+  [y => nthWeekday(y, 10, 4, 4), "Thanksgiving", "pie yam corn feast thanks"],
+  [y => new Date(y, 11, 25), "Christmas", "gift snow tree bell elf"],
+];
+const MONTH_THEMES = [
+  [["Snow Day", "snow sled cold ice mitten"], ["Cozy Inside", "soup tea socks fire nap"], ["Fresh Start", "goal plan new step begin"], ["Winter Birds", "owl jay wren crow robin"]],
+  [["Sweet Treats", "cake pie tart fudge cookie"], ["Friends", "pal chat share laugh call"], ["Game Night", "dice card chess pawn king"], ["Indoor Fun", "book movie puzzle game craft"]],
+  [["Windy Days", "wind kite gust breeze fly"], ["Spring Rain", "rain puddle boots cloud mud"], ["Hoops", "hoop net dunk ball shot"], ["First Sprouts", "seed soil sprout bud grow"]],
+  [["Garden", "tulip bloom petal rake bee"], ["Earth Week", "earth tree ocean leaf green"], ["Baseball", "bat base glove pitch run"], ["Nest Building", "nest egg wing chirp song"]],
+  [["Picnic", "picnic ant basket lemon salad"], ["Flowers", "daisy lily iris rose violet"], ["Bike Ride", "bike pedal wheel helmet ride"], ["Graduation", "cap gown class dream cheer"]],
+  [["Beach", "sand wave shell sun surf"], ["Camping", "tent camp fire hike trail"], ["Summer Fruit", "peach melon berry plum lime"], ["Pool Day", "swim pool splash dive float"]],
+  [["Ice Cream", "cone scoop fudge mint sundae"], ["Road Trip", "map road car drive snack"], ["Garden Veggies", "corn bean pea tomato squash"], ["Night Sky", "moon star comet orbit planet"]],
+  [["County Fair", "fair ride prize pig pony"], ["Back to School", "book desk pen class lunch"], ["Sunflowers", "seed sun petal tall yellow"], ["At the Lake", "lake boat dock fish oar"]],
+  [["Apple Picking", "apple cider tree crisp pie"], ["Football", "kick pass team goal helmet"], ["Harvest", "hay barn farm crop wheat"], ["First Days of Fall", "leaf acorn maple cool rake"]],
+  [["Pumpkin Patch", "gourd patch vine carve seed"], ["Night Owls", "owl night hoot moon tree"], ["Sweater Weather", "knit wool yarn scarf warm"], ["Falling Leaves", "leaf red gold crunch pile"]],
+  [["Soup Season", "soup stew broth bread bowl"], ["Grateful", "thank kind share family give"], ["Forest Friends", "deer fox bear owl elk"], ["Rainy Day", "rain coat drip puddle gray"]],
+  [["Holiday Baking", "cookie oven flour sugar bake"], ["Winter Fun", "snow frost ice sled skate"], ["Lights", "light glow candle spark shine"], ["Hot Cocoa", "cocoa mug cream warm sip"]],
+];
+function easterDay(y) {   // Western Easter (Anonymous Gregorian algorithm)
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day);
+}
+function nthWeekday(y, month, weekday, n) {   // e.g. the 4th Thursday of November
+  const first = new Date(y, month, 1), off = (weekday - first.getDay() + 7) % 7;
+  return new Date(y, month, 1 + off + 7 * (n - 1));
+}
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function weekTheme(off = 0) {   // this week's theme: { wk: Monday's date, name, words }
+  const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + dayShift + off);
+  const mon = new Date(d); mon.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23);
+  for (const [when, name, words] of HOLIDAY_THEMES) for (const y of new Set([mon.getFullYear(), sun.getFullYear()])) {
+    const h = when(y); h.setHours(12);
+    if (h >= mon && h <= sun) return { wk: ymd(mon), name, words: words.split(" ") };
+  }
+  const thu = new Date(mon); thu.setDate(mon.getDate() + 3);   // the week belongs to the month its Thursday is in
+  const [name, words] = MONTH_THEMES[thu.getMonth()][Math.floor((thu.getDate() - 1) / 7) % 4];
+  return { wk: ymd(mon), name, words: words.split(" ") };
+}
+function weekState() {
+  const t = weekTheme(), s = store.get(WEEK_KEY, null);
+  return s?.wk === t.wk ? { ...t, got: s.got || [], all: !!s.all } : { ...t, got: [], all: false };
+}
+// Called for every word scored; returns the reward lines for the score message.
+function checkWeekly(word) {
+  if (tut) return [];
+  const s = weekState();
+  if (!s.words.includes(word) || s.got.includes(word)) return [];
+  s.got.push(word); addCoins(WEEK_WORD_COINS);
+  track("weekly_word", { word, n: s.got.length });
+  const lines = [`🗓️ Weekly word ${s.got.length} of ${s.words.length}: +${WEEK_WORD_COINS} 🪙`];
+  if (s.got.length === s.words.length && !s.all) {
+    s.all = true; addCoins(WEEK_ALL_COINS);
+    const rot = rotates < MAX_ROTATES; if (rot) rotates++;
+    track("weekly_all", { theme: s.name });
+    lines.push(`🎉 All ${s.name} words! +${WEEK_ALL_COINS} 🪙${rot ? " +1 ↻ Rotate" : ""}`);
+  }
+  store.set(WEEK_KEY, { wk: s.wk, got: s.got, all: s.all });
+  return lines;
+}
+// Endless only: now and then a new block's letter comes from a weekly word not found yet, so the words can be made.
+function weeklyLetter() {
+  if (mode !== "endless" || tut || rng() >= 0.08) return null;
+  const s = weekState(), left = s.words.filter(w => !s.got.includes(w));
+  const ch = left.length ? pick(pick(left)) : null;
+  return ch && level <= 5 && "jkqvxz".includes(ch) ? null : ch;   // early boards stay friendly
+}
+function weeklyHtml() {
+  const s = weekState();
+  return `<h4>🗓️ This week: ${esc(s.name)}</h4>
+    <p class="wk-note">Spell these on the board this week: +${WEEK_WORD_COINS} 🪙 each, and +${WEEK_ALL_COINS} 🪙 and a Rotate for all ${s.words.length}. New words every Monday.</p>
+    <div class="wk-words">${s.words.map(w => `<span class="wk${s.got.includes(w) ? " got" : ""}">${s.got.includes(w) ? "✓ " : ""}${w.toUpperCase()}</span>`).join("")}</div>
+    <p class="wk-note">${s.got.length} of ${s.words.length} found${s.all ? " · all done! 🎉" : ""}</p>`;
+}
+// Once a week, say the new words are out (and light the Quests dot).
+function weeklyIntro() {
+  if (tut || !store.get("wb-tutorial-done", false)) return;
+  const s = weekState();
+  if (store.get("wb-week-seen", null) === s.wk) return;
+  store.set("wb-week-seen", s.wk);
+  document.getElementById("questdot").hidden = false;
+  setTimeout(() => toast(`🗓️ This week's words: ${s.name}\nFind them in 🎯 Quests`, false, READ_MS, true), 2500);   // minor: gives way to any game message
+}
+// ---------- Holiday decorations (Alan 2026-11-13): the app dresses up as a holiday gets close ----------
+// A garland over the board, a colored board frame and a few slow falling bits. Letters stay as they are.
+// A switch in Help turns it off; reduced motion keeps the garland and frame but drops the falling bits.
+const DECO_KEY = "wb-deco";
+const DECOS = [
+  { id: "newyear", name: "Happy New Year", at: y => new Date(y, 0, 1), before: 4, after: 1, garland: "🎉 ✨ 🥂 ✨ 🎉", fall: "✨🎊", c1: "#f5c542", c2: "#8c5cf6" },
+  { id: "valentine", name: "Happy Valentine's Day", at: y => new Date(y, 1, 14), before: 7, after: 0, garland: "💕 🌹 💘 🌹 💕", fall: "💕", c1: "#ff5c8a", c2: "#ffc2d4" },
+  { id: "stpat", name: "Happy St. Patrick's Day", at: y => new Date(y, 2, 17), before: 7, after: 0, garland: "☘️ 🍀 🌈 🍀 ☘️", fall: "🍀", c1: "#2fbf71", c2: "#f5c542" },
+  { id: "easter", name: "Happy Easter", at: y => easterDay(y), before: 7, after: 0, garland: "🐣 🌷 🥚 🌷 🐣", fall: "🌸", c1: "#b98cff", c2: "#ffd36b" },
+  { id: "july4", name: "Happy Fourth of July", at: y => new Date(y, 6, 4), before: 6, after: 1, garland: "🎆 ⭐ 🎇 ⭐ 🎆", fall: "⭐", c1: "#e5484d", c2: "#3b82f6" },
+  { id: "halloween", name: "Happy Halloween", at: y => new Date(y, 9, 31), before: 10, after: 0, garland: "🎃 🦇 👻 🦇 🎃", fall: "🍂", c1: "#ff8a1f", c2: "#6b3fa0" },
+  { id: "thanksgiving", name: "Happy Thanksgiving", at: y => nthWeekday(y, 10, 4, 4), before: 14, after: 1, garland: "🍂 🦃 🥧 🦃 🍂", fall: "🍂🍁", c1: "#d9822b", c2: "#8b5a2b" },
+  { id: "christmas", name: "Merry Christmas", at: y => new Date(y, 11, 25), before: 24, after: 1, garland: "🎄 ⭐ 🎁 ⭐ 🎄", fall: "❄️", c1: "#e5484d", c2: "#2fbf71" },
+];
+function holidayNow() {   // the decoration for today, with how many days until the holiday (0 = the day itself)
+  const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + dayShift);
+  for (const h of DECOS) for (const y of [d.getFullYear() - 1, d.getFullYear(), d.getFullYear() + 1]) {
+    const at = h.at(y); at.setHours(12, 0, 0, 0);
+    const days = Math.round((at - d) / 864e5);
+    if (days <= h.before && days >= -h.after) return { ...h, days };
+  }
+  return null;
+}
+function applyDeco() {
+  document.getElementById("deco")?.remove(); document.getElementById("deco-fall")?.remove();
+  DECOS.forEach(h => document.body.classList.remove("deco-" + h.id));
+  document.body.classList.remove("deco");
+  const h = store.get(DECO_KEY, true) ? holidayNow() : null;
+  if (!h) return null;
+  document.body.classList.add("deco", "deco-" + h.id);
+  document.documentElement.style.setProperty("--deco1", h.c1); document.documentElement.style.setProperty("--deco2", h.c2);
+  const g = document.createElement("div"); g.id = "deco"; g.setAttribute("aria-hidden", "true"); g.textContent = h.garland;
+  document.querySelector(".board-wrap").appendChild(g);
+  const f = document.createElement("div"); f.id = "deco-fall"; f.setAttribute("aria-hidden", "true");
+  const bits = [...h.fall.match(/\p{Extended_Pictographic}️?/gu)];
+  for (let i = 0; i < 7; i++) {
+    const s = document.createElement("span"); s.textContent = bits[i % bits.length];
+    s.style.left = (6 + i * 14 + Math.random() * 6) + "%"; s.style.animationDuration = (11 + Math.random() * 7) + "s"; s.style.animationDelay = (-Math.random() * 16) + "s";
+    f.appendChild(s);
+  }
+  document.body.appendChild(f);
+  // On the holiday itself, say so once.
+  if (h.days === 0 && store.get("wb-deco-greet", null) !== dayKey() && store.get("wb-tutorial-done", false)) {
+    store.set("wb-deco-greet", dayKey());
+    setTimeout(() => toast(`${h.garland.split(" ")[1]} ${h.name}!`, true, READ_MS), 1500);
+  }
+  return h;
+}
+function renderDecoHelp() {
+  const box = document.getElementById("deco-help");
+  if (!box) return;
+  const on = store.get(DECO_KEY, true);
+  box.innerHTML = `<button type="button" class="btn plain" id="deco-toggle" aria-pressed="${on}">🎉 Holiday decorations: <b>${on ? "On" : "Off"}</b></button>`;
+  document.getElementById("deco-toggle").onclick = () => { store.set(DECO_KEY, !on); track("deco_toggle", { on: !on }); applyDeco(); renderDecoHelp(); };
+}
 let streak = store.get("wb-streak", { n: 0, best: 0, last: null, days: [] });
 function saveStreak() { store.set("wb-streak", streak); renderStreak(); }
 function renderStreak() {
@@ -2465,7 +2634,8 @@ if (!resumeGame() && !resumeGame(SAVE_KEY + "-endless", false)) newGame("endless
   const jump = window.Capacitor?.isNativePlatform?.() ? 0 : parseInt(new URLSearchParams(location.search).get("level"), 10);
   if (jump >= 2 && jump <= 99 && store.get("wb-tutorial-done", false)) { newGame("endless"); level = jump - 1; levelBase = score; startNextLevel(); }
 }
-renderCoins(); renderStreak(); checkStreakAtRisk();
+renderCoins(); renderStreak(); checkStreakAtRisk(); applyDeco(); weeklyIntro();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyDeco(); weeklyIntro(); } });   // a new week or holiday while the app was away
 // ---------- native app: real ads and in-app purchases ----------
 // In the iPhone and Android apps, Capacitor provides the AdMob and NativePurchases plugins.
 // On the web (the prototype), these stay null and the game keeps its sample ads.
@@ -2484,7 +2654,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "c8f4b0f 2026-11-13 20:04Z";
+const BUILD_STAMP = "1394723 2026-11-13 20:31Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -2793,6 +2963,7 @@ function mergeKey(k, a, b) {           // a: this phone, b: the cloud
   if (k === "wb-streak-saved") return a > b ? a : b;
   if (k === "wb-gift2") return a === "paid" || b === "paid" ? "paid" : (a < b ? a : b);   // the welcome gift is paid once
   if (k === "wb-first-day") return a < b ? a : b;
+  if (k === "wb-week") return a.wk !== b.wk ? (a.wk > b.wk ? a : b) : { wk: a.wk, got: [...new Set([...a.got, ...b.got])], all: a.all || b.all };
   if (k === "wb-code") return b;      // the friend code stays the same on every phone
   return a;                           // settings and invite state: this phone's
 }
