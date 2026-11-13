@@ -251,8 +251,10 @@ body.tut .tools { display: none; }
 .rot-gift { margin: 6px auto; }
 .daily-intro, .tomorrow { font-size: 1rem; line-height: 1.4; margin: 10px auto 4px; }
 .tomorrow b { white-space: nowrap; }
-#remind-help { margin: 4px 0; text-align: center; }
-#remind-help .btn { width: 100%; }
+#remind-help, #expert-help { margin: 4px 0; text-align: center; }
+#remind-help .btn, #expert-help .btn { width: 100%; }
+.expert-note { color: var(--muted); font-size: 1rem; margin: 4px 0 8px; }
+#level .tw { color: #f5a623; font-weight: 700; }
 .rot-gift b { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255, 214, 102, 0.18); animation: chipIn 0.2s ease-out both; }
 .rot-gift:nth-of-type(2) b { animation-delay: 0.06s; } .rot-gift:nth-of-type(3) b { animation-delay: 0.12s; } .rot-gift:nth-of-type(4) b { animation-delay: 0.18s; }
 @keyframes chipIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
@@ -482,12 +484,14 @@ button.pill { cursor: pointer; }
   <a class="btn feedback" id="feedback" href="#">✉️ Send feedback or ideas</a>
   <div id="cloud-help"></div>
   <div id="remind-help"></div>
+  <div id="expert-help"></div>
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> spell words with the letter blocks, then tap them to score points.</li>
       <li>Drag a piece onto the board. Words read left to right, or top to bottom, with 3 or more letters touching.</li>
       <li>Real words <b>glow</b>. Nothing disappears on its own: tap a glowing word when you want to score it and clear its blocks.</li>
       <li>Or keep building: TEA can grow into TEASE. Longer words multiply their points: 4 letters x2, 5 letters x3, 6 or more x4. Rare letters (the small number on each block) score more.</li>
+      <li><b>⚡ Challenge levels:</b> from level 30, every 3rd level has a twist (like 4+ letter words only, or every word needs an E) and pays +20 🪙 bonus.</li>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
       <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total.</li>
       <li><b>Chains:</b> score another word within 2 moves of the last one and it scores more: x1.5, then x2, up to x3.</li>
@@ -560,7 +564,28 @@ const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
 // Difficulty: 1 = easiest (level 1), 0 = full difficulty (level 12 and later).
 const ease = () => Math.max(0, 1 - (level - 1) / 11);
 // Targets: +15 a level up to level 8 (135), then +10 a level (Alan, 2026-11-09: ease after 8).
-const target = () => level <= 8 ? 30 + 15 * (level - 1) : 135 + 10 * (level - 8);
+const baseTarget = () => level <= 8 ? 30 + 15 * (level - 1) : 135 + 10 * (level - 8);
+// ---------- Challenge levels and Expert (Alan 2026-11-13, from Steph at level 48: "change it up") ----------
+// From level 30 in Endless, every 3rd level is a challenge with one twist and +20 bonus coins.
+// Expert (a switch in Help, Endless only): words need 4+ letters, no starter word pieces on new boards,
+// targets 25% higher, 1.5x level coins. A change takes effect from the next level.
+const CHALLENGE_FROM = 30, CHALLENGE_COINS = 20, EXPERT_KEY = "wb-expert";
+const TWISTS = [
+  { id: "long4", short: "Long words only", tag: "4+ letters", text: "Long words only: words need <b>4 or more letters</b> this level." },
+  { id: "needE", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
+  { id: "bombs", short: "Bomb board", tag: "Bomb board", text: "Bomb board: lots of <b>💣 bomb</b> blocks this level." },
+  { id: "big", short: "Big words pay double", tag: "Big words x2", text: "Big words pay: words of <b>6+ letters score double</b> this level." },
+  { id: "crowded", short: "Crowded board", tag: "Crowded", text: "Crowded board: <b>extra letters</b> are in the way this level." },
+];
+let expert = store.get(EXPERT_KEY, false);   // the switch as it applies to the level being played
+const expertOn = () => expert && mode === "endless" && !tut;
+function twist() {
+  if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
+  const t = TWISTS[(level / 3) % TWISTS.length];
+  return t.id === "long4" && expertOn() ? TWISTS[3] : t;   // Expert already needs 4+ letters
+}
+const minLen = () => expertOn() || twist()?.id === "long4" ? 4 : 3;
+const target = () => expertOn() ? Math.round(baseTarget() * 1.25 / 5) * 5 : baseTarget();
 let levelBase = 0;                       // score when this level started
 // First-time demos: the Rotate walkthrough's step (0 = off) and whether the bomb hint has been shown.
 let rotGuide = 0, rotGuideTurns = 0, bombSeen = store.get("wb-bomb-seen", false);
@@ -581,7 +606,8 @@ function randLetter() {
 function rollSpecial() {
   if (level < 2) return null;
   const r = rng();
-  return r < 0.05 ? "x2" : r < 0.085 ? "bomb" : null;
+  const bombs = twist()?.id === "bombs" ? 0.2 : 0.085;
+  return r < 0.05 ? "x2" : r < bombs ? "bomb" : null;
 }
 function makePiece() {
   const e = ease();
@@ -730,7 +756,7 @@ function extendPieces() {
 // later levels add stray letters that get in the way.
 const SEED_WORDS = "rain star tree home sand boat bird cake fish game hand lamp nest park rose seat ship time wind play read sing talk team cold dark east farm gold hill lake late mile note open plan rest road salt slow snow stop told walk warm wise".split(" ");
 function seedBoard() {
-  const helpful = level <= 3 ? 2 : level <= 7 ? 1 : level % 2;
+  const helpful = expertOn() ? 0 : level <= 3 ? 2 : level <= 7 ? 1 : level % 2;
   const stray = Math.min(6, Math.max(0, level - 2));
   const free = (r, c) => r >= 0 && c >= 0 && r < N && c < N && !board[r][c];
   const clear = (r, c) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => r + a < 0 || c + b < 0 || r + a >= N || c + b >= N || !board[r + a][c + b]);
@@ -752,6 +778,14 @@ function seedBoard() {
     board[r][c] = { ch: BAG[Math.floor(rng() * BAG.length)], color: 1 + Math.floor(rng() * 6) };
     n++;
   }
+  // Crowded challenge: 5 more letters that may touch others, as long as they don't already spell a word.
+  for (let n = 0, tries = 0; twist()?.id === "crowded" && n < 5 && tries < 200; tries++) {
+    const r = Math.floor(rng() * N), c = Math.floor(rng() * N);
+    if (!free(r, c)) continue;
+    board[r][c] = { ch: BAG[Math.floor(rng() * BAG.length)], color: 1 + Math.floor(rng() * 6) };
+    if (scanWords(board).length) { board[r][c] = null; continue; }
+    n++;
+  }
 }
 
 function newGame(m, replay = false) {
@@ -761,7 +795,7 @@ function newGame(m, replay = false) {
   if (m === "daily" && !store.get("wb-daily-started", false)) { store.set("wb-daily-started", true); track("first_daily_start", { day: daysSinceFirst() }); }
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
   board = Array.from({ length: N }, () => Array(N).fill(null));
-  chain = 0; chainMoves = 0; score = 0; shownScore = 0; found = []; movable = null; resetGoals(); erasers = 0; shuffles = 0; toShuffle = 0; erasing = false; rotates = 0; rotating = false; rotPaid = null; over = false; busy = false; level = 1; levelBase = 0; continued = false; levelsSinceAd = 0; closeSheet();
+  chain = 0; chainMoves = 0; score = 0; shownScore = 0; found = []; movable = null; resetGoals(); erasers = 0; shuffles = 0; toShuffle = 0; erasing = false; rotates = 0; rotating = false; rotPaid = null; over = false; busy = false; level = 1; levelBase = 0; continued = false; levelsSinceAd = 0; expert = store.get(EXPERT_KEY, false); closeSheet();
   best = Math.max(store.get(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", 0), mode === "daily" ? store.get(DAILY_KEY(), null)?.score || 0 : 0);
   tray = [makePiece(), makePiece(), makePiece()];
   tut = mode === "endless" && !store.get("wb-tutorial-done", false) ? { step: 0, phase: "place" } : null;
@@ -1129,7 +1163,9 @@ function renderScores() {
   document.getElementById("best").textContent = best.toLocaleString();
   document.getElementById("wcount").textContent = found.length;
   const pct = Math.min(100, 100 * levelPts() / target());
-  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""} · ${Math.min(levelPts(), target())} of ${target()} points<span class="lvbar"><i style="width:${pct}%"></i></span>`;
+  // Short marks keep the line on one row: 🔥 = Expert, ⚡ = challenge level (the hint line spells out the twist).
+  const tags = (expertOn() ? `<span title="Expert">🔥</span>` : "") + (twist() ? `<span class="tw" title="Challenge level">⚡</span>` : "");
+  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""}${tags ? " " + tags : ""} · ${Math.min(levelPts(), target())} of ${target()}${tags ? "" : " points"}<span class="lvbar"><i style="width:${pct}%"></i></span>`;
 }
 function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores(); sizeCells(); }
 // A Rotate, Shuffle or Eraser changes the tray or board between moves: the soft hint is worked out again,
@@ -1203,11 +1239,11 @@ const MAX_ERASERS = 3, MAX_SHUFFLES = 3, WORDS_PER_SHUFFLE = 8;
 // keep(i, j) lets the caller require that a word uses a block just placed.
 function wordsIn(cells, keep = () => true) {
   const s = cells.map(x => x.ch).join("");
-  const cand = [];
-  for (let i = 0; i < s.length; i++) for (let j = i + 3; j <= s.length; j++) {
+  const cand = [], ml = minLen(), tw = twist()?.id;
+  for (let i = 0; i < s.length; i++) for (let j = i + ml; j <= s.length; j++) {
     const w = s.slice(i, j);
-    if (!WORDS.has(w) || !keep(i, j)) continue;
-    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length;
+    if (!WORDS.has(w) || !keep(i, j) || (tw === "needE" && !w.includes("e"))) continue;
+    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length + (tw === "big" && w.length >= 6 ? 1 : 0);
     const bomb = blocks.some(x => x.special === "bomb");
     cand.push({ w, i, j, m: mult(w.length), dbl, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** dbl });
   }
@@ -1396,7 +1432,7 @@ function showHelp() {
   if (!INVITES_LIVE) document.getElementById("invite-help").remove();
   if (promoReady()) { document.getElementById("promo-help").outerHTML = promoCard("promo-help"); wirePromo("promo-help", "help"); }
   document.getElementById("feedback").href = feedbackLink();
-  renderCloudHelp(); renderRemindHelp();
+  renderCloudHelp(); renderRemindHelp(); renderExpertHelp();
   document.getElementById("app-ver").textContent = `Wordglow ${APP_VERSION}${ADS_TESTING ? " (test version)" : ""}${BUILD_STAMP.startsWith("__") ? "" : ` · build ${BUILD_STAMP}`}`;
   document.getElementById("help-x").onclick = document.getElementById("help-close").onclick = () => closeSheet();
   document.getElementById("tut-replay").onclick = () => { if (busy) return; store.set("wb-tutorial-done", false); newGame("endless"); scrollTo({ top: 0, behavior: "smooth" }); };
@@ -1696,6 +1732,7 @@ function setHint() {
     h.innerHTML = "💣 <b>Bomb word!</b> Scoring it also blows up the <b style='color:#e5484d'>red squares</b>. Tap the word to set it off.";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
+  else if (twist() && !found.length) h.innerHTML = "⚡ " + twist().text;
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
@@ -1704,7 +1741,8 @@ function setHint() {
   else h.innerHTML = "Spell words <b>across</b> or <b>down</b>. <b>Tap</b> a glowing word to score it.";
   // The everyday reminders repeat what the level line already says; very short screens hide them.
   // The everyday "how to play" line glows and fades once per level, then stays out of the way.
-  const basic = !tut && /^(Score <b>|Spell words <b>across)/.test(h.innerHTML), key = mode + ":" + level;
+  // A challenge level's twist line does the same (the ⚡ on the level line and the "Not a word yet" message keep reminding).
+  const basic = !tut && /^(Score <b>|Spell words <b>across|⚡ )/.test(h.innerHTML), key = mode + ":" + level;
   if (basic) {
     if (h.dataset.bk === key) { if (!h.classList.contains("basic")) h.classList.add("seen"); }
     else { h.dataset.bk = key; h.classList.remove("seen", "basic"); void h.offsetWidth; }   // restart the glow
@@ -1943,7 +1981,9 @@ function levelUp() {
   const left = [];
   board.forEach((row, r) => row.forEach((v, c) => v && left.push([r, c])));
   left.forEach(([r, c], k) => setTimeout(() => cellEl(r, c).classList.add("pop"), 300 + k * 40));
-  const earned = 10 + 2 * level;
+  // Expert pays 1.5x; a cleared challenge level adds its bonus (shown as its own line on the card).
+  const chal = twist() ? CHALLENGE_COINS : 0, earned = Math.round((10 + 2 * level) * (expertOn() ? 1.5 : 1)) + chal;
+  if (chal) track("challenge_complete", { level, twist: twist().id, expert: expertOn() });
   // A level milestone (level 10, 25, ...) is paid with this card, so the card adds up to what the coin count gains.
   const msLevel = level + 1, msCoins = mode === "endless" && !store.get("wb-level-ms-" + msLevel, false) ? LEVEL_MILESTONES[msLevel] || 0 : 0;
   if (invitePending) { invitePending = false; store.set("wb-invite-pending", false); kept.push(`🎁 Friend bonus: +${INVITE_REWARD} 🪙`); setTimeout(() => { addCoins(INVITE_REWARD); toast(`🎁 Friend bonus!\n+${INVITE_REWARD} 🪙`, false, READ_MS); }, 400); }
@@ -1954,9 +1994,10 @@ function levelUp() {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
     if (dailyEnd) return dailyDone(earned, kept);
     const msLine = msCoins ? `🏅 Level ${msLevel} reached: +${msCoins} 🪙` : "";
+    const chalLine = chal ? `⚡ Challenge cleared: +${chal} 🪙 (included)` : "";
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned</p><div class="adbox" style="background:none;color:inherit;padding:6px"><span class="count">+${earned + msCoins} 🪙</span></div>
       ${msCoins ? `<p style="color:var(--muted);font-size:0.85rem;margin:0">Level clear +${earned} · milestone +${msCoins}</p>` : ""}
-      ${[rotLine, msLine].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}
+      ${[chalLine, rotLine, msLine].filter(Boolean).map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("")}
       ${kept.length ? `<p style="color:var(--muted);font-size:0.8rem;margin:8px 0 0">Also earned (already added):</p>` + kept.map(l => `<p class="rot-gift"><b>${l.trim()}</b></p>`).join("") : ""}${newWordsRecap()}${dailyIntro ? `<p class="daily-intro">📅 <b>Today's Daily Board</b> is ready: the same pieces for everyone, 3 levels, then share your score. Your game here stays saved.</p>` : ""}<div class="btns"><button class="btn" id="next">Next level</button>${dailyIntro ? `<button class="btn plain" id="todaydaily">📅 Try today's Daily Board</button>` : ""}<button class="btn plain ad" id="dbl">Watch an ad: get +${earned} more 🪙</button></div>`, true);
     if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); }
     // After the 3rd Endless level, ask once about a daily reminder (phone apps only).
@@ -1982,14 +2023,16 @@ function maybeInterstitial(then) {
 }
 function startNextLevel() {
   {
-    level++; levelBase = score; levelNewWords = []; dryMoves = 0; softHint = null;
+    level++; levelBase = score; levelNewWords = []; dryMoves = 0; softHint = null; expert = store.get(EXPERT_KEY, false);
     track("level_up", { level, mode });
     board = Array.from({ length: N }, () => Array(N).fill(null));
     seedBoard();
     tray = dealTray();
     busy = false; levelStartHint = true;
     setHint(); renderAll(); saveGame();
-    toast(`Level ${level}\nScore ${target()} to clear it`, false, READ_MS);
+    const tw = twist();
+    if (tw) track("challenge_start", { level, twist: tw.id, expert: expertOn() });
+    toast(tw ? `⚡ Challenge level ${level}\n${tw.short}\n+${CHALLENGE_COINS} 🪙 bonus` : `Level ${level}\nScore ${target()} to clear it`, false, READ_MS);
     levelMilestone();
   }
 }
@@ -2396,7 +2439,7 @@ boardEl.addEventListener("click", e => {
     } else {
       const el = cellEl(r, c); el.classList.remove("nope"); void el.offsetWidth; el.classList.add("nope");
       setTimeout(() => el.classList.remove("nope"), 400);
-      toast(movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : "Not a word yet");
+      toast(movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : minLen() > 3 ? "Not a word yet. Words need 4+ letters" : twist()?.id === "needE" ? "Not a word yet. Words need an E" : "Not a word yet");
     }
     return;
   }
@@ -2433,9 +2476,9 @@ const AD_UNITS = {
 // Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
 const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "eb6b4e9 2026-11-12 18:20Z";
+const BUILD_STAMP = "73e6027 2026-11-13 19:56Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -2565,6 +2608,19 @@ function renderRemindHelp() {
   const on = !!store.get(REMIND_KEY, null)?.on;
   box.innerHTML = `<button type="button" class="btn plain" id="remind-toggle" aria-pressed="${on}">🔔 Daily reminder: <b>${on ? "On" : "Off"}</b></button>`;
   document.getElementById("remind-toggle").onclick = async () => { await setReminder(!on); renderRemindHelp(); };
+}
+// Expert switch in Help: harder Endless for players who want more. Takes effect from the next level.
+function renderExpertHelp() {
+  const box = document.getElementById("expert-help");
+  if (!box) return;
+  const on = store.get(EXPERT_KEY, false);
+  box.innerHTML = `<button type="button" class="btn plain" id="expert-toggle" aria-pressed="${on}">🔥 Expert mode: <b>${on ? "On" : "Off"}</b></button>
+    <p class="expert-note">Endless only. Words need 4+ letters, boards start with no word pieces, levels need 25% more points, and you earn 1.5x coins. ${on === expert ? "" : "Starts with your next level."}</p>`;
+  document.getElementById("expert-toggle").onclick = () => {
+    store.set(EXPERT_KEY, !on); track("expert_toggle", { on: !on, level });
+    if (over || tut) expert = !on;   // nothing in play: applies at once
+    renderExpertHelp();
+  };
 }
 // Tapping the reminder opens today's Daily Board (unless it's already done).
 if (Notes) {
