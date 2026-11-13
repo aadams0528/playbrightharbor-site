@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.19.3 (Nikola round 16 fixes + iPhone photo fallback) -->
+<!-- Tripsake v0.19.4 (sample shows Close to home, music fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1373,7 +1373,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19.4 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1776,11 +1776,14 @@ function homeLooksLikeTrip(pts, home){ const near = (pts || []).filter(p => p.t 
 /* photos near home that aren't part of any trip, by day (2 or more photos a day), newest first */
 function nearHomeDays(L){ if (!L || L.manual || !L.home || !L.trips) return []; const inT = new Set(L.trips.flatMap(t => t.pts || [])), byDay = new Map();
   (L.pts || []).forEach(p => { if (inT.has(p) || (L.nearDupe && L.nearDupe.has(p)) || d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM > 100) return; const k = dayKey(new Date(p.t)); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(p); });
-  return [...byDay.entries()].filter(([, a]) => a.length >= 2).sort((a, b) => b[0].localeCompare(a[0])); }
+  return [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0])); }
 /* near-home days, newest first, grouped: 2 to 4 days in a row look like a stay (a trip); a single day, a memory */
-function nearHomeGroups(L){ const d = nearHomeDays(L).slice().sort((a, b) => a[0].localeCompare(b[0])), out = []; let run = [];
+function nearHomeGroups(L){ const all = nearHomeDays(L).slice().sort((a, b) => a[0].localeCompare(b[0])), d = all.filter(r => r[1].length >= 2), out = []; let run = [];
+  /* days with a single photo near home: one "Around home" memory for each month, so a lone snapshot isn't lost and isn't a card of its own */
+  const months = new Map(); all.filter(r => r[1].length < 2).forEach(r => { const m = r[0].slice(0, 7); if (!months.has(m)) months.set(m, []); months.get(m).push(r); });
   const flush = () => { if (!run.length) return; if (run.length >= 2 && run.length <= 4) out.push({trip:true, days:run.map(r => r[0]), pts:run.flatMap(r => r[1])}); else run.forEach(r => out.push({trip:false, days:[r[0]], pts:r[1]})); run = []; };
   d.forEach(r => { if (run.length && dayShift(run[run.length - 1][0], 1) !== r[0]) flush(); run.push(r); }); flush();
+  months.forEach((rs, m) => { const pts = rs.flatMap(r => r[1]); if (pts.length >= 2) out.push({trip:false, month:m, days:rs.map(r => r[0]), pts}); });
   return out.sort((a, b) => b.days[0].localeCompare(a.days[0])).slice(0, 10); }
 /* a Close to home memory whose photos were taken far from home (Banff, say): say so, and offer to keep it as a trip */
 function memFarHTML(L){ const rh = store.get("realHome", null), t = (L.trips || [])[0]; if (!rh || !isFinite(rh.lat) || !t || !t.stops || !t.stops.length) return ""; const far = Math.max(...t.stops.map(q => d3.geoDistance([q.lon, q.lat], [rh.lon, rh.lat]) * KM)); if (far <= 100) return "";
@@ -1796,8 +1799,8 @@ async function planNearDupes(L){ const D = 864e5; const cands = (L.pts || []).fi
 function nearMemHTML(L){ if (!L || L.nearMade || L.manual) return ""; if (!L.nearChecked){ if (!nearHomeLeft(L)) return ""; if (!L.nearChecking){ L.nearChecking = true; setTimeout(() => planNearDupes(L), 0); } return `<div id="ldNear"><p class="ldhow" style="margin:0">Checking your photos from close to home…</p></div>`; }
   const g = nearHomeGroups(L); if (!g.length) return L.nearAlready ? `<div id="ldNear" class="suggest"><b>🏠 ${plural(L.nearAlready, "photo")} from close to home ${L.nearAlready === 1 ? "is" : "are"} already on your globe</b><p style="margin:4px 0 8px">Nothing new to add from close to home.</p>${(L.trips || []).length ? "" : `<button class="btn primary" data-ld-nearnone>Done: nothing new to add</button>`}</div>` : `<div id="ldNear"></div>`; const n = g.reduce((a, x) => a + x.pts.length, 0), nm = g.filter(x => !x.trip).length, nt = g.length - nm;
   const what = [nm ? (nm === 1 ? "a memory" : `${nm} memories`) : "", nt ? (nt === 1 ? "a trip" : `${nt} trips`) : ""].filter(Boolean).join(" and ");
-  return `<div id="ldNear" class="suggest"><b>🏠 ${plural(n, "photo")} from close to home</b><p style="margin:4px 0 8px">They're near home, so they aren't part of a trip. ${nt ? `${nt === 1 ? "One looks" : `${nt} look`} like a stay of a few days in a row, so ${nt === 1 ? "it's" : "they're"} offered as a trip. ` : ""}${nm ? `Single days become <b>Close to home</b> memories, which don't count as travel. ` : ""}You can change any of them later.${L.nearAlready ? ` ${plural(L.nearAlready, "other photo")} from close to home ${L.nearAlready === 1 ? "is" : "are"} already on your globe, so ${L.nearAlready === 1 ? "it isn't" : "they aren't"} offered again.` : ""}</p><button class="btn" data-ld-nearmem>Make ${what}</button></div>`; }
-function makeNearMems(){ const L = loadState; if (!L) return; const g = nearHomeGroups(L); g.forEach(x => { const tr = buildTrip(x.pts); tr.keep = true; if (!x.trip){ tr.homeMem = true; tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; } L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${tmCount(L.trips.slice(-g.length))} from close to home. You can rename any of them on its card`); }
+  return `<div id="ldNear" class="suggest"><b>🏠 ${plural(n, "photo")} from close to home</b><p style="margin:4px 0 8px">They're near home, so they aren't part of a trip. ${nt ? `${nt === 1 ? "One looks" : `${nt} look`} like a stay of a few days in a row, so ${nt === 1 ? "it's" : "they're"} offered as a trip. ` : ""}${nm ? `Days out and odd snapshots become <b>Close to home</b> memories, which don't count as travel. ` : ""}You can change any of them later.${L.nearAlready ? ` ${plural(L.nearAlready, "other photo")} from close to home ${L.nearAlready === 1 ? "is" : "are"} already on your globe, so ${L.nearAlready === 1 ? "it isn't" : "they aren't"} offered again.` : ""}</p><button class="btn" data-ld-nearmem>Make ${what}</button></div>`; }
+function makeNearMems(){ const L = loadState; if (!L) return; const g = nearHomeGroups(L); g.forEach(x => { const tr = buildTrip(x.pts); tr.keep = true; if (!x.trip){ tr.homeMem = true; tr.title = x.month ? `Around home, ${new Date(x.month + "-15T12:00").toLocaleDateString("en-US", {month:"long", year:"numeric"})}` : `${tr.stops[0].name}, ${fmtShort(tr.start)}`; } L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${tmCount(L.trips.slice(-g.length))} from close to home. You can rename any of them on its card`); }
 function findTrips(pts, home){
   const away = p => d3.geoDistance([p.lon, p.lat], [home.lon, home.lat]) * KM > 100;
   const trips = []; let cur = null;
@@ -2352,6 +2355,7 @@ function placeTrack(lat, lon){ const inB = (a, b, c, d) => lat >= a && lat <= b 
   if (inB(42.3, 43.8, -9.6, -1.75) || inB(38.6, 40.2, 1.1, 4.5)) return "spain"; /* northern Spain (Bilbao, San Sebastián) and the Balearics */
   if (inB(42.3, 51.2, -5, 8.2)) return "france";
   if (inB(36, 43.8, -9.6, 3.4)) return "spain";
+  if (inB(42.2, 45.6, 15.2, 19.6)) return "greece"; /* the Croatian and Montenegrin coast: Adriatic islands, not an Italian piazza */
   if (inB(36.5, 45.8, 6.6, 18.6)) return "italy";
   if (inB(34.5, 46.5, 13.5, 28.3) || inB(34.5, 35.8, 32, 34.7)) return "greece";
   if (inB(27.5, 29.5, -18.3, -13.3)) return "beach"; /* the Canaries */
@@ -2359,6 +2363,7 @@ function placeTrack(lat, lon){ const inB = (a, b, c, d) => lat >= a && lat <= b 
   if (inB(47.9, 72, -25, 45)) return "mountains"; /* Iceland, Norway, the north and central Europe: big quiet views (its capitals are big cities) */
   if (inB(35, 47.9, -25, 45)) return "alps";
   if (inB(24, 30.8, -87.7, -79.9)) return "beach"; /* Florida, before the Caribbean */
+  if (inB(7, 11.2, -86, -77.2)) return "mexico"; /* Costa Rica and Panama: Central America */
   if (inB(10, 27.5, -86.5, -59)) return "caribbean";
   if (inB(7, 32.7, -118, -86.5) && !usSide(lat, lon)) return "mexico";
   if (near(SOCAL_COAST, 20)) return "beach";
