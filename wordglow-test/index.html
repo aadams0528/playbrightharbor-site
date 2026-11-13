@@ -267,6 +267,7 @@ body.deco .board { box-shadow: 0 0 0 4px var(--deco1), 0 0 0 7px var(--deco2); }
 @media (prefers-reduced-motion: reduce) { #deco-fall { display: none; } }
 .expert-note { color: var(--muted); font-size: 1rem; margin: 4px 0 8px; }
 #level .tw { color: #f5a623; font-weight: 700; }
+#level .twrule { display: block; font-size: 1rem; color: var(--fg); margin-top: 3px; }   /* the challenge rule stays in view (Cooper round 13) */
 .rot-gift b { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255, 214, 102, 0.18); animation: chipIn 0.2s ease-out both; }
 .rot-gift:nth-of-type(2) b { animation-delay: 0.06s; } .rot-gift:nth-of-type(3) b { animation-delay: 0.12s; } .rot-gift:nth-of-type(4) b { animation-delay: 0.18s; }
 @keyframes chipIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
@@ -501,7 +502,7 @@ button.pill { cursor: pointer; }
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> spell words with the letter blocks, then tap them to score points.</li>
-      <li>Drag a piece onto the board. Words read left to right, or top to bottom, with 3 or more letters touching.</li>
+      <li>Drag a piece onto the board. Words read left to right, or top to bottom, with 3 or more letters touching (4 or more in Expert mode).</li>
       <li>Real words <b>glow</b>. Nothing disappears on its own: tap a glowing word when you want to score it and clear its blocks.</li>
       <li>Or keep building: TEA can grow into TEASE. Longer words multiply their points: 4 letters x2, 5 letters x3, 6 or more x4. Rare letters (the small number on each block) score more.</li>
       <li><b>⚡ Challenge levels:</b> from level 30, every 3rd level has a twist (like 4+ letter words only, or every word needs an E) and pays +20 🪙 bonus.</li>
@@ -894,7 +895,7 @@ function saveGame() {
   if (tut || over) return;
   const save = {
     v: 1, day: todayKey(), mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, rotates,
-    continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(),
+    continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(), expert,
     tray: tray.map(p => ({ ...p, fresh: false })),
     goals: goals.map(g => ({ id: g.id, prog: g.prog, need: g.need, reward: g.reward })),
   };
@@ -928,13 +929,15 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   chain = g.chain || 0; chainMoves = g.chainMoves || 0; dryMoves = g.dryMoves || 0; softHint = null; rotates = g.rotates || 0; rotating = false; rotPaid = null;
   goals = g.goals.map(x => ({ ...GOALS.find(d => d.id === x.id), ...x }));
   rng = mulberry(g.seed);
+  // Expert as it was when this level started, so a reload never changes the goal or rules mid-level (Cooper round 13).
+  expert = typeof g.expert === "boolean" ? g.expert : store.get(EXPERT_KEY, false);
   tut = null; movable = null; erasing = false; over = false; busy = false; shownScore = score;
   best = Math.max(store.get(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", 0), score, mode === "daily" ? store.get(DAILY_KEY(), null)?.score || 0 : 0);
   renderModeTab();
   document.getElementById("modelabel").textContent = mode === "daily" ? `Daily Board #${dailyNo()}` : "Score";
   document.getElementById("over").hidden = true;
   finishTurn();
-  if (!over && welcome) toast(`Welcome back!\nLevel ${level}`, false, READ_MS);
+  if (!over && welcome) toast(`Welcome back!\nLevel ${level}` + (twist() ? `\n⚡ ${twist().short}` : ""), false, READ_MS);
   return true;
 }
 
@@ -1180,7 +1183,7 @@ function renderScores() {
   const pct = Math.min(100, 100 * levelPts() / target());
   // Short marks keep the line on one row: 🔥 = Expert, ⚡ = challenge level (the hint line spells out the twist).
   const tags = (expertOn() ? `<span title="Expert">🔥</span>` : "") + (twist() ? `<span class="tw" title="Challenge level">⚡</span>` : "");
-  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""}${tags ? " " + tags : ""} · ${Math.min(levelPts(), target())} of ${target()}${tags ? "" : " points"}<span class="lvbar"><i style="width:${pct}%"></i></span>`;
+  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""}${tags ? " " + tags : ""} · ${Math.min(levelPts(), target())} of ${target()}${tags ? "" : " points"}<span class="lvbar"><i style="width:${pct}%"></i></span>${twist() ? `<span class="twrule">⚡ ${twist().short}</span>` : ""}`;
 }
 function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores(); sizeCells(); }
 // A Rotate, Shuffle or Eraser changes the tray or board between moves: the soft hint is worked out again,
@@ -2632,7 +2635,7 @@ if (!resumeGame() && !resumeGame(SAVE_KEY + "-endless", false)) newGame("endless
 // can be tried without playing 30 levels first. The phone apps ignore it.
 {
   const jump = window.Capacitor?.isNativePlatform?.() ? 0 : parseInt(new URLSearchParams(location.search).get("level"), 10);
-  if (jump >= 2 && jump <= 99 && store.get("wb-tutorial-done", false)) { newGame("endless"); level = jump - 1; levelBase = score; startNextLevel(); }
+  if (jump >= 2 && jump <= 99) { store.set("wb-tutorial-done", true); newGame("endless"); level = jump - 1; levelBase = score; clearToasts(); startNextLevel(); }
 }
 renderCoins(); renderStreak(); checkStreakAtRisk(); applyDeco(); weeklyIntro();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyDeco(); weeklyIntro(); } });   // a new week or holiday while the app was away
@@ -2654,7 +2657,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "1394723 2026-11-13 20:31Z";
+const BUILD_STAMP = "d14c741 2026-11-13 21:09Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
