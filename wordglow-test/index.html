@@ -267,7 +267,7 @@ body.deco .board { box-shadow: 0 0 0 4px var(--deco1), 0 0 0 7px var(--deco2); }
 @media (prefers-reduced-motion: reduce) { #deco-fall { display: none; } }
 .expert-note { color: var(--muted); font-size: 1rem; margin: 4px 0 8px; }
 #level .tw { color: #f5a623; font-weight: 700; }
-#level .twrule { display: block; font-size: 1rem; color: var(--fg); margin-top: 3px; }   /* the challenge rule stays in view (Cooper round 13) */
+#level .twrule { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 1rem; color: var(--fg); margin-top: 3px; }   /* the challenge rule stays in view (Cooper round 13) */
 .rot-gift b { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255, 214, 102, 0.18); animation: chipIn 0.2s ease-out both; }
 .rot-gift:nth-of-type(2) b { animation-delay: 0.06s; } .rot-gift:nth-of-type(3) b { animation-delay: 0.12s; } .rot-gift:nth-of-type(4) b { animation-delay: 0.18s; }
 @keyframes chipIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
@@ -672,11 +672,11 @@ function wordPiece() {
   let bestP = null, bestS = 0;
   for (const p of [...extendPieces(), ...Array.from({ length: 20 }, makePiece)]) { const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; } if (bestS >= 5) break; }
   for (let i = 0; bestS < 3 && i < 12; i++) {
-    const letters = [...pick(EASY_WORDS)], down = rng() < 0.5, cells = letters.map((_, k) => down ? [k, 0] : [0, k]);
+    const letters = [...pick(minLen() > 3 ? SEED_WORDS : EASY_WORDS)], down = rng() < 0.5, cells = letters.map((_, k) => down ? [k, 0] : [0, k]);
     const p = { cells, color: 1 + Math.floor(rng() * 6), letters, specials: cells.map(() => null), used: false, fresh: true };
     const s = helpScore(p); if (s > bestS) { bestS = s; bestP = p; }
   }
-  return bestS >= 3 ? bestP : null;
+  return bestS >= minLen() ? bestP : null;
 }
 // From level 6 in Endless, checked after every move: when nothing is glowing and no piece left in the tray
 // can make a word (say the word a tray was dealt around just got scored), one of them is swapped.
@@ -701,7 +701,7 @@ function rescueTray() {
 // Soft hint (Alan 2026-11-09): from level 6 in Endless, after 3 pieces placed with no word scored and nothing
 // glowing, the row or column where a tray piece can make a word glows faintly. It never shows the word or
 // which piece makes it; the glow ends with the next word scored.
-const SOFT_HINT_MOVES = 3;
+const SOFT_HINT_MOVES = 2;   // was 3 (Nikola round 13: the glow came too late)
 let dryMoves = 0, softHint = null, lastWordLines = [];
 const softHintWanted = () => !tut && mode === "endless" && level >= 6 && dryMoves >= SOFT_HINT_MOVES && !scanWords(board).length;
 function hintLine() {
@@ -1103,7 +1103,7 @@ function renderBoard() {
   });
   movableCells().forEach(([r, c]) => cellEl(r, c).classList.add("movable"));
   movableCells().forEach(([r, c]) => { for (let R = r - 1; R <= r + 1; R++) for (let C = c - 1; C <= c + 1; C++) if (R >= 0 && C >= 0 && R < N && C < N && !board[R][C]) cellEl(R, C).classList.add("nearmove"); });
-  if (softHint && !lit.length) for (let k = 0; k < N; k++) cellEl(softHint.row ?? k, softHint.col ?? k).classList.add("softhint");
+  if (softHint && !softHint.eraser && !lit.length) for (let k = 0; k < N; k++) cellEl(softHint.row ?? k, softHint.col ?? k).classList.add("softhint");
   tutSpot().forEach(([r, c]) => cellEl(r, c).classList.add("tut-spot"));
   // Hidden while the special-blocks intro is the hint above the board: it says the same thing.
   const lg = document.getElementById("legend");
@@ -1196,8 +1196,10 @@ function renderScores() {
   document.getElementById("wcount").textContent = found.length;
   const pct = Math.min(100, 100 * levelPts() / target());
   // Short marks keep the line on one row: 🔥 = Expert, ⚡ = challenge level (the hint line spells out the twist).
-  const tags = (expertOn() ? `<span title="Expert">🔥</span>` : "") + (twist() ? `<span class="tw" title="Challenge level">⚡</span>` : "");
-  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""}${tags ? " " + tags : ""} · ${Math.min(levelPts(), target())} of ${target()}${tags ? "" : " points"}<span class="lvbar"><i style="width:${pct}%"></i></span>${twist() ? `<span class="twrule">⚡ ${twist().short}</span>` : ""}`;
+  // Expert and the challenge rule show in words under the bar, for the whole level (Nikola and Cooper round 13).
+  const pending = mode === "endless" && !tut && store.get(EXPERT_KEY, false) !== expert;
+  const chips = [expertOn() && `🔥 Expert${pending ? " (off next level)" : ""}`, !expertOn() && pending && "🔥 Expert starts next level", twist() && `⚡ ${twist().short}`].filter(Boolean);
+  document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""} · ${Math.min(levelPts(), target())} of ${target()} points<span class="lvbar"><i style="width:${pct}%"></i></span>${chips.length ? `<span class="twrule">${chips.map(c => `<span class="chip-rule">${c}</span>`).join("")}</span>` : ""}`;
 }
 function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores(); sizeCells(); }
 // A Rotate, Shuffle or Eraser changes the tray or board between moves: the soft hint is worked out again,
@@ -1275,9 +1277,9 @@ function wordsIn(cells, keep = () => true) {
   for (let i = 0; i < s.length; i++) for (let j = i + ml; j <= s.length; j++) {
     const w = s.slice(i, j);
     if (!WORDS.has(w) || !keep(i, j) || (tw === "needE" && !w.includes("e"))) continue;
-    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length + (tw === "big" && w.length >= 6 ? 1 : 0);
+    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length, big = tw === "big" && w.length >= 6 ? 1 : 0;
     const bomb = blocks.some(x => x.special === "bomb");
-    cand.push({ w, i, j, m: mult(w.length), dbl, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** dbl });
+    cand.push({ w, i, j, m: mult(w.length), dbl, big, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** (dbl + big) });
   }
   // Keep every word except ones sitting entirely inside a longer word (TEA inside TEASE).
   // Words that only overlap, like STAR and ARID in STARID, both count.
@@ -1694,6 +1696,7 @@ function cashIn(group) {
   const why = [];
   if (k === 1 && group[0].m > 1) why.push(`${group[0].w.length} letters x${group[0].m}`);
   if (k === 1 && group[0].dbl) why.push(`2x block${group[0].dbl > 1 ? "s" : ""} x${2 ** group[0].dbl}`);
+  if (k === 1 && group[0].big) why.push("big word x2");
   if (chainX > 1) why.push(`chain x${chainX}`);
   // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
   const rare = group.reduce((a, g) => a + [...g.w].filter(ch => "jqxz".includes(ch)).length, 0);
@@ -1778,7 +1781,7 @@ function setHint() {
     h.innerHTML = "💣 <b>Bomb word!</b> Scoring it also blows up the <b style='color:#e5484d'>red squares</b>. Tap the word to set it off.";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
-  else if (twist() && !found.length) h.innerHTML = "⚡ " + twist().text;
+  else if (softHint?.eraser) h.innerHTML = "Stuck? Tap the <b>Eraser</b> below, then a block, to make room.";
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
@@ -1808,7 +1811,7 @@ function finishTurn() {
   const rescued = rescueTray();
   // After a swap, the row or column where the new piece makes a word glows too (Muse round 10).
   const hadHint = softHint;
-  softHint = rescued || softHintWanted() ? hintLine() : null;
+  softHint = rescued || softHintWanted() ? hintLine() || (erasers > 0 && !rescued ? { eraser: true, key: boardKey() } : null) : null;   // nothing fits: point at an Eraser
   if (softHint && rescued) softHint.swap = true;
   if (softHint || hadHint) setHint();
   renderAll(); saveGame();
@@ -1971,9 +1974,10 @@ function checkWeekly(word) {
 }
 // Endless only: now and then a new block's letter comes from a weekly word not found yet, so the words can be made.
 function weeklyLetter() {
-  if (mode !== "endless" || tut || rng() >= 0.08) return null;
-  const s = weekState(), left = s.words.filter(w => !s.got.includes(w));
-  const ch = left.length ? pick(pick(left)) : null;
+  if (mode !== "endless" || tut || rng() >= 0.12) return null;
+  // One word at a time, so its letters come close together and it can actually be made (Nikola round 13).
+  const s = weekState(), left = s.words.filter(w => !s.got.includes(w) && w.length >= minLen());
+  const ch = left.length ? pick(left[0]) : null;
   return ch && level <= 5 && "jkqvxz".includes(ch) ? null : ch;   // early boards stay friendly
 }
 function weeklyHtml() {
@@ -2033,6 +2037,7 @@ function applyDeco() {
     f.appendChild(s);
   }
   document.body.appendChild(f);
+  setTimeout(() => { f.style.transition = "opacity 2s"; f.style.opacity = "0"; setTimeout(() => f.remove(), 2100); }, 30000);   // a short shower, not forever (Nikola round 13)
   // On the holiday itself, say so once.
   if (h.days === 0 && store.get("wb-deco-greet", null) !== dayKey() && store.get("wb-tutorial-done", false)) {
     store.set("wb-deco-greet", dayKey());
@@ -2653,7 +2658,9 @@ boardEl.addEventListener("click", e => {
     } else {
       const el = cellEl(r, c); el.classList.remove("nope"); void el.offsetWidth; el.classList.add("nope");
       setTimeout(() => el.classList.remove("nope"), 400);
-      toast(movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : minLen() > 3 ? "Not a word yet. Words need 4+ letters" : twist()?.id === "needE" ? "Not a word yet. Words need an E" : "Not a word yet");
+      // The level's rule comes first, so a challenge or Expert reject always names it (Nikola round 13).
+      const rule = minLen() > 3 ? "Words need 4+ letters" : twist()?.id === "needE" ? "Every word needs an E" : "";
+      toast(rule ? `Not a word here. ${rule}` : movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : "Not a word yet");
     }
     return;
   }
@@ -2699,7 +2706,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "ca797ee 2026-11-13 21:40Z";
+const BUILD_STAMP = "b2b82cd 2026-11-13 23:02Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
