@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.19.2 (Muse + Cooper round 16 fixes) -->
+<!-- Tripsake v0.19.3 (Nikola round 16 fixes + iPhone photo fallback) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -389,6 +389,7 @@ label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;marg
 .toast{position:fixed}.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
 .toast{display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box}
 .toast button{color:var(--lit-soft);font-weight:700;text-decoration:underline;flex:none}
+.toast:has(button:not(.tx)){padding:12px 16px;gap:16px}.toast button:not(.tx){min-height:40px;padding:4px 10px}
 .toast button.tx{color:var(--muted);text-decoration:none;font-weight:400;padding:2px 4px;margin-left:-4px}
 .badge{display:inline-block;font-size:calc(14px * var(--fs,1));font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,122,184,.18);color:#ffb3d4;vertical-align:1px}
 .morerow{display:flex;gap:12px;align-items:center;padding:10px;border-radius:12px;background:var(--panel-2);text-align:left;width:100%;position:relative;box-sizing:border-box}
@@ -804,7 +805,8 @@ function missingTile(w, h){ const key = "missing|" + w + "|" + h; if (photoCache
   const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.fillStyle = "#1b2233"; x.fillRect(0, 0, w, h);
   x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = Math.max(2, w / 160); x.setLineDash([w / 40, w / 60]); x.strokeRect(w * .06, h * .08, w * .88, h * .84);
   x.fillStyle = "rgba(255,255,255,.55)"; x.textAlign = "center"; x.textBaseline = "middle"; x.font = `${Math.round(h / 5)}px system-ui,sans-serif`; x.fillText("🖼", w / 2, h * .4);
-  x.font = `600 ${Math.round(h / 13)}px system-ui,sans-serif`; x.fillText("Photo couldn't be shown", w / 2, h * .66); x.font = `${Math.round(h / 16)}px system-ui,sans-serif`; x.fillStyle = "rgba(255,255,255,.4)"; x.fillText("in this browser", w / 2, h * .77);
+  const fit = (t, px, wt) => { let f = px; x.font = `${wt}${f}px system-ui,sans-serif`; const m = x.measureText(t).width; if (m > w * .8){ f = Math.floor(f * w * .8 / m); x.font = `${wt}${f}px system-ui,sans-serif`; } return f; };
+  fit("Photo couldn't be shown", Math.round(h / 13), "600 "); x.fillText("Photo couldn't be shown", w / 2, h * .66); fit("in this browser", Math.round(h / 16), ""); x.fillStyle = "rgba(255,255,255,.4)"; x.fillText("in this browser", w / 2, h * .77);
   const url = c.toDataURL("image/jpeg", .85); photoCache.set(key, url); return url; }
 function sky(x, w, h, a, b, horizon = .62){ const g = x.createLinearGradient(0,0,0,h*horizon); g.addColorStop(0,a); g.addColorStop(1,b); x.fillStyle = g; x.fillRect(0,0,w,h); }
 function sun(x, cx, cy, r, col){ const g = x.createRadialGradient(cx,cy,0,cx,cy,r*3); g.addColorStop(0,col); g.addColorStop(.3,col); g.addColorStop(1,"rgba(255,255,255,0)"); x.fillStyle = g; x.beginPath(); x.arc(cx,cy,r*3,0,7); x.fill(); }
@@ -1371,7 +1373,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1600,6 +1602,8 @@ function toast(msg, undo, sticky){
   setTimeout(() => document.addEventListener("pointerdown", off, true), 0);
 }
 const plural = (n, one, many) => `${typeof n === "number" ? n.toLocaleString("en-US") : n} ${n === 1 ? one : (many || one + "s")}`;
+/* "2 trips", "1 memory", "1 trip and 1 memory": trips and Close to home memories named apart */
+const tmCount = a => { const m = a.filter(t => t.homeMem).length, n = a.length - m; return [n || !m ? plural(n, "trip") : "", m ? plural(m, "memory", "memories") : ""].filter(Boolean).join(" and "); };
 
 /* ---------------- add a memory ---------------- */
 let snapDraft = null;
@@ -1703,7 +1707,7 @@ document.addEventListener("change", e => { if (e.target.id === "bigText"){ BIG_T
   if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
   if (e.target.dataset && e.target.dataset.ldMove !== undefined && e.target.value){ const [si, j] = e.target.value.split(":").map(Number); moveStop(+e.target.dataset.ldMove, si, j); } });
-document.addEventListener("input", e => { if (e.target.id !== "whereQ") return; whereResults = searchPlaces(e.target.value);
+document.addEventListener("input", e => { if (e.target.id !== "whereQ") return; whereResults = searchPlaces(e.target.value); if (!whereResults.length && /,/.test(e.target.value)) whereResults = searchPlaces(e.target.value.split(",")[0]); /* "Indianapolis, Indiana, USA" finds Indianapolis */
   $("#whereRes").innerHTML = whereResults.length ? whereResults.map((r, i) => `<button data-where-pick="${i}">${esc(r.name)}<small>${esc(r.region)}</small></button>`).join("") : (normP(e.target.value).length >= 2 ? `<p class="note" style="margin:4px 0 0">No match in the built-in list. Use "Fine-tune on the globe" to drop the pin anywhere.</p>` : ""); });
 let pinMode = false, pinPrevSheet = null, pinLabelAt = 0;
 function startPinMode(){ pinMode = true; $("#overlay").hidden = true; document.body.classList.add("pinmode"); pinPrevSheet = sheetPos; if (isPhone()) setSheet("peek"); spinning = false; closePlace && closePlace();
@@ -1771,18 +1775,29 @@ function homeLooksLikeTrip(pts, home){ const near = (pts || []).filter(p => p.t 
   const a = Math.min(...near.map(p => p.t)), z = Math.max(...near.map(p => p.t)); if (z - a > 21 * DAY) return null; return {n:near.length, start:dayKey(new Date(a)), end:dayKey(new Date(z))}; }
 /* photos near home that aren't part of any trip, by day (2 or more photos a day), newest first */
 function nearHomeDays(L){ if (!L || L.manual || !L.home || !L.trips) return []; const inT = new Set(L.trips.flatMap(t => t.pts || [])), byDay = new Map();
-  (L.pts || []).forEach(p => { if (inT.has(p) || d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM > 100) return; const k = dayKey(new Date(p.t)); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(p); });
+  (L.pts || []).forEach(p => { if (inT.has(p) || (L.nearDupe && L.nearDupe.has(p)) || d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM > 100) return; const k = dayKey(new Date(p.t)); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(p); });
   return [...byDay.entries()].filter(([, a]) => a.length >= 2).sort((a, b) => b[0].localeCompare(a[0])); }
 /* near-home days, newest first, grouped: 2 to 4 days in a row look like a stay (a trip); a single day, a memory */
 function nearHomeGroups(L){ const d = nearHomeDays(L).slice().sort((a, b) => a[0].localeCompare(b[0])), out = []; let run = [];
   const flush = () => { if (!run.length) return; if (run.length >= 2 && run.length <= 4) out.push({trip:true, days:run.map(r => r[0]), pts:run.flatMap(r => r[1])}); else run.forEach(r => out.push({trip:false, days:[r[0]], pts:r[1]})); run = []; };
   d.forEach(r => { if (run.length && dayShift(run[run.length - 1][0], 1) !== r[0]) flush(); run.push(r); }); flush();
   return out.sort((a, b) => b.days[0].localeCompare(a.days[0])).slice(0, 10); }
+/* a Close to home memory whose photos were taken far from home (Banff, say): say so, and offer to keep it as a trip */
+function memFarHTML(L){ const rh = store.get("realHome", null), t = (L.trips || [])[0]; if (!rh || !isFinite(rh.lat) || !t || !t.stops || !t.stops.length) return ""; const far = Math.max(...t.stops.map(q => d3.geoDistance([q.lon, q.lat], [rh.lon, rh.lat]) * KM)); if (far <= 100) return "";
+  return `<div class="suggest"><b>These photos were taken about ${Math.round(far * 0.621371).toLocaleString("en-US")} miles from home</b><p style="margin:4px 0 8px">Close to home is for nights out and days near home. Was this a trip?</p><button class="btn" data-mem-astrip>Make it a trip instead</button></div>`; }
 function nearHomeLeft(L){ if (!L || L.manual || !L.home || !L.trips) return 0; const inT = new Set(L.trips.flatMap(t => t.pts || [])); return (L.pts || []).filter(p => !inT.has(p) && d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM <= 100).length; }
-function nearMemHTML(L){ if (!L || L.nearMade) return ""; const g = nearHomeGroups(L); if (!g.length) return ""; const n = g.reduce((a, x) => a + x.pts.length, 0), nm = g.filter(x => !x.trip).length, nt = g.length - nm;
+/* near-home photos already saved (in a memory or a trip): found by picture fingerprint, like a trip re-import, so the same evening is never offered twice */
+async function planNearDupes(L){ const D = 864e5; const cands = (L.pts || []).filter(p => { const inT = (L.trips || []).some(t => (t.pts || []).includes(p)); return !inT && d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM <= 100; });
+  const dupe = new Set(); const saved = store.get("realTrips", []) || [];
+  if (cands.length && saved.length){ const lo = new Date(Math.min(...cands.map(p => p.t)) - 2 * D).toISOString().slice(0, 10), hi = new Date(Math.max(...cands.map(p => p.t)) + 2 * D).toISOString().slice(0, 10); const prints = []; let n = 0;
+    for (const e of saved){ if (!e.start || e.start > hi || (e.end || e.start) < lo) continue; for (const o of e.stops || []) for (let k = 0; k < (o.photos || []).length; k++){ if (n >= 1500 || o.photos[k][0] !== "real") continue; n++; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); } }
+    if (prints.length) for (const p of cands){ let u = null; try { u = await thumb(p.file, 1024); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) dupe.add(p); } }
+  if (loadState !== L) return; L.nearDupe = dupe; L.nearChecked = true; L.nearAlready = dupe.size; const el = document.getElementById("ldNear"); if (el) el.outerHTML = nearMemHTML(L); }
+function nearMemHTML(L){ if (!L || L.nearMade || L.manual) return ""; if (!L.nearChecked){ if (!nearHomeLeft(L)) return ""; if (!L.nearChecking){ L.nearChecking = true; setTimeout(() => planNearDupes(L), 0); } return `<div id="ldNear"><p class="ldhow" style="margin:0">Checking your photos from close to home…</p></div>`; }
+  const g = nearHomeGroups(L); if (!g.length) return L.nearAlready ? `<div id="ldNear" class="suggest"><b>🏠 ${plural(L.nearAlready, "photo")} from close to home ${L.nearAlready === 1 ? "is" : "are"} already on your globe</b><p style="margin:4px 0 8px">Nothing new to add from close to home.</p>${(L.trips || []).length ? "" : `<button class="btn primary" data-ld-nearnone>Done: nothing new to add</button>`}</div>` : `<div id="ldNear"></div>`; const n = g.reduce((a, x) => a + x.pts.length, 0), nm = g.filter(x => !x.trip).length, nt = g.length - nm;
   const what = [nm ? (nm === 1 ? "a memory" : `${nm} memories`) : "", nt ? (nt === 1 ? "a trip" : `${nt} trips`) : ""].filter(Boolean).join(" and ");
-  return `<div class="suggest"><b>🏠 ${plural(n, "photo")} from close to home</b><p style="margin:4px 0 8px">They're near home, so they aren't part of a trip. ${nt ? `${nt === 1 ? "One looks" : `${nt} look`} like a stay of a few days in a row, so ${nt === 1 ? "it's" : "they're"} offered as a trip. ` : ""}${nm ? `Single days become <b>Close to home</b> memories, which don't count as travel. ` : ""}You can change any of them later.</p><button class="btn" data-ld-nearmem>Make ${what}</button></div>`; }
-function makeNearMems(){ const L = loadState; if (!L) return; const g = nearHomeGroups(L); g.forEach(x => { const tr = buildTrip(x.pts); tr.keep = true; if (!x.trip){ tr.homeMem = true; tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; } L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${plural(g.length, "card")} from close to home. Rename any of them under Fix this trip`); }
+  return `<div id="ldNear" class="suggest"><b>🏠 ${plural(n, "photo")} from close to home</b><p style="margin:4px 0 8px">They're near home, so they aren't part of a trip. ${nt ? `${nt === 1 ? "One looks" : `${nt} look`} like a stay of a few days in a row, so ${nt === 1 ? "it's" : "they're"} offered as a trip. ` : ""}${nm ? `Single days become <b>Close to home</b> memories, which don't count as travel. ` : ""}You can change any of them later.${L.nearAlready ? ` ${plural(L.nearAlready, "other photo")} from close to home ${L.nearAlready === 1 ? "is" : "are"} already on your globe, so ${L.nearAlready === 1 ? "it isn't" : "they aren't"} offered again.` : ""}</p><button class="btn" data-ld-nearmem>Make ${what}</button></div>`; }
+function makeNearMems(){ const L = loadState; if (!L) return; const g = nearHomeGroups(L); g.forEach(x => { const tr = buildTrip(x.pts); tr.keep = true; if (!x.trip){ tr.homeMem = true; tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; } L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${tmCount(L.trips.slice(-g.length))} from close to home. You can rename any of them on its card`); }
 function findTrips(pts, home){
   const away = p => d3.geoDistance([p.lon, p.lat], [home.lon, home.lat]) * KM > 100;
   const trips = []; let cur = null;
@@ -1924,11 +1939,14 @@ function loadHeic(){ if (window.heic2any) return Promise.resolve(window.heic2any
 async function heicToJpeg(file){ if (heicCache.has(file)) return heicCache.get(file);
   const job = (async () => { const h = await loadHeic(); let out = await h({blob:file, toType:"image/jpeg", quality:.8}); if (Array.isArray(out)) out = out[0]; heicUsed++; return out; })();
   heicCache.set(file, job); job.catch(() => heicCache.delete(file)); return job; }
+function imgDecode(file){ return new Promise(res => { let u = null; try { u = URL.createObjectURL(file); } catch(e){ res(null); return; } const im = new Image(); const done = v => { setTimeout(() => { try { URL.revokeObjectURL(u); } catch(e){} }, 0); res(v); };
+  im.onload = () => done(im.naturalWidth ? Object.assign(im, {close:null}) : null); im.onerror = () => done(null); setTimeout(() => done(null), 20000); im.src = u; }); }
 async function decodeBitmap(file, max){
   // a small file (a messaging-size copy) is decoded at its own size, never stretched up, so the bigger of two copies can be told apart later
   if (file.size && file.size < 450000 && !isHeic(file)){ try { const bm = await createImageBitmap(file, {imageOrientation:"from-image"}); if (Math.max(bm.width, bm.height) <= max * 2.5) return bm; bm.close && bm.close(); } catch(e){} }
   try { return await createImageBitmap(file, {resizeWidth:max, resizeQuality:"medium", imageOrientation:"from-image"}); } catch(e){}
   try { return await createImageBitmap(file); } catch(e){}
+  { const im = await imgDecode(file); if (im) return im; } /* iPhone: Safari can always draw a photo it can show, even when createImageBitmap gives up (HEIC, or low memory late in a big import) */
   if (!isHeic(file)) throw new Error("can't decode");
   const jpg = await heicToJpeg(file);
   try { return await createImageBitmap(jpg, {resizeWidth:max, resizeQuality:"medium", imageOrientation:"from-image"}); } catch(e){ return await createImageBitmap(jpg); } }
@@ -1957,8 +1975,8 @@ function openReview(){
   const small = 'style="font-size:calc(15px * var(--fs,1));min-height:44px;padding:6px 12px"';
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(L.homeMem ? "Your memory" : "Your trips")}<div class="steps">${L.homeMem ? "Step 2 of 2 · Check your memory" : L.manual ? "Step 2 of 2 · Check your trip" : "Step 2 of 3 · Check your trips"}</div>
     ${(() => { const inT = tr.reduce((a, t) => a + t.photos, 0), atHome = Math.max(0, L.pts.length - inT), rh = store.get("realHome", null);
-      return `<p class="ldfound">${L.homeMem ? `${plural(L.pts.length, "photo")} ${L.pts.length === 1 ? "makes" : "make"} your memory${tr[0] ? " " + esc(tr[0].title) : ""}.` : L.manual ? `${plural(L.pts.length, "photo")} with a location ${L.pts.length === 1 ? "makes" : "make"} your trip${tr[0] ? " " + esc(tr[0].title) : ""}.` : tr.length ? `<b>We found ${plural(tr.length, "trip")}</b> in your photos.${L.outside ? ` ${L.outside.toLocaleString()} ${L.outside === 1 ? "was" : "were"} outside your dates.` : ""}` : `${plural(L.pts.length, "photo")} with a location, but none were far from home, so there are no trips yet.`}</p>
-      ${tr.length ? `<p class="ldsum" id="ldTotal">${ldTotalText()}</p>${(L.why || []).length ? `<button class="linkbtn" data-ld-seeout style="margin-top:-4px">See the left-out photos and why</button>` : ""}<button class="btn primary ldgo" data-ld-add>Looks good, add ${L.homeMem ? "this memory" : kept === 1 ? "this trip" : `these ${plural(kept, "trip")}`}</button>
+      return `<p class="ldfound">${L.homeMem ? `${plural(L.pts.length, "photo")} ${L.pts.length === 1 ? "makes" : "make"} your memory${tr[0] ? " " + esc(tr[0].title) : ""}.` : L.manual ? `${plural(L.pts.length, "photo")} with a location ${L.pts.length === 1 ? "makes" : "make"} your trip${tr[0] ? " " + esc(tr[0].title) : ""}.` : tr.length ? `<b>We found ${tmCount(tr)}</b> in your photos.${L.outside ? ` ${L.outside.toLocaleString()} ${L.outside === 1 ? "was" : "were"} outside your dates.` : ""}` : nearHomeLeft(L) ? `${plural(L.pts.length, "photo")} with a location, all taken close to home.` : `${plural(L.pts.length, "photo")} with a location, but none were far from home, so there are no trips yet.`}</p>${L.homeMem ? memFarHTML(L) : ""}
+      ${tr.length ? `<p class="ldsum" id="ldTotal">${ldTotalText()}</p>${(L.why || []).length ? `<button class="linkbtn" data-ld-seeout style="margin-top:-4px">See the left-out photos and why</button>` : ""}<button class="btn primary ldgo" data-ld-add>Looks good, add ${L.homeMem ? "this memory" : kept === 1 ? (tr.find(t => t.keep) || {}).homeMem ? "this memory" : "this trip" : `these ${tmCount(tr.filter(t => t.keep))}`}</button>
       <p class="ldhow">${tr.length > 1 ? "Untick any trip you don't want. " : ""}Anything wrong? Tap <b>Fix this ${L.homeMem ? "memory" : "trip"}</b> to rename it, merge it, split it or move a stop.</p>` : ""}
       ${L.sample ? `<p class="ldhow">🏠 These sample photos belong to a sample traveler who lives in ${esc(L.home.label.replace(/ area$/, ""))}, so trips are worked out from there.${rh ? ` Your own home stays ${esc(rh.label.replace(/ area$/, ""))}.` : ""}</p>` : ""}`; })()}
     ${tr.map((t, i) => `<div class="suggest ldtrip">
@@ -2086,7 +2104,7 @@ function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (
 // the Add button always agrees with the receipt: nothing new to save means nothing to add
 function syncAddBtn(){ const L = loadState; const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]");
   document.querySelectorAll("[data-ld-one]").forEach(el => { const k = document.querySelector(`[data-ld-keep="${el.dataset.ldOne}"]`); el.hidden = !!(k && k.checked); });
-  if (!b) return; const none = n && L && !L.lastChecking && L.lastSaved === 0; b.textContent = L && L.homeMem && n && !none ? "Looks good, add this memory" : !n ? "Tick a trip to add" : L && L.lastChecking ? "Checking…" : none ? "Done: nothing new to add" : L && L.lastNewTrips === 0 && L.lastSaved ? `Looks good, add ${plural(L.lastSaved, "photo")} to your trip` : `Looks good, add ${n === 1 ? "this trip" : `these ${plural(n, "trip")}`}`; b.disabled = !n || !!(L && L.lastChecking); b.dataset.none = none ? "1" : ""; }
+  if (!b) return; const none = n && L && !L.lastChecking && L.lastSaved === 0; b.textContent = L && L.homeMem && n && !none ? "Looks good, add this memory" : !n ? "Tick a trip to add" : L && L.lastChecking ? "Checking…" : none ? "Done: nothing new to add" : L && L.lastNewTrips === 0 && L.lastSaved ? `Looks good, add ${plural(L.lastSaved, "photo")} to your trip` : (() => { const k = (L && L.trips || []).filter((t, i) => { const c = document.querySelector(`[data-ld-keep="${i}"]`); return c ? c.checked : t.keep; }); return k.length === n ? `Looks good, add ${n === 1 ? (k[0].homeMem ? "this memory" : "this trip") : `these ${tmCount(k)}`}` : `Looks good, add ${n === 1 ? "this trip" : `these ${plural(n, "trip")}`}`; })(); b.disabled = !n || !!(L && L.lastChecking); b.dataset.none = none ? "1" : ""; }
 const PER_STOP = 20; // photos kept for each stop (the rest still count toward finding trips and stops)
 const BIG_STOP = 60;  // the "keep every photo" limit you can choose in the review
 const stopCap = () => (loadState && loadState.bigCap) ? BIG_STOP : PER_STOP;
@@ -2182,7 +2200,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
     for (let si = 0; si < t.stops.length; si++){
       const s = t.stops[si]; const sid = id + "s" + si; const fresh = s.pts.filter(p => !drop.has(p)); if (!fresh.length) continue; const chosen = stopPick(fresh, cap).keep;
       const photos = [];
-      for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); }
+      for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); } if (!url){ await new Promise(r => setTimeout(r, 1500)); url = await thumb(p.file, 720, true); } /* a phone short of memory late in a big import: wait, then try a smaller copy, rather than lose the photo */
         if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
         done++; prog.textContent = `Saving photos ${done} of ${total}…`;
         const pid = sid + "-" + photos.length; if (!url){ failed++; const hf = isHeic(p.file); if (hf) heicFails++; photos.push(["missing", `${p.file.name || "A photo"}: ${hf ? "an iPhone HEIC photo this browser couldn't open" : "couldn't be shown (the file may be damaged)"}`, null, 0]); continue; }
@@ -2194,6 +2212,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
   }
   if (!out.length && !joined.length){ toast(pick.length === 1 ? "That trip is already on your globe, with all of these photos" : "Those trips are already on your globe, with all of these photos"); btn.disabled = false; return; }
   if (!store.set("realTrips", [...existing, ...out])){ toast("Couldn't save: this browser's storage is full"); btn.disabled = false; return; }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch(e){} /* ask the browser not to clear your photos when space runs low or the site sits unused */
   if (!L.sample && (!L.manual || store.get("realHome", null))) store.set("realHome", {lat:L.home.lat, lon:L.home.lon, label:L.home.label}); /* a trip made by hand never sets your home by guessing */
   if (L.manual) try { sessionStorage.removeItem("tgManName"); } catch(e){}
   store.set("hideSample", hideSample);
@@ -2210,7 +2229,7 @@ function openLaunchpad(v){
   const ids = [...(v.ids || []), ...(v.joined || []).map(j => j.id)].filter((id, k, a) => id && a.indexOf(id) === k); const pc = u => stopsOf(u).reduce((a, s) => a + s.photos.length, 0); const trips = ids.map(id => TRIPS.find(t => t.id === id)).filter(Boolean).sort((a, b) => pc(b) - pc(a)); if (!trips.length) return false; /* the biggest trip leads */
   store.set("launchSeen", true); store.set("staged", false); /* your first trip is in: the extras under More show from now on */
   const t = trips[0], st = stopsOf(t), n = st.reduce((a, s) => a + s.photos.length, 0), onlyJoin = !v.n;
-  const mem = trips.every(u => u.homeMem), head = trips.length > 1 ? `Your ${trips.length} ${mem ? "memories" : "trips"} are ready` : onlyJoin ? "Your trip is updated" : mem ? "Your memory is ready" : "Your trip is ready";
+  const mem = trips.every(u => u.homeMem), head = trips.length > 1 ? `Your ${tmCount(trips)} are ready` : onlyJoin ? "Your trip is updated" : mem ? "Your memory is ready" : "Your trip is ready";
   const receipt = [`${plural(v.saved || 0, "photo")} saved`, v.already ? `${v.already.toLocaleString()} already on your globe, so not saved twice` : "", v.failed ? `${plural(v.failed, "photo")} couldn't be opened${v.heicFails ? " (iPhone HEIC; try Safari)" : ""}` : "", "nothing on your phone was changed"].filter(Boolean).join(" · ");
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(head)}${v.first && !mem ? `<div class="steps">Step 3 of 3 · Watch it</div>` : ""}
     <div class="readycard"><img src="${photoURL(st[0] ? st[0].photos[0] : t.stops[0].photos[0])}" alt=""><div class="rc"><div class="rt">${esc(t.title)}</div><div class="rs">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(st.length, "place")} · ${plural(n, "photo")}</div></div></div>
@@ -2313,7 +2332,7 @@ const REAL_ORDER = ["scotland","ireland","france","italy","spain","greece","alps
 const realFile = k => "travel-globe-music/" + k + ".mp3";
 const REAL_MUSIC = true;
 // which track fits a place: broad boxes, checked in order (the first match wins)
-const BIG_CITIES = [[40.71,-74.01],[51.51,-0.13],[41.88,-87.63],[43.65,-79.38],[42.36,-71.06],[34.05,-118.24],[37.77,-122.42],[47.61,-122.33],[38.9,-77.04],[22.32,114.17],[52.37,4.9],[52.52,13.4],[50.08,14.44],[47.5,19.04],[50.06,19.94],[48.21,16.37],[55.68,12.57],[59.33,18.07],[37.57,126.98],[25.03,121.57]];
+const BIG_CITIES = [[40.71,-74.01],[51.51,-0.13],[41.88,-87.63],[43.65,-79.38],[42.36,-71.06],[34.05,-118.24],[37.77,-122.42],[47.61,-122.33],[38.9,-77.04],[22.32,114.17],[52.37,4.9],[52.52,13.4],[50.08,14.44],[47.5,19.04],[50.06,19.94],[48.21,16.37],[55.68,12.57],[59.33,18.07],[37.57,126.98],[25.03,121.57],[-34.6,-58.38],[45.5,-73.57]];
 function placeTrack(lat, lon){ const inB = (a, b, c, d) => lat >= a && lat <= b && lon >= c && lon <= d; const near = (pts, km) => pts.some(([y, x]) => d3.geoDistance([lon, lat], [x, y]) * KM < km);
   if (near(BIG_CITIES, 30)) return "big-city";
   if (inB(18, 23, -161, -154) || (Math.abs(lat) < 25 && (lon > 165 || lon < -140))) return "pacific-islands";
@@ -3115,7 +3134,7 @@ async function exportBackup(){
   let images = {}; try { images = await idb.all(); for (const k of Object.keys(images)){ const v = images[k]; if (typeof v === "string") continue; if (v instanceof Blob && (String(k).startsWith("rp:") || String(k).startsWith("vn:"))){ try { images[k] = await blobURL(v); } catch(e){ delete images[k]; } } else delete images[k]; } } catch(e){} imgCache.forEach((v, k) => { if (!images[k] && !String(v).startsWith("blob:")) images[k] = v; });
   const data = {app:"travel-globe", version:1, exported:new Date().toISOString(), keys, images};
   try {
-    const blob = new Blob([JSON.stringify(data)], {type:"application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tripsake-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); store.set("lastBackup", Date.now()); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    const blob = new Blob([JSON.stringify(data)], {type:"application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tripsake-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); store.set("lastBackup", Date.now()); if (typeof tab !== "undefined" && tab === "more" && !$("#overlay").dataset.kind) renderBody(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     const nImg = Object.keys(images).filter(k => !String(k).startsWith("vn:")).length; toast(`Backup file saved: ${snaps.length ? plural(snaps.length, "moment you added", "moments you added") + " and " : ""}${nImg ? `${nImg.toLocaleString()} of your own photo${nImg === 1 ? "" : "s"}` : "no photos of your own yet"}${SAMPLE_TRIPS.length ? ". The example trips come with the app, so they don't need saving" : ""}. Keep it somewhere safe.`);
   } catch(e){ toast("This browser blocked the download"); }
 }
@@ -3133,7 +3152,7 @@ function importBackup(file){
     const has = k => { try { const v = JSON.parse(d.keys[k]); return Array.isArray(v) ? v.length > 0 : !!(v && typeof v === "object" && Object.keys(v).length); } catch(e){ return false; } };
     if (!has("tg.snaps") && !has("tg.realTrips") && !has("tg.stories") && !Array.isArray((() => { try { return JSON.parse(d.keys["tg.snaps"]); } catch(e){ return null; } })())){ toast("That backup has nothing in it to restore, so nothing was changed"); return; }
     pendingRestore = d; let n = 0; try { n = JSON.parse(d.keys["tg.snaps"] || "[]").length; } catch(e){}
-    openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Restore this backup?")}<p style="margin:0">Backup from ${esc(String(d.exported || "").slice(0, 10) || "an unknown date")}: ${plural(n, "moment", "moments")}, ${(() => { try { return plural(JSON.parse(d.keys["tg.realTrips"] || "[]").length, "loaded trip"); } catch(e){ return "0 loaded trips"; } })()} and ${plural(Object.keys(d.images || {}).length, "photo")}.</p><p class="note" style="margin:0">${restoreKeptHTML(d)}If saving fails, your old data is put back.</p><div class="row-btns" style="margin:0"><button class="btn primary" data-restore-go>Replace with this backup</button><button class="btn" data-close>Cancel</button></div></div>`);
+    openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Restore this backup?")}<p style="margin:0">Backup from ${esc((() => { const x = new Date(d.exported || ""); return isFinite(x) ? x.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}) : "an unknown date"; })())}: ${[(() => { try { const a = JSON.parse(d.keys["tg.realTrips"] || "[]").map(t => ({homeMem:t.kind === "home"})); return a.length ? tmCount(a) : ""; } catch(e){ return ""; } })(), n ? plural(n, "moment", "moments") : "", plural(Object.keys(d.images || {}).filter(k => !String(k).startsWith("vn:")).length, "photo")].filter(Boolean).join(", ")}.</p><p class="note" style="margin:0">${restoreKeptHTML(d)}If saving fails, your old data is put back.</p><div class="row-btns" style="margin:0"><button class="btn primary" data-restore-go>Replace with this backup</button><button class="btn" data-close>Cancel</button></div></div>`);
   };
   fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file);
 }
@@ -3162,7 +3181,7 @@ async function doRestore(){
   location.reload();
 }
 function restoredNotice(){ let r = null; try { r = JSON.parse(sessionStorage.getItem("tgRestored") || "null"); sessionStorage.removeItem("tgRestored"); } catch(e){} if (!r) return;
-  toast(`Backup restored: ${plural(r.n, "moment", "moments")}, ${r.ok === r.of ? plural(r.ok, "photo") : r.ok + " of " + r.of + " photos (your old photos were kept)"}`, null, true); }
+  toast(`Backup restored: ${[(() => { const a = (store.get("realTrips", []) || []).map(t => ({homeMem:t.kind === "home"})); return a.length ? tmCount(a) : ""; })(), r.n ? plural(r.n, "moment", "moments") : ""].filter(Boolean).concat([""]).join(", ")}${r.ok === r.of ? plural(r.ok, "photo") : r.ok + " of " + r.of + " photos (your old photos were kept)"}`, null, true); }
 
 document.addEventListener("error", e => { const im = e.target; if (im && im.tagName === "IMG" && !im.dataset.fb){ im.dataset.fb = "1"; im.src = missingTile(640, 480); } }, true);
 
@@ -3539,6 +3558,8 @@ document.addEventListener("click", e => {
   if (g("[data-load-photos]")){ openLoader(); return; }
   if (g("[data-ld-manual]")){ openManual(); return; }
   if (g("[data-home-mem]")){ openHomeMem(); return; }
+  if (g("[data-mem-astrip]")){ const L = loadState; if (L && L.trips){ L.homeMem = false; L.trips.forEach(t => { t.homeMem = false; }); openReview(); toast("It will be saved as a trip"); } return; }
+  if (g("[data-ld-nearnone]")){ closeSheet(); toast("Nothing new: those photos are already on your globe"); return; }
   if ((b = g("[data-trip-kind]"))){ setTripKind(b.dataset.tripKind); return; }
   if (g("[data-ld-nearmem]")){ makeNearMems(); return; }
   if (g("[data-home-geo]")){ homeGeo(); return; }
@@ -3607,7 +3628,7 @@ document.addEventListener("input", e => {
   if (e.target.dataset && e.target.dataset.hikeName){ const h = hikes.find(x => x.id === e.target.dataset.hikeName); if (h){ h.name = e.target.value.slice(0, 60) || "Hike"; store.set("hikes", hikes); } return; }
   if (e.target.dataset && e.target.dataset.phlabel){ const id = e.target.dataset.phlabel, v = e.target.value.slice(0, 60); if (v.trim()) phLabels[id] = v; else delete phLabels[id]; store.set("phLabels", phLabels); const c = document.getElementById("lbCap"); if (c){ const it = lbList[lbIdx]; c.textContent = v.trim() || it.cap; } const im = document.querySelector(`.strip img[data-ph="${id}"]`); if (im) im.classList.toggle("labeled", !!v.trim()); return; }
   const t = e.target;
-  if (t.dataset.story){ const id = t.dataset.story; stories[id] = Object.assign(stories[id] || {}, {[t.dataset.f]: t.value}); const ok = store.set("stories", stories); const s = document.getElementById("saved-" + id); if (s) s.textContent = ok ? "Saved" : "Couldn't save: storage full"; }
+  if (t.dataset.story){ const id = t.dataset.story; stories[id] = Object.assign(stories[id] || {}, {[t.dataset.f]: t.value}); const ok = store.set("stories", stories); { const st = stories[id] || {}, has = !!((st.who || "").trim() || (st.best || "").trim() || (st.note || "").trim() || VOICE.has("vn:stop:" + id)), d = document.querySelector(`details[data-stopmore="${id}"]`); if (d){ const a = d.querySelector(".sm-t"), b = d.querySelector(".sm-s"); if (a) a.textContent = has ? "✎ Edit details" : "＋ Add details"; if (b) b.textContent = has ? "Change your words, add a voice note, or change this stop" : "Who was with you, best moment, notes, a voice note, or change this stop"; } } /* the label changes as soon as you write, not only when you close it */ const s = document.getElementById("saved-" + id); if (s) s.textContent = ok ? "Saved" : "Couldn't save: storage full"; }
   if (t.dataset.stopname){ const v = t.value.trim(); if (v) stopNames[t.dataset.stopname] = v; else delete stopNames[t.dataset.stopname]; store.set("stopNames", stopNames); dirty = true; }
   if (t.dataset.cnote){ const key = "c_" + t.dataset.cnote; notes[key] = t.value; const ok = store.set("notes", notes); const s = document.getElementById("saved-" + key); if (s) s.textContent = ok ? "Saved" : "Couldn't save: storage full"; }
   if (t.dataset.hole !== undefined){ let sum = 0, all = true; for (let j = 0; j < 18; j++){ const v = parseInt(document.getElementById("ns-" + j).value, 10); if (isFinite(v)) sum += v; else all = false; } document.getElementById("ns-tot").textContent = sum ? sum + (all ? "" : "…") : "—"; }
@@ -3701,6 +3722,7 @@ function openWelcome(){ /* the guided first run: three plain steps; home is aske
     ${loadState && loadState.awaitHome && loadState.pts && loadState.pts.length ? `<button class="btn primary ldgo" data-resume-review>Carry on with my ${plural(loadState.total || loadState.pts.length, "photo")}</button><button class="btn" data-load-photos style="align-self:stretch;justify-content:center;min-height:52px">Pick different photos</button>` : `<button class="btn primary ldgo" data-load-photos>Start: pick my photos</button>`}
     <button class="btn" data-sample-photos style="align-self:stretch;justify-content:center;min-height:52px">Try it with sample photos</button>
     <button class="btn" data-sample-look style="align-self:stretch;justify-content:center;min-height:48px">Skip for now, just look around</button>
+    <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone? Restore from a backup file<input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>
     <p class="ldhow">🔒 Your photos stay on this device. Nothing is uploaded, and there's no account.</p></div>`, "welcome");
 }
 /* ---------------- home: asked once, first thing; change it under More ---------------- */
@@ -3742,7 +3764,7 @@ async function intro(){
     if (k < 1) requestAnimationFrame(step); else res(); })(); });
   pinsShown = 999; LIGHT_ORDER.forEach(id => lit.set(id, 1));
   $("#scanTitle").textContent = "Your globe is ready";
-  $("#scanCount").textContent = `${plural(totalPhotos, "photo")} · ${plural(nWorld, "country", "countries")} · ${plural(TRIPS.length, "trip")}`;
+  $("#scanCount").textContent = `${plural(totalPhotos, "photo")} · ${plural(nWorld, "country", "countries")} · ${plural(TRAVEL().length, "trip")}`;
   $("#skipScan").textContent = "Let's relive one";
   introRunning = false;
   let done = false;
