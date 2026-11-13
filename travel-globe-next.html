@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.19 (Close to home memories) -->
+<!-- Tripsake v0.19.1 (memory or trip near home) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1369,7 +1369,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">Remove my loaded trips</div><div class="s">Takes your ${plural(REAL_TRIPS.length, "loaded trip")} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.19.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Memories", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1493,6 +1493,7 @@ function openTrip(id, noFly){
       <div class="tmhead">Change this trip</div>
       <button class="morerow" data-music="${t.id}"><div class="flag ring">♪</div><div class="txt"><div class="t">Music</div><div class="s">${esc(choiceName(musicChoice(t.id) === "auto" ? autoChoice(t.id) : musicChoice(t.id)))}</div></div></button>
       <button class="morerow" data-prev="${t.id}"><div class="flag ring">🖼</div><div class="txt"><div class="t">Go through photos</div><div class="s">Pick the cover, turn, reorder or remove photos</div></div></button>
+      ${t.real && (t.homeMem || nearHomeTrip(t)) ? `<button class="morerow" data-trip-kind="${t.id}"><div class="flag ring">${t.homeMem ? "✈" : "🏠"}</div><div class="txt"><div class="t">${t.homeMem ? "Turn into a trip" : "Move to Close to home"}</div><div class="s">${t.homeMem ? "For a stay away from home, even close by. It counts toward your trips and miles" : "It stays yours, but no longer counts as travel"}</div></div></button>` : ""}
       ${t.real ? `<button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete trip</div><div class="s">You can undo it right after</div></div></button>` : ""}
     </div>
     ${backAgainHTML(t)}${chs.length ? `<p class="note" style="margin:0">📚 ${chs.map(c => `${esc(c.name)} (${chapterYears(c)})`).join(" · ")}</p>` : ""}
@@ -1770,9 +1771,15 @@ function homeLooksLikeTrip(pts, home){ const near = (pts || []).filter(p => p.t 
 function nearHomeDays(L){ if (!L || L.manual || !L.home || !L.trips) return []; const inT = new Set(L.trips.flatMap(t => t.pts || [])), byDay = new Map();
   (L.pts || []).forEach(p => { if (inT.has(p) || d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM > 100) return; const k = dayKey(new Date(p.t)); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(p); });
   return [...byDay.entries()].filter(([, a]) => a.length >= 2).sort((a, b) => b[0].localeCompare(a[0])); }
-function nearMemHTML(L){ if (!L || L.nearMade) return ""; const d = nearHomeDays(L); if (!d.length) return ""; const n = d.reduce((a, [, x]) => a + x.length, 0), k = Math.min(d.length, 10);
-  return `<div class="suggest"><b>🏠 ${d.length === 1 ? "A day" : `${d.length} days`} out close to home</b><p style="margin:4px 0 8px">${plural(n, "photo")} from ${d.length === 1 ? "one day" : `${d.length} days`} near home aren't part of a trip. Keep ${k === 1 ? "that day" : d.length > 10 ? "the 10 newest days" : `those ${k} days`} as <b>Close to home</b> memories? They won't count as travel.</p><button class="btn" data-ld-nearmem>Make ${k === 1 ? "a memory" : `${k} memories`}</button></div>`; }
-function makeNearMems(){ const L = loadState; if (!L) return; const d = nearHomeDays(L).slice(0, 10); d.forEach(([, a]) => { const tr = buildTrip(a); tr.homeMem = true; tr.keep = true; tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${plural(d.length, "memory", "memories")} from close to home. Rename them under Fix this trip`); }
+/* near-home days, newest first, grouped: 2 to 4 days in a row look like a stay (a trip); a single day, a memory */
+function nearHomeGroups(L){ const d = nearHomeDays(L).slice().sort((a, b) => a[0].localeCompare(b[0])), out = []; let run = [];
+  const flush = () => { if (!run.length) return; if (run.length >= 2 && run.length <= 4) out.push({trip:true, days:run.map(r => r[0]), pts:run.flatMap(r => r[1])}); else run.forEach(r => out.push({trip:false, days:[r[0]], pts:r[1]})); run = []; };
+  d.forEach(r => { if (run.length && dayShift(run[run.length - 1][0], 1) !== r[0]) flush(); run.push(r); }); flush();
+  return out.sort((a, b) => b.days[0].localeCompare(a.days[0])).slice(0, 10); }
+function nearMemHTML(L){ if (!L || L.nearMade) return ""; const g = nearHomeGroups(L); if (!g.length) return ""; const n = g.reduce((a, x) => a + x.pts.length, 0), nm = g.filter(x => !x.trip).length, nt = g.length - nm;
+  const what = [nm ? (nm === 1 ? "a memory" : `${nm} memories`) : "", nt ? (nt === 1 ? "a trip" : `${nt} trips`) : ""].filter(Boolean).join(" and ");
+  return `<div class="suggest"><b>🏠 ${plural(n, "photo")} from close to home</b><p style="margin:4px 0 8px">They're near home, so they aren't part of a trip. ${nt ? `${nt === 1 ? "One looks" : `${nt} look`} like a stay of a few days in a row, so ${nt === 1 ? "it's" : "they're"} offered as a trip. ` : ""}${nm ? `Single days become <b>Close to home</b> memories, which don't count as travel. ` : ""}You can change any of them later.</p><button class="btn" data-ld-nearmem>Make ${what}</button></div>`; }
+function makeNearMems(){ const L = loadState; if (!L) return; const g = nearHomeGroups(L); g.forEach(x => { const tr = buildTrip(x.pts); tr.keep = true; if (!x.trip){ tr.homeMem = true; tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; } L.trips.push(tr); }); L.nearMade = true; openReview(); toast(`Added ${plural(g.length, "card")} from close to home. Rename any of them under Fix this trip`); }
 function findTrips(pts, home){
   const away = p => d3.geoDistance([p.lon, p.lat], [home.lon, home.lat]) * KM > 100;
   const trips = []; let cur = null;
@@ -1852,6 +1859,7 @@ function openHomeMem(){
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("A memory close to home")}<div class="steps">A night out, a birthday, a ball game</div>
     <p class="note" style="margin:0">Pick the photos from one day or night. It's kept with your trips under <b>Close to home</b>, and it doesn't count toward your countries or miles. Nothing is uploaded.</p>
     <div><label class="l" for="ldManTitle">Name it</label><input type="text" id="ldManTitle" maxlength="80" placeholder="Girls Night Out"></div>
+    <label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="ldAsTrip" style="width:22px;height:22px;accent-color:var(--lit)"><span>We stayed overnight (a hotel downtown, say): make it a <b>trip</b> instead</span></label>
     <label class="btn primary" style="align-self:flex-start;cursor:pointer">Choose photos<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>
     <p class="note" style="margin:0">Photos without a location are placed at home.</p>
     <div id="ldProg" class="note" style="margin:0"></div></div>`, "loader");
@@ -1875,6 +1883,7 @@ function periodRange(){
 }
 async function processFiles(files){
   const [a, b] = periodRange(); const prog = $("#ldProg"); const pts = []; let noLoc = 0, outside = 0, i = 0; const noLocNames = [], noLocPts = [], noLocAll = [], why = []; const nm = f => f.name || "a photo";
+  if (loadState.homeMem && $("#ldAsTrip") && $("#ldAsTrip").checked) loadState.homeMem = false; /* a night in a hotel near home: a trip, by choice */
   for (const f of files){
     i++; if (i === 1 || i % 5 === 0 || i === files.length){ { const pc = Math.round(i / files.length * 100); prog.innerHTML = `<b style="color:var(--ink)">Reading ${i.toLocaleString()} of ${plural(files.length, "photo")}… ${pc}%</b><div class="ldbar"><i style="width:${pc}%"></i></div>`; } await new Promise(r => setTimeout(r, 0)); }
     let ex = {}, bad = false; try { ex = await readExif(f) || {}; } catch(e){ bad = true; }
@@ -2949,6 +2958,11 @@ function tripsListHTML(){ let h = `<div class="catchips" role="group" aria-label
   h += homeMemsHTML(newest(TRIPS.filter(t => t.homeMem)));
   return h; }
 /* Close to home: nights out, birthdays and ball games near home, kept like a trip but never counted as travel */
+/* a trip whose stops are all within 100 km of home could be a Close to home memory */
+const nearHomeTrip = t => HOME_SET && !t.homeMem && t.stops.length > 0 && t.stops.every(s => d3.geoDistance([s.lon, s.lat], [HOME.lon, HOME.lat]) * KM <= 100);
+async function setTripKind(id){ const raw = store.get("realTrips", []) || [], r = raw.find(x => x.id === id); if (!r) return; const toHome = r.kind !== "home"; if (toHome) r.kind = "home"; else delete r.kind;
+  if (!store.set("realTrips", raw)){ toast("Couldn't save"); return; } await refreshTrips(id, toHome ? "Moved to Close to home. It no longer counts as travel" : "It's a trip now, and counts toward your trips and miles");
+  toast(toHome ? "Moved to Close to home" : "It's a trip now", async () => { const raw2 = store.get("realTrips", []) || [], r2 = raw2.find(x => x.id === id); if (!r2) return; if (toHome) delete r2.kind; else r2.kind = "home"; store.set("realTrips", raw2); await refreshTrips(id); }); }
 const memDates = t => t.start === t.end ? fmt(t.start) : t.start.slice(0, 4) === t.end.slice(0, 4) ? `${fmtShort(t.start)} – ${fmt(t.end)}` : `${fmt(t.start)} – ${fmt(t.end)}`;
 function homeMemsHTML(mems){ let h = `<div class="sec">🏠 Close to home${mems.length ? ` · ${mems.length}` : ""}</div>`;
   if (!mems.length) return h + `<button class="item" data-home-mem><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">＋</div><div class="txt"><div class="t">Add a memory from close to home</div><div class="s">A night out, a birthday, a ball game. Pick its photos and give it a name</div></div></button>`;
@@ -3516,6 +3530,7 @@ document.addEventListener("click", e => {
   if (g("[data-load-photos]")){ openLoader(); return; }
   if (g("[data-ld-manual]")){ openManual(); return; }
   if (g("[data-home-mem]")){ openHomeMem(); return; }
+  if ((b = g("[data-trip-kind]"))){ setTripKind(b.dataset.tripKind); return; }
   if (g("[data-ld-nearmem]")){ makeNearMems(); return; }
   if (g("[data-home-geo]")){ homeGeo(); return; }
   if (g("[data-home-save]")){ homeSave(); return; }
