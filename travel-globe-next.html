@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.21.2 (Muse + Nikola r19 fixes) -->
+<!-- Tripsake v0.22.0 (gentle reminders: your year on the globe, last month's photos) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1269,7 +1269,7 @@ function openAddMenu(){ const row = (attr, icon, t, sub) => `<button class="more
 function openLayers(){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Layers")}${onceNote("layers", `<p class="note" style="margin:0">Choose what shows on the globe. Tap a row to show or hide it.</p>`)}<div class="layerlist" id="layers"></div>
     <button class="morerow big" data-open-style><div class="flag ring">◐</div><div class="txt"><div class="t">Globe style</div><div class="s">${esc(TH().name)}</div></div></button></div>`, "layers"); renderLayers(); }
 function otdPick(){
-  const now = new Date(); const doy = d => { const x = new Date(d + "T12:00:00"); return Math.floor((Date.UTC(2001, x.getMonth(), x.getDate()) - Date.UTC(2001,0,1)) / 864e5); };
+  const now = shToday(); const doy = d => { const x = new Date(d + "T12:00:00"); return Math.floor((Date.UTC(2001, x.getMonth(), x.getDate()) - Date.UTC(2001,0,1)) / 864e5); };
   const today = Math.floor((Date.UTC(2001, now.getMonth(), now.getDate()) - Date.UTC(2001,0,1)) / 864e5);
   // only earlier years, within about 3 weeks of today's date, and at least ~11 months back (never "1 year ago" for last spring)
   let best = null, bd = 999; PHOTOS.forEach(p => { if (stopState[p.stop.id] === "ignored") return; if (now - new Date(p.date + "T12:00:00") < 330 * 864e5) return; let d = Math.abs(doy(p.date) - today); d = Math.min(d, 365 - d); if (d <= 21 && d < bd){ bd = d; best = p; } });
@@ -1286,6 +1286,41 @@ function onThisDayHTML(){
     <div class="c"><small>${o.when}</small><h3>${esc(stopName(s))}</h3><p>${esc(st.best || o.best.caption)}${st.who ? ` · with ${esc(st.who)}` : ""}</p>
     <div class="row-btns"><button class="btn primary" data-replay="${s.trip.id}">▶ Play my story</button><button class="btn" data-open-trip="${s.trip.id}">Open trip</button></div></div></div>`;
 }
+/* ---------------- gentle reminders, never goals (Alan 11-14: no weekly memory goals; On this day, last month's photos, your year) ---------------- */
+/* December (and early January): your year on the globe, one story through every trip of the year */
+let YEAR_TRIP = null;
+const findTrip = id => TRIPS.find(x => x.id === id) || (YEAR_TRIP && YEAR_TRIP.id === id ? YEAR_TRIP : null);
+function yearOf(){ const d = shToday(); return d.getMonth() === 11 ? d.getFullYear() : d.getMonth() === 0 && d.getDate() <= 15 ? d.getFullYear() - 1 : 0; }
+function yearTrip(y){ const list = TRIPS.filter(t => t.real && !t.homeMem && String(t.start).slice(0, 4) === String(y) && stopsOf(t).length).sort((a, b) => a.start.localeCompare(b.start)); if (!list.length) return null;
+  const per = Math.max(1, Math.ceil(24 / list.length)), stops = list.flatMap(t => stopsOf(t).slice(0, per)); /* a short story: about two dozen stops, every trip in it */
+  YEAR_TRIP = {id:"year-" + y, title:`Your ${y} on the globe`, start:list[0].start, end:list[list.length - 1].end, stops, real:true, year:true, trips:list}; return YEAR_TRIP; }
+function yearHTML(){ const y = yearOf(); if (!y || store.get("yearHidden", 0) === y) return ""; const t = yearTrip(y); if (!t) return "";
+  const miles = t.trips.reduce((a, u) => a + tripMiles(u), 0), places = new Set(t.trips.flatMap(u => stopsOf(u).map(s => stopName(s)))).size, c = tripCover(t.trips[0]);
+  return `<div class="otdhero"><img src="${photo(c.scene, c.id, 960, 480)}" alt=""><button class="x" data-year-hide aria-label="Hide your year">✕</button>
+    <div class="c"><small>Your year on the globe</small><h3>${esc(t.title)}</h3><p>${plural(t.trips.length, "trip")} · ${plural(places, "place")} · ${miles.toLocaleString()} miles</p>
+    <div class="row-btns"><button class="btn primary" data-replay="${t.id}">▶ Play my year</button><button class="btn" data-year-video="${t.id}">🎬 Make a video to share</button></div></div></div>`; }
+/* early in a month, on the iPhone: last month's photos that aren't on your globe yet. Shown only when there are some */
+const lastMonth = () => { const d = shToday(); const a = new Date(d.getFullYear(), d.getMonth() - 1, 1), b = new Date(d.getFullYear(), d.getMonth(), 0); const k = x => x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); return {a, b, from:k(a), to:k(b), key:k(a).slice(0, 7), name:a.toLocaleDateString("en-US", {month:"long"})}; };
+let NUDGE = null; /* {key, n} once checked */
+async function nudgeCheck(){ const m = lastMonth(); if (NUDGE && NUDGE.key === m.key) return; NUDGE = {key:m.key, n:0};
+  if (!NATIVE_LIB || !REAL_TRIPS.length || shToday().getDate() > 14 || store.get("nudgeDone", "") === m.key) return; const PL = PHOTOLIB(); if (!PL) return;
+  try { const st = (await PL.checkAuthorization()).state; if (st !== "authorized" && st !== "limited") return; /* never asks for permission on its own */
+    const rh = store.get("realHome", null), saved = new Set(); travelRaw(store.get("realTrips", [])).forEach(e => (e.stops || []).forEach(o => (o.photos || []).forEach(ph => { if (ph && ph[1]) saved.add(ph[1]); })));
+    const a = m.a.getTime(), b = m.b.getTime() + DAY; let off = 0, more = true, n = 0;
+    while (more && off < 6000){ const r = await PL.getLibrary({offset:off, limit:300, includeImages:true, includeVideos:false, includeCloudData:true, thumbnailWidth:0, thumbnailHeight:0}); const list = (r && r.assets) || []; off += list.length; more = !!(r && r.hasMore) && list.length > 0; let older = false;
+      for (const x of list){ const t = x.creationDate ? Date.parse(x.creationDate) : NaN; if (!isFinite(t) || t >= b) continue; if (t < a){ older = true; break; } if (!isFinite(x.latitude) || !isFinite(x.longitude)) continue;
+        if (rh && isFinite(rh.lat) && d3.geoDistance([x.longitude, x.latitude], [rh.lon, rh.lat]) * KM <= 100) continue; /* trips only: photos near home are memories, added by hand */
+        if (saved.has(new Date(t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}))) continue; n++; }
+      if (older) break; }
+    NUDGE.n = n; if (n >= 3 && tab === "trips" && !document.querySelector(".sheet")) renderBody(); } catch(e){} }
+function nudgeHTML(){ const m = lastMonth(); if (!NUDGE || NUDGE.key !== m.key || NUDGE.n < 3 || store.get("nudgeDone", "") === m.key) return "";
+  return `<div class="postcard" aria-label="Last month's photos"><div class="stamp" aria-hidden="true">📷</div><small>New photos</small><h3>Add ${esc(m.name)}'s photos?</h3><p style="margin:0">${plural(NUDGE.n, "photo")} from ${esc(m.name)}, away from home, ${NUDGE.n === 1 ? "isn't" : "aren't"} on your globe yet.</p>
+    <div class="row-btns" style="margin:8px 0 0"><button class="btn primary" data-nudge-go>Add them</button><button class="btn" data-nudge-no>Not now</button></div></div>`; }
+document.addEventListener("click", e => { const g = q => e.target.closest && e.target.closest(q); let b;
+  if (g("[data-year-hide]")){ store.set("yearHidden", yearOf()); renderBody(); toast("Hidden until next December"); return; }
+  if ((b = g("[data-year-video]"))){ if (yearTrip(yearOf())) openVideoStart(b.dataset.yearVideo); return; }
+  if (g("[data-nudge-no]")){ store.set("nudgeDone", lastMonth().key); renderBody(); toast("No more reminders this month"); return; }
+  if (g("[data-nudge-go]")){ const m = lastMonth(); store.set("nudgeDone", m.key); openLoader(); loadState.period = "custom"; const c = $("#ldCustom"); if (c) c.hidden = false; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x.dataset.ldPeriod === "custom")); const f = $("#ldFrom"), t = $("#ldTo"); if (f) f.value = m.from; if (t) t.value = m.to; nativeImport(); return; } });
 /* Sunday postcard: this week in past years */
 function postcardData(){
   const now = new Date(); const ds = d => { const x = new Date(d + "T12:00:00"); return Date.UTC(2001, x.getMonth(), x.getDate()); };
@@ -1346,6 +1381,7 @@ let BIG_TEXT = !!store.get("bigText", false); function applyTextSize(){ document
 function renderBody(){
   const b = $("#tabbody"); let h = "";
   if (tab === "trips"){
+    h += yearHTML() + nudgeHTML(); nudgeCheck();
     { const pc = postcardHTML(), otd = onThisDayHTML(); h += new Date().getDay() === 0 ? pc + otd : otd + pc; }
     if (!REAL_TRIPS.length) h += `<button class="item" data-load-photos><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">⤓</div><div class="txt"><div class="t">Try it with your own photos</div><div class="s">Pick a time period and some photos. Your real trips appear on the globe. Nothing is uploaded.</div></div></button>`;
     h += backAgainHomeHTML();
@@ -1421,7 +1457,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.22.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2798,7 +2834,7 @@ function momentPhoto(el, src){
 const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 async function replay(id, opts = {}){
-  const t = TRIPS.find(x => x.id === id); const st = stopsOf(t); $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
+  const t = findTrip(id); if (!t) return; const st = stopsOf(t); $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
   const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
   const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
@@ -3311,7 +3347,7 @@ function vidPlan(t, len = vidLen){ const L = VLEN[len] || VLEN.normal; const st 
   return {cap, sc, est:Math.round(est(cap, sc))}; }
 function secsText(n){ return n < 100 ? `${n} seconds` : `${Math.round(n / 60 * 2) / 2} minutes`; }
 function openVideoStart(id){
-  const t = TRIPS.find(x => x.id === id); if (!t) return;
+  const t = findTrip(id); if (!t) return;
   if (!canRecord()){ toast("This browser can't make videos. Try Chrome, Safari or Edge."); return; }
   const st = stopsOf(t); const VP = vidPlan(t), est = VP.est, maxPh = Math.max(...st.map(s => s.photos.length));
   const m = musicChoice(t.id); const mname = m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m);
