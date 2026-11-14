@@ -42,6 +42,15 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 @media (max-width:400px){.brand{font-size:22px;white-space:nowrap}.brand small{font-size:10px;letter-spacing:.8px}.top{gap:6px}.top .pill{padding:5px 9px}} @media (max-width:460px){.brand .proto{display:none}} /* Nikola, v0.74: the version line wrapped or lost "levels" */ /* 360px phones: the title wrapped to two lines and the subtitle lost the level count */
 .pill.done{border-color:rgba(63,214,138,.6)}
 .streak{font-size:15px;font-weight:800;margin:4px 0 2px}
+.week{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,210,122,.35);border-radius:14px;padding:10px 12px;margin:2px 0 10px;text-align:left}
+.week .wh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:16px;font-weight:800;margin-bottom:4px}.week .wh span{color:var(--lantern);font-size:15px;white-space:nowrap}
+.week ul{list-style:none;margin:0;padding:0}.week li{display:flex;justify-content:space-between;gap:8px;font-size:15px;line-height:1.4;padding:2px 0}.week li b{font-weight:800}.week li.ok{color:#9fe0b4}.week li span{white-space:nowrap;font-variant-numeric:tabular-nums}
+.week small{display:block;font-size:14px;opacity:.8;margin-top:4px}
+#card .fire{font-size:15px;opacity:1;color:var(--lantern);margin:0 2px 6px}
+#deco{position:absolute;left:0;right:0;top:0;text-align:center;font-size:17px;line-height:22px;letter-spacing:6px;white-space:nowrap;overflow:hidden;pointer-events:none;display:none}
+.stage.decorated #deco{display:block}.stage.decorated canvas{box-shadow:0 0 0 3px var(--f1),0 0 0 6px var(--f2),0 10px 30px rgba(0,0,0,.35)}
+.fall{position:fixed;top:-30px;z-index:6;pointer-events:none;font-size:22px;opacity:.55;animation:fall 5s linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(200deg)}}
 #card .tmrw{font-size:16px;font-weight:700;color:var(--lantern);opacity:1;line-height:1.35;margin:6px 0 2px}
 #card .daily1{border-color:var(--lantern);color:var(--lantern);font-weight:800}
 .iconbtn{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;font-size:17px;font-weight:800;padding:0}
@@ -165,7 +174,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.81 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.82 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -179,6 +188,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
   </div>
 
   <div class="stage">
+    <div id="deco" aria-hidden="true"></div>
     <canvas id="board" aria-label="Game board. Drag from a den to a nest."></canvas>
   </div>
 
@@ -558,7 +568,9 @@ function mergeProg(here,cloud){
   const a=here.streak,b=cloud.streak;if(b&&(!a||b.last>a.last||(b.last===a.last&&b.n>a.n)))out.streak=Object.assign({},b);
   if(out.streak)out.streak.best=Math.max(a?a.best:0,b?b.best:0,out.streak.n);
   const fd=[here.firstDay,cloud.firstDay].filter(x=>x!=null);if(fd.length)out.firstDay=Math.min(...fd);
-  out.gift=here.gift||cloud.gift||undefined; // the welcome-back gift is paid once, whichever phone paid it
+  out.gift=here.gift||cloud.gift||undefined;
+  out.zap=Object.assign({},cloud.zap,here.zap);out.fire=Object.assign({},cloud.fire,here.fire); // bonus-river payouts and Expert marks, whichever phone earned them
+  {const a=here.wk,b=cloud.wk;if(a&&b&&a.w===b.w){out.wk={w:a.w,c:max(a.c,b.c),paid:Object.assign({},b.paid,a.paid),mega:a.mega||b.mega};}else if(b&&(!a||b.w>a.w))out.wk=b;} // the welcome-back gift is paid once, whichever phone paid it
   out.total=starSum(out.stars);
   return out;
 }
@@ -638,8 +650,8 @@ function startLevel(n,keep,cut,extra){
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
   const fin=!daily&&!bonus&&L.gen&&L.ch&&(n===LEVELS.length-1||LEVELS[n+1].ch!==L.ch); // a chapter's hardest board, mixing its idea with older ones
-  $("lvTitle").textContent=daily?`Daily River · ${dayLabel(daily.day)}`:L.long?`${L.name} · ${L.long.stage?"downstream":"upstream"}`:bonus?`Challenge river · ${L.name}`:`Level ${n+1} · ${L.name}${fin?" · Finale":""}`;
-  $("lvTip").textContent=L.tip;
+  $("lvTitle").textContent=titleText(n,L,fin);
+  $("lvTip").textContent=tipText();
   renderLegend();
   const hasBridge=L.map.some(r=>r.includes("=")),hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
   const intro=(key,msg)=>{if(!prog.seen[key]){prog.seen[key]=1;saveProg();laterToast(msg);return true;}return false;};
@@ -653,6 +665,8 @@ function startLevel(n,keep,cut,extra){
   bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
   lesson=null;reserveTip();resize();glowTip();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily&&!bonus)store.set("cur",ID(n));
   // a chapter with no lesson level says what's new on its first board (Nikola, v0.57: Riverside and Wetlands opened cold)
+  if(!daily&&!bonus&&!keep&&isZap(n)&&!prog.seen["note:zap"])teachOnce("zap","⚡ Bonus river! From here on, every third level pays a free hint for the perfect route (★★★). A normal clear still counts.");
+  weekNow(true);applyDeco();
   if(!daily&&!bonus&&!keep){const C=CHAPTERS.find(c=>c.id===LV().ch);if(C&&C.note&&!C.teach.length&&(n===0||LEVELS[n-1].ch!==C.id)&&!prog.seen["note:ch"+C.id])teachOnce("ch"+C.id,`${C.title}: ${C.note}`);}
   const lsBack=fits&&extra&&Number.isInteger(extra.ls); // a lesson open at reload comes back, even one reopened by hand
   if(LESSONS[L.name]&&(!prog.seen["lesson:"+L.id]||lsBack)){startLesson();if(fits&&extra&&Number.isInteger(extra.ls)&&lesson&&extra.ls>0){lesson.i=Math.min(extra.ls,lesson.steps.length-1);renderCoach();}}else renderCoach();
@@ -663,9 +677,9 @@ function startLevel(n,keep,cut,extra){
 function renderLegend(){
   const L=LV();
   // the first-mix level keeps the chart's space (hidden) so the board doesn't jump when it appears
-  const mixes=legendMix||L.firstMix?[[1,4,5],[1,2,3],[2,4,6]]:[];
+  const mixes=opts.expert?[]:legendMix||L.firstMix?[[1,4,5],[1,2,3],[2,4,6]]:[];
   let html=mixes.map(([a,b,c])=>`<span class="chip mx${legendMix?"":" veil"}" role="img" aria-label="${NAMES[a]} and ${NAMES[b]} make ${NAMES[c]}"><i class="dot" style="background:${COLORS[a]};color:${COLORS[a]}"></i>+<i class="dot" style="background:${COLORS[b]};color:${COLORS[b]}"></i>=<i class="dot" style="background:${COLORS[c]};color:${COLORS[c]}"></i></span>`).join("");
-  if(L.mud)html+=`<span class="chip mx" role="img" aria-label="purple and yellow make mud"><i class="dot" style="background:${COLORS[5]};color:${COLORS[5]}"></i>+<i class="dot" style="background:${COLORS[2]};color:${COLORS[2]}"></i>=<i class="dot" style="background:${COLORS[7]};color:${COLORS[7]}"></i></span>`;
+  if(L.mud&&!opts.expert)html+=`<span class="chip mx" role="img" aria-label="purple and yellow make mud"><i class="dot" style="background:${COLORS[5]};color:${COLORS[5]}"></i>+<i class="dot" style="background:${COLORS[2]};color:${COLORS[2]}"></i>=<i class="dot" style="background:${COLORS[7]};color:${COLORS[7]}"></i></span>`;
   const hasBridge=L.map.some(r=>r.includes("="));
   if(hasBridge)html+=`<span class="chip"><i class="brg"></i>bridge: no mixing</span>`;
   const hasT=L.map.some(r=>r.includes("T")),fl=[1,2,4].filter(f=>L.map.some(r=>r.includes(String(f))));
@@ -760,7 +774,7 @@ function resize(){
 }
 // Re-measure the tip too: a phone app's web view can start before the screen has its real size, and a tip
 // measured then is far too tall (Alan's Android, Oct 16: board shrunk and pushed down, buttons cut off).
-window.addEventListener("resize",()=>{if(G){reserveTip();resize();}});
+window.addEventListener("resize",()=>{if(G){reserveTip();resize();applyDeco();}});
 // The board also re-fits whenever the tip block changes height: turning color marks on mid-level wraps the legend into
 // more rows, which pushed the bottom buttons off a phone screen (v0.61 review). resize() sizes only the board, so no loop.
 try{let tipH=0;new ResizeObserver(()=>{const h=document.querySelector(".tip").offsetHeight;if(G&&h!==tipH){tipH=h;resize();}}).observe(document.querySelector(".tip"));}catch(e){}
@@ -995,7 +1009,7 @@ let nudge=null;
 function crossCells(){const L=LV();if(!L.sol)return[];const r=L.sol.map((_,k)=>{try{return routeOf(k);}catch(e){return[];}}),out=new Set();
   for(let a=0;a<r.length;a++)for(let b=a+1;b<r.length;b++)r[a].slice(1).forEach(c=>{const t=G.cells[c]&&G.cells[c].t;if(r[b].includes(c)&&!["bridge","tunnel","src","delta","nest"].includes(t))out.add(c);});
   return[...out];}
-function checkNudge(){if(!nudge||nudge.done||won||lesson)return;const now=performance.now();
+function checkNudge(){if(!nudge||nudge.done||won||lesson||opts.expert)return;const now=performance.now();
   if(!(nudge.restarts>=2||(now-nudge.t0>75000&&nudge.strokes>=6)))return;const cells=crossCells();nudge.done=true;if(!cells.length)return;
   nudge.cells=cells;nudge.on=now;toast(cells.length>1?"Stuck? The crossings that matter are glowing. Lead two streams straight through each one.":"Stuck? The crossing that matters is glowing. Lead two streams straight through it.");}
 function drawNudge(now){if(!nudge||!nudge.on||won)return;const t=(now-nudge.on)/1000;if(t>8)return;const a=(Math.sin(t*5)+1)/2;
@@ -1069,7 +1083,7 @@ function win(){
   won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":bonus?bonus.id:lv+1,stars:s,ink,hints:hintsUsed});
-  dayWin();session.wins++;
+  dayWin();session.wins++;retentionWin(s);decoFall();
   if(bonus&&bonus.long){longWon(ink);return;}
   if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg();store.set("onChal",null); // challenge stars stay out of the total and the chapter gates
     setTimeout(()=>{if(bonus===at&&won)showBonusWin(s,ink,first);},800);return;}
@@ -1087,7 +1101,7 @@ function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</s
 function showWin(s,ink,fresh){
   const last=lv===LEVELS.length-1,locked=!last&&!prog.all&&!gateOK(lv+1),nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
   const over=ink-G.par,note=s===3?`Perfect route! ${ink} ink.`:over<=2?`Solved! So close to a perfect route: just ${over} ink over. Three stars at ${G.par}.`:`Solved! Can you find a shorter river? Three stars at ${G.par} ink.`; // near-miss drives the retry
-  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${nextCh&&CHALLENGES.some(c=>c.after===LEVELS[lv].ch&&!prog.stars[c.id])?`<p>✦ <b>A challenge river is open</b> on the River map: an optional extra-hard bonus.</p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>${last?"Pack complete!":nextCh?"Chapter complete!":"Home safe!"}</h3><p>${note}</p>${newsHtml()}${nextCh&&!locked?`<p>Next up: <b>${nextCh.title}</b></p>`:""}${nextCh&&CHALLENGES.some(c=>c.after===LEVELS[lv].ch&&!prog.stars[c.id])?`<p>✦ <b>A challenge river is open</b> on the River map: an optional extra-hard bonus.</p>`:""}${locked?gateNote(LEVELS[lv].ch,nextCh):""}${lv+1===DAILY_AT&&!prog.all?`<p>☀︎ <b>Daily River is open!</b> A new puzzle every day, up top.</p>`:""}
    ${last?`<p>${LEVELS.every(L=>prog.stars[L.id])?"You've played every river so far.":"Final river complete!"} More rivers arrive with each update.</p>${dailyOpen()?`<button class="big" id="goDaily">☀︎ Play today's Daily River</button><button class="ghost" id="goLevels">See all levels</button>`:`<button class="big" id="goLevels">See all levels</button>`}`:locked?`<button class="big" id="goLevels">Earn more stars</button>`:`<button class="big" id="goNext">Next level</button>`}
    ${!last&&dailyOpen()&&!prog.daily?`<button class="ghost daily1" id="goDaily1">☀︎ Try today's Daily River: start your 🔥 streak</button>`:""}${tomorrowLine(false)}
    <button class="ghost" id="goRetry">${s===3||(prog.stars[ID(lv)]||0)===3?"Play again":"Play again for more stars"}</button>${last||locked?"":`<button class="ghost" id="goMap">River map</button>`}${last?`<button class="showme" id="goEnding" style="align-self:center">Watch the ending again</button>`:""}`);
@@ -1234,7 +1248,7 @@ function startBonus(k){bonus=CHALLENGES[k];const cd=store.get("cdraw",null),mine
 function showBonusWin(s,ink,first){
   const k=CHALLENGES.indexOf(bonus),over=ink-G.par,next=CHALLENGES.map((c,j)=>CHALLENGES[(k+1+j)%CHALLENGES.length]).find(c=>c!==bonus&&chalOpen(c)&&!prog.stars[c.id]); // the next one after this, wrapping round (Cooper, v0.64)
   const note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close: just ${over} ink over. Three stars at ${G.par}.`:`Solved in ${ink} ink. Reach ${G.par} for three stars.`;
-  openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Challenge cleared!":"Cleared again!"}</h3><p>${note}</p>
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Challenge cleared!":"Cleared again!"}</h3><p>${note}</p>${newsHtml()}
    <button class="big" id="goBack">Back to Level ${lv+1}</button>${next?`<button class="ghost" id="goChal">Next challenge: ${next.name}</button>`:""}
    <button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
   $("goBack").onclick=()=>{closeSheet();resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();startBonus(k);};
@@ -1277,7 +1291,7 @@ function longWon(ink){const L=bonus.long,k=L.k;
     // Continue goes to the first level after this one still to clear (Nikola, v0.75: "Continue Level 16" pointed at a cleared level)
     let to=lv;if(prog.stars[ID(lv)]){const j=LEVELS.findIndex((L,i)=>i>lv&&!prog.stars[L.id]);if(j>0&&(prog.all||gateOK(j)))to=j;}
     const note=s===3?`Perfect river! ${total} ink across both boards.`:over<=2?`So close: just ${over} ink over. Three stars at ${par}.`:`Solved in ${total} ink across both boards. Reach ${par} for three stars.`;
-    openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>
+    openSheet(`<div class="stars">${starRow(s)}</div><h3>${first?"Long River complete!":"Complete again!"}</h3><p>${note}</p>${newsHtml()}
      <button class="big" id="goBack">Continue: Level ${to+1}</button><button class="ghost" id="goMap">River map</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
     $("goBack").onclick=()=>{closeSheet();longRun=null;resumeLevel(to);};$("goMap").onclick=()=>{closeSheet();longRun=null;resumeLevel(lv);showLevels();}; /* Muse, v0.69: "Back to Level 13" read as a step back */$("goRetry").onclick=()=>{closeSheet();longRun=null;startLong(k);};},800);
 }
@@ -1300,7 +1314,7 @@ function resumeLevel(i){const dr=store.get("draw",null);if(dr&&dr.id===ID(i))sta
 function showDailyWin(s,ink){
   const st=prog.streak||{n:0,best:0},over=ink-G.par;
   const note=s===3?`Perfect route! ${ink} ink.`:over<=2?`So close! Just ${over} ink over par.`:`${ink} ink. Three stars at ${G.par} or less.`;
-  openSheet(`<div class="stars">${starRow(s)}</div><h3>Daily River done!</h3><p>${note}</p>
+  openSheet(`<div class="stars">${starRow(s)}</div><h3>Daily River done!</h3><p>${note}</p>${newsHtml()}
    <p class="streak">🔥 ${st.n}-day streak${st.best>st.n?` · best ${st.best}`:""}</p><p>${st.grace>0?"Grace day ready: miss one day and your streak stays.":`${7-st.n%7} more day${7-st.n%7===1?"":"s"} in a row to earn a grace day.`} A new river comes tomorrow.</p>${tomorrowLine(true)}
    <button class="big" id="goBack">Back to Level ${lv+1}</button><button class="ghost" id="goRetry">${s===3?"Play again":"Play again for more stars"}</button>`);
   $("goBack").onclick=()=>{closeSheet();resumeLevel(lv);};$("goRetry").onclick=()=>{closeSheet();startDaily();};
@@ -1323,7 +1337,7 @@ function showLevels(){
       <span class="lab"><b>${C.id?`Chapter ${chNo(C.id)}`:"Preview"}</b>${C.title}<small>★ ${I.got}/${I.max}</small><i style="width:${I.max?Math.round(100*I.got/I.max):0}%"></i></span></button>`;}).join("");
   const sk=streakNow(),gr=prog.streak&&prog.streak.grace>0;
   const dl=dailyOpen()?`<button class="big" id="goDaily">☀︎ Daily River${dailyDone()?" ✓":""}${sk?` · 🔥 ${sk}`:""}</button><p class="chnote">${sk?`🔥 ${sk}-day streak. `:"Play every day to grow a 🔥 streak. "}Miss a day and a grace day keeps it going${sk&&!gr?" (yours is used: play 7 days in a row to earn it back)":""}.</p>`:`<p class="chnote">☀︎ Daily River opens at level ${DAILY_AT}: a new puzzle every day.</p>`;
-  openSheet(`<h3>River map</h3>${dl}<div class="saga" id="saga"><div class="sagaIn" style="height:${H}px">
+  openSheet(`<h3>River map</h3>${weekCard()}${dl}${fireCount()?`<p class="chnote fire">🔥 ${fireCount()} Expert clear${fireCount()===1?"":"s"}</p>`:""}<div class="saga" id="saga"><div class="sagaIn" style="height:${H}px">
     <svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" class="bank"/><path d="${d}" class="water"/><path d="${d}" class="shine"/></svg>${stops}</div></div>
     ${CHALLENGES.length?`<div class="chap"><b>✦ Challenge rivers</b><span>★ ${CHALLENGES.reduce((a,c)=>a+(prog.stars[c.id]||0),0)}/${CHALLENGES.length*3}</span></div>
     <p class="chnote">Optional extra-hard rivers. One opens after each of these chapters; skip any you like.</p>
@@ -1341,7 +1355,7 @@ function showLevels(){
 }
 function showChapter(id){
   const C=CHAPTERS.find(c=>c.id===id),I=chapterInfo(C);
-  const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}</small></button>`;
+  const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}${prog.fire&&prog.fire[ID(i)]?"🔥":""}</small></button>`;
   openSheet(`<button class="ghost back" id="back">‹ River map</button><div class="chap"><b>${C.id?`Chapter ${chNo(C.id)} · `:""}${C.title}</b><span>★ ${I.got}/${I.max}</span></div>
     ${C.note?`<p class="chnote">${C.note}</p>`:""}${I.shut?`<p class="chnote">🔒 Opens at ★ ${chGoal(I.prev)} in Chapter ${chNo(I.prev)} (you have ${chStars(I.prev)})</p>`:""}
     <div class="grid">${I.ids.map(btn).join("")}</div><button class="ghost" id="close">Close</button>`);
@@ -1353,6 +1367,8 @@ function showSettings(){
    <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" role="switch" aria-checked="${!!opts.shapes}" aria-label="Critter shapes"></button></div>
    <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" role="switch" aria-checked="${!!opts.marks}" aria-label="Color marks"></button></div>
    <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" role="switch" aria-checked="${!!opts.sound}" aria-label="Sound"></button></div>
+   <div class="set"><div>🔥 Expert<small>No goal line, colour chart or crossing nudge. Clear a river at ★★★ to earn a 🔥.</small></div><button class="tog ${opts.expert?"on":""}" id="tExpert" role="switch" aria-checked="${!!opts.expert}" aria-label="Expert"></button></div>
+   <div class="set"><div>Holiday decorations<small>A festive touch around the board on holidays</small></div><button class="tog ${opts.deco!==false?"on":""}" id="tDeco" role="switch" aria-checked="${opts.deco!==false}" aria-label="Holiday decorations"></button></div>
    <div class="set"><div>Remove ads<small>${prog.noAds?"Ads are off. Thank you!":"No more breaks between levels"}</small></div><button class="ghost" id="tAds" ${prog.noAds?"disabled":""}>${prog.noAds?"Done":adsPrice()}</button></div>
    <div id="cloudBox"></div>
    <div class="set"><div>Lessons<small>See every new-element lesson again</small></div><button class="ghost" id="tLessons">Replay</button></div>
@@ -1362,6 +1378,10 @@ function showSettings(){
   $("tMarks").onclick=e=>{opts.marks=!opts.marks;e.currentTarget.classList.toggle("on",opts.marks);e.currentTarget.setAttribute("aria-checked",opts.marks);store.set("opts",opts);renderLegend();reserveTip();resize();};
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);e.currentTarget.setAttribute("aria-checked",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
+  $("tExpert").onclick=e=>{opts.expert=!opts.expert;e.currentTarget.classList.toggle("on",opts.expert);e.currentTarget.setAttribute("aria-checked",opts.expert);store.set("opts",opts);T("expert_toggle",{on:opts.expert?1:0,level:lv+1});
+    if(opts.expert&&!prog.seen["note:expert"]){prog.seen["note:expert"]=1;saveProg();toast("🔥 Expert on: no goal line, colour chart or nudges. Clear a river at ★★★ for a 🔥.",4500);}
+    $("lvTitle").textContent=titleText(lv,LV());renderCoach();renderLegend();reserveTip();resize();};
+  $("tDeco").onclick=e=>{opts.deco=opts.deco===false;e.currentTarget.classList.toggle("on",opts.deco);e.currentTarget.setAttribute("aria-checked",opts.deco);store.set("opts",opts);T("deco_toggle",{on:opts.deco?1:0});applyDeco();};
   $("tLessons").onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Show all again?";return;} // a second tap confirms
     Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:")||k.startsWith("note:filter"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
   $("close").onclick=closeSheet;
@@ -1512,7 +1532,7 @@ function lessonNext(){if(!lesson)return;lesson.i++;lesson.t0=performance.now();i
 function renderCoach(){
   const el=$("coach"),tip=$("lvTip"),st=lessonStep(),has=!daily&&!!LESSONS[LV().name];
   document.querySelector(".ink").classList.toggle("glow-ink",!!(st&&st.dom==="ink"));$("crewBtn").classList.toggle("glow-ink",!!(st&&st.dom==="crew"));$("undoBtn").classList.toggle("glow-ink",!!(st&&st.dom==="undo"));
-  if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=LV().tip;tip.classList.toggle("float",!LV().long&&!has);$("tipBtn").hidden=!tip.classList.contains("float");document.querySelector(".head").classList.toggle("wrap",!!LV().long);if(LV().long){const p=document.createElement("div");p.id="longPeek";tip.append(p);updatePeek();}
+  if(!st){el.hidden=true;tip.hidden=false;tip.innerHTML="";tip.textContent=tipText();tip.classList.toggle("float",!LV().long&&!has);if(opts.expert&&tip.classList.contains("float"))tip.hidden=true;$("tipBtn").hidden=tip.hidden||!tip.classList.contains("float");document.querySelector(".head").classList.toggle("wrap",!!LV().long);if(LV().long){const p=document.createElement("div");p.id="longPeek";tip.append(p);updatePeek();}
     if(has){const b=document.createElement("button");b.className="showme";b.textContent="Replay lesson";b.onclick=()=>{startLevel(lv);startLesson();saveDraft();};tip.append(document.createElement("br"),b);}return;}
   // a lesson takes the tip's place; a note floats over the tip instead, so the board never moves when one appears
   tip.hidden=!lesson.note;el.hidden=false;el.classList.toggle("float",!!lesson.note);
@@ -1631,6 +1651,94 @@ try{const q=TEST_BUILD?location.search+location.hash:"";
   // Test builds open every level by default (Alan, Oct 14: testers lose progress and need to pick any level).
   // Store builds (TEST_BUILD false) skip this, so players get the normal chapter star goals.
   else if(TEST_BUILD&&!prog.all&&!prog.testLock){prog.all=true;saveProg();}}catch(e){}
+// ---------- 1.3 retention (Alan chose all four, Nov 14: /mnt/project-files/color-rivers/retention-1.3-ideas.md) ----------
+// ⚡ bonus rivers, 🔥 Expert, 🗓️ weekly goals and holiday decorations. None of them changes a board, a par or a star gate.
+function isZap(i){return typeof i==="number"&&i+1>=30&&(i+1-30)%3===0;} // levels 30, 33, 36 ... pay +1 hint for the first ★★★
+function titleText(n,L,fin){L=L||LV();if(fin===undefined)fin=!daily&&!bonus&&L.gen&&L.ch&&(n===LEVELS.length-1||LEVELS[n+1].ch!==L.ch);
+  return daily?`Daily River · ${dayLabel(daily.day)}`:L.long?`${L.name} · ${L.long.stage?"downstream":"upstream"}`:bonus?`Challenge river · ${L.name}`
+    :`Level ${n+1}${isZap(n)?" ⚡":""}${opts.expert?" 🔥":""} · ${L.name}${fin?" · Finale":""}`;}
+function tipText(){return (isZap(lv)&&!daily&&!bonus?"⚡ Bonus river: find the perfect route (★★★) for +1 hint. ":"")+(LV().tip||"");}
+let winNews=[];
+function newsHtml(){const h=winNews.map(t=>`<p class="tmrw">${t}</p>`).join("");winNews=[];return h;}
+function retentionWin(s){try{
+  if(!daily&&!bonus){const id=ID(lv);prog.zap=prog.zap||{};prog.fire=prog.fire||{};
+    if(isZap(lv)&&!prog.zap[id]){if(s===3){prog.zap[id]=1;prog.bonusHints=(prog.bonusHints||0)+1;winNews.push("⚡ Perfect route: +1 hint");T("zap_paid",{level:lv+1});}
+      else winNews.push("⚡ ★★★ here still pays +1 hint. Try the perfect route.");}
+    if(opts.expert&&s===3&&!prog.fire[id]){prog.fire[id]=1;winNews.push("🔥 Expert clear!");}}
+  weeklyWin(s);saveProg();updateHintBtn();}catch(e){}}
+// The week runs Monday to Sunday (the Daily epoch is a Monday), the same goals for everyone, worked out on the phone: no server.
+let dayShift=0; // tester builds: ?day=2026-11-26 pretends it is that day, for the weekly theme and the decorations only
+try{const m=TEST_BUILD&&/[?&#]day=(\d{4})-(\d\d)-(\d\d)/.exec(location.search+location.hash);
+  if(m){const t=new Date();dayShift=Math.round((Date.UTC(+m[1],m[2]-1,+m[3])-Date.UTC(t.getFullYear(),t.getMonth(),t.getDate()))/864e5);}}catch(e){}
+function calDate(){const d=new Date();d.setDate(d.getDate()+dayShift);return d;}
+function easterDay(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31);
+  return new Date(y,mo-1,(h+l-7*m+114)%31+1);}
+function nthWeekday(y,m,dow,k){const d=new Date(y,m,1);d.setDate(1+(dow-d.getDay()+7)%7+7*(k-1));return d;}
+// [key, date in year y, days of decorations before, days after]; Mother's and Father's Day name a week but don't decorate
+var HOLS=[["newyear",y=>new Date(y,0,1),4,1],["valentine",y=>new Date(y,1,14),7,0],["stpat",y=>new Date(y,2,17),7,0],["easter",easterDay,7,0],
+  ["mother",y=>nthWeekday(y,4,0,2),-1,0],["father",y=>nthWeekday(y,5,0,3),-1,0],["july4",y=>new Date(y,6,4),6,1],["halloween",y=>new Date(y,9,31),10,0],
+  ["thanksgiving",y=>nthWeekday(y,10,4,4),14,1],["christmas",y=>new Date(y,11,25),24,1]];
+const dOnly=d=>Math.round(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5);
+function holidayNow(d){d=d||calDate();const t=dOnly(d);
+  for(const [k,f,before,after] of HOLS){if(before<0)continue;for(const y of [d.getFullYear(),d.getFullYear()+1]){const h=dOnly(f(y));
+    if(t>=h-before&&t<=h+after)return{key:k,today:t===h,year:y};}}return null;}
+// goal order: color, homes, perfect, daily, clear (one name each)
+var THEMES={newyear:["🎆","New Year",2,["Gold rush","Fresh start","Midnight","Resolution","Countdown"]],
+  valentine:["💕","Valentine's Week",1,["Roses","Sweethearts","Perfect match","Love notes","Hugs"]],
+  stpat:["☘️","St Patrick's Week",6,["Shamrocks","Rainbow trail","Pot of gold","Lucky walk","Clover hunt"]],
+  easter:["🐣","Spring Eggs",5,["Painted eggs","Egg hunt","Golden egg","Spring walk","Baskets"]],
+  mother:["💐","Mother's Day Week",5,["Lilacs","Family visit","Breakfast in bed","Sunday call","Bouquets"]],
+  father:["👔","Father's Day Week",4,["Blue ties","Fishing trip","Grill master","Garage day","Fix-it list"]],
+  july4:["🎆","Fourth of July",4,["Blue skies","Parade","Fireworks","Picnic walk","Sparklers"]],
+  halloween:["🎃","Halloween Week",3,["Pumpkins","Trick or treat","Full moon","Night walk","Lanterns"]],
+  thanksgiving:["🦃","Thanksgiving Week",3,["Harvest","Gathering","Feast","Daily walk","Busy kitchen"]],
+  christmas:["🎄","Christmas Week",6,["Evergreens","Sleigh ride","Star on top","Carols","Wrapping"]]};
+var MONTHS=[["❄️","Snow Days",4,["Icicles","Sledding","Snowflake","Winter walk","Snow forts"]],["🧣","Cozy Weeks",1,["Mittens","Hot cocoa","Warm fire","Brisk walk","Knitting"]],
+  ["🌱","First Sprouts",6,["Seedlings","Garden rows","First bloom","Mud walk","Planting"]],["🌧️","April Showers",4,["Raindrops","Puddles","Rainbow","Umbrella walk","Downpour"]],
+  ["🌷","Blossom Time",5,["Tulips","Orchard row","Full bloom","Garden walk","Petals"]],["🐝","Meadow",2,["Buttercups","Bee lines","Honeycomb","Meadow walk","Wildflowers"]],
+  ["☀️","Summer Days",2,["Sunshine","Beach day","Golden hour","Lake walk","Lemonade"]],["🍉","Picnic Season",1,["Watermelon","Picnic basket","Sweet slice","Park walk","Cookout"]],
+  ["🍎","Orchard",1,["Apples","Hay ride","Apple pie","Orchard walk","Cider press"]],["🍂","Autumn Leaves",3,["Maple leaves","Leaf piles","Harvest moon","Woods walk","Raking"]],
+  ["🌰","Harvest Moon",3,["Acorns","Gathering","Full pantry","Frosty walk","Canning"]],["⛄","Winter",4,["Frost","Snowfall","Snow globe","Lantern walk","Snowmen"]]];
+function weekTheme(w){const mon=new Date(DAILY_EPOCH+w*7*864e5),d0=Date.UTC(mon.getUTCFullYear(),mon.getUTCMonth(),mon.getUTCDate())/864e5,y=mon.getUTCFullYear();
+  for(const [k,f] of HOLS)for(const yy of [y,y+1]){const h=dOnly(f(yy));if(h>=d0&&h<d0+7)return{key:k,...thm(THEMES[k])};}
+  const thu=new Date(DAILY_EPOCH+(w*7+3)*864e5);return{key:"m"+thu.getUTCMonth(),...thm(MONTHS[thu.getUTCMonth()])};}
+function thm(t){return{emoji:t[0],name:t[1],color:t[2],names:t[3]};}
+function weekNow(announce){const w=Math.floor(dayNum(calDate())/7),theme=weekTheme(w),r=w%3,old=prog.wk;
+  if(!prog.wk||prog.wk.w!==w){prog.wk={w,c:{},paid:{},mega:0};saveProg();
+    if(announce&&old)toast(`🗓️ New weekly goals: ${theme.emoji} ${theme.name}. See the River map.`,4000);}
+  const sizes={color:[8,10,12][r],homes:[20,25,30][r],perfect:[3,4,5][r],daily:3,clear:[8,10,12][r]};
+  const text={color:n=>`Guide ${n} ${NAMES[theme.color]} critters home`,homes:n=>`Guide ${n} streams home`,perfect:n=>`Find ${n} perfect routes (★★★)`,
+    daily:n=>`Finish ${n} Daily Rivers`,clear:n=>`Clear ${n} rivers`};
+  const goals=["color","homes","perfect","daily","clear"].map((k,i)=>({k,n:sizes[k],name:theme.names[i],text:text[k](sizes[k])}));
+  return{w,theme,goals};}
+function weeklyWin(s){const W=weekNow(),c=prog.wk.c,add=(k,n)=>{if(n>0)c[k]=(c[k]||0)+n;};
+  const ns=(G&&G.nests||[]).filter(x=>!x.out);
+  add("clear",1);add("homes",ns.length);add("color",ns.filter(x=>x.mask===W.theme.color).length);if(s===3)add("perfect",1);
+  if(daily&&!(prog.daily&&prog.daily[daily.day]))add("daily",1); // the first win of each day's Daily (recordDaily runs after this)
+  W.goals.forEach(g=>{if(!prog.wk.paid[g.k]&&(c[g.k]||0)>=g.n){prog.wk.paid[g.k]=1;prog.bonusHints=(prog.bonusHints||0)+1;
+    winNews.push(`🗓️ Weekly goal done: ${g.name}! +1 hint`);T("weekly_goal",{goal:g.k});}});
+  if(!prog.wk.mega&&W.goals.every(g=>prog.wk.paid[g.k])){prog.wk.mega=1;prog.bonusHints=(prog.bonusHints||0)+5;winNews.push("🗓️ All 5 weekly goals! +5 hints");T("weekly_all",{});}}
+function weekCard(){const W=weekNow(),c=prog.wk.c,done=W.goals.filter(g=>prog.wk.paid[g.k]).length;
+  return `<div class="week" id="weekCard"><div class="wh">🗓️ This week: ${W.theme.emoji} ${W.theme.name}<span>${done} of 5</span></div><ul>${W.goals.map(g=>{const ok=prog.wk.paid[g.k],n=Math.min(g.n,c[g.k]||0);
+    return `<li class="${ok?"ok":""}"><div><b>${g.name}:</b> ${g.text}${g.k==="daily"&&!dailyOpen()?" (opens after level 6)":""}</div><span>${ok?"✓":`${n}/${g.n}`}</span></li>`;}).join("")}</ul>
+    <small>+1 hint each · all 5: +5 hints${prog.wk.mega?" ✓":""}</small></div>`;}
+function fireCount(){return Object.keys(prog.fire||{}).length;}
+// Holiday decorations: a garland above the board (only where there is room), a two-colour frame and a few slow falling bits on a win.
+// The critters and nests never change, so colours stay easy to read. Settings turns it off.
+var DECOS={newyear:["🎆✨🥂","#ffd166","#7aa2ff","✨"],valentine:["💕🌹💕","#ff6b8a","#ffc2d1","💗"],stpat:["☘️🌈☘️","#3fd68a","#ffd166","☘️"],
+  easter:["🐣🌷🥚","#c9a0ff","#ffe08a","🌸"],july4:["🎆⭐🎆","#ff5d6c","#5d8bff","⭐"],halloween:["🎃🦇🎃","#ff9a3c","#8a5cff","🍂"],
+  thanksgiving:["🍂🦃🍁","#ff9a3c","#9a7454","🍁"],christmas:["🎄⭐🎁","#3fd68a","#ff5d6c","❄️"]};
+const HNAMES={newyear:"Happy New Year",valentine:"Happy Valentine's Day",stpat:"Happy St Patrick's Day",easter:"Happy Easter",july4:"Happy Fourth of July",
+  halloween:"Happy Halloween",thanksgiving:"Happy Thanksgiving",christmas:"Merry Christmas"};
+function decoNow(){if(opts.deco===false)return null;const h=holidayNow();return h&&DECOS[h.key]?h:null;}
+function applyDeco(){try{const st=cv.parentElement,el=$("deco"),h=decoNow();st.classList.toggle("decorated",!!h);if(!h){el.textContent="";return;}
+  const D=DECOS[h.key];st.style.setProperty("--f1",D[1]);st.style.setProperty("--f2",D[2]);
+  el.textContent=Array(4).fill(D[0]).join(" ");requestAnimationFrame(()=>{const room=cv.offsetTop>=24;el.style.top=(cv.offsetTop-22)+"px";el.style.visibility=room?"visible":"hidden";});
+  const gk="greet:"+h.year+h.key;if(h.today&&!prog.seen[gk]){prog.seen[gk]=1;saveProg();setTimeout(()=>toast(`${D[0].slice(0,2)} ${HNAMES[h.key]}!`,3500),600);}}catch(e){}}
+function decoFall(){const h=decoNow();if(!h||calm())return;const bit=DECOS[h.key][3];
+  for(let i=0;i<7;i++){const s=document.createElement("span");s.className="fall";s.textContent=bit;s.style.left=(5+Math.random()*90)+"vw";
+    s.style.animationDelay=(i*.35)+"s";document.body.appendChild(s);setTimeout(()=>s.remove(),8000);}}
 // One message at a time, each up for at least 1.9 s, so a second one never wipes the first before it's read.
 // Repeats are dropped and at most two wait their turn (the newest win).
 let toastQ=[],toastOn="";
