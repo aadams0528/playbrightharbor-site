@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.9 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.10 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -148,7 +148,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .wkrow .wt{flex:1;display:flex;flex-direction:column;gap:2px}
 .wkrow b{font-family:var(--disp);font-size:17px}
 .wkrow span{font-size:15px;color:#d9dcef;font-weight:700}
-.wkrow .new{background:var(--gold);color:#3b2d14;border-radius:999px;font-size:12px;font-weight:800;padding:2px 8px;margin-left:6px}
+.wkrow .new{display:inline-block;width:10px;height:10px;background:var(--gold);border-radius:50%;margin-left:8px;vertical-align:middle;box-shadow:0 0 0 2px rgba(201,150,40,.3)}
 .goals{list-style:none;padding:0;margin:0 0 12px}
 .goals li{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);font-size:16px;font-weight:700;color:var(--ink)}
 .goals li .gn{margin-left:auto;font-family:var(--disp);color:var(--ink2);white-space:nowrap}
@@ -2598,8 +2598,12 @@ function weekGoals(mon) {
   const first = pool[0], rest = rng.shuffle(pool.slice(1)).slice(0, 3);
   return { name: WEEKNAMES[Math.round(new Date(mon + 'T12:00:00').getTime() / 6048e5) % WEEKNAMES.length], goals: [{ id: 'days', e: '📅', t: 'Finish the Daily Three on 4 days', n: 4 }, first].concat(rest) };
 }
+// A ?date preview (test page only) keeps its week in memory, so it never replaces the real week.
+// No build ever saves an older week over a newer one (a phone clock moved back, for example).
+const WK_PREVIEW = TEST_BUILD && !!params.get('date'); let wkMem = null;
 function wkGet() {
-  const mon = weekOf(realToday)[0]; let w = store.get('wk', null);
+  const mon = weekOf(realToday)[0]; let w = WK_PREVIEW ? wkMem : store.get('wk', null);
+  if (WK_PREVIEW && !w) { const s = store.get('wk', null); if (s && s.w === mon) w = JSON.parse(JSON.stringify(s)); }
   if (!w || w.w !== mon) w = { w: mon, p: {}, days: [], beacon: 0, seen: w && w.seen ? 1 : 0 };
   return w;
 }
@@ -2610,11 +2614,16 @@ function mergeWeek(a, b) {
   const days = (a.days || []).concat((b.days || []).filter(d => (a.days || []).indexOf(d) < 0));
   return { w: a.w, p, days, beacon: a.beacon || b.beacon ? 1 : 0, gift: a.gift || b.gift ? 1 : 0, seen: a.seen || b.seen ? 1 : 0 };
 }
+function wkSave(w) {
+  if (WK_PREVIEW) { wkMem = w; return; }
+  const s = store.get('wk', null); if (s && s.w && s.w > w.w) return;
+  store.set('wk', w);
+}
 const goalsDone = (w, G) => G.goals.filter(g => (w.p[g.id] || 0) >= g.n).length;
 // Goals merged from another phone can reach 5 of 5: light the Beacon then, like a goal finished here.
 function beaconCheck() {
   const w = wkGet(); if (w.beacon || goalsDone(w, weekGoals(w.w)) < 5) return;
-  const gift = lightBeacon(w); store.set('wk', w); setTimeout(() => toast(beaconMsg(gift), 4500), 400);
+  const gift = lightBeacon(w); wkSave(w); setTimeout(() => toast(beaconMsg(gift), 4500), 400);
 }
 // Lights the Beacon; gives the shield only if none is held (w.gift remembers which).
 function lightBeacon(w) { w.beacon = 1; const sh = shieldGet(); const gift = !sh.n; if (gift) { sh.n = 1; store.set('shield', sh); } w.gift = gift ? 1 : 0; return gift; }
@@ -2643,12 +2652,12 @@ function goalEvent(ev) {
       msg = beaconMsg(gift);
     } else msg = '🏮 Weekly goal done (' + after + ' of ' + G.goals.length + ')';
   }
-  store.set('wk', w);
+  wkSave(w);
   if (msg) setTimeout(() => toast(msg, w.beacon && after === G.goals.length ? 4500 : 2500), 1200);
 }
 function weekRow() {
   const w = wkGet(); const G = weekGoals(w.w); const d = goalsDone(w, G);
-  return '<button class="wkrow' + (w.beacon ? ' lit' : '') + '" id="wkr"><div class="wl">' + G.goals.map((g, i) => '<span class="ln' + (i < d ? '' : ' off') + '">🏮</span>').join('') + '</div><div class="wt"><b>' + esc(G.name) + (w.seen ? '' : '<i class="new">NEW</i>') + '</b><span>' + (w.beacon ? LH + ' Beacon lit!' + (w.gift !== 0 ? ' 🛡️ shield earned' : '') : 'Goals: ' + d + ' of ' + G.goals.length + ' done') + '</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>';
+  return '<button class="wkrow' + (w.beacon ? ' lit' : '') + '" id="wkr"><div class="wl">' + G.goals.map((g, i) => '<span class="ln' + (i < d ? '' : ' off') + '">🏮</span>').join('') + '</div><div class="wt"><b>' + esc(G.name) + (w.seen ? '' : '<i class="new" role="img" aria-label="New" title="New"></i>') + '</b><span>' + (w.beacon ? LH + ' Beacon lit!' + (w.gift !== 0 ? ' 🛡️ shield earned' : '') : 'Goals: ' + d + ' of ' + G.goals.length + ' done') + '</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>';
 }
 // All puzzle types, one tap away from home: each opens its short lesson.
 function showHowTo() {
@@ -2659,7 +2668,7 @@ function showHowTo() {
 }
 function showGoals() {
   const w = wkGet(); const G = weekGoals(w.w); const first = !w.seen;
-  w.seen = 1; store.set('wk', w);
+  w.seen = 1; wkSave(w);
   openSheet('<h2>' + esc(G.name) + '</h2>' +
     '<div class="sub">' + (first ? 'New! Five goals for this week. Each one lights a lantern 🏮. Light all five for the Harbor Beacon and a free streak shield (you can hold one at a time).' : 'Each goal lights a lantern 🏮. All five light the Harbor Beacon and give a streak shield (you can hold one at a time).') + '</div>' +
     '<ul class="goals">' + G.goals.map(g => { const n = Math.min(w.p[g.id] || 0, g.n), ok = n >= g.n; return '<li class="' + (ok ? 'done' : '') + '"><span>' + g.e + '</span><span>' + esc(g.t) + '</span><span class="gn">' + (ok ? '✓' : n + '/' + g.n) + '</span></li>'; }).join('') + '</ul>' +
@@ -2723,7 +2732,7 @@ function bonusSolved(ms) {
   openSheet('<h2>' + (star ? 'Bonus solved! ⭐' : 'Bonus solved!') + '</h2><div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + TWISTS[tw].e + '</b><span>' + TWISTS[tw].n.toUpperCase() + '</span></div></div>' +
     '<div class="sub" style="font-size:15px">' + (star ? 'You earned the ⭐ for ' + TWISTS[tw].n.toLowerCase() + '.' : tw === 'onetry' ? 'No ⭐ this time (there was a miss), but you cracked it!' : 'No ⭐ this time, but you cracked it!') + ' ' + nextBonusLine() + '</div>' +
-    '<div class="col"><button class="btn" id="bh">Back to home</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
+    '<div class="col"><button class="btn" id="bh">‹ Back to home</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   document.getElementById('bh').onclick = () => { closeSheet(); renderHome(); };
 }
@@ -2739,7 +2748,7 @@ function renderHome() {
   const next = e ? e.s.findIndex(x => !x) : 0;
   const hol = holidayNow();
   $app.innerHTML = iconize(
-    '<div class="home-top"><div class="logo" id="logo">' + lockIcon(40) + '<h1>Aha<span>lock</span></h1>' + (hol ? '<span class="hol" aria-hidden="true">' + hol.e + '</span>' : '') + '</div><div class="streak" id="stk" role="button" tabindex="0" title="Days in a row" aria-label="Streak: ' + st + ' days in a row' + (shieldGet().n ? ', shield held' : '') + '">🔥 ' + st + (shieldGet().n ? ' <span title="Streak shield: saves your streak once if you miss a day">🛡️</span>' : '') + '</div></div>' +
+    '<div class="home-top"><div class="logo" id="logo">' + lockIcon(40) + '<h1>Aha<span>lock</span></h1>' + (hol ? '<span class="hol" aria-hidden="true">' + hol.e + '</span>' : '') + '</div><div class="streak" id="stk" role="button" tabindex="0" title="Days in a row" aria-label="Streak: ' + st + (st === 1 ? ' day' : ' days') + ' in a row' + (shieldGet().n ? ', shield held' : '') + '">🔥 ' + st + (shieldGet().n ? ' <span title="Streak shield: saves your streak once if you miss a day">🛡️</span>' : '') + '</div></div>' +
     '<div class="tag">Three little logic puzzles a day. No guessing needed.</div>' + (hol ? '<div class="tag holtag">' + hol.g + ' ' + esc(hol.t) + '</div>' : '') +
     '<div class="today"><div class="when"><h2>' + (ds === realToday ? 'Today' : nice(ds)) + '</h2><div class="mood">' + (expertOn() ? '🧠 Expert · ' : '') + TL.DAYMOOD[TL.weekday(ds)] + ' day</div></div>' +
     '<div class="trio">' + day.map((p, i) => '<div class="tile' + (e && e.s[i] ? ' done' : '') + '"><div class="ico">' + typeIcon(p.type, 44) + '</div><div class="nm">' + TYPENAME[p.type] + '</div><div class="dots">' + [1, 2, 3, 4].slice(0, p.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[p.tier] ? 'on' : '') + '"></i>').join('') + '</div></div>').join('') + '</div>' +
@@ -2752,7 +2761,7 @@ function renderHome() {
     '<div class="homerows"><button class="wkrow hrow" id="howr"><span class="hi">📖</span><div class="wt"><b>How to play</b><span>' + TL.ROSTER.length + ' puzzle types, with a short lesson each</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>' +
     '<button class="wkrow hrow" id="opts"><span class="hi">⚙️</span><div class="wt"><b>Options</b><span>Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.9' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.10' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('opts').onclick = showOptions;
@@ -3009,7 +3018,7 @@ function showDaySummary(ds) {
     '<div class="sub" style="margin-top:-6px;font-size:15px">' + legendLine(e) + '</div>' +
     '<label class="tgl"><input type="checkbox" id="stime"' + (sh.showTime ? ' checked' : '') + '> Show my time when I share</label>' +
     tomorrowCard(ds) + (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="sub" style="font-size:16px">⭐ ' + nextBonusLine() + '</div>' : '') +
-    '<div class="col"><button class="btn" id="share">Share result</button>' + bonusBtn() + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">Back to home</button></div>' +
+    '<div class="col"><button class="btn" id="share">Share result</button>' + bonusBtn() + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button></div>' +
     (adsOn() && window.AL_STORE ? '<div class="sub" style="text-align:center;font-size:15px;margin-top:8px">Enjoying Ahalock? <button class="linkbtn" id="dsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button></div>' : ''));
   const db = document.getElementById('dsBuy'); if (db) db.onclick = async () => { if (await AL_STORE.buy()) showDaySummary(ds); };
   const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
@@ -3786,7 +3795,7 @@ function coachFit(last) {
   const c = document.querySelector('#coach .cbox'), pad = document.querySelector('.tutpad'); if (!c) return;
   const ch = c.getBoundingClientRect().height + 28;
   if (pad) pad.style.height = Math.ceil(ch) + 'px';
-  const ts = [document.querySelector('.pulse') || document.querySelector('.board .keys, .board .tray'), last ? document.getElementById('chk') : null].filter(Boolean);
+  const ts = [document.querySelector('.pulse') || document.querySelector('.board .keys, .board .tray'), document.getElementById('chk')].filter(Boolean);
   if (!ts.length) return;
   const top = innerHeight - ch, bot = Math.max(...ts.map(t => t.getBoundingClientRect().bottom)), hi = Math.min(...ts.map(t => t.getBoundingClientRect().top));
   if (bot > top - 8) window.scrollBy(0, Math.min(bot - top + 8, Math.max(0, hi - 12)));
