@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.23.3 (hold to move photos) -->
+<!-- Tripsake v0.24.0 (simpler trip page, one editor) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -474,7 +474,7 @@ label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;marg
 .btn.playbig{width:100%;justify-content:center;min-height:56px;font-size:calc(19px * var(--fs,1));border-radius:14px}
 .tripmore{display:flex;flex-direction:column;gap:6px}
 .tripmore[hidden]{display:none}
-.tmhead{font-size:calc(15px * var(--fs,1));font-weight:700;color:var(--muted);margin:8px 2px 0}
+.tmhead{font-size:calc(15px * var(--fs,1));font-weight:700;color:var(--muted);margin:8px 2px 0}.bigact{min-height:60px;justify-content:flex-start;gap:14px;font-size:calc(18px * var(--fs,1));font-weight:600;text-align:left;width:100%;box-sizing:border-box}.bigact .ic{font-size:calc(24px * var(--fs,1));width:32px;text-align:center}.vedcov.on{background:color-mix(in srgb,var(--lit) 22%,var(--panel));border-color:var(--lit);color:var(--ink)}
 .morerow{min-height:56px}
 .morerow.big{min-height:68px}
 .morerow.big .t{font-size:calc(18px * var(--fs,1))}
@@ -1464,7 +1464,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.23.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.24.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1556,7 +1556,7 @@ function stopHTML(s){
   const st = getStory(s);
   return `<div class="stop"><div><h4>${esc(stopName(s))}</h4><div class="d">${fmt(s.date)} · ${s.photos.length} photo${s.photos.length > 1 ? "s" : ""}</div></div>
     <div class="strip" style="margin:0">${s.photos.map(ph => { const im = `<img src="${photoURL(ph)}" alt="${esc(phLabel(ph) || ph.caption)}" data-ph="${ph.id}"${phLabel(ph) ? ` class="labeled" title="${esc(phLabel(ph))}${ph.by ? " · photo: " + esc(ph.by) : ""}"` : ph.by ? ` title="Photo: ${esc(ph.by)}"` : ""}>`; return ph.by ? `<span class="byph">${im}<i>📷 ${esc(ph.by)}</i></span>` : im; }).join("")}</div>
-    <div class="note" style="margin:-4px 0 0">${onceNote("stopPhotos", `Tap a photo to see it big. Label it or remove it there. To pick the cover, turn photos or change their order, use <b>Go through photos</b> under More for this ${s.trip && s.trip.homeMem ? "memory" : "trip"}.`)}${s.allPhotos && s.allPhotos.length > s.photos.length ? ` ${plural(s.allPhotos.length - s.photos.length, "photo")} you removed ${s.allPhotos.length - s.photos.length === 1 ? "is" : "are"} hidden from this stop, not deleted. <button class="linkbtn" data-put-back="${s.id}">Put ${s.allPhotos.length - s.photos.length === 1 ? "it" : "them"} back</button>` : ""}</div>
+    <div class="note" style="margin:-4px 0 0">${onceNote("stopPhotos", `Tap a photo to see it big. Label it or remove it there. To pick the cover, turn photos or change their order, use <b>✎ Edit my story</b>.`)}${s.allPhotos && s.allPhotos.length > s.photos.length ? ` ${plural(s.allPhotos.length - s.photos.length, "photo")} you removed ${s.allPhotos.length - s.photos.length === 1 ? "is" : "are"} hidden from this stop, not deleted. <button class="linkbtn" data-put-back="${s.id}">Put ${s.allPhotos.length - s.photos.length === 1 ? "it" : "them"} back</button>` : ""}</div>
     ${othersHTML(s)}
     ${keepHTML(s)}
     ${(() => { const L = typeof dayLineForStop === "function" ? dayLineForStop(s) : null; return L && L.text ? `<div class="dayline"><div><div class="d">Best moment that day · trip journal</div><div>${esc(L.text)}</div></div>${VOICE.has("vn:day:" + s.date) ? `<button class="btn" data-vn-play="vn:day:${s.date}">▶</button>` : ""}</div>` : ""; })()}
@@ -1582,6 +1582,7 @@ function moveRealStop(sid, toId){ const raw = store.get("realTrips", []), before
   const gone = !a.stops.length; const out = gone ? raw.filter(t => t !== a) : raw; if (!store.set("realTrips", out)){ toast("Couldn't save: this browser's storage is full"); return; }
   refreshTrips(b.id).then(() => toast(`Moved ${st.name} to ${b.title}.${gone ? ` ${a.title} had only that stop, so it's gone now.` : ""}${warn}`, () => { store.set("realTrips", JSON.parse(before)); refreshTrips(a.id, "Move undone"); })); }
 document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.stopMove && e.target.value) moveRealStop(e.target.dataset.stopMove, e.target.value); });
+const tripSetLabel = open => `⚙ Trip settings ${open ? "▴" : "▾"}`; /* the rarely used changes sit behind one button; the cover, turning, music and order live in Edit my story (Alan 11-14) */
 const TRIP_MORE = new Set(); let tripMoreOpen = false; /* "More for this trip" opens for that trip only (store "tripMore" = "all" keeps it open everywhere, for tests) */
 function openTrip(id, noFly){
   tripMoreOpen = store.get("tripMore", "") === "all" || TRIP_MORE.has(id);
@@ -1595,19 +1596,16 @@ function openTrip(id, noFly){
    <div class="pad">
     <div class="facts"><div><b>${days(t)}</b><span>${days(t) === 1 ? "Day" : "Days"}</span></div><div><b>${st.length}</b><span>${st.length === 1 ? "Place" : "Places"}</span></div><div><b>${n}</b><span>${n === 1 ? "Photo" : "Photos"}</span></div>${t.homeMem ? "" : `<div><b>${tripMiles(t).toLocaleString()}</b><span>${tripMiles(t) === 1 ? "Mile" : "Miles"}</span></div>`}</div>
     <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button><button class="btn playbig" data-vedit="${t.id}">✎ Edit my story</button>${musicMuted ? `<p class="note" data-mutenote style="margin:0">🔇 Sound is off for stories. <button class="btn" data-unmute style="min-height:40px">Turn sound on</button></p>` : ""}
-    <div class="row-btns" style="margin:0">${t.real ? `<label class="btn" style="cursor:pointer;flex:1;justify-content:center">＋ Add photos<input type="file" id="tripAddFiles" data-trip="${t.id}" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}<button class="btn" style="flex:1" data-trip-more aria-expanded="${tripMoreOpen}" data-trip-id="${t.id}">More for this ${t.homeMem ? "memory" : "trip"} ${tripMoreOpen ? "▴" : "▾"}</button></div>
+    <div class="tmhead">Make and share</div>
+    <button class="btn bigact" data-share="${t.id}"><span class="ic" aria-hidden="true">🎬</span><span>Make a shareable video</span></button>
+    <button class="btn bigact" data-tshare="${t.id}"><span class="ic" aria-hidden="true">👥</span><span>Share this ${tnoun(t)}</span></button>
+    <button class="btn bigact" data-book="${t.id}"><span class="ic" aria-hidden="true">📖</span><span>${t.homeMem ? "Memory book" : "Trip book"}</span></button>
+    ${t.real ? `<div class="row-btns" style="margin:4px 0 0"><label class="btn" style="cursor:pointer;flex:1;justify-content:center">＋ Add photos<input type="file" id="tripAddFiles" data-trip="${t.id}" accept="image/*,.heic,.heif" multiple hidden></label><button class="btn" style="flex:1" data-trip-more aria-expanded="${tripMoreOpen}" data-trip-id="${t.id}">${tripSetLabel(tripMoreOpen)}</button></div>
     <div class="tripmore" ${tripMoreOpen ? "" : "hidden"}>
-      <div class="tmhead">Make and share</div>
-      <button class="morerow" data-share="${t.id}"><div class="flag ring">🎬</div><div class="txt"><div class="t">Make a shareable video</div><div class="s">Turns your story into a video file you can text or post</div></div></button>
-      <button class="morerow" data-tshare="${t.id}"><div class="flag ring">👥</div><div class="txt"><div class="t">Share this ${tnoun(t)}</div><div class="s">Send it to someone who was there</div></div></button>
-      <button class="morerow" data-book="${t.id}"><div class="flag ring">📖</div><div class="txt"><div class="t">${t.homeMem ? "Memory book" : "Trip book"}</div><div class="s">A printable book of this ${tnoun(t)}</div></div></button>
-      <div class="tmhead">Change this ${tnoun(t)}</div>
-      ${t.real ? `<button class="morerow" data-trip-rename="${t.id}"><div class="flag ring">✎</div><div class="txt"><div class="t">Rename this ${tnoun(t)}</div><div class="s">${esc(t.title)}</div></div></button>` : ""}
-      <button class="morerow" data-music="${t.id}"><div class="flag ring">♪</div><div class="txt"><div class="t">Music</div><div class="s">${esc(choiceName(musicChoice(t.id) === "auto" ? autoChoice(t.id) : musicChoice(t.id)))}</div></div></button>
-      <button class="morerow" data-prev="${t.id}"><div class="flag ring">🖼</div><div class="txt"><div class="t">Go through photos</div><div class="s">Pick the cover, turn, reorder or remove photos</div></div></button>
-      ${t.real ? `<button class="morerow" data-trip-kind="${t.id}"><div class="flag ring">${t.homeMem ? "✈" : "🏠"}</div><div class="txt"><div class="t">${t.homeMem ? "Turn into a trip" : "Move to Close to home"}</div><div class="s">${t.homeMem ? "For a stay away from home, even close by. It counts toward your trips and miles" : "For a night out or a day near home. It stays yours, but no longer counts as travel"}</div></div></button>` : ""}
-      ${t.real ? `<button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete ${tnoun(t)}</div><div class="s">You can undo it right after</div></div></button>` : ""}
-    </div>
+      <button class="morerow" data-trip-rename="${t.id}"><div class="flag ring">✎</div><div class="txt"><div class="t">Rename this ${tnoun(t)}</div><div class="s">${esc(t.title)}</div></div></button>
+      <button class="morerow" data-trip-kind="${t.id}"><div class="flag ring">${t.homeMem ? "✈" : "🏠"}</div><div class="txt"><div class="t">${t.homeMem ? "Turn into a trip" : "Move to Close to home"}</div><div class="s">${t.homeMem ? "For a stay away from home, even close by. It counts toward your trips and miles" : "For a night out or a day near home. It stays yours, but no longer counts as travel"}</div></div></button>
+      <button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete ${tnoun(t)}</div><div class="s">You can undo it right after</div></div></button>
+    </div>` : ""}
     ${backAgainHTML(t)}${chs.length ? `<p class="note" style="margin:0">📚 ${chs.map(c => `${esc(c.name)} (${chapterYears(c)})`).join(" · ")}</p>` : ""}
     ${t.sharedWith && t.sharedWith.length ? `<p class="note" style="margin:0">👥 Shared with ${esc(t.sharedWith.join(", "))}. Send it again any time and your copies merge.</p>` : ""}
     ${dupesHTML(t)}
@@ -3372,12 +3370,13 @@ function vedSumText(t){ const VP = vidPlan(t), n = stopsOf(t).reduce((a, s) => a
 function vedMusicName(t){ const m = musicChoice(t.id); return m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m); }
 function openVideoEdit(id){ const t = findTrip(id); if (!t) return; VED_BACK = id;
   if (!vedOf(t)) VEDIT[id] = {out:[]}; /* every photo starts in, the same as the story */
-  const ed = vedOf(t), tile = p => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
+  const cov = tripCover(t).id, ed = vedOf(t), tile = p => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
     return `<div class="vedph${on ? "" : " off"}" data-vedph="${p.id}"><button class="vedimg${wh ? " whole" : ""}" data-vedtog="${p.id}" aria-pressed="${on}" aria-label="${on ? "In the video" : "Left out"}: ${nm}. Tap to ${on ? "leave it out" : "put it back"}"><img src="${photoURL(p)}" alt="" loading="lazy" draggable="false"><span class="vedarr up" aria-hidden="true">▲</span><span class="vedarr down" aria-hidden="true">▼</span><span class="vedtick" aria-hidden="true">${on ? "✓" : ""}</span></button>
-      <div class="vedside"><button class="btn" data-vedwhole="${p.id}" aria-pressed="${wh}">${wh ? "✓ Whole photo" : "⤢ Whole photo"}</button></div></div>`; };
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Edit my story")}
+      <div class="vedside"><button class="btn vedcov${cov === p.id ? " on" : ""}" data-vedcover="${p.id}" aria-pressed="${cov === p.id}">${cov === p.id ? "★ Cover" : "☆ Make cover"}</button><button class="btn" data-vedrot="${p.id}" aria-label="Turn ${nm} a quarter turn">⟳ Turn</button><button class="btn" data-vedwhole="${p.id}" aria-pressed="${wh}">${wh ? "✓ Whole photo" : "⤢ Whole photo"}</button></div></div>`; };
+  /* its own back bar goes to the trip page it came from, (the trip page has the way back to the globe) (Alan 11-14) */
+  openSheet(`<div class="backbar"><button class="btn" data-open-trip="${t.id}">‹ Back to ${esc(t.title)}</button></div><div class="pad" style="padding-top:18px">${sheetHead("Edit my story")}
     <p class="vedsum" id="vedSum" aria-live="polite">${vedSumText(t)}</p>
-    ${onceNote("vedTip", `<p class="note" style="margin:0;font-size:calc(17px * var(--fs,1))">Tap a photo to leave it out of your story and video. <b>Press and hold</b> a photo to move it. <b>⤢ Whole photo</b> shows all of it, with no zoom. Nothing is deleted.</p>`)}
+    ${onceNote("vedTip", `<p class="note" style="margin:0;font-size:calc(17px * var(--fs,1))">Tap a photo to leave it out of your story and video. <b>Press and hold</b> a photo to move it. <b>☆ Make cover</b> picks the trip's main photo. <b>⤢ Whole photo</b> shows all of it, with no zoom. Nothing is deleted.</p>`)}
     <div class="vedmusic"><span aria-hidden="true">♪</span><span class="t">Music: <b>${esc(vedMusicName(t))}</b></span><button class="btn" data-ved-music="${t.id}">Change</button></div>
     ${stopsOf(t).map(s => `<h3 class="vedstop">${esc(stopName(s))}</h3><div class="vedlist" data-vedstop="${s.id}">${s.photos.map(tile).join("")}</div>`).join("")}
     <button class="btn primary playbig" data-ved-play="${t.id}" style="margin-top:8px">▶ Play my story</button><button class="btn playbig" data-ved-go="${t.id}">🎬 Make a shareable video</button>
@@ -3386,6 +3385,9 @@ function vedSave(){ store.set("vidEdit", VEDIT); store.set("vidWhole", [...VWHOL
 function vedToggle(pid){ const t = findTrip(VED_BACK); if (!t) return; const ed = vedOf(t), s = stopsOf(t).find(x => x.photos.some(p => p.id === pid)); if (!ed || !s) return;
   if (ed.has(pid)){ if (s.photos.filter(p => ed.has(p.id)).length <= 1){ toast("Each stop keeps at least one photo in the video"); return; } ed.delete(pid); } else ed.add(pid);
   VEDIT[t.id] = {out:vedAll(t).filter(x => !ed.has(x))}; vedSave(); const el = document.querySelector(`[data-vedph="${pid}"]`); if (el){ const on = ed.has(pid); el.classList.toggle("off", !on); const b = el.querySelector("[data-vedtog]"); b.setAttribute("aria-pressed", on); b.setAttribute("aria-label", b.getAttribute("aria-label").replace(/^(In the video|Left out)/, on ? "In the video" : "Left out").replace(/Tap to .*$/, on ? "Tap to leave it out" : "Tap to put it back")); el.querySelector(".vedtick").textContent = on ? "✓" : ""; } }
+function vedCover(pid){ const t = findTrip(VED_BACK); if (!t) return; COVERS[t.id] = pid; store.set("covers", COVERS);
+  document.querySelectorAll("[data-vedcover]").forEach(b => { const on = b.dataset.vedcover === pid; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); b.textContent = on ? "★ Cover" : "☆ Make cover"; }); toast("This is now the cover"); }
+async function vedTurn(pid){ const ph = PHOTOS.find(p => p.id === pid); if (!ph || !(await turnPhoto(ph))) return; const im = document.querySelector(`[data-vedph="${pid}"] img`); if (im) im.src = photoURL(ph); }
 function vedWhole(pid){ if (VWHOLE.has(pid)) VWHOLE.delete(pid); else VWHOLE.add(pid); vedSave(); const el = document.querySelector(`[data-vedph="${pid}"]`); if (el){ const on = VWHOLE.has(pid); el.querySelector(".vedimg").classList.toggle("whole", on); const b = el.querySelector("[data-vedwhole]"); b.setAttribute("aria-pressed", on); b.textContent = on ? "✓ Whole photo" : "⤢ Whole photo"; } }
 /* a new order in the editor is the stop's order everywhere, so the story and the video always match */
 function vedOrder(list){ const t = findTrip(VED_BACK); const s = t && stopsOf(t).find(x => x.id === list.dataset.vedstop); if (!s) return; const ids = [...list.querySelectorAll("[data-vedph]")].map(e => e.dataset.vedph), all = s.allPhotos || s.photos;
@@ -3405,7 +3407,7 @@ let VED_DRAGGED = 0;
     if ((after ? after.previousElementSibling : list.lastElementChild) === ph) return; flip(sib, () => { if (after) list.insertBefore(ph, after); else list.appendChild(ph); }); arrows(); };
   const tick = () => { if (!it) return; const s = sc(); if (s){ if (py < 110) s.scrollTop -= 10; else if (py > innerHeight - 110) s.scrollTop += 10; } it.style.top = (py - off) + "px"; place(); raf = requestAnimationFrame(tick); };
   const cancelHold = () => { if (hold){ clearTimeout(hold); hold = null; } if (!ph){ it = null; list = null; } };
-  document.addEventListener("pointerdown", e => { const c = e.target.closest(".vedph"); if (!c || e.target.closest("[data-vedwhole]") || e.button > 0) return; it = c; list = c.parentElement; x0 = e.clientX; y0 = py = e.clientY; hold = setTimeout(lift, e.pointerType === "mouse" ? 180 : 320); });
+  document.addEventListener("pointerdown", e => { const c = e.target.closest(".vedph"); if (!c || e.target.closest(".vedside") || e.button > 0) return; it = c; list = c.parentElement; x0 = e.clientX; y0 = py = e.clientY; hold = setTimeout(lift, e.pointerType === "mouse" ? 180 : 320); });
   document.addEventListener("pointermove", e => { if (hold && (Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10)){ if (e.pointerType === "mouse" && it){ clearTimeout(hold); lift(); } else cancelHold(); } if (it && ph){ py = e.clientY; } });
   const drop = () => { if (hold){ cancelHold(); return; } if (!it || !ph) return; cancelAnimationFrame(raf); const card = it, slot = ph, l = list; it = null; ph = null; list = null; document.removeEventListener("touchmove", stopTouch);
     const r = slot.getBoundingClientRect(); card.style.transition = "top .16s ease, transform .16s ease, box-shadow .16s"; card.style.top = r.top + "px"; card.classList.remove("lifted", "canup", "candown");
@@ -3510,13 +3512,15 @@ function drawPhotoReview(){ const R = prev, ph = R.list[R.i], s = ph.stop, off =
 function prMove(d){ const ph = prev.list[prev.i], arr = ph.stop.allPhotos || ph.stop.photos, k = arr.indexOf(ph), j = k + d; if (j < 0 || j >= arr.length) return;
   [arr[k], arr[j]] = [arr[j], arr[k]]; const li = prev.list.indexOf(arr[k]), lj = prev.list.indexOf(arr[j]); [prev.list[li], prev.list[lj]] = [prev.list[lj], prev.list[li]];
   PH_ORDER[ph.stop.id] = arr.map(p => p.id); store.set("phOrder", PH_ORDER); prev.i = prev.list.indexOf(ph); prev.changed = true; drawPhotoReview(); }
-async function prRotate(){ const ph = prev.list[prev.i];
-  if (ph.scene !== "real"){ PH_ROT[ph.id] = ((PH_ROT[ph.id] || 0) + 90) % 360; if (!PH_ROT[ph.id]) delete PH_ROT[ph.id]; store.set("phRot", PH_ROT); prev.changed = true; drawPhotoReview(); return; }
-  const src = imgCache.get("rp:" + ph.id); if (!src){ toast("This photo couldn't be opened, so it can't be turned"); return; }
-  const im = new Image(); im.src = src; try { await im.decode(); } catch(e){ toast("This photo couldn't be turned"); return; }
+/* turn a photo a quarter turn: a drawn one by a stored angle, your own for good (true when it turned) */
+async function turnPhoto(ph){
+  if (ph.scene !== "real"){ PH_ROT[ph.id] = ((PH_ROT[ph.id] || 0) + 90) % 360; if (!PH_ROT[ph.id]) delete PH_ROT[ph.id]; store.set("phRot", PH_ROT); return true; }
+  const src = imgCache.get("rp:" + ph.id); if (!src){ toast("This photo couldn't be opened, so it can't be turned"); return false; }
+  const im = new Image(); im.src = src; try { await im.decode(); } catch(e){ toast("This photo couldn't be turned"); return false; }
   const c0 = document.createElement("canvas"); c0.width = im.naturalWidth; c0.height = im.naturalHeight; c0.getContext("2d").drawImage(im, 0, 0);
   const url = rotCanvas(c0, 90).toDataURL("image/jpeg", .88); imgCache.set("rp:" + ph.id, url); try { await idb.put("rp:" + ph.id, url); } catch(e){ toast("Turned for this visit only: this browser couldn't save it"); }
-  prev.changed = true; drawPhotoReview(); }
+  return true; }
+async function prRotate(){ const ph = prev.list[prev.i]; if (await turnPhoto(ph)){ prev.changed = true; drawPhotoReview(); } }
 function prStep(d){ if (!prev) return; prev.i = Math.max(0, Math.min(prev.list.length - 1, prev.i + d)); drawPhotoReview(); }
 function prSetHidden(on){ const ph = prev.list[prev.i], st = ph.stop;
   if (on && (st.allPhotos || st.photos).filter(p => !prev.hidden[p.id]).length <= 1){ /* the last photo at a stop: the stop goes with it */
@@ -3760,7 +3764,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-nav]"))){ const k = b.dataset.nav;
     if (k === "globe" && b.closest(".backbar") && !b.hasAttribute("data-bb-leave") && leaveAsk()) return; /* the import review isn't saved yet: ask before throwing it away (Nikola r18) */
     if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
-  if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; const b2 = g("[data-trip-more]"); if (tripMoreOpen) TRIP_MORE.add(b2.dataset.tripId); else TRIP_MORE.delete(b2.dataset.tripId); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = "More for this " + ((TRIPS.find(u => u.id === b2.dataset.tripId) || {}).homeMem ? "memory " : "trip ") + (tripMoreOpen ? "▴" : "▾"); const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
+  if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; const b2 = g("[data-trip-more]"); if (tripMoreOpen) TRIP_MORE.add(b2.dataset.tripId); else TRIP_MORE.delete(b2.dataset.tripId); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = tripSetLabel(tripMoreOpen); const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
   if (g("[data-open-layers]")){ openLayers(); return; }
   if (g("[data-add-memory]")){ closeSheet(); openSnap("food"); return; }
   if (g("[data-add-manual]")){ closeSheet(); openManual(); return; }
@@ -3822,6 +3826,8 @@ document.addEventListener("click", e => {
   if ((b = g("[data-vedit]"))){ openVideoEdit(b.dataset.vedit); return; }
   if ((b = g("[data-vedtog]"))){ if (Date.now() - VED_DRAGGED < 400) return; vedToggle(b.dataset.vedtog); return; }
   if ((b = g("[data-vedwhole]"))){ vedWhole(b.dataset.vedwhole); return; }
+  if ((b = g("[data-vedcover]"))){ vedCover(b.dataset.vedcover); return; }
+  if ((b = g("[data-vedrot]"))){ vedTurn(b.dataset.vedrot); return; }
   if ((b = g("[data-ved-music]"))){ VED_BACK = b.dataset.vedMusic; openMusicPicker(b.dataset.vedMusic); return; }
   if ((b = g("[data-ved-go]"))){ const id = b.dataset.vedGo; if (!canRecord()){ toast("This browser can't make videos. Try Chrome, Safari or Edge."); return; } VED_BACK = null; closeSheet(); replay(id, {record:true}); return; }
   if ((b = g("[data-ved-play]"))){ VED_BACK = null; replay(b.dataset.vedPlay); return; }
