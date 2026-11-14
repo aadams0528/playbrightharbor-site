@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 8bc12df (PR #34) -->
+<!-- number-blast 270f5f4 (PR #35) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -17,6 +17,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,6 +58,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:6px 10
 .pill{font:700 .9rem var(--body);border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:.35em .75em;cursor:pointer;display:inline-flex;align-items:center;gap:.3em}
 .pill .plus{color:var(--accent);font-weight:800}
 .bump{animation:bump .35s ease-out}
+.earnfly{position:fixed;z-index:60;transform:translate(-50%,-100%);font:800 20px 'Baloo 2',sans-serif;color:#1f7a3a;background:#fff;border-radius:12px;padding:0 8px;box-shadow:0 2px 6px rgba(0,0,0,.2);pointer-events:none;animation:earnfly 1.4s ease-out forwards}
+@keyframes earnfly{0%{opacity:0;margin-top:0}15%{opacity:1}100%{opacity:0;margin-top:-36px}}
 @keyframes bump{40%{transform:scale(1.18)}}
 
 .hud{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;min-height:44px}
@@ -342,7 +345,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily run</b> gives everyone the same pieces today and ends when no piece fits. Clear level 1, 3 and 5 for up to 3 ⭐ (all 3 in a day pays 10 🪙); 15 ⭐ in a week opens a 🎁 coin chest. Switching between them keeps your place in each.</li>
     </ul>
     <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
-    <p class="tester" hidden>Sumburst 1.3.1 test version · ads and purchases are samples.</p>
+    <p class="tester" hidden>Sumburst 1.3.2 test version · ads and purchases are samples.</p>
     <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
@@ -416,7 +419,8 @@ let mode="endless", level=1, levelBase=0, score=0, best=0, T=10, board=Array(N*N
 const capNoted=new Set();   // tools already said to be full this level
 // Halfway reward (Alan 2026-11-14, Muse's round 12 idea): from level 30, reaching half the goal pays a few coins once.
 const HALF_FROM=30,HALF_COINS=5;let halfPaid=false;
-let introPending=false;   // the next level's card waits for the between-level ad; saved so a reload still shows it (Nikola round 13)
+let introPending=false;   // false, or the target before the ad, so the card after a reload says "New target" only when it changed (Nikola round 14)
+   // the next level's card waits for the between-level ad; saved so a reload still shows it (Nikola round 13)
 const MAX_ERASERS=3, MAX_SHUFFLES=3, MAX_ROTATES=3, BLASTS_PER_SHUFFLE=8, CHAIN_MOVES=2, CHAIN_MAX=4;
 const MAX_OF={Eraser:MAX_ERASERS,Shuffle:MAX_SHUFFLES,Rotate:MAX_ROTATES};
 const ri=(a,b)=>a+Math.floor(rng()*(b-a+1));
@@ -1061,7 +1065,11 @@ const READ_MS=3200, CASH_MS=2400;
 // The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
 let newsQ=[],newsTimer=null,newsWait=0,cantQueued=false;
 // first=true puts it at the front of the line, for news about the drop just made (Muse round 13: earned tools came too late).
-function news(text,big=false,onShow,first=false){newsQ[first?'unshift':'push']([text,big,onShow]);if(!newsTimer)nextNews()}
+// Several "first" items keep their own order, so a tool earned on a drop stays ahead of the halfway note (Nikola round 14).
+function news(text,big=false,onShow,first=false){const it=[text,big,onShow,first],i=first?newsQ.findIndex(x=>!x[3]):-1;i<0?newsQ.push(it):newsQ.splice(i,0,it);if(!newsTimer)nextNews()}
+// A "+1" rises from a tool's button the moment it is earned, even if a level card is about to open (Nikola round 14).
+function earnFly(el,n){if(!el||!n)return;const b=el.getBoundingClientRect(),f=document.createElement('span');f.className='earnfly';f.textContent='+'+n;
+  f.style.left=(b.left+b.width/2)+'px';f.style.top=b.top+'px';document.body.appendChild(f);setTimeout(()=>f.remove(),1500)}
 function nextNews(){
   newsTimer=null;if(!newsQ.length)return;
   if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
@@ -1159,7 +1167,7 @@ let endedByChoice=false,longPlaced=null,hudCleared=null;   // hudCleared: the le
 let specialSeen=store.get('nb-special-seen',false), justTutored=false, levelStartHint=false, rotateHintNow=false;
 function setHint(){
   if(longPlaced&&!longPlaced.every(k=>board[k]))longPlaced=null;   // once any of its squares empties, it's gone for good (Nikola round 10)
-  const h=$('hint');h.classList.toggle('tut',!!tut);
+  const h=$('hint');h.classList.toggle('tut',!!tut);let rule=false;   // rule lines glow once a level, then fade
   // Stuck: nothing in the tray can make the target on a crowded board. Say so, and point at the Eraser (or Shuffle).
   const stuck=!tut&&!over&&board.filter(Boolean).length>=24&&tray.some(p=>p&&canFit(p))&&!canBlast();
   const tool=stuck?(erasers?'eraser':shuffleHelps()?'shuffle':null):null;
@@ -1178,14 +1186,14 @@ function setHint(){
     (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
   else if(movable&&moveHintNow)h.innerHTML='Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.';
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
-  else if(twist())h.innerHTML=`⚡ <b>${twist().short}</b> · `+(expertOn()?`💎 Expert: 3+ blocks make <b>${T}</b>.`:`make <b>${T}</b>. The level card has the rule.`);   // one line, fades like the everyday line (Cooper + Nikola round 13)   // Expert keeps it to one line (Cooper round 13)   // the strip names this level's twist instead of the everyday rule (Nikola round 11)
-  else if(minLen()>2)h.innerHTML=`<b>💎 Expert:</b> only <b>3 or more</b> touching blocks that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
-  else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
+  else if(twist())rule=true,h.innerHTML=`⚡ <b>${twist().short}</b> · `+(expertOn()?`💎 Expert: 3+ blocks make <b>${T}</b>.`:`make <b>${T}</b>.`);   // one line, fades like the everyday line (Cooper + Nikola round 13)   // Expert keeps it to one line (Cooper round 13)   // the strip names this level's twist instead of the everyday rule (Nikola round 11)
+  else if(minLen()>2)h.innerHTML=`💎 Expert: 3+ blocks make <b>${T}</b>.`,rule=true;   // short, and fades like the other rule lines (Nikola round 14)
+  else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`,rule=true;
   // A nearly full board with no sum to make: offer to end the run instead of spending tools one by one (Muse round 7).
   const endOffer=endRunOffer();
   if(endOffer)h.insertAdjacentHTML('beforeend',' <button type="button" class="tut-skip" id="end-run">End run</button>');
   // The everyday "how to play" line glows and fades once per level, then stays out of the way (Alan 2026-11-12).
-  const basic=!endOffer&&/^(Touching blocks in a row|⚡ <b>)/.test(h.innerHTML),key=mode+':'+level;
+  const basic=!endOffer&&rule,key=mode+':'+level;
   if(basic){
     if(h.dataset.bk===key){if(!h.classList.contains('basic'))h.classList.add('seen')}
     else{h.dataset.bk=key;h.classList.remove('seen','basic');void h.offsetWidth}   // restart the glow
@@ -1362,9 +1370,9 @@ function blast(cascade=0){
   if(got)news(`🎁 ${got} earned!`,true,null,true);
   if(capTxt)news(`🧰 ${capTxt}: use one to earn more`,false,null,!got);
   // The tool's own button bounces right away, so an earn is seen even before its message comes up.
-  if(earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))bumpEl($('eraser'));
-  if(shuffleEarned||goalsDone.some(g=>g.reward==='shuffle'&&!g.full))bumpEl($('shuffle'));
-  if(rotEarned||goalsDone.some(g=>g.reward==='rotate'&&!g.full))bumpEl($('rotate'));
+  if(toolN.Eraser)bumpEl($('eraser')),earnFly($('eraser'),toolN.Eraser);
+  if(toolN.Shuffle)bumpEl($('shuffle')),earnFly($('shuffle'),toolN.Shuffle);
+  if(toolN.Rotate)bumpEl($('rotate')),earnFly($('rotate'),toolN.Rotate);
   if(cascade&&!store.get('nb-cascade-seen',false)){store.set('nb-cascade-seen',true);news(`Cascade! ${label}\nClearing blocks made a new ${T}, so it blasted too, with a chain bonus.`,true)}
   const extras=[];
   if(!tut){
@@ -1490,7 +1498,7 @@ function levelUp(){
     // The next level starts (and is saved) before any between-level ad, so closing the app during the ad
     // can never bring back this card and pay it twice (Cooper round 12).
     const go=(n,dbl,after)=>{closeSheet();$('deco-fall')?.remove();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);
-      const ad=adDue(),oldT=T;introPending=ad;startNextLevel(!ad);
+      const ad=adDue(),oldT=T;introPending=ad?oldT:false;startNextLevel(!ad);
       const fin=()=>{if(ad)levelIntro(oldT);if(after)after();askReminder()};
       if(ad){busy=true;watchAd(()=>{busy=false;fin()},()=>{busy=false;fin()},'Between-level ad',true)}else fin()};
     $('dbl').onclick=()=>watchAd(()=>go(earned*2,true),()=>go(earned));
@@ -1515,7 +1523,7 @@ function startNextLevel(intro=true){
   if(intro)levelIntro(oldT);
 }
 function levelIntro(oldT){
-  if(introPending){introPending=false;saveGame()}
+  if(introPending!==false){introPending=false;saveGame()}
   const tw=twist();
   if(tw)openSheet(`<h3>⚡ Challenge level ${level}</h3><p>${tw.text}</p><p>Clear it for a <b>+${CHALLENGE_COINS} 🪙</b> bonus.${T!==oldT?` New target: make <b>${T}</b>!`:''}</p><div class="btns"><button class="btn" id="tw-go">Let's go</button></div>`),$('tw-go').onclick=closeSheet;
   else if(T!==oldT){news(`Level ${level}\nNew target: make ${T}!`,true);bumpEl($('targetbox'));$('targetbox').classList.remove('newt');void $('targetbox').offsetWidth;$('targetbox').classList.add('newt')}
@@ -1987,9 +1995,9 @@ function resumeGame(key='nb-save',welcome=true){
   goals=g.goals.map(x=>({...GOALS.find(d=>d.id===x.id),...x}));
   rng=mulberry(g.seed);tut=null;over=false;busy=false;erasing=false;movable=null;$('over').hidden=true;
   best=Math.max(store.get(bestKey(),0),score);
-  introPending=!!g.introPending;
+  introPending=g.introPending===true?-1:(g.introPending||false);   // older saves stored true
   renderModeTab();finishTurn();
-  if(introPending&&!over)levelIntro(-1);
+  if(introPending!==false&&!over)levelIntro(introPending);
   else if(!over&&welcome)news(`Welcome back!\nLevel ${level} · make ${T}`);
   return true;
 }
