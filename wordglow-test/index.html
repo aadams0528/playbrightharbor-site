@@ -92,8 +92,11 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .hint { margin: 0; font-size: 1.1rem; line-height: 1.3; text-wrap: balance; position: absolute; left: 0; right: 0; top: var(--hint-top, 4px); z-index: 5;
   min-height: var(--hint-h, 90px); box-sizing: border-box; padding: 4px 2px; background: var(--bg); display: grid; align-content: center; border-radius: 12px; }
 .hint:empty { display: none; }
-/* With a rule under the level bar, the hint stops just above it, so the rule stays in view (Nikola round 14). */
-.hint.short { min-height: 0; height: var(--hint-hs, 70px); overflow: hidden; font-size: 1.05rem; line-height: 1.2; padding: 2px; }
+/* The hint sits over the title row only, so the level line stays in view (Nikola round 15).
+   A hint too long for that row grows down to just above the rule chip (Nikola round 14), and never clips its text. */
+.hint.short { min-height: 0; height: var(--hint-hs, 40px); overflow: hidden; font-size: 1.05rem; line-height: 1.15; padding: 0 2px; }
+.hint.short.grow { height: var(--hint-hg, 70px); }
+.hint.short.grow.fit { height: auto; min-height: var(--hint-hg, 70px); overflow: visible; }
 .hint.basic { animation: hintFade 5s ease-out forwards; pointer-events: none; }
 .hint.basic.seen { display: none; }
 @keyframes hintFade { 0% { opacity: 0; background: color-mix(in srgb, var(--gold) 45%, var(--bg)); } 8% { opacity: 1; background: color-mix(in srgb, var(--gold) 45%, var(--bg)); }
@@ -150,7 +153,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
   font-family: var(--font-display); font-weight: 800; font-size: 1.7rem; color: var(--gold);
   text-shadow: 0 2px 0 var(--board), 0 0 12px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap;
-  animation: rise 1.1s ease-out forwards;
+  animation: rise 1.1s ease-out forwards; z-index: 30;   /* score messages show over a definition card (Nikola round 15) */
 }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, -30%); } 15% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -120%); } }
 /* Cash-in celebrations pop in, hold still long enough to read, then float away. */
@@ -269,7 +272,8 @@ body.tut .tools { display: none; }
 /* Holiday decorations: a garland over the board, a colored frame, a few slow falling bits */
 body.deco.has-rule .board-wrap { margin-top: 14px; }   /* room for the garland, so it never sits on the rule under the level bar (Nikola round 14) */
 body.deco .board { box-shadow: 0 0 0 4px var(--deco1), 0 0 0 7px var(--deco2); }
-#deco { position: absolute; top: -17px; left: 0; right: 0; text-align: center; font-size: 22px; letter-spacing: 0.35em; line-height: 1; pointer-events: none; z-index: 4; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+body.chain-on #deco { opacity: 0; }   /* the chain line takes the garland's spot (Nikola round 15) */
+#deco { transition: opacity 0.3s; position: absolute; top: -17px; left: 0; right: 0; text-align: center; font-size: 22px; letter-spacing: 0.35em; line-height: 1; pointer-events: none; z-index: 4; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
 #deco-fall { position: fixed; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
 #deco-fall span { position: absolute; top: -40px; font-size: 20px; opacity: 0.35; animation: decoFall linear infinite; }
 @keyframes decoFall { from { transform: translateY(0) rotate(0); } to { transform: translateY(110vh) rotate(300deg); } }
@@ -462,7 +466,7 @@ button.pill { cursor: pointer; }
     <div class="small"><div class="label">Best</div><div class="num" id="best">0</div></div>
   </div>
 
-  <p id="hint" class="hint"></p>
+  <p id="hint" class="hint short" role="status" aria-live="polite"></p>
 
   <div id="sr-live" class="sr-only" role="status" aria-live="polite"></div>
   <div class="board-wrap">
@@ -597,15 +601,16 @@ const baseTarget = () => level <= 8 ? 30 + 15 * (level - 1) : 135 + 10 * (level 
 // targets 25% higher, 1.5x level coins. A change takes effect from the next level.
 const CHALLENGE_FROM = 30, CHALLENGE_COINS = 20, EXPERT_KEY = "wb-expert";
 const TWISTS = [
-  { id: "long4", short: "Long words only", tag: "4+ letters", text: "Long words only: words need <b>4 or more letters</b> this level." },
-  { id: "needE", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
-  { id: "bombs", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
-  { id: "big", short: "Big words pay double", tag: "Big words x2", text: "Big words pay: words of <b>6+ letters score double</b> this level." },
-  { id: "crowded", short: "Crowded board", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
+  { id: "long4", line: "Words need 4 or more letters.", short: "Long words only", tag: "4+ letters", text: "Long words only: words need <b>4 or more letters</b> this level." },
+  { id: "needE", line: "Words without an E don't count.", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
+  { id: "bombs", line: "A 💣 word blasts the squares around it, +3 each.", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
+  { id: "big", line: "Words of 6+ letters score double.", short: "Big words pay double", tag: "Big words x2", text: "Big words pay: words of <b>6+ letters score double</b> this level." },
+  { id: "crowded", line: "10 extra letters to use or clear.", short: "Crowded board", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
   // Placement twists (Muse round 13 idea; Alan chose both 2026-11-14).
-  { id: "ice", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
-  { id: "norefill", short: "No refills", chip: "No refills: score a word for new pieces", tag: "No refills", text: "No refills: new pieces come only <b>after you score a word</b>. Plan where all 3 go." },
+  { id: "ice", line: "Frozen ❄️ letters stay; using one thaws it, +5.", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
+  { id: "norefill", line: "New pieces come only after you score a word.", short: "No refills", chip: "No refills: score a word for new pieces", tag: "No refills", text: "No refills: new pieces come only <b>after you score a word</b>. Plan where all 3 go." },
 ];
+let picking = false;   // the pick card is open
 let expert = store.get(EXPERT_KEY, false);   // the switch as it applies to the level being played
 const expertOn = () => expert && mode === "endless" && !tut;
 function twist() {
@@ -1253,9 +1258,10 @@ function renderScores() {
   // Short marks keep the line on one row: 🔥 = Expert, ⚡ = challenge level (the hint line spells out the twist).
   // Expert and the challenge rule show in words under the bar, for the whole level (Nikola and Cooper round 13).
   const pending = mode === "endless" && !tut && store.get(EXPERT_KEY, false) !== expert;
-  const chips = [expertOn() && `🔥 Expert${pending ? " (off next level)" : ""}`, !expertOn() && pending && "🔥 Expert starts next level", twist() && `⚡ ${twist().chip || twist().short}`].filter(Boolean);
+  const tw = picking ? null : twist();   // the pick card hasn't been answered yet: no twist named behind it (Nikola round 15)
+  const chips = [expertOn() && `🔥 Expert${pending ? " (off next level)" : ""}`, !expertOn() && pending && "🔥 Expert starts next level", tw && `⚡ ${tw.chip || tw.short}`].filter(Boolean);
   document.getElementById("level").innerHTML = `Level ${level}${mode === "daily" ? ` of ${DAILY_LEVELS}` : ""} · ${Math.min(levelPts(), target())} of ${target()} points<span class="lvbar"><i style="width:${pct}%"></i></span>${chips.length ? `<span class="twrule"><span class="sr-only">. </span>${chips.map(c => `<span class="chip-rule">${c}</span>`).join(`<span class="sr-only">. </span>`)}</span>` : ""}`;
-  document.getElementById("hint").classList.toggle("short", chips.length > 0); document.body.classList.toggle("has-rule", chips.length > 0);
+  document.body.classList.toggle("has-rule", chips.length > 0); fitHint();
 }
 function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores(); sizeCells(); }
 // A Rotate, Shuffle or Eraser changes the tray or board between moves: the soft hint is worked out again,
@@ -1295,8 +1301,11 @@ function sizeCells() {
   const hd = document.querySelector("header");
   document.documentElement.style.setProperty("--hint-top", hd.offsetTop + "px");
   document.documentElement.style.setProperty("--hint-h", sc.offsetTop + sc.offsetHeight - hd.offsetTop + "px");
-  const chip = document.querySelector("#level .twrule");   // a hint on a rule level stops just above the rule
-  document.documentElement.style.setProperty("--hint-hs", (chip ? chip.getBoundingClientRect().top - hd.getBoundingClientRect().top - 2 : hd.offsetHeight) + "px");
+  const chip = document.querySelector("#level .twrule"), top = hd.getBoundingClientRect().top;
+  // The hint covers the title row; a long one grows to just above the rule (or over the score row on a normal level).
+  document.documentElement.style.setProperty("--hint-hs", Math.max(hd.offsetHeight, document.getElementById("level").getBoundingClientRect().top - top - 2) + "px");
+  document.documentElement.style.setProperty("--hint-hg", (chip ? chip.getBoundingClientRect().top - top - 2 : sc.offsetTop + sc.offsetHeight - hd.offsetTop) + "px");
+  fitHint();
   const a = cellEls[0].getBoundingClientRect();
   document.documentElement.style.setProperty("--cell", a.width + "px");
 }
@@ -1864,6 +1873,14 @@ function cashIn(group) {
   }, wordDone + (extra.length ? 450 : 320));
 }
 
+// A hint too long for the title row grows down to the rule chip; one too long for that shows in full (Nikola round 15).
+function fitHint() {
+  const h = document.getElementById("hint");
+  h.classList.remove("grow", "fit");
+  if (!h.textContent.trim() || !h.offsetHeight) return;
+  if (h.scrollHeight > h.clientHeight + 1) h.classList.add("grow");
+  if (h.scrollHeight > h.clientHeight + 1) h.classList.add("fit");
+}
 function setHint() {
   const h = document.getElementById("hint");
   document.body.classList.toggle("tut", !!tut);
@@ -1888,7 +1905,9 @@ function setHint() {
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
   else if (!found.length && level === 1) h.innerHTML = `Score <b>${target()} points</b> to clear level 1 and get a fresh board.`;
-  else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.";
+  else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the piece you just placed.";
+  // The how-to line is for new players; past level 5 the hint only speaks when it has news (Nikola round 15).
+  else if (mode === "endless" && store.get("wb-best-level", 1) > 5) h.innerHTML = "";
   else h.innerHTML = "Spell words <b>across</b> or <b>down</b>. <b>Tap</b> a glowing word to score it.";
   // The everyday reminders repeat what the level line already says; very short screens hide them.
   // The everyday "how to play" line glows and fades once per level, then stays out of the way.
@@ -1899,7 +1918,8 @@ function setHint() {
     else { h.dataset.bk = key; h.classList.remove("seen", "basic"); void h.offsetWidth; }   // restart the glow
     h.classList.add("basic");
   } else h.classList.remove("basic", "seen");
-  h.innerHTML = `<span>${h.innerHTML}</span>`;   // one block, so the floating hint can center it
+  h.innerHTML = h.innerHTML && `<span>${h.innerHTML}</span>`;   // one block, so the floating hint can center it
+  fitHint();
 }
 let moveHints = store.get("wb-move-hints", 0), specialSeen = store.get("wb-special-seen", false), specialIntro = false;
 let stuckWords = null;   // no piece fits but words glow: the hint names them until one is scored (Nikola round 14)
@@ -1912,9 +1932,10 @@ function finishTurn() {
   if (movable && moveHints < 3) store.set("wb-move-hints", ++moveHints);
   if (!over && levelPts() >= target()) return levelUp();
   // No refills: an empty tray waits for a scored word, unless nothing on the board can be scored (never stuck).
+  const wasHeld = refillHeld;
   refillHeld = tray.every(p => p.used) && twist()?.id === "norefill" && !scoredSinceDeal && scanWords(board).length > 0;
   if (tray.every(p => p.used) && !refillHeld) { tray = dealTray(); rotPaid = null; scoredSinceDeal = false; }
-  if (refillHeld) setHint();
+  if (refillHeld || wasHeld) setHint();   // the held hint goes away as soon as new pieces come (Cooper round 15)
   const rescued = rescueTray();
   // After a swap, the row or column where the new piece makes a word glows too (Muse round 10).
   const hadHint = softHint;
@@ -1953,15 +1974,18 @@ function spendCoins(n) { if (coins < n) return false; coins -= n; store.set("wb-
 
 // ---------- sheets and sample ads (the real app plays a video ad from an ad network here) ----------
 // locked: the sheet needs an answer (an ad playing, level complete), so tapping the backdrop does nothing.
-let sheetLocked = false;
+let sheetLocked = false, sheetOpener = null;
 function openSheet(html, locked = false) {
+  if (document.getElementById("modal").hidden) sheetOpener = document.activeElement;   // focus goes back here on close (Nikola round 15)
   sheetLocked = locked; openTab = null; document.getElementById("sheet").innerHTML = html;
   const m = document.getElementById("modal"); m.hidden = false; m.classList.remove("dock"); m.style.paddingBottom = ""; document.getElementById("sheet").style.maxHeight = ""; m.scrollTop = 0; document.getElementById("sheet").scrollTop = 0;
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-expanded", false));
 }
 function closeSheet() {
   sheetLocked = false; openTab = null;
-  const m = document.getElementById("modal"); m.hidden = true; m.classList.remove("dock"); m.style.paddingBottom = ""; document.getElementById("sheet").style.maxHeight = "";
+  const m = document.getElementById("modal");
+  if (!m.hidden && sheetOpener && sheetOpener !== document.body && document.contains(sheetOpener)) sheetOpener.focus({ preventScroll: true });
+  sheetOpener = null; m.hidden = true; m.classList.remove("dock"); m.style.paddingBottom = ""; document.getElementById("sheet").style.maxHeight = "";
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-expanded", false));
 }
 function watchAd(onReward, onSkip = () => {}, title = "Sample ad", forced = false) {
@@ -2268,6 +2292,12 @@ function toastSheet(text) { let p = document.getElementById("inv-err"); if (!p) 
 document.getElementById("invitebtn").onclick = showInvite;
 if (!INVITES_LIVE) { document.getElementById("invitebtn").hidden = true; invitePending = false; }
 document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal" && !sheetLocked) closeSheet(); });
+// Escape closes a meaning card or any pop-up that a backdrop tap would close (Nikola round 15).
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (document.querySelector(".defcard:not(.out)")) return hideDefinitions();
+  if (!document.getElementById("modal").hidden && !sheetLocked) closeSheet();
+});
 
 // Level done: clear what's left with a flourish, then a fresh, seeded board and a slightly bigger target.
 function levelUp() {
@@ -2351,16 +2381,17 @@ function nextTwist() {
   return t;
 }
 // One plain line of what a twist does, for the pick card's buttons (Muse round 14).
-const ruleLine = t => t.text.replace(/<[^>]+>/g, "").replace(new RegExp("^" + t.short + ":\\s*", "i"), "").replace(/ this level\.?$/, ".").replace(/^[a-z]/, m => m.toUpperCase());
+// One short line each, so a button never runs to two sentences (Nikola round 15).
+const ruleLine = t => t.line;
 function pickTwist() {
   busy = true;
   board = Array.from({ length: N }, () => Array(N).fill(null));
-  tray.forEach(p => p.used = true); movable = null; stuckWords = null; refillHeld = false; softHint = null;
+  tray.forEach(p => p.used = true); movable = null; stuckWords = null; refillHeld = false; softHint = null; picking = true;
   renderAll(); document.getElementById("hint").innerHTML = "";   // no stale pieces, level line or hint behind the card (Nikola round 14)
   const [a, b] = twistChoices();
   openSheet(`<h3>⚡ Pick your challenge</h3><p>Level ${level} is a challenge level. Which twist do you want? Both pay +${CHALLENGE_COINS} 🪙.</p>
     <div class="btns"><button class="btn pick" id="pick-a">${a.short}<small>${ruleLine(a)}</small></button><button class="btn pick" id="pick-b">${b.short}<small>${ruleLine(b)}</small></button></div>`, true);
-  const choose = t => { picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
+  const choose = t => { picking = false; picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
   document.getElementById("pick-a").onclick = () => choose(a);
   document.getElementById("pick-b").onclick = () => choose(b);
 }
@@ -2438,6 +2469,7 @@ const CHAIN_MOVES = 2, CHAIN_MAX = 4;
 let chain = 0, chainMoves = 0;
 const chainMult = () => 1 + 0.5 * chain;
 function renderChain() {
+  document.body.classList.toggle("chain-on", !!(chain && !tut));
   document.getElementById("chain").textContent = chain && !tut
     ? `🔗 Chain x${chainMult()} · ${chainMoves ? `${chainMoves} move${chainMoves === 1 ? "" : "s"} left` : (lit.length ? "tap a word now" : "next piece ends it")}` : "";
 }
@@ -2801,7 +2833,7 @@ boardEl.addEventListener("click", e => {
       setTimeout(() => el.classList.remove("nope"), 400);
       // The level's rule comes first, so a challenge or Expert reject always names it (Nikola round 13).
       // Name a rule only when a real word through this letter breaks it (Nikola round 14), and both rules when both apply.
-      const why = brokenRules(r, c), both = minLen() > 3 && twist()?.id === "needE";
+      const why = brokenRules(r, c), both = why.size === 2;
       const rule = !why.size ? "" : both ? "Words need 4+ letters and an E" : why.has("long") ? "Words need 4+ letters" : "Every word needs an E";
       const mine = movableCells().some(([R, C]) => R === r && C === c);
       toast(rule ? `${rule}\n${mine ? "Drag it to move it" : "Not a word here"}` : mine ? "Not a word yet. Drag it to move it" : "Not a word yet");
@@ -2854,7 +2886,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "3ac7419 2026-11-14 16:34Z";
+const BUILD_STAMP = "ea83fa9 2026-11-14 17:40Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
