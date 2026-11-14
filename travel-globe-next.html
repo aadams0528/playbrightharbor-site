@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.21.1 (Cooper r19 fixes: no duplicate on re-import) -->
+<!-- Tripsake v0.21.2 (Muse + Nikola r19 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1001,12 +1001,13 @@ function shNth(y, month, weekday, n){ const first = new Date(y, month, 1), off =
 function shToday(){ const d = window.TG_DATE ? new Date(window.TG_DATE + "T12:00:00") : new Date(); d.setHours(12, 0, 0, 0); return d; }
 function shHoliday(){ const d = shToday(); for (const h of SH_DECOS) for (const y of [d.getFullYear() - 1, d.getFullYear(), d.getFullYear() + 1]){ const at = h.at(y); at.setHours(12, 0, 0, 0); const days = Math.round((at - d) / 864e5); if (days <= h.before && days >= -h.after) return {...h, days}; } return null; }
 // the season in the north; the south is the opposite
-const SH_SEASONS = ["winter", "spring", "summer", "autumn"], SH_TINT = {winter:"rgba(226,240,255,.34)", spring:"rgba(130,214,150,.26)", summer:"rgba(255,206,110,.28)", autumn:"rgba(232,146,64,.30)"};
+let SH_T0 = performance.now(); document.addEventListener("visibilitychange", () => { if (!document.hidden) SH_T0 = performance.now(); }); const shLeft = () => 30000 - (performance.now() - SH_T0);
+const SH_SEASONS = ["winter", "spring", "summer", "autumn"], SH_TINT = {winter:"rgba(226,240,255,.34)", spring:"rgba(130,214,150,.26)", summer:"rgba(255,206,110,.28)", autumn:"rgba(186,92,78,.30)"};
 function shSeason(){ const m = shToday().getMonth(), n = SH_SEASONS[Math.floor(((m + 1) % 12) / 3)]; return {north:n, south:SH_SEASONS[(SH_SEASONS.indexOf(n) + 2) % 4]}; }
 const SH_NORTH = d3.geoCircle().center([0, 90]).radius(90)(), SH_SOUTH = d3.geoCircle().center([0, -90]).radius(90)();
 function shDesc(){ const s = shSeason(), h = shHoliday(); return `The real seasons on each half of the world: now ${s.north} in the north and ${s.south} in the south.${h ? ` ${h.days > 0 ? `${h.name.replace(/^(Happy|Merry) /, "")} is coming` : h.name + "!"}, so the globe is dressed for it.` : " Holidays add a little decoration."} Pick another style to turn it off.`; }
 THEMES.seasons = {name:"Seasons & Holidays", get desc(){ return shDesc(); }, dark:true, pin:"#f2b24a", route:THEMES.night.route, diary:THEMES.night.diary, ink:"#eef1f8", label:THEMES.night.label,
-  get animated(){ return !!shHoliday() && !REDUCED(); },
+  get animated(){ return !!shHoliday() && !REDUCED() && shLeft() > 0 && !document.querySelector("#overlay .sheet"); }, /* a short shower: 30 seconds after you open the app or pick the style, and never under a sheet, so the phone stays cool (Nikola r19) */
   base(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(), s = shSeason(); x.fillStyle = "#060a14"; x.fillRect(0,0,W,H); starfield(x, W, H, t, "#cfd8ff");
    const glow = h ? h.c1 : "#7aa0ff", atm = x.createRadialGradient(cx,cy,R*.92,cx,cy,R*1.18); atm.addColorStop(0, h ? glow + "66" : "rgba(120,160,255,.28)"); atm.addColorStop(1,"rgba(120,160,255,0)"); x.fillStyle = atm; x.beginPath(); x.arc(cx,cy,R*1.18,0,7); x.fill();
    const oc = x.createRadialGradient(cx-R*.3,cy-R*.35,R*.1,cx,cy,R); oc.addColorStop(0,"#13224a"); oc.addColorStop(1,"#08112a"); x.beginPath(); path(sphere); x.fillStyle = oc; x.fill();
@@ -1016,7 +1017,7 @@ THEMES.seasons = {name:"Seasons & Holidays", get desc(){ return shDesc(); }, dar
    countries.forEach(f => { const v = lit.get(f.id); if (!v) return; x.beginPath(); path(f); x.fillStyle = `rgba(242,178,74,${.18 + .5*v})`; x.shadowColor = "rgba(242,178,74,.8)"; x.shadowBlur = 18*v; x.fill(); x.shadowBlur = 0; x.strokeStyle = `rgba(255,216,140,${.7*v})`; x.lineWidth = .8; x.stroke(); }); /* your places light up exactly as on Night Lights */
    x.beginPath(); path(borders); x.strokeStyle = "rgba(160,180,225,.16)"; x.lineWidth = .5; x.stroke();
    if (h){ x.beginPath(); path(sphere); x.strokeStyle = h.c2 + "aa"; x.lineWidth = 2; x.stroke(); } },
-  overlay(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(); if (!h || W < 200) return; const bits = h.fall, n = REDUCED() ? 0 : 7; x.save(); x.globalAlpha = .55; x.font = `${Math.max(14, Math.min(22, W / 24))}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; x.textAlign = "center";
+  overlay(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(); if (!h || W < 200) return; const bits = h.fall, n = REDUCED() ? 0 : 7, fade = Math.min(1, shLeft() / 3000); if (fade <= 0) return; x.save(); x.globalAlpha = .55 * fade; x.font = `${Math.max(14, Math.min(22, W / 24))}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; x.textAlign = "center";
    for (let i = 0; i < n; i++){ const sp = .5 + (i * 37 % 10) / 20, px = ((i * 137 + 23) % 100) / 100 * W, py = ((t / 45) * sp + i * (H + 40) / n) % (H + 40) - 20, sway = Math.sin(t / 1400 + i) * 14; x.fillText(bits[i % bits.length], px + sway, py); } x.restore(); }};
 const THEME_ORDER = ["night","atlas","toy","scratch","dots","seasons"];
 let themeKey = store.get("theme", "night"); if (!THEMES[themeKey]) themeKey = "night";
@@ -1116,7 +1117,8 @@ function loop(t){
   else if (spinning && !dragging && !REDUCED()){ rot[0] += dt * .006; dirty = true; if (!spinFor) spinFor = performance.now(); if (performance.now() - spinFor > 12000 && !introRunning){ spinning = false; spinFor = 0; } } // 12 s of clock time, however slow the frames
   if (!spinning) spinFor = 0;
   if (document.hidden){ requestAnimationFrame(loop); return; }
-  if (introRunning || selectedTrip || replayState || Math.abs(shiftY) > .5 || TH().animated) dirty = true;
+  if (introRunning || selectedTrip || replayState || Math.abs(shiftY) > .5) dirty = true;
+  else if (TH().animated && t - (lastDraw || 0) > 33) dirty = true; /* the falling leaves only need about 30 frames a second */
   if (dirty){ draw(t); dirty = false; lastDraw = t; }
   requestAnimationFrame(loop);
 }
@@ -1419,7 +1421,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1481,9 +1483,21 @@ function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vr
 (function(){ let y0 = null, el = null, dy = 0;
   document.addEventListener("pointerdown", e => { const h = e.target.closest(".sheet-grip, .sheet-in h2"); if (!h || e.target.closest("button,input,textarea,select")) return; el = h.closest(".sheet-in"); if (!el) return; y0 = e.clientY; dy = 0; el.style.transition = "none"; });
   document.addEventListener("pointermove", e => { if (y0 == null || !el) return; dy = Math.max(0, e.clientY - y0); el.style.transform = dy ? `translateY(${dy}px)` : ""; });
-  const end = () => { if (y0 == null || !el) return; const s = el; y0 = null; el = null; s.style.transition = "transform .18s"; if (dy > 90){ s.style.transform = "translateY(100%)"; setTimeout(closeSheet, 160); } else s.style.transform = ""; };
+  const end = () => { if (y0 == null || !el) return; const s = el; y0 = null; el = null; s.style.transition = "transform .18s"; if (dy > 90 && !unsavedWhat()){ s.style.transform = "translateY(100%)"; setTimeout(closeSheet, 160); } else { s.style.transform = ""; if (dy > 90) leaveAsk(); } };
   document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end); })();
 let SAVING = false;
+/* what an open import review would add if saved, in words ("your 2 ticked trips"); empty when nothing would be lost */
+function unsavedWhat(){ const L = loadState; if (!document.querySelector("[data-ld-add]") || !L || !L.trips || !L.trips.length || SAVING) return "";
+  const on = L.trips.filter(t => tripTicked(L, t)), fresh = on.filter(t => !t.repeat || t.forceJoin).length, more = on.filter(t => t.repeat && !t.forceJoin).reduce((a, t) => a + repeatNew(t), 0); /* only what would really be added: ticked trips that are new, and new photos for ones already on your globe (Cooper, Muse, Nikola r19) */
+  const mem = L.homeMem || (on.length && on.every(t => t.homeMem));
+  return [fresh && (fresh === 1 ? (mem ? "your memory" : "your ticked trip") : (mem ? `your ${fresh} memories` : `your ${fresh} ticked trips`)), more && (more === 1 ? "1 new photo" : `${more} new photos`)].filter(Boolean).join(" and "); }
+/* ask before leaving an import review that isn't saved: from the Back bar, a tap on the background, Escape or ✕ (Nikola r19) */
+function leaveAsk(){ const what = unsavedWhat(); if (!what) return false; const n = what.match(/\d+/), many = /memories|trips|photos/.test(what) && !/^your (memory|ticked trip)$/.test(what);
+  let bar = document.querySelector(".sheet .backbar") || document.querySelector(".backbar"); if (!bar){ const sh = document.querySelector(".sheet"); if (!sh) return false; bar = document.createElement("div"); bar.className = "backbar"; bar.dataset.made = "1"; sh.prepend(bar); }
+  bar.innerHTML = `<p style="margin:0 0 8px;font-weight:600">${what[0].toUpperCase() + what.slice(1)} ${many ? "aren't" : "isn't"} saved yet. Leave anyway?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`;
+  bar.scrollIntoView && bar.scrollIntoView({block:"nearest"}); return true; }
+/* a close the person asked for (✕, background tap, Escape, swipe down): an unsaved import asks first */
+function userClose(){ if (leaveAsk()) return false; closeSheet(); return true; }
 function closeSheet(force){ if (SAVING && force !== true){ toast("Saving your photos. One moment, it finishes by itself"); return; } if (typeof vrec !== "undefined" && vrec) vrecCancel(); if ($("#overlay").dataset.kind === "homeq" && loadState && loadState.awaitHome && loadState.pts && loadState.pts.length){ homeNext = null; openWelcome(); return; } /* closing the home question never loses the photos already read: back to the start, with a way to carry on */ if ($("#overlay").dataset.kind === "home" && homeNext === "memory" && loadState && loadState.memPending){ openMemHeld(); return; } /* closing "Where's home?" on a memory keeps its name and photos */ if ($("#overlay").dataset.kind === "memheld" && loadState && loadState.memPending && force !== true){ delete loadState.memPending; setTimeout(() => toast("Memory not saved. Your photos are still in your photo library"), 0); } const wasTrip = $("#overlay").dataset.kind === "trip"; if (["welcome", "loader", "home"].includes($("#overlay").dataset.kind)) setTimeout(() => { if (!document.querySelector(".sheet")) lightSample(); }, 0); $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip) document.querySelectorAll(".toast.undo").forEach(x => { if (!x.querySelector(".tbar") && !/Heads up/.test(x.textContent)) undoCountdown(x, 10000); }); /* leaving the trip never loses an Undo: it now counts down 10 seconds */ if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
 function flyToStops(st, ms = 1300){ if (!st.length) return; const lats = st.map(s => s.lat), lons = st.map(s => s.lon);
   flyTo(d3.mean(lons), d3.mean(lats), Math.min(14, 2.2 / Math.max(.15, d3.geoDistance([d3.min(lons), d3.min(lats)], [d3.max(lons), d3.max(lats)]) * 3)), ms); }
@@ -1535,7 +1549,7 @@ function openTrip(id, noFly){
   openSheet(`${BACKBAR}<div class="hero"><img src="${photo(coverPh.scene, coverPh.id, 960, 540)}" alt=""><div class="cap"><h2>${esc(t.title)}</h2><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${dRange(t.start, t.end, true)} · ${esc(t.country)}`}${ppl.length ? " · with " + esc(ppl.join(", ")) : ""}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
    <div class="pad">
     <div class="facts"><div><b>${days(t)}</b><span>${days(t) === 1 ? "Day" : "Days"}</span></div><div><b>${st.length}</b><span>${st.length === 1 ? "Place" : "Places"}</span></div><div><b>${n}</b><span>${n === 1 ? "Photo" : "Photos"}</span></div>${t.homeMem ? "" : `<div><b>${tripMiles(t).toLocaleString()}</b><span>${tripMiles(t) === 1 ? "Mile" : "Miles"}</span></div>`}</div>
-    <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>
+    <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>${musicMuted ? `<p class="note" data-mutenote style="margin:0">🔇 Sound is off for stories. <button class="btn" data-unmute style="min-height:40px">Turn sound on</button></p>` : ""}
     <div class="row-btns" style="margin:0">${t.real ? `<label class="btn" style="cursor:pointer;flex:1;justify-content:center">＋ Add photos<input type="file" id="tripAddFiles" data-trip="${t.id}" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}<button class="btn" style="flex:1" data-trip-more aria-expanded="${tripMoreOpen}" data-trip-id="${t.id}">More for this ${t.homeMem ? "memory" : "trip"} ${tripMoreOpen ? "▴" : "▾"}</button></div>
     <div class="tripmore" ${tripMoreOpen ? "" : "hidden"}>
       <div class="tmhead">Make and share</div>
@@ -1947,7 +1961,8 @@ function openHomeMem(){
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("A memory close to home")}<div class="steps">A night out, a birthday, a ball game</div>
     <p class="note" style="margin:0">${NATIVE_LIB ? "Pick the day, and Tripsake gets that day's photos." : "Pick the photos from one day or night."} It's kept with your trips under <b>Close to home</b>, and it doesn't count toward your countries or miles. Nothing is uploaded.</p>
     <div><label class="l" for="ldManTitle">Name it</label><input type="text" id="ldManTitle" maxlength="80" placeholder="Girls Night Out"></div>
-    <label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="ldAsTrip" style="width:22px;height:22px;accent-color:var(--lit)"><span>We stayed overnight (a hotel downtown, say): make it a <b>trip</b> instead</span></label>
+    <div class="l" style="margin:0">Did you stay away overnight?</div><div class="row-btns" style="margin:0" role="group" aria-label="Memory or trip"><button class="btn primary" data-mem-kind="mem" aria-pressed="true" style="flex:1;justify-content:center;min-height:48px">🏠 No, a memory</button><button class="btn" data-mem-kind="trip" aria-pressed="false" style="flex:1;justify-content:center;min-height:48px">🛏️ Yes, make it a trip</button></div><input type="checkbox" id="ldAsTrip" hidden>
+    <p class="note" id="ldMemKindNote" style="margin:0">${store.get("realHome", null) ? "A day or night out near home, kept under Close to home." : "Home isn't set yet. After you pick the photos, we'll ask where home is, so the memory sits in the right place."}</p>
     ${NATIVE_LIB ? `<div><label class="l" for="ldMemDay">Which day?</label><input type="date" id="ldMemDay" value="${(() => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); })()}"></div>
     <button class="btn primary ldgo" data-ld-native>Get that day's photos</button>
     <p class="note" style="margin:0">Photos from that day and night (until 6 in the morning) are used. Photos without a location are placed at home.</p>
@@ -1967,6 +1982,12 @@ function openMemHeld(){ const m = loadState.memPending; homeNext = null;
     <div><label class="l" for="ldMemHeldTitle">Name it</label><input type="text" id="ldMemHeldTitle" maxlength="80" placeholder="Girls Night Out" value="${esc(m.title || "")}"></div>
     <button class="btn primary" data-mem-held-home style="align-self:stretch;justify-content:center;min-height:48px">Set home and save my memory</button>
     <button class="btn" data-mem-held-drop style="align-self:flex-start">Don't save this memory</button></div>`, "memheld"); }
+/* mute is shown outside the player too, so a quiet story never looks broken (Muse r19) */
+document.addEventListener("click", e => { if (!(e.target.closest && e.target.closest("[data-unmute]"))) return; music.setMuted(false); document.querySelectorAll("[data-mutenote]").forEach(x => x.remove()); toast("Sound on for stories"); });
+/* the memory form's one question: a memory near home, or an overnight stay that's a trip (two plain buttons, Muse r19) */
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-mem-kind]"); if (!b) return; const trip = b.dataset.memKind === "trip", cb = $("#ldAsTrip"); if (cb) cb.checked = trip;
+  document.querySelectorAll("[data-mem-kind]").forEach(x => { const on = (x.dataset.memKind === "trip") === trip; x.classList.toggle("primary", on); x.setAttribute("aria-pressed", on ? "true" : "false"); });
+  const n = $("#ldMemKindNote"); if (n) n.textContent = trip ? "It will be saved as a trip, with its own place on your globe." : store.get("realHome", null) ? "A day or night out near home, kept under Close to home." : "Home isn't set yet. After you pick the photos, we'll ask where home is, so the memory sits in the right place."; });
 document.addEventListener("input", e => { if (e.target.id === "ldMemHeldTitle" && loadState && loadState.memPending) loadState.memPending.title = e.target.value.trim(); });
 document.addEventListener("click", e => { if (!e.target.closest) return; if (e.target.closest("[data-mem-held-home]")){ if (loadState && loadState.memPending) openHomeSheet("memory"); }
   else if (e.target.closest("[data-mem-held-drop]")){ closeSheet(); }
@@ -2162,7 +2183,7 @@ function fillThumbs(){ const L = loadState; if (!L) return; document.querySelect
   if (THUMBS.has(f)){ put(THUMBS.get(f)); return; }
   thumbQ = thumbQ.then(async () => { if (!THUMBS.has(f)) THUMBS.set(f, await thumb(f, 480)); put(THUMBS.get(f)); }); }); }
 function drawTiles(){ const L = loadState; if (!L) return; document.querySelectorAll("[data-nl]").forEach(el => { const p = (L.noLocAll || [])[+el.dataset.nl]; if (!p) return; const to = nlFate(L, p), t = to && tripTicked(L, to) ? to : null;
-  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = t ? "Goes into " + t.title : to ? `Left out: ${to.title} isn't ticked` : "Left out";
+  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = t ? "Goes into " + t.title : L.savedNoLoc && L.savedNoLoc.has(p.file) ? `Already on your globe in ${L.savedNoLoc.get(p.file)}` : to ? `Left out: ${to.title} isn't ticked` : "Left out";
   const kb = el.querySelector("[data-nl-keep]"), ob = el.querySelector("[data-nl-out]"); if (kb){ kb.classList.toggle("primary", !!t); kb.setAttribute("aria-pressed", t ? "true" : "false"); } if (ob){ ob.classList.toggle("primary", !t); ob.setAttribute("aria-pressed", t ? "false" : "true"); } });
   const n = $("#ldNoLocFate"); if (n) n.textContent = noLocFate(L); }
 /* set where one no-location photo goes: v = trip index, or -1 to leave it out */
@@ -2206,7 +2227,7 @@ function whyFate(L, w){ const f = w.file; if (!f) return null; const pin = $("#l
 function nearLeftPts(L){ if (!L || L.manual || !L.home || !L.trips) return []; const inT = new Set(L.trips.flatMap(t => t.pts || [])); return (L.pts || []).map((p, k) => ({p, k})).filter(({p}) => !inT.has(p) && d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM <= 100); }
 function whyHTML(L){ const why = ((L && L.why) || []).map((w, k) => ({w, k})).filter(x => x.w && x.w.out), near = nearLeftPts(L); if (!why.length && !near.length) return "";
   const grid = (list, attr) => `<div class="nlgrid">${list.slice(0, 24).map(x => `<div class="nltile"><div class="nlimg"><img ${attr}="${x.k}" alt=""></div><div class="nlcap">${(x.w || x.p).t ? esc(nlDate((x.w || x.p).t)) : ""}</div></div>`).join("")}</div>${list.length > 24 ? `<p class="note">and ${(list.length - 24).toLocaleString()} more</p>` : ""}`;
-  return `<details id="ldWhy" style="margin-top:10px"${whyHTML.open ? " open" : ""}><summary>${plural(why.length + near.length, "photo")} left out, and why</summary>
+  return `<details id="ldWhy" style="margin-top:10px"${whyHTML.open ? " open" : ""}><summary>${(() => { const n = why.length + near.length, all = Math.max(0, (L.total || 0) - (L.lastSaved || 0)); return all > n ? `${n.toLocaleString()} of the ${all.toLocaleString()} photos left out, and why` : `${plural(n, "photo")} left out, and why`; })()}</summary>
     ${near.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(near.length, "photo")} taken near home</b>, so ${near.length === 1 ? "it isn't" : "they aren't"} part of a trip. To keep a day near home, use Add → A memory close to home.</p>${grid(near, "data-near-thumb")}` : ""}
     ${why.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(why.length, "photo")} taken outside your dates.</b> To bring ${why.length === 1 ? "it" : "them"} in, pick a longer time period and add again.</p>${grid(why, "data-why-thumb")}` : ""}</details>`; }
 function refreshWhy(){ const d = $("#ldWhy"); if (d && loadState){ whyHTML.open = d.open; d.outerHTML = whyHTML(loadState); fillThumbs(); } refreshCapNotes(); }
@@ -2243,7 +2264,8 @@ function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; cons
   L.lastSaved = saved; L.lastAlready = already; L.lastChecking = checking; L.lastNewTrips = L.trips.filter((t, i) => live(t, i) && !t.repeat).length; /* ticked trips that are new, not photos joining a saved trip */
   if (checking) return `${L.native ? `We found ${plural(total, "photo")} from that ${L.memDay ? "day" : "time"}.` : `You picked ${plural(total, "photo")}.`} Checking which are already on your globe…`;
   const why = [already && `${already.toLocaleString()} already on your globe`, unticked && `${unticked.toLocaleString()} in trips you didn't tick`, over && `${over.toLocaleString()} over a stop's photo limit`, ...(() => { if (!rest) return []; const nh = Math.min(rest, nearHomeLeft(L)), other = rest - nh; return [nh && `${nh.toLocaleString()} taken near home, so not a trip`, other && `${other.toLocaleString()} with no place or date to match a trip`]; })()].filter(Boolean);
-  const joins = L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => { const n = repeatNew(t); return n ? `${plural(n, "new photo")} ${n === 1 ? "joins" : "join"} ${t.repeat.title}` : `${t.repeat.title} is already on your globe`; });
+  { const sv = Math.min(rest - Math.min(rest, nearHomeLeft(L)), (L.noLocAll || []).filter(p => L.savedNoLoc && L.savedNoLoc.has(p.file) && !nlFate(L, p)).length); if (sv > 0){ /* no-location photos already saved count as already on your globe */ const k = why.findIndex(w => / with no place or date to match a trip$/.test(w)), other = parseInt(String(why[k] || "0").replace(/,/g, ""), 10) - sv; if (k >= 0){ if (other > 0) why[k] = `${other.toLocaleString()} with no place or date to match a trip`; else why.splice(k, 1); } const a = why.findIndex(w => / already on your globe$/.test(w)), n = (a >= 0 ? parseInt(why[a].replace(/,/g, ""), 10) : 0) + sv; if (a >= 0) why[a] = `${n.toLocaleString()} already on your globe`; else why.unshift(`${n.toLocaleString()} already on your globe`); } }
+  const joins = L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => { const n = repeatNew(t); return n ? `${plural(n, "new photo")} ${n === 1 ? "joins" : "join"} ${t.repeat.title}` : ""; }).filter(Boolean); /* a trip with nothing new is counted once, under Left out: already on your globe (Muse r19) */
   /* one plain sentence that adds up: picked = saved + each reason the rest is left out */
   return `${L.native ? `We found ${plural(total, "photo")} from that ${L.memDay ? "day" : "time"}.` : `You picked ${plural(total, "photo")}.`} ${saved.toLocaleString()} will be saved to your globe${joins.length ? ` (${joins.join("; ")})` : ""}.${why.length && total > saved ? ` Left out: ${why.join(", ")}.` : ""}`; }
 function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); if (typeof drawTiles === "function") drawTiles(); const L = loadState; if (L && L.trips) document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); }
@@ -2299,12 +2321,20 @@ async function repeatPlan(t, e){ const prints = []; for (const o of e.stops) for
     if (f && prints.some(q => picCorr(f, q) > .9) && await savedSame(p.file, prints)) continue; /* a close call: look again at the size it was saved at, so the same photo is never added twice (Cooper r19) */
     out.push(x ? {s, p, x} : {s, p}); }
   return out; }
+/* no-location photos that are already on your globe (you placed them in an earlier import): same time label and the same picture. They show as already saved, not as photos with nowhere to go (Muse + Cooper r19) */
+async function noLocSaved(L){ if (!L || !L.noLocAll || !L.noLocAll.length) return; const saved = []; travelRaw(store.get("realTrips", [])).forEach(e => (e.stops || []).forEach(o => (o.photos || []).forEach((ph, k) => { if (ph && ph[0] === "real" && ph[1]) saved.push({e, o, k, lab:ph[1]}); })));
+  if (!saved.length) return; L.savedNoLoc = L.savedNoLoc || new Map();
+  for (const p of L.noLocAll){ if (!p.t || L.savedNoLoc.has(p.file)) continue; const lab = new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}); const c = saved.filter(x => x.lab === lab); if (!c.length) continue;
+    const prints = []; for (const x of c){ const f = await picPrint(imgCache.get("rp:" + x.o.id + "-" + x.k)); if (f) prints.push({f, x}); } if (!prints.length) continue;
+    let u = null; try { u = await thumb(p.file, 1024, true); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (!f) continue;
+    const hit = prints.find(q => samePic(f, q.f)); if (hit) L.savedNoLoc.set(p.file, hit.x.e.title); }
+  if (loadState === L && L.savedNoLoc.size){ updateAddCount(); refreshCapNotes(); } }
 /* the photo shrunk and saved exactly as a saved one was (1024 px), so a re-import of the same picture matches it closely */
 async function savedSame(file, prints){ let u = null; try { u = await thumb(file, 1024, true); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; return !!f && prints.some(q => samePic(f, q)); }
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = travelRaw(store.get("realTrips", []));
   (async () => { for (const t of L.trips){ if (t.homeMem || L.homeMem) continue; const e = existing.find(x => sameTripAs(x, t));
     if (!e){ if (!existing.length) continue; { const w = existing.find(x => duringTrip(x, t)); if (w){ t.maybeJoin = {eid:w.id, title:w.title}; if (t.photos <= 3){ tickKeep(t); forceJoin(L.trips.indexOf(t), true); } } } /* a day or two of photos (1 to 3) from the days of a saved trip joins it, ticked from the start; untick to keep it apart */ /* a day out far away in the middle of a saved trip: ask, rather than guess */ t.dupe = {pending:true, drop:new Set()}; refreshCapNotes(); try { t.dupe.drop = await dupeScan(t, existing); } catch(err){} t.dupe.pending = false; refreshCapNotes(); continue; }
-    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; })(); }
+    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; await noLocSaved(L); })(); }
 function untickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = false; t.pts.forEach(p => p.off = true); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = false; updateAddCount(); }
 function tickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = true; t.pts.forEach(p => p.off = false); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = true; const o = document.querySelector(`[data-ld-one="${i}"]`); if (o) o.remove(); updateAddCount(); }
 // a batch whose dates sit inside a saved trip's dates (give or take a day), wherever it is
@@ -2402,9 +2432,9 @@ function openLaunchpad(v){
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(head)}${v.first && !mem ? `<div class="steps">Step 3 of 3 · Watch it</div>` : ""}
     <div class="readycard"><img src="${photoURL(st[0] ? st[0].photos[0] : t.stops[0].photos[0])}" alt=""><div class="rc"><div class="rt">${esc(t.title)}</div><div class="rs">${dRange(t.start, t.end)} · ${plural(st.length, "place")} · ${plural(n, "photo")}</div></div></div>
     <p class="ldsum" id="readyReceipt">${receipt}.</p>
-    <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>
+    <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>${musicMuted ? `<p class="note" data-mutenote style="margin:0">🔇 Sound is off for stories. <button class="btn" data-unmute style="min-height:40px">Turn sound on</button></p>` : ""}
     <button class="btn" data-open-trip="${t.id}" style="align-self:stretch;justify-content:center;min-height:52px">Open this ${t.homeMem ? "memory" : "trip"}</button>
-    ${trips.length > 1 ? `<div class="sec">Also new: ${tmCount(trips.slice(1))}</div>${trips.slice(1, 6).map(u => `<button class="item" data-open-trip="${u.id}" style="background:var(--panel-2)"><img src="${photoURL(stopsOf(u)[0] ? stopsOf(u)[0].photos[0] : u.stops[0].photos[0])}" alt=""><div class="txt"><div class="t">${esc(u.title)}</div><div class="s">${fmt(u.start)} · ${plural(stopsOf(u).length, "place")}</div></div></button>`).join("")}${trips.length > 6 ? `<p class="ldhow">Plus ${tmCount(trips.slice(6))} under Trips.</p>` : ""}` : ""}
+    ${trips.length > 1 ? `<div class="sec">Also new: ${tmCount(trips.slice(1))}</div>${trips.slice(1, 6).map(u => `<button class="item" data-open-trip="${u.id}" style="background:var(--panel-2)"><img src="${photoURL(stopsOf(u)[0] ? stopsOf(u)[0].photos[0] : u.stops[0].photos[0])}" alt=""><div class="txt"><div class="t">${esc(u.title)}</div><div class="s">${dRange(u.start, u.end)} · ${plural(stopsOf(u).length, "place")}</div></div></button>`).join("")}${trips.length > 6 ? `<p class="ldhow">Plus ${tmCount(trips.slice(6))} under Trips.</p>` : ""}` : ""}
     <button class="btn" data-nav="globe" style="align-self:stretch;justify-content:center;min-height:56px;font-size:calc(18px * var(--fs,1))">🌍 Back to my globe</button></div>`, "ready");
   try { flyToStops(st); } catch(e){}
   return true; }
@@ -2433,7 +2463,7 @@ function openGuide(step = 1){
     const pool = TRAVEL().some(t => t.real) ? TRAVEL().filter(t => t.real) : TRAVEL(); const all = [...pool].reverse(); const picks = guideAll ? all : all.slice(0, 4);
     openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Let's relive one trip")}<div class="steps">Step 1 of 3</div>
       <p class="note" style="margin:0">${pool.length < TRIPS.length ? "Your own photos made" : "Your photos were grouped into"} ${tmCount(pool)}. Pick one and in a minute it becomes a short story you can watch.</p>
-      ${picks.map(t => `<button class="item" data-guide-trip="${t.id}" style="background:var(--panel-2)"><img src="${photoURL(t.stops[0].photos[0])}" alt=""><div class="txt"><div class="t">${esc(t.title)}</div><div class="s">${fmt(t.start)} · ${plural(stopsOf(t).length, "stop")}</div></div></button>`).join("")}
+      ${picks.map(t => `<button class="item" data-guide-trip="${t.id}" style="background:var(--panel-2)"><img src="${photoURL(t.stops[0].photos[0])}" alt=""><div class="txt"><div class="t">${esc(t.title)}</div><div class="s">${dRange(t.start, t.end)} · ${plural(stopsOf(t).length, "stop")}</div></div></button>`).join("")}
       <div class="row-btns" style="margin:0">${guideAll || all.length <= 4 ? "" : `<button class="btn" data-guide-all>Show all ${all.length} trips</button>`}<button class="btn" data-guide-skip>Maybe later</button></div></div>`);
   } else if (step === 2){
     const t = TRIPS.find(x => x.id === guideTrip); const n = t.stops.reduce((a, s) => a + s.photos.length, 0); const hid = t.stops.length - stopsOf(t).length;
@@ -3463,11 +3493,12 @@ function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) retu
     <p style="margin:0">Send this ${tnoun(t)} to someone who was there. They open it in Tripsake, add their own photos and best moments, and send it back. Your two copies merge, so nothing is lost and no photo is doubled.</p>
     <ol class="note sharesteps"><li>You send the ${tnoun(t)} file.</li><li>They open it: More → Open a shared trip or memory.</li><li>They add their photos and best moments, then tap 👥 Share this ${tnoun(t)}.</li><li>You open their file the same way, and it merges into yours.</li></ol>
     <div><label class="l" for="myName">Your name, so they see who added what${myName() ? "" : " (needed)"}</label><input type="text" id="myName" value="${esc(myName())}" placeholder="Type your first name" maxlength="30"></div>
-    ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about ${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))})</span></label>`
-      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : "There are no photos of your own on this trip, so only"} the stops, best moments and captions travel. The file is <span id="tsSize">small</span>.</p>`}
+    ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about <span id="tsPSize">${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))}</span>)</span></label>`
+      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : `There are no photos of your own in this ${tnoun(t)}, so only`} the stops, best moments and captions travel. The file is <span id="tsSize">small</span>.</p>`}
     <p class="note" style="margin:0">File: <b>${esc(tripFileName(t))}</b></p>
     <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">Send the ${tnoun(t)} file</button>
     <p class="note" style="margin:0">It goes as one file through Messages, WhatsApp, email or AirDrop. Nothing is uploaded to us, and there's no account.</p></div>`, "tshare");
+  if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el) el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
   if (!real) buildTripFile(t, false).then(d => { const el = $("#tsSize"); if (el) el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); }).catch(() => {}); /* the size of the very file that is sent, not a guess (Muse r18) */ }
 async function buildTripFile(t, withPhotos){ const from = myName(); const out = {app:"travel-globe", kind:"trip", v:1, from, sent:new Date().toISOString(), trip:{shareId:tripShareId(t), aka:t.shareIds || [], ...(t.homeMem ? {kind:"home"} : {}), title:t.title, country:t.country, start:t.start, end:t.end, people:[...new Set([from, ...(t.sharedWith || [])].filter(Boolean))], stops:[]}, lines:{}};
   for (const s of t.stops){ const st = getStory(s); const mine = {who:st.who || "", best:st.best || "", note:st.note || ""}; const o = {uid:s.uid || s.id, name:stopName(s), lat:s.lat, lon:s.lon, date:s.date, others:Object.assign({}, s.others || {}), photos:[]};
@@ -3484,13 +3515,13 @@ async function buildTripFile(t, withPhotos){ const from = myName(); const out = 
 const tripFileName = t => `tripsake-${tnoun(t)}-${t.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "trip"}.json`;
 const sizeText = n => n < 10240 ? `${Math.max(.1, Math.round(n / 102.4) / 10)} KB` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`; // small files keep one decimal, so 1.4 KB doesn't read as 1 KB
 async function sendTripFile(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const nm = ($("#myName") || {}).value; if (nm != null){ if (!String(nm).trim()){ toast("Type your name first, so they know who sent it"); $("#myName").focus(); return; } store.set("myName", String(nm).trim().slice(0, 30)); }
-  const btn = document.querySelector("[data-tshare-go]"); if (btn){ btn.disabled = true; btn.textContent = "Packing the trip…"; }
+  const btn = document.querySelector("[data-tshare-go]"); if (btn){ btn.disabled = true; btn.textContent = `Packing the ${tnoun(t)}…`; }
   const data = await buildTripFile(t, !$("#tsPhotos") || $("#tsPhotos").checked); const name = tripFileName(t);
   const blob = new Blob([JSON.stringify(data)], {type:"application/json"}); const file = new File([blob], name, {type:"application/json"}); let shared = false;
   try { if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:t.title, text:`${data.from} shared "${t.title}" from Tripsake. Open it in Tripsake: More → Open a shared trip or memory.`}); shared = true; } } catch(e){ if (e && e.name === "AbortError"){ if (btn){ btn.disabled = false; btn.textContent = `Send the ${tnoun(t)} file`; } return; } }
   if (!shared){ try { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); } catch(e){ toast("This browser blocked the file"); return; } }
-  closeSheet(); toast(shared ? `Trip sent (${sizeText(blob.size)})` : `Saved ${name} (${sizeText(blob.size)}) to your downloads. Send it to them however you like.`); }
-function readTripFile(file){ const fr = new FileReader(); fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){} if (!d || d.app !== "travel-globe" || d.kind !== "trip" || !d.trip || !Array.isArray(d.trip.stops)){ toast("That file isn't a Tripsake trip"); return; } openTripImport(d); }; fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file); }
+  closeSheet(); toast(shared ? `${tnoun(t)[0].toUpperCase() + tnoun(t).slice(1)} sent (${sizeText(blob.size)})` : `Saved ${name} (${sizeText(blob.size)}) to your downloads. Send it to them however you like.`); }
+function readTripFile(file){ const fr = new FileReader(); fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){} if (!d || d.app !== "travel-globe" || d.kind !== "trip" || !d.trip || !Array.isArray(d.trip.stops)){ toast("That file isn't a Tripsake trip"); return; } if (+d.v > 1){ toast("This file is from a newer version of Tripsake. Update the app, then open it again"); return; } /* never half-read a newer file (Nikola r19) */ openTripImport(d); }; fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file); }
 function findLocalShared(d, raw = store.get("realTrips", []) || []){ const ids = new Set([d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean));
   return raw.find(t => ids.has(t.shareId) || ids.has(t.id) || (t.shareIds || []).some(x => ids.has(x))) || null; }
 // a trip you loaded yourself that the shared one overlaps: dates within a day and a stop within 25 km
@@ -3621,12 +3652,9 @@ document.addEventListener("click", e => {
   if ((b = g("[data-title-offer]"))){ titleOffer(b.dataset.titleOffer, b.dataset.use === "1"); return; }
   if ((b = g("[data-dup-use]"))){ dupUse(+b.dataset.dupUse, b.dataset.which); return; }
   if ((b = g("[data-dup-both]"))){ dupKeepBoth(+b.dataset.dupBoth); return; }
-  if (g("[data-bb-stay]")){ const bb = g(".backbar"); if (bb) bb.outerHTML = BACKBAR; return; }
+  if (g("[data-bb-stay]")){ const bb = g(".backbar"); if (bb){ if (bb.dataset.made) bb.remove(); else bb.outerHTML = BACKBAR; } return; }
   if ((b = g("[data-nav]"))){ const k = b.dataset.nav;
-    if (k === "globe" && b.closest(".backbar") && !b.hasAttribute("data-bb-leave") && document.querySelector("[data-ld-add]") && loadState && loadState.trips && loadState.trips.length && !SAVING){ /* the import review isn't saved yet: ask before throwing it away (Nikola r18) */
-      const L = loadState, on = L.trips.filter(t => tripTicked(L, t)), fresh = on.filter(t => !t.repeat || t.forceJoin).length, more = on.filter(t => t.repeat && !t.forceJoin).reduce((a, t) => a + repeatNew(t), 0); /* say what would really be added: the ticked trips, and new photos for ones already on your globe (Cooper r19) */
-      const what = [fresh && (fresh === 1 ? "this trip" : `these ${fresh} trips`), more && (more === 1 ? "this new photo" : `these ${more} new photos`)].filter(Boolean).join(" and ");
-      if (what) { b.closest(".backbar").innerHTML = `<p style="margin:0 0 8px;font-weight:600">Leave without adding ${what}?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`; return; } }
+    if (k === "globe" && b.closest(".backbar") && !b.hasAttribute("data-bb-leave") && leaveAsk()) return; /* the import review isn't saved yet: ask before throwing it away (Nikola r18) */
     if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
   if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; const b2 = g("[data-trip-more]"); if (tripMoreOpen) TRIP_MORE.add(b2.dataset.tripId); else TRIP_MORE.delete(b2.dataset.tripId); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = "More for this " + ((TRIPS.find(u => u.id === b2.dataset.tripId) || {}).homeMem ? "memory " : "trip ") + (tripMoreOpen ? "▴" : "▾"); const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
   if (g("[data-open-layers]")){ openLayers(); return; }
@@ -3646,8 +3674,8 @@ document.addEventListener("click", e => {
   if ((b = g("[data-raw]"))){ lightbox([{src:b.dataset.raw, cap:b.dataset.rawcap}], 0); return; }
   if ((b = g("[data-col]"))){ colFilter = b.dataset.col; renderBody(); const tb = $("#tabbody"), sec = tb.querySelector("#colList > *"); if (sec) tb.scrollTo({top: Math.max(0, sec.offsetTop - tb.offsetTop - 8), behavior: REDUCED() ? "auto" : "smooth"}); return; }
   if ((b = g("[data-close-place]")) || (b = g("[data-dismiss]"))){ closePlace(); return; }
-  if ((b = g("[data-close]"))){ closeSheet(); return; }
-  if (e.target.matches("[data-sheet-bg]")){ closeSheet(); return; }
+  if ((b = g("[data-close]"))){ userClose(); return; }
+  if (e.target.matches("[data-sheet-bg]")){ userClose(); return; }
   if ((b = g("[data-lb]"))){ lbIdx = (lbIdx + +b.dataset.lb + lbList.length) % lbList.length; renderLB(); return; }
   if ((b = g("[data-lb-rm]"))){ lbRemove(b.dataset.lbRm); return; }
   if ((b = g("[data-put-back]"))){ const st = ALL_STOPS.find(x => x.id === b.dataset.putBack); if (!st) return; const ids = st.allPhotos.filter(o => o.hidden).map(o => o.id); ids.forEach(i => setPhotoHidden(i, false)); redrawAfterPhoto(st, ids[0]); toast(`Put back ${plural(ids.length, "photo")}`, () => { ids.forEach(i => setPhotoHidden(i, true)); redrawAfterPhoto(st, ids[0]); }); return; }
@@ -3690,7 +3718,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-video-again]"))){ openVideoStart(b.dataset.videoAgain); return; }
   if (g("[data-video-share]") && lastVideo){ navigator.share({files:[lastVideo.file], title:lastVideo.title}).catch(e => { if (e && e.name !== "AbortError") toast("Sharing didn't work here. Use Save video instead."); }); return; }
   if (g("[data-import]")){ toast("In the app you pick your Timeline file and years of places fill in"); return; }
-  if ((b = g(".themeopt[data-theme]"))){ themeKey = b.dataset.theme; store.set("theme", themeKey); applyTheme(); document.querySelectorAll(".themeopt").forEach(o => o.setAttribute("aria-pressed", o === b)); toast(TH().name + " style on"); if (tab === "more") renderBody(); if (document.querySelector(".sheet .themeopt")) setTimeout(closeSheet, 450); return; }
+  if ((b = g(".themeopt[data-theme]"))){ themeKey = b.dataset.theme; SH_T0 = performance.now(); store.set("theme", themeKey); applyTheme(); document.querySelectorAll(".themeopt").forEach(o => o.setAttribute("aria-pressed", o === b)); toast(themeKey === "seasons" ? (() => { const q = shSeason(), c = w => w[0].toUpperCase() + w.slice(1); return `${c(q.north)} in the north, ${q.south} in the south. Your places stay lit in gold`; })() : TH().name + " style on"); /* the season colours aren't places you've been (Muse r19) */ if (tab === "more") renderBody(); if (document.querySelector(".sheet .themeopt")) setTimeout(closeSheet, 450); return; }
   if (g("#zstyle") || g("[data-open-style]")){ openThemePicker(); return; }
   if (g("[data-bucket-add]")){ const c = centerLonLat(); whereDraft = {lon:c[0], lat:c[1], label:"Search below, or drop a pin on the globe", set:false}; openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Add to bucket list")}${whereHTML()}<div><label class="l" for="bucketName">Name it (optional)</label><input type="text" id="bucketName" placeholder="Machu Picchu, Augusta, the Northern Lights…"></div><button class="btn primary" data-bucket-save style="align-self:flex-start">Add place</button></div>`); setTimeout(() => { const q = $("#whereQ"); if (q && !isPhone()) q.focus(); }, 50); return; }
   if ((b = g("[data-where-pick]"))){ const r = whereResults[+b.dataset.wherePick]; if (!r) return; setWhere(r.lon, r.lat, r.name + (r.region.startsWith("On your globe") ? "" : ", " + r.region)); $("#whereQ").value = ""; $("#whereRes").innerHTML = ""; const bn = $("#bucketName"); if (bn && !bn.value.trim()) bn.value = r.name; flyTo(r.lon, r.lat, Math.max(zoom, 4), 800); return; }
@@ -3835,7 +3863,7 @@ document.addEventListener("keydown", e => {
   if (replayState && !replayState.opts.record && !/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || "")) && !document.querySelector(".sheet")){
     const id = {" ":"rpause", ArrowLeft:"rprev", ArrowRight:"rskip"}[e.key]; if (id && document.getElementById(id)){ e.preventDefault(); document.getElementById(id).click(); return; } }
   if (e.key === "Escape" && document.getElementById("book")){ closeBook(); return; }
-  if (e.key === "Escape"){ if (pinMode) endPinMode(false); else if (document.getElementById("lb")) closeLB(); else if (replayState) endReplay(); else closeSheet(); }
+  if (e.key === "Escape"){ if (pinMode) endPinMode(false); else if (document.getElementById("lb")) closeLB(); else if (replayState) endReplay(); else userClose(); }
   if (e.key === "Enter" && e.target.dataset && e.target.dataset.stopname){ e.target.blur(); if (guideRename){ guideRename = null; openGuide(2); } else { const s = TRIPS.flatMap(t => t.stops).find(x => x.id === e.target.dataset.stopname); openTrip(s.trip.id, true); } renderBody(); }
 });
 $("#replay").addEventListener("click", e => {
