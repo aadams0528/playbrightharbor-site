@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 31000c6 (PR #31) -->
+<!-- number-blast cbf1452 (PR #33) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -418,6 +418,7 @@ const capNoted=new Set();   // tools already said to be full this level
 // Halfway reward (Alan 2026-11-14, Muse's round 12 idea): from level 30, reaching half the goal pays a few coins once.
 const HALF_FROM=30,HALF_COINS=5;let halfPaid=false;
 const MAX_ERASERS=3, MAX_SHUFFLES=3, MAX_ROTATES=3, BLASTS_PER_SHUFFLE=8, CHAIN_MOVES=2, CHAIN_MAX=4;
+const MAX_OF={Eraser:MAX_ERASERS,Shuffle:MAX_SHUFFLES,Rotate:MAX_ROTATES};
 const ri=(a,b)=>a+Math.floor(rng()*(b-a+1));
 // Points to clear a level: 60, 90, 120, then 40 more each level up to level 10 (a little more pressure
 // early, Alan 2026-11-07), then 30 more each level after that.
@@ -1058,7 +1059,8 @@ const READ_MS=3200, CASH_MS=2400;
 // News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
 // The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
 let newsQ=[],newsTimer=null,newsWait=0,cantQueued=false;
-function news(text,big=false,onShow){newsQ.push([text,big,onShow]);if(!newsTimer)nextNews()}
+// first=true puts it at the front of the line, for news about the drop just made (Muse round 13: earned tools came too late).
+function news(text,big=false,onShow,first=false){newsQ[first?'unshift':'push']([text,big,onShow]);if(!newsTimer)nextNews()}
 function nextNews(){
   newsTimer=null;if(!newsQ.length)return;
   if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
@@ -1175,7 +1177,7 @@ function setHint(){
     (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
   else if(movable&&moveHintNow)h.innerHTML='Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.';
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
-  else if(twist())h.innerHTML=`⚡ ${twist().text} Make <b>${T}</b>.`+(expertOn()?' <b>💎 Expert:</b> 3+ blocks.':'');   // the strip names this level's twist instead of the everyday rule (Nikola round 11)
+  else if(twist())h.innerHTML=expertOn()?`⚡ <b>${twist().short}</b> · 💎 Expert: 3+ blocks make <b>${T}</b>.`:`⚡ ${twist().text} Make <b>${T}</b>.`;   // Expert keeps it to one line (Cooper round 13)   // the strip names this level's twist instead of the everyday rule (Nikola round 11)
   else if(minLen()>2)h.innerHTML=`<b>💎 Expert:</b> only <b>3 or more</b> touching blocks that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
   else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
   // A nearly full board with no sum to make: offer to end the run instead of spending tools one by one (Muse round 7).
@@ -1249,7 +1251,8 @@ function endDrag(e){
   const d=drag;drag=null;d.fl.remove();if(d.slot)d.slot.style.opacity='';
   if(d.move){
     if(d.pos)put(d.p,d.pos,true);
-    else{putTiles(d.p,d.origin);movable={p:d.p,pos:d.origin,keys:keysAt(d.p,d.origin)};renderBoard()}  // dropped off the board: back where it was
+    else{putTiles(d.p,d.origin);movable={p:d.p,pos:d.origin,keys:keysAt(d.p,d.origin)};renderBoard();  // no spot: back where it was
+      if(e&&e.type==='pointerup'&&overBoard(e))toast("It doesn't fit there, so it went back.\nEvery block needs an empty square.",false,READ_MS)}
   }
   else if(d.pos)place(d.i,d.pos);
   else{renderBoard();if(tut)toast('Drop it on the glowing square');else if(e&&e.type==='pointerup'&&overBoard(e))toast("It doesn't fit there.\nDrop it where every block lands on an empty square.",false,READ_MS)}
@@ -1278,7 +1281,8 @@ boardEl.addEventListener('pointerdown',e=>{
     movable.keys.forEach(key=>board[key]=null);movable=null;
     const {cs,step}=cellStep(),fl=pieceEl(p,cs,'float');fl.style.gap=BGAP+'px';fl.style.fontSize=cs*.7+'px';document.body.appendChild(fl);
     const {rows}=pieceSize(p),h=rows*cs+(rows-1)*BGAP;
-    drag={p,fl,slot:null,pos:null,move:true,origin:pos,dx:g.c*step+cs/2,dy:mouse?g.r*step+cs/2:h+cs*.9};
+    // A moved piece stays at the square you grabbed, so a one-square nudge lands one square away (Muse round 13).
+    drag={p,fl,slot:null,pos:null,move:true,origin:pos,dx:g.c*step+cs/2,dy:g.r*step+cs/2};
     moveDrag(ev);
     addEventListener('pointermove',moveDrag);addEventListener('pointerup',endDrag);addEventListener('pointercancel',endDrag);
   };
@@ -1351,8 +1355,12 @@ function blast(cascade=0){
   toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt,longest>=4||k>1||extra.size>0||!!st,CASH_MS);
   // A tool you would have earned but already hold 3 of says so, once a level per tool (Nikola round 12).
   const capNew=[...capHit].filter(x=>!capNoted.has(x));capNew.forEach(x=>capNoted.add(x));
-  const capTxt=capNew.length?capNew.map(x=>`${x} full (${MAX_ERASERS})`).join(' · '):'';
-  if(got||capTxt)news(got?`🎁 ${got} earned!`+(capTxt?`\n${capTxt}`:''):`🎁 ${capTxt}: use one to earn more`,!!got);
+  const capTxt=capNew.length?capNew.map(x=>`${x} full (${MAX_OF[x]})`).join(' · '):'';
+  if(got||capTxt)news(got?`🎁 ${got} earned!`+(capTxt?`\n${capTxt}`:''):`🎁 ${capTxt}: use one to earn more`,!!got,null,true);
+  // The tool's own button bounces right away, so an earn is seen even before its message comes up.
+  if(earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))bumpEl($('eraser'));
+  if(shuffleEarned||goalsDone.some(g=>g.reward==='shuffle'&&!g.full))bumpEl($('shuffle'));
+  if(rotEarned||goalsDone.some(g=>g.reward==='rotate'&&!g.full))bumpEl($('rotate'));
   if(cascade&&!store.get('nb-cascade-seen',false)){store.set('nb-cascade-seen',true);news(`Cascade! ${label}\nClearing blocks made a new ${T}, so it blasted too, with a chain bonus.`,true)}
   const extras=[];
   if(!tut){
@@ -1959,7 +1967,7 @@ window.BH_SAVE={game:'sumburst',version:1,
 function saveGame(){
   if(tut||over)return;
   const save={v:3,day:dayKey(),mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,rotates,chain,chainMoves,continued,levelsSinceAd,
-    goals:goals.map(g=>({id:g.id,prog:g.prog,need:g.need,reward:g.reward})),goalCount,seed:rng.seed(),lastV,blastsGame,bestRun,specials,expert,halfPaid};
+    goals:goals.map(g=>({id:g.id,prog:g.prog,need:g.need,reward:g.reward})),goalCount,seed:rng.seed(),lastV,blastsGame,bestRun,specials,expert,halfPaid,capNoted:[...capNoted]};
   store.set('nb-save',save);store.set('nb-save-'+mode,save);
 }
 function resumeGame(key='nb-save',welcome=true){
@@ -1968,6 +1976,7 @@ function resumeGame(key='nb-save',welcome=true){
   if(g.goals.some(x=>!GOALS.find(d=>d.id===x.id)))return false;
   ({mode,level,levelBase,score,T,board,tray,erasers,shuffles,toShuffle,chain,chainMoves,continued,levelsSinceAd,goalCount,lastV,blastsGame,bestRun}=g);
   rotates=g.rotates||0;rotating=false;rotPaid=null;expert=!!g.expert;
+  capNoted.clear();(g.capNoted||[]).forEach(x=>capNoted.add(x));
   halfPaid=g.halfPaid??(g.score-g.levelBase>=goalFor(g.level)/2);   // older saves past halfway count as paid
   specials=g.specials??(g.level>3?3:0);  // saves from before this change: past level 3 they've had their chance
   goals=g.goals.map(x=>({...GOALS.find(d=>d.id===x.id),...x}));
@@ -2155,7 +2164,9 @@ else if(!resumeGame()&&!resumeGame('nb-save-endless',false))newGame('endless'); 
 // can be tried without playing 30 levels first. The phone apps ignore it.
 {
   const jump=window.Capacitor?.isNativePlatform?.()?0:parseInt(new URLSearchParams(location.search).get('level'),10);
-  if(jump>=2&&jump<=99&&store.get('nb-tutorial-done',false)){newGame('endless');specials=3;specialSeen=true;['nb-special-seen','nb-five-done','nb-longsum-tip','nb-rotate-seen','nb-cascade-seen'].forEach(k=>store.set(k,true));level=jump-1;levelBase=score;startNextLevel()}
+  if(jump>=2&&jump<=99&&store.get('nb-tutorial-done',false)){newGame('endless');specials=3;specialSeen=true;['nb-special-seen','nb-five-done','nb-longsum-tip','nb-rotate-seen','nb-cascade-seen'].forEach(k=>store.set(k,true));level=jump-1;levelBase=score;startNextLevel();
+    // Jump once: a reload carries on from the saved game instead of starting the level again (Muse round 13).
+    try{const u=new URL(location.href);u.searchParams.delete('level');history.replaceState(null,'',u)}catch(e){}}
 }
 if(!welcomeBack())checkStreakAtRisk();
 weeklyHello();applyDeco();
