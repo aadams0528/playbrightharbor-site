@@ -278,6 +278,16 @@ body.chain-on #deco { opacity: 0; }   /* the chain line takes the garland's spot
 #deco-fall span { position: absolute; top: -40px; font-size: 20px; opacity: 0.35; animation: decoFall linear infinite; }
 @keyframes decoFall { from { transform: translateY(0) rotate(0); } to { transform: translateY(110vh) rotate(300deg); } }
 @media (prefers-reduced-motion: reduce) { #deco-fall { display: none; } }
+/* Thawing a frozen letter gets its own moment: the ice cracks off, a chime, "+5" floats up (Nikola round 15 idea; Alan 2026-11-14). */
+.cell.thaw .tile { animation: thawCrack 0.6s ease-out; }
+@keyframes thawCrack { 0% { transform: scale(1); } 25% { transform: scale(1.18) rotate(-4deg); box-shadow: 0 0 0 4px #bfe3ff, 0 0 18px #bfe3ff; }
+  50% { transform: scale(0.94) rotate(3deg); } 100% { transform: scale(1); } }
+.cell.thaw .badge.ice { animation: iceOff 0.6s ease-out forwards; }
+@keyframes iceOff { to { transform: translateY(-18px) scale(1.6); opacity: 0; } }
+.thawpop { position: absolute; left: 50%; top: 0; z-index: 6; pointer-events: none; white-space: nowrap; font: 800 1rem var(--font-display); color: #e8f6ff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7); animation: thawUp 1.1s ease-out forwards; }
+@keyframes thawUp { 0% { opacity: 0; transform: translate(-50%, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -140%); } }
+@media (prefers-reduced-motion: reduce) { .cell.thaw .tile, .cell.thaw .badge.ice { animation: none; } .thawpop { animation-duration: 0.01s; } }
 .expert-note { color: var(--muted); font-size: 1rem; margin: 4px 0 8px; }
 #level .tw { color: #f5a623; font-weight: 700; }
 #level .twrule { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 1rem; color: var(--fg); margin-top: 3px; }   /* the challenge rule stays in view (Cooper round 13) */
@@ -390,6 +400,7 @@ button.pill { cursor: pointer; }
 .pill.bump { animation: bump 0.4s ease-out; }
 @keyframes bump { 40% { transform: scale(1.18); } }
 .modal { position: fixed; inset: 0; z-index: 40; background: rgba(10, 12, 30, 0.6); display: grid; place-items: center; padding: 16px; }
+.modal.solid { background: rgba(10, 12, 30, 0.9); }   /* the pick card hides the board behind it (Muse round 15) */
 .sheet { background: var(--panel); color: var(--fg); border-radius: 16px; padding: 20px; width: min(360px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .sheet h3 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 6px; }
 .sheet-x { position: sticky; top: 0; float: right; margin: -4px -4px 0 8px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--slot); color: inherit; font-size: 1.1rem; cursor: pointer; z-index: 2; }
@@ -539,7 +550,7 @@ button.pill { cursor: pointer; }
       <li>You get three new pieces once all three are used. The game ends when the board is too full for any piece and you have no erasers, shuffles or rotates left that could help.</li>
       <li><b>Ideas or problems?</b> Tap <b>Send feedback</b> at the top of this page to email us. We read every message.</li>
       <li><b>Want to play our games early?</b> Tap <b>Test our next game</b> at the bottom of this page.</li>
-      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces today: clear 3 levels to finish it and share your score. Switching between them keeps your place in each.</li>
+      <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily Board</b> gives everyone the same pieces and the same ⚡ twist of the day: clear 3 levels to finish it and share your score. Switching between them keeps your place in each.</li>
     </ul>
     <button type="button" class="tut-replay" id="tut-replay">Replay the tutorial</button>
     <div id="promo-help"></div>
@@ -604,8 +615,9 @@ const TWISTS = [
   { id: "long4", line: "Words need 4 or more letters.", short: "Long words only", tag: "4+ letters", text: "Long words only: words need <b>4 or more letters</b> this level." },
   { id: "needE", line: "Words without an E don't count.", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
   { id: "bombs", line: "A 💣 word blasts the squares around it, +3 each.", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
-  { id: "big", line: "Words of 6+ letters score double.", short: "Big words pay double", tag: "Big words x2", text: "Big words pay: words of <b>6+ letters score double</b> this level." },
-  { id: "crowded", line: "10 extra letters to use or clear.", short: "Crowded board", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
+  // Replaced "Big words pay double", which only paid off now and then (Nikola round 15 idea; Alan 2026-11-14).
+  { id: "combo", line: "2 or more words scored together pay x3.", short: "Combos pay triple", tag: "Combo x3", text: "Combos pay triple: score <b>2 or more touching words together</b> for <b>x3</b>." },
+  { id: "crowded", line: "10 extra letters to use or clear.", short: "Crowded board", chip: "Crowded: 10 extra letters", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
   // Placement twists (Muse round 13 idea; Alan chose both 2026-11-14).
   { id: "ice", line: "Frozen ❄️ letters stay; using one thaws it, +5.", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
   { id: "norefill", line: "New pieces come only after you score a word.", short: "No refills", chip: "No refills: score a word for new pieces", tag: "No refills", text: "No refills: new pieces come only <b>after you score a word</b>. Plan where all 3 go." },
@@ -613,10 +625,14 @@ const TWISTS = [
 let picking = false;   // the pick card is open
 let expert = store.get(EXPERT_KEY, false);   // the switch as it applies to the level being played
 const expertOn = () => expert && mode === "endless" && !tut;
+// Twist of the day (Nikola round 15 idea; Alan 2026-11-14): every Daily Board has one gentle twist, the same for everyone.
+const DAILY_TWISTS = ["bombs", "combo", "ice"];
+const dailyTwistFor = no => TWISTS.find(t => t.id === DAILY_TWISTS[no % DAILY_TWISTS.length]);
 function twist() {
+  if (mode === "daily" && !tut) return dailyTwistFor(dailyNo());
   if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
   if (picked?.level === level) return TWISTS.find(t => t.id === picked.id);   // the player chose this one
-  const t = TWISTS[((level - CHALLENGE_FROM) / 3) % TWISTS.length];   // 30 long words, 33 E, 36 bombs, 39 big, 42 crowded, 45 ice, 48 no refills
+  const t = TWISTS[((level - CHALLENGE_FROM) / 3) % TWISTS.length];   // 30 long words, 33 E, 36 bombs, 39 combos, 42 crowded, 45 ice, 48 no refills
   return t.id === "long4" && expertOn() ? TWISTS[3] : t;   // Expert already needs 4+ letters
 }
 // Every 3rd challenge level (36, 45, 54...) the player picks between this level's twist and the next one (Cooper round 13).
@@ -721,7 +737,7 @@ function rescueTray() {
   p.swapped = true;
   tray[left[Math.floor(rng() * left.length)][1]] = p;
   toast("One piece swapped so you can play", false, READ_MS);
-  return true;
+  return p;
 }
 // Soft hint (Alan 2026-11-09): from level 6 in Endless, after 3 pieces placed with no word scored and nothing
 // glowing, the row or column where a tray piece can make a word glows faintly. It never shows the word or
@@ -729,9 +745,11 @@ function rescueTray() {
 const SOFT_HINT_MOVES = 2;   // was 3 (Nikola round 13: the glow came too late)
 let dryMoves = 0, softHint = null, lastWordLines = [];
 const softHintWanted = () => !tut && mode === "endless" && level >= 6 && dryMoves >= SOFT_HINT_MOVES && !scanWords(board).length;
-function hintLine() {
+// After a swap, the new piece's word comes first, so "New piece! It makes a word..." points at it (Muse round 15).
+function hintLine(only = null) { return (only && hintFor([only])) || hintFor(tray); }
+function hintFor(pieces) {
   let best = null;
-  for (const p of tray) {
+  for (const p of pieces) {
     if (p.used) continue;
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
       if (!fits(p, r, c)) continue;
@@ -1102,6 +1120,7 @@ const SFX = {
   shuffle: () => [392, 494, 587, 698, 784].forEach((f, i) => tone(f, 0.07, "triangle", 0.09, i * 0.04)),
   boom: () => { tone(110, 0.6, "sawtooth", 0.22, 0, 0.25); tone(55, 0.7, "square", 0.18, 0.02, 0.5); tone(1800, 0.15, "sawtooth", 0.05, 0, 0.2); },
   over: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.4, "triangle", 0.12, i * 0.22)),
+  thaw: () => [1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 0.35, "sine", 0.06, i * 0.06)),
 };
 // Native apps use the Haptics plugin (iPhones ignore navigator.vibrate); the web falls back to vibrate.
 const impact = ms => window.Capacitor.Plugins.Haptics?.impact({ style: ms <= 10 ? "LIGHT" : ms <= 20 ? "MEDIUM" : "HEAVY" });
@@ -1269,7 +1288,7 @@ function renderAll() { freshHint(); renderBoard(); renderTray(); renderScores();
 function freshHint() {
   if (!softHint || softHint.key === boardKey()) return;
   const swap = softHint.swap;
-  softHint = hintLine();
+  softHint = hintLine(swap ? tray.find(p => p.swapped && !p.used) : null);
   if (softHint && swap) softHint.swap = true;
   setHint();
 }
@@ -1344,7 +1363,7 @@ function wordsIn(cells, keep = () => true) {
   for (let i = 0; i < s.length; i++) for (let j = i + ml; j <= s.length; j++) {
     const w = s.slice(i, j);
     if (!WORDS.has(w) || !keep(i, j) || (tw === "needE" && !w.includes("e"))) continue;
-    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length, big = tw === "big" && w.length >= 6 ? 1 : 0;
+    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length, big = 0;
     const bomb = blocks.some(x => x.special === "bomb");
     cand.push({ w, i, j, m: mult(w.length), dbl, big, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** (dbl + big) });
   }
@@ -1533,6 +1552,7 @@ function showModeSwitch() {
   }
   openTabSheet("mode", toDaily
     ? `<h3>📅 Daily Board #${dailyNo()}</h3><p>Everyone gets the same pieces today. Clear 3 levels to finish it, then share your score. A new one comes out tomorrow.</p>
+       <p class="next-chal">⚡ <b>Today's twist: ${dailyTwistFor(dailyNo()).short}</b><br>${dailyTwistFor(dailyNo()).line}</p>
        <p>Your Endless game is saved, so you can come back to it.</p>
        <div class="btns"><button class="btn" id="go-mode">Play today's board</button></div>`
     : `<h3>♾️ Endless</h3><p>${saved ? `Pick up your Endless game at level ${saved.level}.` : "Start an Endless game. It gets a little harder each level."}</p>
@@ -1752,7 +1772,7 @@ function cashIn(group) {
   if (!Array.isArray(group)) group = [group];
   movable = null;
   bombReach(group);
-  const k = group.length, comboMult = 1 + 0.5 * (k - 1);
+  const k = group.length, comboMult = twist()?.id === "combo" && k > 1 ? Math.max(3, 1 + 0.5 * (k - 1)) : 1 + 0.5 * (k - 1);   // Combos pay triple
   const seen = new Set(), cells = [];
   group.forEach(g => g.cells.forEach(x => { const key = x.join(","); if (!seen.has(key)) { seen.add(key); cells.push(x); } }));
   const chainX = tut ? 1 : chainMult();
@@ -1803,7 +1823,6 @@ function cashIn(group) {
   const why = [];
   if (k === 1 && group[0].m > 1) why.push(`${group[0].w.length} letters x${group[0].m}`);
   if (k === 1 && group[0].dbl) why.push(`2x block${group[0].dbl > 1 ? "s" : ""} x${2 ** group[0].dbl}`);
-  if (k === 1 && group[0].big) why.push("big word x2");
   if (chainX > 1) why.push(`chain x${chainX}`);
   if (thaw.length) why.push(`❄️ thawed +${thaw.length * THAW_PTS}`);   // one small line, not its own big one (Cooper round 14)
   // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
@@ -1864,13 +1883,22 @@ function cashIn(group) {
         burst(b.left + b.width / 2, b.top + b.height / 2, [tileColor(board[r][c].color), "#ff6a3d"], 12, 1.1);
       });
     }
+    if (thaw.length) {
+      SFX.thaw(); buzz([15, 30, 15]);
+      thaw.forEach(([r, c]) => {
+        const el = cellEl(r, c), b = el.getBoundingClientRect();
+        el.classList.add("thaw"); setTimeout(() => el.classList.remove("thaw"), 700);
+        const pop = document.createElement("span"); pop.className = "thawpop"; pop.textContent = `+${THAW_PTS}`; el.appendChild(pop); setTimeout(() => pop.remove(), 1200);
+        burst(b.left + b.width / 2, b.top + b.height / 2, ["#bfe3ff", "#ffffff", "#8fd3ff"], 30, 1.4);
+      });
+    }
   }, wordDone);
   setTimeout(() => {
     const gone = ([r, c]) => { if (isIce([r, c])) board[r][c].special = null; else board[r][c] = null; };
     w.cells.forEach(gone); extra.forEach(gone);
     scoredSinceDeal = true;
     busy = false; finishTurn();
-  }, wordDone + (extra.length ? 450 : 320));
+  }, wordDone + (extra.length ? 450 : thaw.length ? 650 : 320));   // a thaw gets time to finish its crack
 }
 
 // A hint too long for the title row grows down to the rule chip; one too long for that shows in full (Nikola round 15).
@@ -1939,7 +1967,7 @@ function finishTurn() {
   const rescued = rescueTray();
   // After a swap, the row or column where the new piece makes a word glows too (Muse round 10).
   const hadHint = softHint;
-  softHint = rescued || softHintWanted() ? hintLine() || (erasers > 0 && !rescued ? { eraser: true, key: boardKey() } : null) : null;   // nothing fits: point at an Eraser
+  softHint = rescued || softHintWanted() ? hintLine(rescued || null) || (erasers > 0 && !rescued ? { eraser: true, key: boardKey() } : null) : null;   // nothing fits: point at an Eraser
   if (softHint && rescued) softHint.swap = true;
   if (softHint || hadHint) setHint();
   renderAll(); saveGame();
@@ -1985,7 +2013,7 @@ function closeSheet() {
   sheetLocked = false; openTab = null;
   const m = document.getElementById("modal");
   if (!m.hidden && sheetOpener && sheetOpener !== document.body && document.contains(sheetOpener)) sheetOpener.focus({ preventScroll: true });
-  sheetOpener = null; m.hidden = true; m.classList.remove("dock"); m.style.paddingBottom = ""; document.getElementById("sheet").style.maxHeight = "";
+  sheetOpener = null; m.hidden = true; m.classList.remove("dock", "solid"); m.style.paddingBottom = ""; document.getElementById("sheet").style.maxHeight = "";
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-expanded", false));
 }
 function watchAd(onReward, onSkip = () => {}, title = "Sample ad", forced = false) {
@@ -2324,7 +2352,7 @@ function levelUp() {
   board.forEach((row, r) => row.forEach((v, c) => v && left.push([r, c])));
   left.forEach(([r, c], k) => setTimeout(() => cellEl(r, c).classList.add("pop"), 300 + k * 40));
   // Expert pays 1.5x; a cleared challenge level adds its bonus (shown as its own line on the card).
-  const chal = twist() ? CHALLENGE_COINS : 0, earned = Math.round((10 + 2 * level) * (expertOn() ? 1.5 : 1)) + chal;
+  const chal = twist() && mode === "endless" ? CHALLENGE_COINS : 0, earned = Math.round((10 + 2 * level) * (expertOn() ? 1.5 : 1)) + chal;
   if (chal) track("challenge_complete", { level, twist: twist().id, expert: expertOn() });
   // A level milestone (level 10, 25, ...) is paid with this card, so the card adds up to what the coin count gains.
   const msLevel = level + 1, msCoins = mode === "endless" && !store.get("wb-level-ms-" + msLevel, false) ? LEVEL_MILESTONES[msLevel] || 0 : 0;
@@ -2369,7 +2397,7 @@ function startNextLevel() {
   level++; levelBase = score; levelNewWords = []; dryMoves = 0; softHint = null; expert = store.get(EXPERT_KEY, false);
   lvBonus = { cross: false, grow: false }; glowMemory = []; picked = null;
   track("level_up", { level, mode });
-  if (twist() && level % PICK_EVERY === 0) return pickTwist();
+  if (mode === "endless" && twist() && level % PICK_EVERY === 0) return pickTwist();
   beginLevel();
 }
 // The next level's twist, for the level-complete card (none when the player picks it on the pick card).
@@ -2391,6 +2419,7 @@ function pickTwist() {
   const [a, b] = twistChoices();
   openSheet(`<h3>⚡ Pick your challenge</h3><p>Level ${level} is a challenge level. Which twist do you want? Both pay +${CHALLENGE_COINS} 🪙.</p>
     <div class="btns"><button class="btn pick" id="pick-a">${a.short}<small>${ruleLine(a)}</small></button><button class="btn pick" id="pick-b">${b.short}<small>${ruleLine(b)}</small></button></div>`, true);
+  document.getElementById("modal").classList.add("solid");
   const choose = t => { picking = false; picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
   document.getElementById("pick-a").onclick = () => choose(a);
   document.getElementById("pick-b").onclick = () => choose(b);
@@ -2440,7 +2469,7 @@ function nextToast() {
   });
   // Screen readers hear every message too.
   const live = document.getElementById("sr-live");
-  if (live) live.textContent = q.text.replace(/[\u2063\u2064]/g, "").replace(/\n/g, ". ");
+  if (live) live.textContent = q.text.replace(/[\u2063\u2064]/g, "").replace(/([.!?])?\n/g, (m, end) => end ? end + " " : ". ");   // no "!." (Muse round 15)
   t.style.setProperty("--toast-ms", q.ms + "ms");
   if (q.y != null) t.style.top = q.y + "%";   // a score shows near its word, not always mid-board (Muse round 13)
   document.querySelector(".board-wrap").appendChild(t);
@@ -2456,6 +2485,7 @@ function endToast(q) {
 }
 function clearToasts() {
   toastQ = [];
+  const live = document.getElementById("sr-live"); if (live) live.textContent = "";   // a cleared message isn't read later (Muse round 15)
   if (toastNow) { clearTimeout(toastNow.timer); toastNow = null; }
   document.querySelectorAll(".toast").forEach(t => t.remove());
 }
@@ -2589,6 +2619,7 @@ function dailyShareText(r) {
   return [
     `Wordglow Daily #${r.no} ✅`,
     `⭐ ${DAILY_LEVELS}/${DAILY_LEVELS} levels · ${r.score.toLocaleString()} pts · ${r.words} word${r.words === 1 ? "" : "s"}`,
+    `⚡ Today's twist: ${dailyTwistFor(r.no).short}`,
     r.top ? `Best word: ${r.top.w.toUpperCase()} ${"🟨".repeat(r.top.w.length)} +${r.top.s}` : "",
     INVITES_LIVE ? `Play with me! Use code ${myCode} for ${INVITE_REWARD} free coins` : "Can you beat it?",
     "playbrightharbor.com/wordglow.html",
@@ -2886,7 +2917,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "ea83fa9 2026-11-14 17:40Z";
+const BUILD_STAMP = "20d54da 2026-11-14 17:59Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -3023,7 +3054,7 @@ function renderExpertHelp() {
   if (!box) return;
   const on = store.get(EXPERT_KEY, false);
   box.innerHTML = `<button type="button" class="btn plain" id="expert-toggle" aria-pressed="${on}">🔥 Expert mode: <b>${on ? "On" : "Off"}</b></button>
-    <p class="expert-note">Endless only. Words need 4+ letters, boards start with no word pieces, levels need 25% more points, and you earn 1.5x coins. The "Long words only" challenge becomes "Big words pay double", since every word is already long. ${on === expert ? "" : "Starts with your next level."}</p>`;
+    <p class="expert-note">Endless only. Words need 4+ letters, boards start with no word pieces, levels need 25% more points, and you earn 1.5x coins. The "Long words only" challenge becomes "Combos pay triple", since every word is already long. ${on === expert ? "" : "Starts with your next level."}</p>`;
   document.getElementById("expert-toggle").onclick = () => {
     store.set(EXPERT_KEY, !on); track("expert_toggle", { on: !on, level });
     if (over || tut) expert = !on;   // nothing in play: applies at once
