@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.24.1 (round 21 fixes) -->
+<!-- Tripsake v0.24.2 (round 21 fixes, no photo block) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1464,7 +1464,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.24.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.24.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2364,10 +2364,10 @@ const repeatOut = (L, t, x) => !!(x.x && L && L.skip && L.skip.has(x.p.file) && 
 const repeatNew = t => { const L = loadState; if (t.repeat.unchecked) return 0; return (t.repeat.newPts || []).filter(x => !repeatOut(L, t, x)).length + repeatKept(t).length; };
 /* a trip that's already on your globe is checked again when you Keep or Leave out one of its no-location photos, so its count stays exact */
 async function replanRepeat(t){ const L = loadState; if (!t || !t.repeat || t.repeat.pending || !L) return; const e = travelRaw(store.get("realTrips", [])).find(x => x.id === t.repeat.eid); if (!e) return; t.repeat.pending = true; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
-async function repeatPlan(t, e){ const prints = []; let missing = 0; for (const o of e.stops) for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); else missing++; }
-  if (missing){ if (t.repeat) t.repeat.unchecked = missing; return []; } /* some saved pictures are gone from this phone, so there is no way to tell new photos from saved ones: add nothing rather than save any twice (Nikola r20) */
+async function repeatPlan(t, e){ const prints = [], blind = new Set(); for (const o of e.stops) for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); else if (o.photos[k][1]) blind.add(o.photos[k][1]); }
+  /* a saved picture this phone can't read no longer blocks the trip (Alan 11-14): new photos still come in, checked against every picture it can read; one taken at the same minute as an unreadable one is skipped, and a rare copy can be removed on the trip page */
   const list = []; for (const s of t.stops) for (const p of s.pts) list.push({s, p}); if (t.repeat) extraPts(t).forEach((ps, s) => ps.forEach(p => { if (!list.some(x => x.p.file === p.file)) list.push({s, p, x:true}); })); /* no-location photos matched by date are checked too, so a kept one is counted (and one already saved isn't) */
-  const out = []; for (const {s, p, x} of list){ if (t.repeat && t.repeat.checked) t.repeat.checked.add(p.file); let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) continue;
+  const out = []; for (const {s, p, x} of list){ if (t.repeat && t.repeat.checked) t.repeat.checked.add(p.file); if (blind.size && p.t && blind.has(new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}))) continue; let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) continue;
     if (f && prints.some(q => picCorr(f, q) > .9) && await savedSame(p.file, prints)) continue; /* a close call: look again at the size it was saved at, so the same photo is never added twice (Cooper r19) */
     out.push(x ? {s, p, x} : {s, p}); }
   return out; }
