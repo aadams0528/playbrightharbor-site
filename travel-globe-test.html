@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.20.1 (round 18 fixes: left-out photos and why, Keep into a saved trip) -->
+<!-- Tripsake v0.20.2 (Nikola r18: ask before leaving an import, memory wording, fate follows the tick) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -560,6 +560,8 @@ const store = {
 };
 const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
 const fmtShort = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric"});
+/* "Jul 8, 2025", not "Jul 8 – Jul 8, 2025", for a one-day range (Nikola r18) */
+function dRange(a, b, long){ return !b || a === b ? fmt(a) : `${long ? fmt(a) : fmtShort(a)} – ${fmt(b)}`; } //
 
 /* ---------------- sample data ---------------- */
 const HOME = {name:"Home · Denver area", lon:-104.99, lat:39.74}; // replaced by the real home once real trips are loaded
@@ -1380,7 +1382,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.20.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.20.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1436,7 +1438,7 @@ function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.d
 
 /* ---------------- overlays ---------------- */
 /* every screen gets the "Back to my globe" bar, so nobody gets lost (Alan 11-13); not on first-run questions, the photo review (its Done saves) or the ready screen (it has its own big button) */
-const NO_BACKBAR = new Set(["welcome", "homeq", "memheld", "prev", "ready"]);
+const NO_BACKBAR = new Set(["welcome", "homeq", "homefirst", "memheld", "prev", "ready"]); /* first-run questions, photo review and the ready screen have their own way on */
 function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); if (!NO_BACKBAR.has(kind) && !html.includes('class="backbar"')) html = BACKBAR + html; $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
 // drag the grip (or a sheet title) down to close a sheet; titles don't select text while dragging
 (function(){ let y0 = null, el = null, dy = 0;
@@ -1454,7 +1456,7 @@ function keepHTML(s){ const st = getStory(s), vk = "vn:stop:" + s.id, v = VOICE.
 const STOP_OPEN = new Set(); /* stops whose "Add details" you opened, so a redraw keeps them open */
 document.addEventListener("toggle", e => { const d = e.target; if (d && d.matches && d.matches("details.stopmore")){ const id = d.dataset.stopmore; if (d.open) STOP_OPEN.add(id); else { STOP_OPEN.delete(id); /* closing the editor refreshes the keepsake view above it */ let s = null; for (const t of TRIPS){ s = stopsOf(t).find(x => x.id === id); if (s) break; } const k = document.querySelector(`.keep[data-keep="${id}"]`); if (s && k) k.outerHTML = keepHTML(s); } } }, true);
 function stopHTML(s){
-  if (stopState[s.id] === "ignored") return `<div class="stop ignored"><div><h4>${esc(stopName(s))}</h4><div class="d">Hidden from this trip</div></div><div class="stopbtns"><button data-stop-restore="${s.id}">Put it back</button></div></div>`;
+  if (stopState[s.id] === "ignored") return `<div class="stop ignored"><div><h4>${esc(stopName(s))}</h4><div class="d">Hidden from this ${tnoun(s.trip)}</div></div><div class="stopbtns"><button data-stop-restore="${s.id}">Put it back</button></div></div>`;
   const st = getStory(s);
   return `<div class="stop"><div><h4>${esc(stopName(s))}</h4><div class="d">${fmt(s.date)} · ${s.photos.length} photo${s.photos.length > 1 ? "s" : ""}</div></div>
     <div class="strip" style="margin:0">${s.photos.map(ph => { const im = `<img src="${photoURL(ph)}" alt="${esc(phLabel(ph) || ph.caption)}" data-ph="${ph.id}"${phLabel(ph) ? ` class="labeled" title="${esc(phLabel(ph))}${ph.by ? " · photo: " + esc(ph.by) : ""}"` : ph.by ? ` title="Photo: ${esc(ph.by)}"` : ""}>`; return ph.by ? `<span class="byph">${im}<i>📷 ${esc(ph.by)}</i></span>` : im; }).join("")}</div>
@@ -1493,7 +1495,7 @@ function openTrip(id, noFly){
   if (!noFly) flyToStops(st);
   const scroll = noFly && document.querySelector(".sheet-in") ? document.querySelector(".sheet-in").scrollTop : 0;
   const fa = document.activeElement, keepF = fa && fa.dataset && fa.dataset.story && fa.id && $("#overlay").contains(fa) ? {id:fa.id, a:fa.selectionStart, b:fa.selectionEnd, v:fa.value} : null; if (keepF) STOP_OPEN.add(fa.dataset.story); /* a redraw while you type keeps your place in the field */
-  openSheet(`${BACKBAR}<div class="hero"><img src="${photo(coverPh.scene, coverPh.id, 960, 540)}" alt=""><div class="cap"><h2>${esc(t.title)}</h2><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${fmt(t.start)} – ${fmt(t.end)} · ${esc(t.country)}`}${ppl.length ? " · with " + esc(ppl.join(", ")) : ""}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
+  openSheet(`${BACKBAR}<div class="hero"><img src="${photo(coverPh.scene, coverPh.id, 960, 540)}" alt=""><div class="cap"><h2>${esc(t.title)}</h2><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${dRange(t.start, t.end, true)} · ${esc(t.country)}`}${ppl.length ? " · with " + esc(ppl.join(", ")) : ""}</p></div><button class="close" data-close aria-label="Close">✕</button></div>
    <div class="pad">
     <div class="facts"><div><b>${days(t)}</b><span>${days(t) === 1 ? "Day" : "Days"}</span></div><div><b>${st.length}</b><span>${st.length === 1 ? "Place" : "Places"}</span></div><div><b>${n}</b><span>${n === 1 ? "Photo" : "Photos"}</span></div>${t.homeMem ? "" : `<div><b>${tripMiles(t).toLocaleString()}</b><span>${tripMiles(t) === 1 ? "Mile" : "Miles"}</span></div>`}</div>
     <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>
@@ -1566,8 +1568,8 @@ let lbList = [], lbIdx = 0;
 /* swipe left for the next photo, right for the previous one, wherever photos are shown one at a time (Alan 11-13) */
 { let sw = null;
   document.addEventListener("touchstart", e => { const t = e.touches[0]; sw = e.touches.length === 1 && !(e.target.closest && e.target.closest("input,textarea,select")) ? {x:t.clientX, y:t.clientY, at:Date.now(), el:e.target} : null; }, {passive:true});
-  document.addEventListener("touchend", e => { if (!sw) return; const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, el = sw.el; sw = null;
-    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return; const dir = dx < 0 ? 1 : -1;
+  document.addEventListener("touchend", e => { if (!sw) return; const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, el = sw.el, ms = Date.now() - sw.at; sw = null;
+    if (ms > 700 || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return; const dir = dx < 0 ? 1 : -1;
     const lb = document.getElementById("lb"), pv = document.getElementById("pv"); let btn = null;
     if (lb && lb.contains(el)) btn = lb.querySelector(`[data-lb="${dir}"]`);
     else if (pv && pv.contains(el)) btn = pv.querySelector(`[data-pv-step="${dir}"]`);
@@ -1594,7 +1596,7 @@ function redrawAfterPhoto(s, id){
   try { worldCache.key = null; if (typeof renderBody === "function") renderBody(); renderStats(); } catch(e){} }
 function lbRemove(id){ const s = photoStop(id); if (!s) return;
   if (s.photos.length <= 1){ /* the last photo at a stop: the stop goes with it */
-    if (!s.trip || stopsOf(s.trip).length < 2){ toast("This is the only photo in this trip, so it stays"); return; }
+    if (!s.trip || stopsOf(s.trip).length < 2){ toast(`This is the only photo in this ${tnoun(s.trip)}, so it stays`); return; }
     const was = stopState[s.id]; stopState[s.id] = "ignored"; store.set("stopState", stopState);
     lbList = lbList.filter(x => x.id !== id); if (!lbList.length) closeLB(); else { lbIdx = Math.min(lbIdx, lbList.length - 1); renderLB(); }
     rerender(); if ($("#overlay").dataset.kind === "trip") openTrip(s.trip.id, true);
@@ -1728,7 +1730,7 @@ function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where<
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
 function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
 document.addEventListener("change", e => { if (e.target.id === "ldAll" && loadState){ loadState.bigCap = e.target.checked; refreshCapNotes(); return; } if (e.target.dataset && e.target.dataset.ldJoin != null && loadState){ forceJoin(+e.target.dataset.ldJoin, e.target.checked); return; } }, true);
-document.addEventListener("change", e => { if (e.target.id === "bigText"){ BIG_TEXT = e.target.checked; store.set("bigText", BIG_TEXT); applyTextSize(); toast(BIG_TEXT ? "Larger text on" : "Larger text off"); return; } if (e.target.id === "tripAddFiles" && e.target.files.length){ addPhotosToTrip(e.target.dataset.trip, [...e.target.files]); e.target.value = ""; return; } if (e.target.id === "tripFile" && e.target.files.length){ readTripFile(e.target.files[0]); e.target.value = ""; } if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else { const t = loadState.trips[v]; loadState.placed.set(p.file, t.pts[0]); const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${fmtShort(t.start)} – ${fmt(t.end)}). It's added anyway; set it back to Leave out if that's wrong.`); } } refreshWhy(); } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState){ $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); refreshWhy(); } if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
+document.addEventListener("change", e => { if (e.target.id === "bigText"){ BIG_TEXT = e.target.checked; store.set("bigText", BIG_TEXT); applyTextSize(); toast(BIG_TEXT ? "Larger text on" : "Larger text off"); return; } if (e.target.id === "tripAddFiles" && e.target.files.length){ addPhotosToTrip(e.target.dataset.trip, [...e.target.files]); e.target.value = ""; return; } if (e.target.id === "tripFile" && e.target.files.length){ readTripFile(e.target.files[0]); e.target.value = ""; } if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else { const t = loadState.trips[v]; loadState.placed.set(p.file, t.pts[0]); const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${dRange(t.start, t.end)}). It's added anyway; set it back to Leave out if that's wrong.`); } } refreshWhy(); } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState){ $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); refreshWhy(); } if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
   if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
   if (e.target.dataset && e.target.dataset.ldMove !== undefined && e.target.value){ const [si, j] = e.target.value.split(":").map(Number); moveStop(+e.target.dataset.ldMove, si, j); } });
@@ -2051,13 +2053,13 @@ function openReview(){
     ${(() => { const inT = tr.reduce((a, t) => a + t.photos, 0), atHome = Math.max(0, L.pts.length - inT), rh = store.get("realHome", null);
       return `<p class="ldfound">${L.homeMem ? `${plural(L.pts.length, "photo")} ${L.pts.length === 1 ? "makes" : "make"} your memory${tr[0] ? " " + esc(tr[0].title) : ""}.` : L.manual ? `${plural(L.pts.length, "photo")} with a location ${L.pts.length === 1 ? "makes" : "make"} your trip${tr[0] ? " " + esc(tr[0].title) : ""}.` : tr.length ? `<b>We found ${tmCount(tr)}</b> in your photos.${L.outside ? ` ${L.outside.toLocaleString()} ${L.outside === 1 ? "was" : "were"} outside your dates.` : ""}` : nearHomeLeft(L) ? `${plural(L.pts.length, "photo")} with a location, all taken close to home.` : `${plural(L.pts.length, "photo")} with a location, but none were far from home, so there are no trips yet.`}</p>${L.homeMem ? memFarHTML(L) : ""}
       ${L.limited ? `<p class="note" style="margin:0">${libAskHTML("some")}</p>` : ""}${tr.length ? `<p class="ldsum" id="ldTotal">${ldTotalText()}</p>${whyHTML(L) ? `<button class="linkbtn" data-ld-seeout style="margin-top:-4px">See the left-out photos and why</button>` : ""}<button class="btn primary ldgo" data-ld-add>Looks good, add ${L.homeMem ? "this memory" : kept === 1 ? (tr.find(t => t.keep) || {}).homeMem ? "this memory" : "this trip" : `these ${tmCount(tr.filter(t => t.keep))}`}</button>
-      <p class="ldhow">${tr.length > 1 ? "Untick any trip you don't want. " : ""}Anything wrong? Tap <b>Fix this ${L.homeMem ? "memory" : "trip"}</b> to rename it, merge it, split it or move a stop.</p>` : ""}
+      <p class="ldhow">${tr.length > 1 ? "Untick any trip you don't want. " : ""}Anything wrong? ${L.homeMem ? "Tap <b>Fix this memory</b> to rename it." : "Tap <b>Fix this trip</b> to rename it, merge it, split it or move a stop."}</p>` : ""}
       ${L.sample ? `<p class="ldhow">🏠 These sample photos belong to a sample traveler who lives in ${esc(L.home.label.replace(/ area$/, ""))}, so trips are worked out from there.${rh ? ` Your own home stays ${esc(rh.label.replace(/ area$/, ""))}.` : ""}</p>` : ""}`; })()}
     ${tr.map((t, i) => `<div class="suggest ldtrip">
       <div style="display:flex;gap:12px;align-items:flex-start"><label class="ldtick"><input type="checkbox" data-ld-keep="${i}" ${t.keep ? "checked" : ""} aria-label="Keep ${esc(t.title)}"></label>
       <img data-ld-cover="${i}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:12px;flex:none;background:var(--panel)">
       <div style="flex:1;min-width:0"><div class="ldname" data-ld-name="${i}">${esc(t.title)}</div>
-      <div class="ldline">${t.homeMem ? "🏠 Close to home · " : ""}${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(t.stops.length, "stop")} · <span data-ld-n="${i}">${plural(cardPhotos(t), "photo")}</span></div><div class="ldline ldcount" data-ld-count="${i}">${tripCountLine(t)}</div>
+      <div class="ldline">${t.homeMem ? "🏠 Close to home · " : ""}${dRange(t.start, t.end)} · ${plural(t.stops.length, "stop")} · <span data-ld-n="${i}">${plural(cardPhotos(t), "photo")}</span></div><div class="ldline ldcount" data-ld-count="${i}">${tripCountLine(t)}</div>
       <div class="ldline">${t.stops.map(s => s.unsure ? `${esc(s.name)}? <span class="checktag">check</span>` : esc(s.name)).join(" → ")}${t.extraStops ? ` <b>+ ${plural(t.extraStops, "more stop")} not shown</b> (the first ${MAX_STOPS} are kept)` : ""}</div></div></div>
       ${!t.keep && t.photos < 2 ? `<div class="ldwarn" data-ld-one="${i}">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
       <div class="ldwarn ldcap" data-ld-cap="${i}">${capNote(t)}</div><div data-ld-joinbox="${i}">${joinNote(t, i)}</div>
@@ -2097,6 +2099,9 @@ function placeHTML(L){ const list = L.noLocAll || []; if (!list.length || !(L.tr
 /* the trip a no-location photo falls in by its date, and where it goes now: the trip you picked, else its date trip unless you left it out */
 function dateTrip(L, p){ return p && p.t ? (L.trips || []).find(t => { const [a, b] = tripDayRange(t); return p.t >= a && p.t < b; }) || null : null; }
 function nlFate(L, p){ const pl = placeTrip(L, p); if (pl) return pl; const dt = dateTrip(L, p); return dt && !(L.skip && L.skip.has(p.file)) ? dt : null; }
+/* the trip it goes into, only while that trip is ticked: an unticked trip saves nothing, so its photos are left out too (Nikola r18) */
+function tripTicked(L, t){ const k = document.querySelector(`[data-ld-keep="${L.trips.indexOf(t)}"]`); return k ? k.checked : !!t.keep; }
+function nlLive(L, p){ const t = nlFate(L, p); return t && tripTicked(L, t) ? t : null; }
 function nlDate(t){ return new Date(t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); }
 function nlCap(p){ return p.kind === "bad" ? "Can't be read" : p.kind === "noexif" || !p.t ? "No date or place (screenshot or saved copy)" : nlDate(p.t) + " · no place saved"; }
 placeHTML.all = false;
@@ -2107,13 +2112,13 @@ function fillThumbs(){ const L = loadState; if (!L) return; document.querySelect
   const put = u => { if (u) im.src = u; else im.parentNode.classList.add("nothumb"); };
   if (THUMBS.has(f)){ put(THUMBS.get(f)); return; }
   thumbQ = thumbQ.then(async () => { if (!THUMBS.has(f)) THUMBS.set(f, await thumb(f, 480)); put(THUMBS.get(f)); }); }); }
-function drawTiles(){ const L = loadState; if (!L) return; document.querySelectorAll("[data-nl]").forEach(el => { const p = (L.noLocAll || [])[+el.dataset.nl]; if (!p) return; const t = nlFate(L, p);
-  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = t ? "Goes into " + t.title : "Left out";
+function drawTiles(){ const L = loadState; if (!L) return; document.querySelectorAll("[data-nl]").forEach(el => { const p = (L.noLocAll || [])[+el.dataset.nl]; if (!p) return; const to = nlFate(L, p), t = to && tripTicked(L, to) ? to : null;
+  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = t ? "Goes into " + t.title : to ? `Left out: ${to.title} isn't ticked` : "Left out";
   const kb = el.querySelector("[data-nl-keep]"), ob = el.querySelector("[data-nl-out]"); if (kb){ kb.classList.toggle("primary", !!t); kb.setAttribute("aria-pressed", t ? "true" : "false"); } if (ob){ ob.classList.toggle("primary", !t); ob.setAttribute("aria-pressed", t ? "false" : "true"); } });
   const n = $("#ldNoLocFate"); if (n) n.textContent = noLocFate(L); }
 /* set where one no-location photo goes: v = trip index, or -1 to leave it out */
 function setPlace(k, v){ const L = loadState, p = L && L.noLocAll[k]; if (!p) return;
-  if (!L.skip) L.skip = new Set(); L.skip.add(p.file); if (v < 0) L.placed.delete(p.file); else { const t = L.trips[v]; if (!t) return; L.placed.set(p.file, t.pts[0]); { const k2 = document.querySelector(`[data-ld-keep="${v}"]`); if (k2 && !k2.checked){ k2.checked = true; reviewSave(); updateAddCount(); } } /* adding a photo to a trip keeps that trip */ const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${fmtShort(t.start)} – ${fmt(t.end)}). It's added anyway; tap it again and choose Leave out if that's wrong.`); }
+  if (!L.skip) L.skip = new Set(); L.skip.add(p.file); if (v < 0) L.placed.delete(p.file); else { const t = L.trips[v]; if (!t) return; L.placed.set(p.file, t.pts[0]); { const k2 = document.querySelector(`[data-ld-keep="${v}"]`); if (k2 && !k2.checked){ k2.checked = true; reviewSave(); updateAddCount(); } } /* adding a photo to a trip keeps that trip */ const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${dRange(t.start, t.end)}). It's added anyway; tap it again and choose Leave out if that's wrong.`); }
   refreshWhy(); drawTiles(); }
 /* the big view of one no-location photo: see it, then add it to a trip or leave it out */
 let pvIdx = -1;
@@ -2156,7 +2161,7 @@ function whyHTML(L){ const why = ((L && L.why) || []).map((w, k) => ({w, k})).fi
     ${near.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(near.length, "photo")} taken near home</b>, so ${near.length === 1 ? "it isn't" : "they aren't"} part of a trip. To keep a day near home, use Add → A memory close to home.</p>${grid(near, "data-near-thumb")}` : ""}
     ${why.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(why.length, "photo")} taken outside your dates.</b> To bring ${why.length === 1 ? "it" : "them"} in, pick a longer time period and add again.</p>${grid(why, "data-why-thumb")}` : ""}</details>`; }
 function refreshWhy(){ const d = $("#ldWhy"); if (d && loadState){ whyHTML.open = d.open; d.outerHTML = whyHTML(loadState); fillThumbs(); } refreshCapNotes(); }
-function noLocFate(L){ const list = L.noLocAll || [], kept = list.filter(p => nlFate(L, p)).length;
+function noLocFate(L){ const list = L.noLocAll || [], kept = list.filter(p => nlLive(L, p)).length;
   return `These don't say where they were taken. Tap Keep on the ones you want. ${kept.toLocaleString()} kept, ${(list.length - kept).toLocaleString()} left out.`; }
 function moveStop(i, si, j){ const snap = reviewSnap(); const tr = loadState.trips, a = tr[i], b = tr[j]; const st = a.stops[si]; if (!st || !b) return;
   const near = b.stops.map(o => ({o, d:d3.geoDistance([st.lon, st.lat], [o.lon, o.lat]) * 3959})).sort((x, y) => x.d - y.d)[0], gap = Math.min(...b.pts.map(p => Math.abs(p.t - st.pts[0].t))) / DAY;
@@ -2191,7 +2196,7 @@ function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; cons
   const joins = L.trips.filter((t, i) => live(t, i) && t.repeat && !t.repeat.pending).map(t => { const n = repeatNew(t); return n ? `${plural(n, "new photo")} ${n === 1 ? "joins" : "join"} ${t.repeat.title}` : `${t.repeat.title} is already on your globe`; });
   /* one plain sentence that adds up: picked = saved + each reason the rest is left out */
   return `${L.native ? `We found ${plural(total, "photo")} from that ${L.memDay ? "day" : "time"}.` : `You picked ${plural(total, "photo")}.`} ${saved.toLocaleString()} will be saved to your globe${joins.length ? ` (${joins.join("; ")})` : ""}.${why.length && total > saved ? ` Left out: ${why.join(", ")}.` : ""}`; }
-function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); const L = loadState; if (L && L.trips) document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); }
+function updateAddCount(){ { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); if (typeof drawTiles === "function") drawTiles(); const L = loadState; if (L && L.trips) document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); }
 // the Add button always agrees with the receipt: nothing new to save means nothing to add
 function syncAddBtn(){ const L = loadState; const n = document.querySelectorAll("[data-ld-keep]:checked").length; const b = document.querySelector("[data-ld-add]");
   document.querySelectorAll("[data-ld-one]").forEach(el => { const k = document.querySelector(`[data-ld-keep="${el.dataset.ldOne}"]`); el.hidden = !!(k && k.checked); });
@@ -2309,7 +2314,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
       for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); } if (!url){ await new Promise(r => setTimeout(r, 1500)); url = await thumb(p.file, 720, true); } /* a phone short of memory late in a big import: wait, then try a smaller copy, rather than lose the photo */
         if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
         done++; prog.textContent = `Saving photos ${done} of ${total}…`;
-        const pid = sid + "-" + photos.length; if (!url){ failed++; const hf = isHeic(p.file); if (hf) heicFails++; photos.push(["missing", `${p.file.name || "A photo"}: ${hf ? "an iPhone HEIC photo this browser couldn't open" : "couldn't be shown (the file may be damaged)"}`, null, 0]); continue; }
+        const pid = sid + "-" + photos.length; if (!url){ failed++; const hf = isHeic(p.file); if (hf) heicFails++; photos.push(["missing", hf ? "An iPhone HEIC photo this browser couldn't open" : "A photo that couldn't be opened here. The original is still in your photo library", null, 0]); /* no file names on screen */ continue; }
         try { await idb.put("rp:" + pid, url); photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); } catch(e){ failed++; } }
       if (!photos.length) photos.push(["missing", heicFails ? "iPhone HEIC photos this browser couldn't open" : "Photos this browser couldn't open", null, 0]);
       const d = new Date(s.t); stops.push({...(cap === BIG_STOP ? {big:true} : {}), ...(chosen.length > cap ? {placedOver:true} : {}), id:sid, name:s.name, lat:+s.lat.toFixed(5), lon:+s.lon.toFixed(5), date:d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"), photos});
@@ -2339,7 +2344,7 @@ function openLaunchpad(v){
   const mem = trips.every(u => u.homeMem), head = trips.length > 1 ? `Your ${tmCount(trips)} are ready` : onlyJoin ? "Your trip is updated" : mem ? "Your memory is ready" : "Your trip is ready";
   const receipt = [`${plural(v.saved || 0, "photo")} saved`, v.already ? `${v.already.toLocaleString()} already on your globe, so not saved twice` : "", v.failed ? `${plural(v.failed, "photo")} couldn't be opened here${v.heicFails ? " (iPhone HEIC; try Safari)" : ""}, so ${v.failed === 1 ? "it wasn't" : "they weren't"} saved. The ${v.failed === 1 ? "original is" : "originals are"} still safe in your photo library` : "", v.left ? `left out: ${v.left}` : "", "nothing on your phone was changed"].filter(Boolean).join(" · ");
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(head)}${v.first && !mem ? `<div class="steps">Step 3 of 3 · Watch it</div>` : ""}
-    <div class="readycard"><img src="${photoURL(st[0] ? st[0].photos[0] : t.stops[0].photos[0])}" alt=""><div class="rc"><div class="rt">${esc(t.title)}</div><div class="rs">${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(st.length, "place")} · ${plural(n, "photo")}</div></div></div>
+    <div class="readycard"><img src="${photoURL(st[0] ? st[0].photos[0] : t.stops[0].photos[0])}" alt=""><div class="rc"><div class="rt">${esc(t.title)}</div><div class="rs">${dRange(t.start, t.end)} · ${plural(st.length, "place")} · ${plural(n, "photo")}</div></div></div>
     <p class="ldsum" id="readyReceipt">${receipt}.</p>
     <button class="btn primary playbig" data-replay="${t.id}">▶ Play my story</button>
     <button class="btn" data-open-trip="${t.id}" style="align-self:stretch;justify-content:center;min-height:52px">Open this ${t.homeMem ? "memory" : "trip"}</button>
@@ -2712,7 +2717,7 @@ async function replay(id, opts = {}){
   const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
-    <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { const c = tripCover(t); return photo(c.scene, c.id, 1280, 960); })()}') center/cover"><div><div class="d">${fmt(t.start)} – ${fmt(t.end)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
+    <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { const c = tripCover(t); return photo(c.scene, c.id, 1280, 960); })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
     <div class="card" id="rcard" style="opacity:0"></div>
     <div class="bar"><button class="btn" id="rprev" aria-label="Previous stop">‹</button><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rskip" aria-label="Next stop">›</button><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
   const alive = () => replayState?.token === token;
@@ -3007,7 +3012,7 @@ function recDraw(r){
   }
   // opening title card
   if (r.title > .01){ x.globalAlpha = r.title; if (r.cover && r.cover.complete && r.cover.naturalWidth){ const im = r.cover, sc = Math.max(VW / im.naturalWidth, VH / im.naturalHeight), w = im.naturalWidth * sc, h = im.naturalHeight * sc; try { x.drawImage(im, (VW - w) / 2, (VH - h) / 2, w, h); } catch(e){} } const g = x.createRadialGradient(VW / 2, VH / 2, 0, VW / 2, VH / 2, VH * .7); g.addColorStop(0, "rgba(6,10,20,.35)"); g.addColorStop(1, "rgba(6,10,20,.9)"); x.fillStyle = g; x.fillRect(0, 0, VW, VH);
-    const t = r.trip; x.textAlign = "center"; x.textBaseline = "alphabetic"; x.font = "500 24px 'JetBrains Mono', monospace"; x.fillStyle = "#f2cf8a"; x.fillText(`${fmt(t.start)} – ${fmt(t.end)}`.toUpperCase(), VW / 2, VH / 2 - 90);
+    const t = r.trip; x.textAlign = "center"; x.textBaseline = "alphabetic"; x.font = "500 24px 'JetBrains Mono', monospace"; x.fillStyle = "#f2cf8a"; x.fillText(`${dRange(t.start, t.end, true)}`.toUpperCase(), VW / 2, VH / 2 - 90);
     x.font = "86px 'Instrument Serif', Georgia, serif"; x.fillStyle = "#fff"; const tl = recWrap(x, t.title, VW - 100); tl.forEach((l, i) => x.fillText(l, VW / 2, VH / 2 + i * 88)); x.globalAlpha = 1; }
   // closing card
   if (r.endA > .01 && r.end){ x.globalAlpha = r.endA; x.fillStyle = "rgba(5,7,13,.62)"; x.fillRect(0, 0, VW, VH); x.textAlign = "center"; x.textBaseline = "alphabetic";
@@ -3073,7 +3078,7 @@ function saveChapter(id){ const name = ($("#chName").value || "").trim(), from =
   store.set("chapters", chapters); return true; }
 
 function tripItemHTML(t){ const st = stopsOf(t); const cover = tripCover(t); const n = st.reduce((a, s) => a + s.photos.length, 0); const ppl = tripPeople(t);
-  return `<div class="tripitem"><button class="item" data-open-trip="${t.id}"><img src="${photoURL(cover)}" alt=""><div class="txt"><div class="t">${esc(t.title)}${t.real ? "" : ` <span class="badge">Sample</span>`}</div><div class="s">${t.homeMem ? memDates(t) : `${fmtShort(t.start)} – ${fmt(t.end)} · ${plural(st.length, "place")}`} · ${plural(n, "photo")}${ppl.length ? " · with " + esc(ppl.slice(0, 3).join(", ")) + (ppl.length > 3 ? " +" + (ppl.length - 3) : "") : ""}${backAgain(t).length ? " · 🔁 back again" : ""}</div></div></button><button class="playbtn" data-replay="${t.id}" aria-label="Relive ${esc(t.title)}">▶</button></div>`; }
+  return `<div class="tripitem"><button class="item" data-open-trip="${t.id}"><img src="${photoURL(cover)}" alt=""><div class="txt"><div class="t">${esc(t.title)}${t.real ? "" : ` <span class="badge">Sample</span>`}</div><div class="s">${t.homeMem ? memDates(t) : `${dRange(t.start, t.end)} · ${plural(st.length, "place")}`} · ${plural(n, "photo")}${ppl.length ? " · with " + esc(ppl.slice(0, 3).join(", ")) + (ppl.length > 3 ? " +" + (ppl.length - 3) : "") : ""}${backAgain(t).length ? " · 🔁 back again" : ""}</div></div></button><button class="playbtn" data-replay="${t.id}" aria-label="Relive ${esc(t.title)}">▶</button></div>`; }
 let tripGroup = store.get("tripGroup", "date"); if (!["date", "people", "chapters"].includes(tripGroup)) tripGroup = "date";
 function tripsListHTML(){ let h = `<div class="catchips" role="group" aria-label="Group trips">${[["date", "Newest first"], ["people", "People"], ["chapters", "Life chapters"]].map(([k, l]) => `<button data-tgroup="${k}" aria-pressed="${tripGroup === k}">${l}</button>`).join("")}</div>`;
   const newest = a => [...a].sort((x, y) => y.start.localeCompare(x.start)); const TT = TRAVEL();
@@ -3100,7 +3105,7 @@ const nearHomeTrip = t => HOME_SET && !t.homeMem && t.stops.length > 0 && t.stop
 async function setTripKind(id){ const raw = store.get("realTrips", []) || [], r = raw.find(x => x.id === id); if (!r) return; const toHome = r.kind !== "home"; if (toHome) r.kind = "home"; else delete r.kind;
   if (!store.set("realTrips", raw)){ toast("Couldn't save"); return; } await refreshTrips(id, toHome ? "Moved to Close to home. It no longer counts as travel" : "It's a trip now, and counts toward your trips and miles");
   toast(toHome ? "Moved to Close to home: it's a memory now" : "It's a trip now", async () => { const raw2 = store.get("realTrips", []) || [], r2 = raw2.find(x => x.id === id); if (!r2) return; if (toHome) delete r2.kind; else r2.kind = "home"; store.set("realTrips", raw2); await refreshTrips(id); }); }
-const memDates = t => t.start === t.end ? fmt(t.start) : t.start.slice(0, 4) === t.end.slice(0, 4) ? `${fmtShort(t.start)} – ${fmt(t.end)}` : `${fmt(t.start)} – ${fmt(t.end)}`;
+const memDates = t => t.start === t.end ? fmt(t.start) : t.start.slice(0, 4) === t.end.slice(0, 4) ? `${dRange(t.start, t.end)}` : `${dRange(t.start, t.end, true)}`;
 function homeMemsHTML(mems){ let h = `<div class="sec">🏠 Close to home${mems.length ? ` · ${mems.length}` : ""}</div>`;
   if (!mems.length) return h + `<button class="item" data-home-mem><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">＋</div><div class="txt"><div class="t">Add a memory from close to home</div><div class="s">A night out, a birthday, a ball game. Pick its photos and give it a name</div></div></button>`;
   mems.forEach(t => h += tripItemHTML(t)); return h + `<button class="btn" data-home-mem style="align-self:flex-start">＋ Add a memory from close to home</button>`; }
@@ -3132,7 +3137,7 @@ function openBook(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; c
   el.innerHTML = `<div class="booktools"><button class="btn primary" data-book-page>🖨 Print or save as PDF</button><button class="btn" data-book-all aria-pressed="${bookAll}">${bookAll ? "Every photo" : "Up to 5 photos a stop"}</button><button class="btn" data-book-close>Close</button>
       <p class="note">${bookAll ? "The book shows every photo." : `The book prints up to 5 photos a stop, but your trip keeps them all. Tap <b>Up to 5 photos a stop</b> to switch to every photo.`} Tap the <b>Dedication</b> or <b>Looking back</b> page to write your own words. To make a PDF, pick <b>Save as PDF</b> as the printer${/iPhone|iPad/.test(navigator.userAgent) ? " (on iPhone, tap Share in the print preview, then Save to Files)" : ""}.${window.self !== window.top ? " If nothing opens here, open the trip book on playbrightharbor.com." : ""} Print opens the book on its own page (or saves it as a file), and you print from there with its Print button.</p></div>
     <div class="bookpages" data-book-id="${t.id}">
-      <section class="bcover"><img src="${photo(cov.scene, cov.id, 1600, 1100)}" alt=""><div class="bnum">${t.homeMem ? `${memDates(t)} · Close to home` : `${fmt(t.start)} – ${fmt(t.end)}${t.country ? " · " + esc(t.country) : ""}`}</div><h1>${esc(t.title)}</h1>
+      <section class="bcover"><img src="${photo(cov.scene, cov.id, 1600, 1100)}" alt=""><div class="bnum">${t.homeMem ? `${memDates(t)} · Close to home` : `${dRange(t.start, t.end, true)}${t.country ? " · " + esc(t.country) : ""}`}</div><h1>${esc(t.title)}</h1>
         ${ppl.length ? `<p>With ${esc(ppl.join(", "))}</p>` : ""}${chs.length ? `<p class="bnum">${chs.map(c => esc(c.name)).join(" · ")}</p>` : ""}
         <div class="bfacts">${plural(days(t), "day")} · ${plural(st.length, "place")} · ${plural(n, "photo")}${t.homeMem ? "" : ` · ${plural(tripMiles(t), "mile")}`}</div>
         ${bookMap(st)}
@@ -3303,14 +3308,14 @@ function openPhotoReview(id, at){ const t = TRIPS.find(x => x.id === id); if (!t
   prev = {trip:t, list, i:Math.max(0, Math.min(list.length - 1, at || 0)), hidden:Object.assign({}, PH_HIDDEN), changed:false}; drawPhotoReview(); }
 function drawPhotoReview(){ const R = prev, ph = R.list[R.i], s = ph.stop, off = !!R.hidden[ph.id];
   const stopLeft = (s.allPhotos || s.photos).filter(p => !R.hidden[p.id]).length; const isCover = (COVERS[R.trip.id] || "") === ph.id;
-  const kept = R.list.filter(p => !R.hidden[p.id]).length;
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">Photo ${R.i + 1} of ${R.list.length} in this trip · ${kept === R.list.length ? "all in the trip" : `${kept} in the trip, ${R.list.length - kept} removed`}</div><div class="note" style="margin:-4px 0 0">${esc(stopName(s))} · ${fmt(s.date)} · ${(s.allPhotos || s.photos).length === 1 ? "the only photo here" : `${(s.allPhotos || s.photos).length} photos here`}${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
+  const kept = R.list.filter(p => !R.hidden[p.id]).length, tn = tnoun(R.trip); /* a memory is never called a trip (Nikola r18) */
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">Photo ${R.i + 1} of ${R.list.length} in this ${tn} · ${kept === R.list.length ? `all in the ${tn}` : `${kept} in the ${tn}, ${R.list.length - kept} removed`}</div><div class="note" style="margin:-4px 0 0">${esc(stopName(s))} · ${fmt(s.date)} · ${(s.allPhotos || s.photos).length === 1 ? "the only photo here" : `${(s.allPhotos || s.photos).length} photos here`}${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
     <div style="position:relative;border-radius:14px;overflow:hidden;background:#0b0f1a"><img src="${photo(ph.scene, ph.id, 960, 720)}" alt="${esc(phLabel(ph) || ph.caption)}" style="width:100%;aspect-ratio:4/3;object-fit:contain;display:block;${off ? "opacity:.3;filter:grayscale(1)" : ""}">
-      ${off ? `<div style="position:absolute;inset:auto 0 12px 0;text-align:center"><span class="badge">Removed from this trip</span></div>` : isCover ? `<div style="position:absolute;top:10px;left:10px"><span class="badge">★ Trip cover</span></div>` : ""}</div>
+      ${off ? `<div style="position:absolute;inset:auto 0 12px 0;text-align:center"><span class="badge">Removed from this ${tn}</span></div>` : isCover ? `<div style="position:absolute;top:10px;left:10px"><span class="badge">★ ${tn === "memory" ? "Memory" : "Trip"} cover</span></div>` : ""}</div>
     <div><label class="l" for="prCap">Caption</label><input type="text" id="prCap" data-phlabel="${ph.id}" maxlength="60" value="${esc(phLabel(ph))}" placeholder="${ph.scene === "real" ? "What's in this photo? Shows in your story and video" : esc(ph.caption)}"></div>
-    <div class="row-btns" style="margin:0">${off ? `<button class="btn primary" data-pr-keep>✓ Put it back in the trip</button>` : `<button class="btn" data-pr-remove ${stopLeft <= 1 && stopsOf(R.trip).length < 2 ? "disabled" : ""}>${stopLeft <= 1 ? "✕ Remove photo and stop" : "✕ Remove from trip"}</button><button class="btn" data-pr-cover ${isCover ? "disabled" : ""}>${isCover ? "★ This is the cover" : "★ Make it the cover"}</button>`}</div>
+    <div class="row-btns" style="margin:0">${off ? `<button class="btn primary" data-pr-keep>✓ Put it back in the ${tn}</button>` : `<button class="btn" data-pr-remove ${stopLeft <= 1 && stopsOf(R.trip).length < 2 ? "disabled" : ""}>${stopLeft <= 1 ? "✕ Remove photo and stop" : `✕ Remove from ${tn}`}</button><button class="btn" data-pr-cover ${isCover ? "disabled" : ""}>${isCover ? "★ This is the cover" : "★ Make it the cover"}</button>`}</div>
     ${(() => { const arr = s.allPhotos || s.photos, k = arr.indexOf(ph); return `<div class="row-btns" style="margin:0"><button class="btn" data-pr-rot aria-label="Rotate a quarter turn">⟳ Rotate</button>${arr.length > 1 ? `<button class="btn" data-pr-move="-1" ${k <= 0 ? "disabled" : ""} aria-label="Move earlier in this stop">◀ Earlier</button><button class="btn" data-pr-move="1" ${k >= arr.length - 1 ? "disabled" : ""} aria-label="Move later in this stop">Later ▶</button><span class="note" style="align-self:center">Photo ${k + 1} of ${arr.length} at this stop</span>` : `<span class="note" style="align-self:center">Only photo at this stop, so there's nothing to reorder</span>`}</div>`; })()}
-    ${!off && stopLeft <= 1 ? `<p class="note" style="margin:0">${stopsOf(R.trip).length < 2 ? "This is the only photo in this trip, so it stays." : `This is the only photo at ${esc(stopName(s))}, so removing it removes the stop too.`}</p>` : ""}
+    ${!off && stopLeft <= 1 ? `<p class="note" style="margin:0">${stopsOf(R.trip).length < 2 ? `This is the only photo in this ${tn}, so it stays.` : `This is the only photo at ${esc(stopName(s))}, so removing it removes the stop too.`}</p>` : ""}
     <div class="row-btns" style="margin:0;justify-content:space-between"><button class="btn" data-pr-step="-1" ${R.i === 0 ? "disabled" : ""}>‹ Previous</button><button class="btn primary" data-pr-done>Done</button><button class="btn" data-pr-step="1" ${R.i === R.list.length - 1 ? "disabled" : ""}>Next ›</button></div></div>`, "prev"); }
 function prMove(d){ const ph = prev.list[prev.i], arr = ph.stop.allPhotos || ph.stop.photos, k = arr.indexOf(ph), j = k + d; if (j < 0 || j >= arr.length) return;
   [arr[k], arr[j]] = [arr[j], arr[k]]; const li = prev.list.indexOf(arr[k]), lj = prev.list.indexOf(arr[j]); [prev.list[li], prev.list[lj]] = [prev.list[lj], prev.list[li]];
@@ -3325,7 +3330,7 @@ async function prRotate(){ const ph = prev.list[prev.i];
 function prStep(d){ if (!prev) return; prev.i = Math.max(0, Math.min(prev.list.length - 1, prev.i + d)); drawPhotoReview(); }
 function prSetHidden(on){ const ph = prev.list[prev.i], st = ph.stop;
   if (on && (st.allPhotos || st.photos).filter(p => !prev.hidden[p.id]).length <= 1){ /* the last photo at a stop: the stop goes with it */
-    if (stopsOf(prev.trip).length < 2){ toast("This is the only photo in this trip, so it stays"); return; }
+    if (stopsOf(prev.trip).length < 2){ toast(`This is the only photo in this ${tnoun(prev.trip)}, so it stays`); return; }
     stopState[st.id] = "ignored"; store.set("stopState", stopState); toast(`Photo removed, and ${stopName(st)} with it`); }
   if (!on && stopState[st.id] === "ignored"){ delete stopState[st.id]; store.set("stopState", stopState); }
   if (on) prev.hidden[ph.id] = true; else delete prev.hidden[ph.id]; prev.changed = true;
@@ -3372,7 +3377,7 @@ async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []
   const lo = +new Date(t.start + "T00:00") - 7 * DAY, hi = +new Date(t.end + "T23:59") + 7 * DAY, far = items.filter(x => x.when < lo || x.when > hi);
   if (far.length){ const months = [...new Set(far.map(x => monthYear(ds(x.when))))].slice(0, 3).join(", ");
     const pick = await new Promise(res => { openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Heads up: different dates")}
-      <p style="margin:0">${far.length === items.length ? (items.length === 1 ? "This photo is" : `All ${items.length} photos are`) : `${far.length} of these ${items.length} photos are`} from ${esc(months)}, well outside ${esc(t.title)} (${fmtShort(t.start)} – ${fmt(t.end)}). Adding ${far.length === 1 ? "it" : "them"} would make the trip <b>${(() => { const a = Math.min(new Date(t.start + "T12:00"), ...far.map(x => x.when)), z = Math.max(new Date(t.end + "T12:00"), ...far.map(x => x.when)); return esc(fmt(ds(a)) + " – " + fmt(ds(z)) + " (" + plural(Math.round((new Date(ds(z) + "T12:00") - new Date(ds(a) + "T12:00")) / DAY) + 1, "day") + ")"); })()}</b>.</p>
+      <p style="margin:0">${far.length === items.length ? (items.length === 1 ? "This photo is" : `All ${items.length} photos are`) : `${far.length} of these ${items.length} photos are`} from ${esc(months)}, well outside ${esc(t.title)} (${dRange(t.start, t.end)}). Adding ${far.length === 1 ? "it" : "them"} would make the trip <b>${(() => { const a = Math.min(new Date(t.start + "T12:00"), ...far.map(x => x.when)), z = Math.max(new Date(t.end + "T12:00"), ...far.map(x => x.when)); return esc(fmt(ds(a)) + " – " + fmt(ds(z)) + " (" + plural(Math.round((new Date(ds(z) + "T12:00") - new Date(ds(a) + "T12:00")) / DAY) + 1, "day") + ")"); })()}</b>.</p>
       <div class="row-btns" style="margin:0">${far.length < items.length ? `<button class="btn primary" id="farSkip">Add only the ones from this trip</button>` : ""}<button class="btn${far.length < items.length ? "" : " primary"}" id="farAll">Add ${far.length === items.length ? (items.length === 1 ? "it" : "them") : "all"} anyway</button><button class="btn" id="farNo">Cancel</button></div></div>`, "far");
       const b = id => document.getElementById(id); if (b("farSkip")) b("farSkip").onclick = () => res("skip"); b("farAll").onclick = () => res("all"); b("farNo").onclick = () => res("no");
       const ov = $("#overlay"), obs = new MutationObserver(() => { if (!document.getElementById("farAll")){ obs.disconnect(); res("no"); } }); obs.observe(ov, {childList:true, subtree:true}); });
@@ -3461,11 +3466,11 @@ let pendingTrip = null;
 function openTripImport(d){ pendingTrip = d; const local = findLocalShared(d) || sampleFor(d); const nPh = d.trip.stops.reduce((a, s) => a + s.photos.length, 0);
   const ov = !local ? findOverlap(d) : null;
   if (ov){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(`Same ${tnoun(d.trip)} as yours?`)}<div class="steps">${esc(d.trip.title)}${d.from ? " · from " + esc(d.from) : ""}</div>
-    <p style="margin:0">You already have <b>${esc(ov.title)}</b> (${fmtShort(ov.start)} – ${fmt(ov.end)}) in the same place at the same time. If it's the same ${tnoun(d.trip)}, ${d.from ? esc(d.from) + "'s" : "their"} photos and best moments join yours. Photos you both have are kept once, and nothing of yours is changed.</p>
+    <p style="margin:0">You already have <b>${esc(ov.title)}</b> (${dRange(ov.start, ov.end)}) in the same place at the same time. If it's the same ${tnoun(d.trip)}, ${d.from ? esc(d.from) + "'s" : "their"} photos and best moments join yours. Photos you both have are kept once, and nothing of yours is changed.</p>
     ${myName() ? "" : `<div><label class="l" for="myName">Your name, for what you add</label><input type="text" id="myName" placeholder="Type your first name" maxlength="30"></div>`}
     <div class="row-btns" style="margin:0"><button class="btn primary" data-tin-go data-into="${ov.id}">Yes, merge into my ${tnoun(d.trip)}</button><button class="btn" data-tin-go>No, add it separately</button></div></div>`, "tin"); return; }
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(local ? `Merge this ${tnoun(d.trip)}?` : `Add this shared ${tnoun(d.trip)}?`)}<div class="steps">${esc(d.trip.title)}${d.from ? " · from " + esc(d.from) : ""}</div>
-    <p style="margin:0">${local ? `You already have this ${tnoun(d.trip)}. Anything new in ${d.from ? esc(d.from) + "'s" : "their"} copy is added: photos you don't have, new stops and their best moments. Nothing of yours is changed or removed.` : `${plural(d.trip.stops.length, "stop")} and ${plural(nPh, "photo")}, ${fmt(d.trip.start)} – ${fmt(d.trip.end)}. ${tnoun(d.trip) === "memory" ? "It joins your memories under Close to home" : "It joins your trips"}, and you can add your own photos and best moments, then send it back.`}</p>
+    <p style="margin:0">${local ? `You already have this ${tnoun(d.trip)}. Anything new in ${d.from ? esc(d.from) + "'s" : "their"} copy is added: photos you don't have, new stops and their best moments. Nothing of yours is changed or removed.` : `${plural(d.trip.stops.length, "stop")} and ${plural(nPh, "photo")}, ${dRange(d.trip.start, d.trip.end, true)}. ${tnoun(d.trip) === "memory" ? "It joins your memories under Close to home" : "It joins your trips"}, and you can add your own photos and best moments, then send it back.`}</p>
     ${myName() ? "" : `<div><label class="l" for="myName">Your name, for what you add</label><input type="text" id="myName" placeholder="Type your first name" maxlength="30"></div>`}
     ${local ? "" : `<p class="note" style="margin:0">Then add your photos and best moments, and send it back with 👥 Share this ${tnoun(d.trip)} on its page.</p>`}
     <div class="row-btns" style="margin:0"><button class="btn primary" data-tin-go>${local ? "Merge it in" : "Add the " + tnoun(d.trip)}</button><button class="btn" data-close>Not now</button></div></div>`, "tin"); }
@@ -3560,7 +3565,11 @@ document.addEventListener("click", e => {
   if ((b = g("[data-title-offer]"))){ titleOffer(b.dataset.titleOffer, b.dataset.use === "1"); return; }
   if ((b = g("[data-dup-use]"))){ dupUse(+b.dataset.dupUse, b.dataset.which); return; }
   if ((b = g("[data-dup-both]"))){ dupKeepBoth(+b.dataset.dupBoth); return; }
-  if ((b = g("[data-nav]"))){ const k = b.dataset.nav; if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
+  if (g("[data-bb-stay]")){ const bb = g(".backbar"); if (bb) bb.outerHTML = BACKBAR; return; }
+  if ((b = g("[data-nav]"))){ const k = b.dataset.nav;
+    if (k === "globe" && b.closest(".backbar") && !b.hasAttribute("data-bb-leave") && document.querySelector("[data-ld-add]") && loadState && loadState.trips && loadState.trips.length && !SAVING){ /* the import review isn't saved yet: ask before throwing it away (Nikola r18) */
+      const n = loadState.trips.length; b.closest(".backbar").innerHTML = `<p style="margin:0 0 8px;font-weight:600">Leave without adding ${n === 1 ? "this trip" : `these ${n} trips`}?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`; return; }
+    if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
   if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; const b2 = g("[data-trip-more]"); if (tripMoreOpen) TRIP_MORE.add(b2.dataset.tripId); else TRIP_MORE.delete(b2.dataset.tripId); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = "More for this " + ((TRIPS.find(u => u.id === b2.dataset.tripId) || {}).homeMem ? "memory " : "trip ") + (tripMoreOpen ? "▴" : "▾"); const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
   if (g("[data-open-layers]")){ openLayers(); return; }
   if (g("[data-add-memory]")){ closeSheet(); openSnap("food"); return; }
@@ -3850,7 +3859,7 @@ function openWelcome(){ /* the guided first run: three plain steps; home is aske
 /* ---------------- home: asked once, first thing; change it under More ---------------- */
 let homeNext = null;
 const homeClean = l => String(l || "").replace(/^near /i, "").split(",")[0].replace(/ area$/i, "").replace(/^\d+ (mi|km) \w+ of /i, "").trim();
-function openHomeSheet(next){ homeNext = next; const rh = store.get("realHome", null);
+function openHomeSheet(next, first){ homeNext = next; const rh = store.get("realHome", null);
   whereDraft = rh && isFinite(rh.lat) ? {lon:rh.lon, lat:rh.lat, label:rh.label, set:true} : {lon:0, lat:0, label:"Search your city, or use your location", set:false};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(rh ? "Your home" : next === "review" || next === "memory" ? "One question: where's home?" : "Where's home?")}
     <p style="margin:0">${next === "memory" ? "Some of these photos don't say where they were taken. They go at home, so we need to know where home is. Set it once; you can change it later under More." : rh ? "Change it any time. Trips are the places you went away from home." : next === "review" ? "Your trips are the places you went away from home, so we need to know where home is. Set it once; you can change it later under More." : "Tripsake finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
@@ -3858,7 +3867,7 @@ function openHomeSheet(next){ homeNext = next; const rh = store.get("realHome", 
     <div class="row-btns" style="margin:0"><button class="btn" data-home-geo>📍 Use my location</button><button class="btn primary" data-home-save>${next === "review" ? "Set home and find my trips" : next === "memory" ? "Set home and save my memory" : "Set as home"}</button></div>
     ${""}<!-- no "work it out from my photos": a trip's photos can look like home (Alan 11-13). Home is your location or the city you type. -->
     ${next === "welcome" ? `<div class="row-btns" style="margin:0"><button class="btn" data-home-skip style="font-size:calc(14.5px * var(--fs,1));opacity:.85">Skip for now</button><button class="btn" data-sample-look style="font-size:calc(14.5px * var(--fs,1));opacity:.85">Look around with a sample traveler</button></div>` : ""}
-    <div id="homeMsg" class="note" style="margin:0"></div></div>`, next === "review" ? "homeq" : "home"); if (next === "review" && loadState) loadState.awaitHome = true; }
+    <div id="homeMsg" class="note" style="margin:0"></div></div>`, next === "review" ? "homeq" : first ? "homefirst" : "home"); if (next === "review" && loadState) loadState.awaitHome = true; }
 function homeGeo(){ const m = $("#homeMsg"); if (!navigator.geolocation){ m.textContent = "This browser can't share your location. Search for your city instead."; return; }
   m.textContent = "Finding you…"; let geoDone = false; setTimeout(() => { if (!geoDone && /Finding you/.test(m.textContent)) m.textContent = "Couldn't get your location. Search for your city instead."; }, 12000); /* never leave "Finding you…" up forever */ navigator.geolocation.getCurrentPosition(pos => { geoDone = true; const lat = pos.coords.latitude, lon = pos.coords.longitude; const lab = whereLabel([lon, lat]), far = /^\d|^Open water/.test(lab), pl = far ? nearestPlace([lon, lat]) : null; setWhere(lon, lat, pl ? pl.p[0] + ", " + pl.p[1] : homeClean(lab) || "Your location"); m.textContent = far ? `Closest town we know: ${lab}. Is that right? If not, search for your city.` : "Found you. Tap Set as home if that's right."; },
     () => { geoDone = true; m.textContent = "Couldn't get your location. Search for your city instead."; }, {enableHighAccuracy:false, timeout:10000, maximumAge:600000}); }
@@ -3899,7 +3908,7 @@ window.addEventListener("resize", resize);
 if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => resize()).observe($("#stage"));
 setSheet("half"); resize(); rerender(); applyTheme();
 if (store.get("seen", false)){ LIGHT_ORDER.forEach(id => lit.set(id, 1)); pinsShown = 999; introRunning = false; $("#scan").hidden = true;
-  if (!store.get("realHome", null) && !store.get("homeSkipped", false) && !store.get("homeAsked", false)){ store.set("homeAsked", true); setTimeout(() => { if (!document.querySelector(".sheet")) openHomeSheet("more"); }, 900); } // people from before home-first get asked once
+  if (!store.get("realHome", null) && !store.get("homeSkipped", false) && !store.get("homeAsked", false)){ store.set("homeAsked", true); setTimeout(() => { if (!document.querySelector(".sheet")) openHomeSheet("more", true); }, 900); } // people from before home-first get asked once
   else if (!store.get("guided", false) && !store.get("guideShown", false)) setTimeout(() => { if (!document.querySelector(".sheet")) openGuide(1); }, 900); }
 else if (!REAL_TRIPS.length){ $("#scan").hidden = true; introRunning = false; globeDark = true; store.set("seen", true); store.set("staged", true); setTimeout(openWelcome, 300); } // first open starts with your photos
 else { intro(); store.set("seen", true); }
