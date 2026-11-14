@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.20.2 (Nikola r18: ask before leaving an import, memory wording, fate follows the tick) -->
+<!-- Tripsake v0.20.3 (no home set: trip or memory close to home?) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1382,7 +1382,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.20.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.20.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1438,7 +1438,7 @@ function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.d
 
 /* ---------------- overlays ---------------- */
 /* every screen gets the "Back to my globe" bar, so nobody gets lost (Alan 11-13); not on first-run questions, the photo review (its Done saves) or the ready screen (it has its own big button) */
-const NO_BACKBAR = new Set(["welcome", "homeq", "homefirst", "memheld", "prev", "ready"]); /* first-run questions, photo review and the ready screen have their own way on */
+const NO_BACKBAR = new Set(["welcome", "homeq", "homefirst", "memheld", "memask", "prev", "ready"]); /* first-run questions, photo review and the ready screen have their own way on */
 function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); if (!NO_BACKBAR.has(kind) && !html.includes('class="backbar"')) html = BACKBAR + html; $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
 // drag the grip (or a sheet title) down to close a sheet; titles don't select text while dragging
 (function(){ let y0 = null, el = null, dy = 0;
@@ -1918,6 +1918,12 @@ function openHomeMem(){
     <p class="note" style="margin:0">Photos without a location are placed at home.</p>`}
     <div id="ldProg" class="note" style="margin:0"></div></div>`, "loader");
 }
+function openMemAsk(){ const m = loadState.memPending; homeNext = null;
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Is this a trip or a memory?")}
+    <p style="margin:0">${m.title ? `<b>${esc(m.title)}</b>: ` : ""}${plural(m.pts.length, "photo")}. A <b>trip</b> is time away from home. A <b>memory close to home</b> is a night out or a day near where you live.</p>
+    <button class="btn primary" data-memask-trip style="align-self:stretch;justify-content:center;min-height:52px">✈️ It's a trip</button>
+    <button class="btn primary" data-memask-mem style="align-self:stretch;justify-content:center;min-height:52px">🏠 A memory close to home</button>
+    <p class="note" style="margin:0">For a memory, we'll ask where home is next, so it sits in the right place on your globe.</p></div>`, "memask"); }
 function openMemHeld(){ const m = loadState.memPending; homeNext = null;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("A memory close to home")}<div class="steps">Kept: nothing is lost</div>
     <p style="margin:0">${m.title ? `<b>${esc(m.title)}</b>: ` : ""}your ${plural(m.pts.length, "photo")} ${m.pts.length === 1 ? "is" : "are"} kept here. ${m.pts.length === 1 ? "It doesn't" : "They don't"} say where ${m.pts.length === 1 ? "it was" : "they were"} taken, so set home to save this memory.</p>
@@ -1926,7 +1932,11 @@ function openMemHeld(){ const m = loadState.memPending; homeNext = null;
     <button class="btn" data-mem-held-drop style="align-self:flex-start">Don't save this memory</button></div>`, "memheld"); }
 document.addEventListener("input", e => { if (e.target.id === "ldMemHeldTitle" && loadState && loadState.memPending) loadState.memPending.title = e.target.value.trim(); });
 document.addEventListener("click", e => { if (!e.target.closest) return; if (e.target.closest("[data-mem-held-home]")){ if (loadState && loadState.memPending) openHomeSheet("memory"); }
-  else if (e.target.closest("[data-mem-held-drop]")){ closeSheet(); } });
+  else if (e.target.closest("[data-mem-held-drop]")){ closeSheet(); }
+  else if (e.target.closest("[data-memask-mem]")){ if (loadState && loadState.memPending) openHomeSheet("memory"); }
+  else if (e.target.closest("[data-memask-trip]")){ const m = loadState && loadState.memPending; if (!m) return; delete loadState.memPending; loadState.homeMem = false; const located = m.pts.filter(p => !p.atHome);
+    if (located.length) m.pts.forEach(p => { if (p.atHome){ p.lat = d3.median(located, q => q.lat); p.lon = d3.median(located, q => q.lon); delete p.atHome; } });
+    openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Your trip")}<div id="ldProg" class="note" style="margin:0"></div></div>`, "loader"); memFinish(m.pts, m, $("#ldProg")); } });
 function openManual(){
   loadState = {period:"all", from:"", to:"", manual:true};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Make a trip by hand")}<div class="steps">One trip, from the photos you choose</div>
@@ -1985,6 +1995,8 @@ async function processFiles(files){
     pts.push({file:f, lat:ex.lat, lon:ex.lon, t});
   }
   pts.sort((x, y) => x.t - y.t);
+  if (loadState.homeMem && !loadState.sample){ const rh = store.get("realHome", null); if (!(rh && isFinite(rh.lat)) && pts.some(p => !p.atHome)){ /* no home set yet: ask whether this is a trip or a memory close to home, and only ask for home if it's a memory (Alan 11-14) */
+    loadState.memPending = {pts, noLoc, noLocNames, noLocPts, outside, total:files.length, why, noLocAll, title:(($("#ldManTitle") || {}).value || "").trim()}; openMemAsk(); return; } }
   if (loadState.homeMem && pts.some(p => p.atHome)){ const rh = store.get("realHome", null), located = pts.filter(p => !p.atHome), hh = rh && isFinite(rh.lat) ? rh : located.length ? {lat:d3.median(located, p => p.lat), lon:d3.median(located, p => p.lon)} : null;
     if (!hh){ /* no home set and no photo knows where it was: ask, never guess a city */ loadState.memPending = {pts, noLoc, noLocNames, noLocPts, outside, total:files.length, why, noLocAll, title:(($("#ldManTitle") || {}).value || "").trim()}; openHomeSheet("memory"); return; }
     pts.forEach(p => { if (p.atHome){ p.lat = hh.lat; p.lon = hh.lon; } }); }
@@ -3862,7 +3874,7 @@ const homeClean = l => String(l || "").replace(/^near /i, "").split(",")[0].repl
 function openHomeSheet(next, first){ homeNext = next; const rh = store.get("realHome", null);
   whereDraft = rh && isFinite(rh.lat) ? {lon:rh.lon, lat:rh.lat, label:rh.label, set:true} : {lon:0, lat:0, label:"Search your city, or use your location", set:false};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(rh ? "Your home" : next === "review" || next === "memory" ? "One question: where's home?" : "Where's home?")}
-    <p style="margin:0">${next === "memory" ? "Some of these photos don't say where they were taken. They go at home, so we need to know where home is. Set it once; you can change it later under More." : rh ? "Change it any time. Trips are the places you went away from home." : next === "review" ? "Your trips are the places you went away from home, so we need to know where home is. Set it once; you can change it later under More." : "Tripsake finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
+    <p style="margin:0">${next === "memory" ? (loadState && loadState.memPending && loadState.memPending.pts.some(p => p.atHome) ? "Some of these photos don't say where they were taken. They go at home, so we need to know where home is. Set it once; you can change it later under More." : "Memories close to home are kept around where you live, so we need to know where home is. Set it once; you can change it later under More.") : rh ? "Change it any time. Trips are the places you went away from home." : next === "review" ? "Your trips are the places you went away from home, so we need to know where home is. Set it once; you can change it later under More." : "Tripsake finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
     ${whereHTML("Your home stays on this device.").replace(/<button class="btn" data-where-map>[^<]*<\/button>/, "").replace('<small class="guesstag">Not set yet</small>', '<small class="guesstag">Not set yet · </small>')}
     <div class="row-btns" style="margin:0"><button class="btn" data-home-geo>📍 Use my location</button><button class="btn primary" data-home-save>${next === "review" ? "Set home and find my trips" : next === "memory" ? "Set home and save my memory" : "Set as home"}</button></div>
     ${""}<!-- no "work it out from my photos": a trip's photos can look like home (Alan 11-13). Home is your location or the city you type. -->
