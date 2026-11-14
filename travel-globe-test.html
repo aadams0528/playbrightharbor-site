@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.20.3 (no home set: trip or memory close to home?) -->
+<!-- Tripsake v0.21.0 (Seasons & Holidays globe style) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -981,7 +981,42 @@ const THEMES = {
    const c = [-P.rotate()[0], -P.rotate()[1]]; const ds = Math.max(1, Math.min(6, R/160));
    buildDots().forEach(d => { if (d3.geoDistance([d[0], d[1]], c) > 1.55) return; const p = P([d[0], d[1]]); if (p[0] < -10 || p[0] > W+10 || p[1] < -10 || p[1] > H+10) return; const v = lit.get(d[2]) || 0; x.fillStyle = v ? `rgba(255,207,106,${.35 + .65*v})` : "rgba(124,160,220,.4)"; x.fillRect(p[0]-ds*.8, p[1]-ds*.8, ds*1.6, ds*1.6); }); }}
 };
-const THEME_ORDER = ["night","atlas","toy","scratch","dots"];
+
+/* ---------------- Seasons & Holidays globe (Alan 11-14): the real season on each half of the world, and a touch of each holiday ---------------- */
+// holiday dates match Wordglow's calendar; window.TG_DATE (tests only) pretends it's another day
+const SH_DECOS = [
+  {id:"newyear", name:"Happy New Year", at:y => new Date(y, 0, 1), before:4, after:1, fall:["✨","🎉"], c1:"#f5c542", c2:"#8c5cf6"},
+  {id:"valentine", name:"Happy Valentine's Day", at:y => new Date(y, 1, 14), before:7, after:0, fall:["💕"], c1:"#ff5c8a", c2:"#ffc2d4"},
+  {id:"stpat", name:"Happy St. Patrick's Day", at:y => new Date(y, 2, 17), before:7, after:0, fall:["🍀"], c1:"#2fbf71", c2:"#f5c542"},
+  {id:"easter", name:"Happy Easter", at:y => shEaster(y), before:7, after:0, fall:["🌸"], c1:"#b98cff", c2:"#ffd36b"},
+  {id:"july4", name:"Happy Fourth of July", at:y => new Date(y, 6, 4), before:6, after:1, fall:["🎆","⭐"], c1:"#e5484d", c2:"#3b82f6"},
+  {id:"halloween", name:"Happy Halloween", at:y => new Date(y, 9, 31), before:10, after:0, fall:["🦇","🎃"], c1:"#ff8a1f", c2:"#6b3fa0"},
+  {id:"thanksgiving", name:"Happy Thanksgiving", at:y => shNth(y, 10, 4, 4), before:14, after:1, fall:["🍂","🍁"], c1:"#d9822b", c2:"#8b5a2b"},
+  {id:"christmas", name:"Merry Christmas", at:y => new Date(y, 11, 25), before:24, after:1, fall:["❄️"], c1:"#e5484d", c2:"#2fbf71"},
+];
+function shEaster(y){ const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451); return new Date(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1); }
+function shNth(y, month, weekday, n){ const first = new Date(y, month, 1), off = (weekday - first.getDay() + 7) % 7; return new Date(y, month, 1 + off + 7 * (n - 1)); }
+function shToday(){ const d = window.TG_DATE ? new Date(window.TG_DATE + "T12:00:00") : new Date(); d.setHours(12, 0, 0, 0); return d; }
+function shHoliday(){ const d = shToday(); for (const h of SH_DECOS) for (const y of [d.getFullYear() - 1, d.getFullYear(), d.getFullYear() + 1]){ const at = h.at(y); at.setHours(12, 0, 0, 0); const days = Math.round((at - d) / 864e5); if (days <= h.before && days >= -h.after) return {...h, days}; } return null; }
+// the season in the north; the south is the opposite
+const SH_SEASONS = ["winter", "spring", "summer", "autumn"], SH_TINT = {winter:"rgba(226,240,255,.34)", spring:"rgba(130,214,150,.26)", summer:"rgba(255,206,110,.28)", autumn:"rgba(232,146,64,.30)"};
+function shSeason(){ const m = shToday().getMonth(), n = SH_SEASONS[Math.floor(((m + 1) % 12) / 3)]; return {north:n, south:SH_SEASONS[(SH_SEASONS.indexOf(n) + 2) % 4]}; }
+const SH_NORTH = d3.geoCircle().center([0, 90]).radius(90)(), SH_SOUTH = d3.geoCircle().center([0, -90]).radius(90)();
+function shDesc(){ const s = shSeason(), h = shHoliday(); return `The real seasons on each half of the world: now ${s.north} in the north and ${s.south} in the south.${h ? ` ${h.days > 0 ? `${h.name.replace(/^(Happy|Merry) /, "")} is coming` : h.name + "!"}, so the globe is dressed for it.` : " Holidays add a little decoration."} Pick another style to turn it off.`; }
+THEMES.seasons = {name:"Seasons & Holidays", get desc(){ return shDesc(); }, dark:true, pin:"#f2b24a", route:THEMES.night.route, diary:THEMES.night.diary, ink:"#eef1f8", label:THEMES.night.label,
+  get animated(){ return !!shHoliday() && !REDUCED(); },
+  base(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(), s = shSeason(); x.fillStyle = "#060a14"; x.fillRect(0,0,W,H); starfield(x, W, H, t, "#cfd8ff");
+   const glow = h ? h.c1 : "#7aa0ff", atm = x.createRadialGradient(cx,cy,R*.92,cx,cy,R*1.18); atm.addColorStop(0, h ? glow + "66" : "rgba(120,160,255,.28)"); atm.addColorStop(1,"rgba(120,160,255,0)"); x.fillStyle = atm; x.beginPath(); x.arc(cx,cy,R*1.18,0,7); x.fill();
+   const oc = x.createRadialGradient(cx-R*.3,cy-R*.35,R*.1,cx,cy,R); oc.addColorStop(0,"#13224a"); oc.addColorStop(1,"#08112a"); x.beginPath(); path(sphere); x.fillStyle = oc; x.fill();
+   x.beginPath(); path(graticule); x.strokeStyle = "rgba(150,175,230,.07)"; x.lineWidth = .6; x.stroke();
+   x.beginPath(); countries.forEach(f => { if (!lit.get(f.id)) path(f); }); x.fillStyle = "#1b2741"; x.fill();
+   [[SH_NORTH, s.north], [SH_SOUTH, s.south]].forEach(([half, se]) => { x.save(); x.beginPath(); path(half); x.clip(); x.beginPath(); countries.forEach(f => { if (!lit.get(f.id)) path(f); }); x.fillStyle = SH_TINT[se]; x.fill(); x.restore(); }); /* each half of the world in its own season */
+   countries.forEach(f => { const v = lit.get(f.id); if (!v) return; x.beginPath(); path(f); x.fillStyle = `rgba(242,178,74,${.18 + .5*v})`; x.shadowColor = "rgba(242,178,74,.8)"; x.shadowBlur = 18*v; x.fill(); x.shadowBlur = 0; x.strokeStyle = `rgba(255,216,140,${.7*v})`; x.lineWidth = .8; x.stroke(); }); /* your places light up exactly as on Night Lights */
+   x.beginPath(); path(borders); x.strokeStyle = "rgba(160,180,225,.16)"; x.lineWidth = .5; x.stroke();
+   if (h){ x.beginPath(); path(sphere); x.strokeStyle = h.c2 + "aa"; x.lineWidth = 2; x.stroke(); } },
+  overlay(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(); if (!h || W < 200) return; const bits = h.fall, n = REDUCED() ? 0 : 7; x.save(); x.globalAlpha = .55; x.font = `${Math.max(14, Math.min(22, W / 24))}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; x.textAlign = "center";
+   for (let i = 0; i < n; i++){ const sp = .5 + (i * 37 % 10) / 20, px = ((i * 137 + 23) % 100) / 100 * W, py = ((t / 45) * sp + i * (H + 40) / n) % (H + 40) - 20, sway = Math.sin(t / 1400 + i) * 14; x.fillText(bits[i % bits.length], px + sway, py); } x.restore(); }};
+const THEME_ORDER = ["night","atlas","toy","scratch","dots","seasons"];
 let themeKey = store.get("theme", "night"); if (!THEMES[themeKey]) themeKey = "night";
 const TH = () => THEMES[themeKey];
 function themeThumb(key){
@@ -1382,7 +1417,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.20.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
