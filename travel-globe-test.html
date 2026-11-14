@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.24.0 (simpler trip page, one editor) -->
+<!-- Tripsake v0.24.1 (round 21 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -474,7 +474,7 @@ label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;marg
 .btn.playbig{width:100%;justify-content:center;min-height:56px;font-size:calc(19px * var(--fs,1));border-radius:14px}
 .tripmore{display:flex;flex-direction:column;gap:6px}
 .tripmore[hidden]{display:none}
-.tmhead{font-size:calc(15px * var(--fs,1));font-weight:700;color:var(--muted);margin:8px 2px 0}.bigact{min-height:60px;justify-content:flex-start;gap:14px;font-size:calc(18px * var(--fs,1));font-weight:600;text-align:left;width:100%;box-sizing:border-box}.bigact .ic{font-size:calc(24px * var(--fs,1));width:32px;text-align:center}.vedcov.on{background:color-mix(in srgb,var(--lit) 22%,var(--panel));border-color:var(--lit);color:var(--ink)}
+.tmhead{font-size:calc(15px * var(--fs,1));font-weight:700;color:var(--muted);margin:8px 2px 0}.bigact{min-height:60px;justify-content:flex-start;gap:14px;font-size:calc(18px * var(--fs,1));font-weight:600;text-align:left;width:100%;box-sizing:border-box}.bigact .ic{font-size:calc(24px * var(--fs,1));width:32px;text-align:center}.vedhint{position:absolute;left:8px;bottom:8px;padding:4px 10px;border-radius:999px;background:rgba(6,10,20,.78);color:#fff;font-weight:600;font-size:calc(15px * var(--fs,1));pointer-events:none}.vedph.lifted .vedhint{display:none}.vedcov.on{background:color-mix(in srgb,var(--lit) 22%,var(--panel));border-color:var(--lit);color:var(--ink)}
 .morerow{min-height:56px}
 .morerow.big{min-height:68px}
 .morerow.big .t{font-size:calc(18px * var(--fs,1))}
@@ -1464,7 +1464,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.24.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.24.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1521,7 +1521,11 @@ function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.d
 /* ---------------- overlays ---------------- */
 /* every screen gets the "Back to my globe" bar, so nobody gets lost (Alan 11-13); not on first-run questions, the photo review (its Done saves) or the ready screen (it has its own big button) */
 const NO_BACKBAR = new Set(["welcome", "homeq", "homefirst", "memheld", "memask", "prev", "ready"]); /* first-run questions, photo review and the ready screen have their own way on */
-function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); if (!NO_BACKBAR.has(kind) && !html.includes('class="backbar"')) html = BACKBAR + html; $("#overlay").dataset.kind = kind; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
+/* a sheet opened from a trip page (share, video) leads back to that trip page, by its bar and by ✕ (Cooper, Muse r21) */
+let PEND_TRIP = null; const TRIPBAR = t => `<div class="backbar"><button class="btn" data-open-trip="${t.id}">‹ Back to ${esc(t.title)}</button></div>`;
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-share],[data-tshare]"); PEND_TRIP = b && $("#overlay").dataset.kind === "trip" && $("#overlay").contains(b) && selectedTrip ? selectedTrip.id : null; }, true);
+function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); const ft = kind !== "trip" && PEND_TRIP && TRIPS.find(x => x.id === PEND_TRIP); PEND_TRIP = null;
+  if (!NO_BACKBAR.has(kind) && !html.includes('class="backbar"')) html = (ft ? TRIPBAR(ft) : BACKBAR) + html; $("#overlay").dataset.kind = kind; $("#overlay").dataset.trip = ft ? ft.id : kind === "vedit" && VED_BACK && TRIPS.some(x => x.id === VED_BACK) ? VED_BACK : ""; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
 // drag the grip (or a sheet title) down to close a sheet; titles don't select text while dragging
 (function(){ let y0 = null, el = null, dy = 0;
   document.addEventListener("pointerdown", e => { const h = e.target.closest(".sheet-grip, .sheet-in h2"); if (!h || e.target.closest("button,input,textarea,select")) return; el = h.closest(".sheet-in"); if (!el) return; y0 = e.clientY; dy = 0; el.style.transition = "none"; });
@@ -1542,7 +1546,7 @@ function leaveAsk(){ const what = unsavedWhat(); if (!what) return false; const 
   bar.innerHTML = `<p style="margin:0 0 8px;font-weight:600">${what[0].toUpperCase() + what.slice(1)} ${many ? "aren't" : "isn't"} saved yet. Leave anyway?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`;
   bar.setAttribute("role", "alert"); bar.scrollIntoView && bar.scrollIntoView({block:"nearest"}); const st = bar.querySelector("[data-bb-stay]"); if (st) st.focus({preventScroll:true}); return true; } /* said out loud and focused, so a screen reader hears the question (Nikola r20) */
 /* a close the person asked for (✕, background tap, Escape, swipe down): an unsaved import asks first */
-function userClose(){ if (leaveAsk()) return false; closeSheet(); return true; }
+function userClose(){ if (leaveAsk()) return false; const tid = $("#overlay").dataset.trip; if (tid && TRIPS.some(x => x.id === tid) && !replayState){ openTrip(tid, true); return true; } closeSheet(); return true; }
 function closeSheet(force){ if (SAVING && force !== true){ toast("Saving your photos. One moment, it finishes by itself"); return; } if (typeof vrec !== "undefined" && vrec) vrecCancel(); if ($("#overlay").dataset.kind === "homeq" && loadState && loadState.awaitHome && loadState.pts && loadState.pts.length){ homeNext = null; openWelcome(); return; } /* closing the home question never loses the photos already read: back to the start, with a way to carry on */ if ($("#overlay").dataset.kind === "home" && homeNext === "memory" && loadState && loadState.memPending){ openMemHeld(); return; } /* closing "Where's home?" on a memory keeps its name and photos */ if ($("#overlay").dataset.kind === "memheld" && loadState && loadState.memPending && force !== true){ delete loadState.memPending; setTimeout(() => toast("Memory not saved. Your photos are still in your photo library"), 0); } const wasTrip = $("#overlay").dataset.kind === "trip"; if (["welcome", "loader", "home"].includes($("#overlay").dataset.kind)) setTimeout(() => { if (!document.querySelector(".sheet")) lightSample(); }, 0); $("#overlay").dataset.kind = ""; $("#overlay").innerHTML = ""; if (wasTrip) document.querySelectorAll(".toast.undo").forEach(x => { if (!x.querySelector(".tbar") && !/Heads up/.test(x.textContent)) undoCountdown(x, 10000); }); /* leaving the trip never loses an Undo: it now counts down 10 seconds */ if (wasTrip && !replayState && !document.body.classList.contains("replaying")){ selectedTrip = null; flyTo(HOME.lon, 25, 1, 1000); } if (!replayState && typeof music !== "undefined" && music.playing) music.stop(.6); if (replayState && replayState.pickerPause){ replayState.pickerPause = false; replayState.paused = false; const pb = document.getElementById("rpause"); if (pb) pb.textContent = "❚❚"; } }
 function flyToStops(st, ms = 1300){ if (!st.length) return; const lats = st.map(s => s.lat), lons = st.map(s => s.lon);
   flyTo(d3.mean(lons), d3.mean(lats), Math.min(14, 2.2 / Math.max(.15, d3.geoDistance([d3.min(lons), d3.min(lats)], [d3.max(lons), d3.max(lats)]) * 3)), ms); }
@@ -2275,6 +2279,7 @@ function whyHTML(L){ const why = ((L && L.why) || []).map((w, k) => ({w, k})).fi
     ${why.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(why.length, "photo")} taken outside your dates.</b> To bring ${why.length === 1 ? "it" : "them"} in, pick a longer time period and add again.</p>${grid(why, "data-why-thumb")}` : ""}</details>`; }
 function refreshWhy(){ const d = $("#ldWhy"); if (d && loadState){ whyHTML.open = d.open; d.outerHTML = whyHTML(loadState); fillThumbs(); } refreshCapNotes(); }
 function noLocFate(L){ const list = L.noLocAll || [], kept = list.filter(p => nlLive(L, p)).length;
+  if (list.length && L.savedNoLoc && list.every(p => L.savedNoLoc.has(p.file))) return "These photos are already saved."; /* nothing to choose (Cooper r21) */
   return `These don't say where they were taken. Tap Keep on the ones you want. ${kept.toLocaleString()} kept, ${(list.length - kept).toLocaleString()} left out.`; }
 function moveStop(i, si, j){ const snap = reviewSnap(); const tr = loadState.trips, a = tr[i], b = tr[j]; const st = a.stops[si]; if (!st || !b) return;
   const near = b.stops.map(o => ({o, d:d3.geoDistance([st.lon, st.lat], [o.lon, o.lat]) * 3959})).sort((x, y) => x.d - y.d)[0], gap = Math.min(...b.pts.map(p => Math.abs(p.t - st.pts[0].t))) / DAY;
@@ -2373,7 +2378,7 @@ async function noLocSaved(L){ if (!L || !L.noLocAll || !L.noLocAll.length) retur
     const prints = []; for (const x of c){ const f = await picPrint(imgCache.get("rp:" + x.o.id + "-" + x.k)); if (f) prints.push({f, x}); } if (!prints.length) continue;
     let u = null; try { u = await thumb(p.file, 1024, true); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (!f) continue;
     const hit = prints.find(q => samePic(f, q.f)); if (hit) L.savedNoLoc.set(p.file, hit.x.e.title); }
-  if (loadState === L && L.savedNoLoc.size){ updateAddCount(); refreshCapNotes(); } }
+  if (loadState === L && L.savedNoLoc.size){ updateAddCount(); refreshCapNotes(); const nf = $("#ldNoLocFate"); if (nf) nf.textContent = noLocFate(L); } }
 /* the photo shrunk and saved exactly as a saved one was (1024 px), so a re-import of the same picture matches it closely */
 async function savedSame(file, prints){ let u = null; try { u = await thumb(file, 1024, true); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; return !!f && prints.some(q => samePic(f, q)); }
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = travelRaw(store.get("realTrips", []));
@@ -2422,18 +2427,20 @@ async function addRealTripsRun(L, pick, names, hideSample){
   if (!$("#ldPin") || $("#ldPin").checked) pick.forEach(({t}) => { if (!t.pinnedDone){ pinNoLoc(t); t.pinnedDone = true; } });
   if (L.placed && L.placed.size) pick.forEach(({t}) => placeChosen(L, t));
   const btn = document.querySelector("[data-ld-add]") || {}; btn.disabled = true; const progEl = $("#ldProg"); const prog = {set textContent(v){ const el = document.getElementById("ldProg") || progEl; if (el) el.textContent = v; const m = /([\d,]+) of ([\d,]+)/.exec(v || ""); if (m) saveCard(+m[1].replace(/,/g, ""), +m[2].replace(/,/g, "")); }};
-  const existing = store.get("realTrips", []); const out = [], joined = []; const base = Date.now().toString(36); let done = 0, failed = 0, heicFails = 0;
+  const existing = store.get("realTrips", []); const out = [], joined = []; const base = Date.now().toString(36); let done = 0, failed = 0, heicFails = 0; const jw = {plan:0, full:0, fail:0, unchecked:0, failed:new Set()}; /* why photos meant for a saved trip didn't join it, so the message is honest (Muse r21) */
   const cap = stopCap(); const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + stopPick(s.pts, cap).keep.length, 0), 0);
   for (const {t, i} of pick){
     { const e = t.homeMem || L.homeMem ? null : travelRaw(existing).find(x => t.forceJoin ? x.id === t.forceJoin : sameTripAs(x, t)); if (e){ /* already saved: same dates and places, so only its new photos join that trip */
-      let plan = (t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep).filter(x => !repeatOut(L, t, x)); let got = 0;
+      let plan = (t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep).filter(x => !repeatOut(L, t, x)); let got = 0; if (t.repeat && t.repeat.unchecked) jw.unchecked++;
       { const have = new Set(plan.map(x => x.p.file)), kept = t.stops.map(s => ({s, pts:s.pts.filter(p => p.pinned && !have.has(p.file))})).filter(x => x.pts.length); /* a no-location photo you tapped Keep on joins this trip too, unless that same picture is already in it */
         if (kept.length){ const more = await repeatPlan({stops:kept.map(x => ({pts:x.pts, own:x.s}))}, e); plan = plan.concat(more.map(r => ({s:r.s.own, p:r.p}))); } }
+      jw.plan += plan.length;
       for (const {s, p} of plan){ let es = e.stops.map(q => ({q, d:d3.geoDistance([q.lon, q.lat], [s.lon, s.lat])})).sort((a, b) => a.d - b.d)[0]; es = es.d * KM < 15 ? es.q : null;
         if (!es){ const dd = new Date(s.t); es = {id:e.id + "x" + Date.now().toString(36) + e.stops.length, name:s.name, lat:+s.lat.toFixed(5), lon:+s.lon.toFixed(5), date:dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"), photos:[]}; e.stops.push(es); e.stops.sort((a, b) => a.date.localeCompare(b.date)); } /* a new place on the same trip becomes a new stop */
-        const vis = es.photos.filter((ph, k) => !PH_HIDDEN[es.id + "-" + k]).length; if (vis >= Math.max(stopLimit(es), cap) && !p.pinned) continue;
-        let url = await thumb(p.file, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e2){ url = null; } } if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ failed++; continue; }
-        try { await idb.put("rp:" + es.id + "-" + es.photos.length, url); } catch(e2){ failed++; continue; } es.photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); got++; done++; prog.textContent = `Saving photos ${done} of ${total}…`; }
+        const vis = es.photos.filter((ph, k) => !PH_HIDDEN[es.id + "-" + k]).length; if (vis >= Math.max(stopLimit(es), cap) && !p.pinned){ jw.full++; continue; }
+        let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); } if (!url){ await new Promise(r => setTimeout(r, 1500)); url = await thumb(p.file, 720, true); } /* the same patient retry a new trip gets */
+        if (url instanceof Blob){ try { url = await blobURL(url); } catch(e2){ url = null; } } if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ if (!jw.failed.has(p.file)){ jw.failed.add(p.file); failed++; jw.fail++; if (isHeic(p.file)) heicFails++; } continue; }
+        try { await idb.put("rp:" + es.id + "-" + es.photos.length, url); } catch(e2){ if (!jw.failed.has(p.file)){ jw.failed.add(p.file); failed++; jw.fail++; } continue; } es.photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); got++; done++; prog.textContent = `Saving photos ${done} of ${total}…`; }
       if (got){ joined.push({title:e.title, n:got, id:e.id}); const near = k => { const a = +new Date(e.start + "T12:00:00") - 2 * DAY, b = +new Date(e.end + "T12:00:00") + 2 * DAY; return k >= a && k <= b; }; /* numbers, not a date string (Muse r20) */ const ds = e.stops.map(q => q.date).concat(plan.filter(({p}) => near(p.t)).map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); /* only a photo from a day or two either side stretches the trip; one you added from weeks away keeps its own date but not the trip's (Cooper r19) */ if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
     const drop = t.dupe && !t.dupe.pending ? t.dupe.drop : (existing.length ? await dupeScan(t, existing) : new Set()); /* never save a photo twice, whatever its name or time */
     if (drop.size && t.stops.every(s => s.pts.every(p => drop.has(p)))) continue;
@@ -2452,7 +2459,11 @@ async function addRealTripsRun(L, pick, names, hideSample){
     }
     out.push({id, title, country:t.country, start:t.start, end:t.end, stops, ...(t.homeMem || L.homeMem ? {kind:"home"} : {})});
   }
-  if (!out.length && !joined.length){ toast(pick.length === 1 ? "That trip is already on your globe, with all of these photos" : "Those trips are already on your globe, with all of these photos"); btn.disabled = false; return; }
+  if (!out.length && !joined.length){ const one = pick.length === 1; /* nothing was added: say the real reason, never "already there" when photos failed (Muse r21) */
+    toast(jw.fail ? `No new photos were added. ${plural(jw.fail, "photo")} couldn't be ${heicFails ? "opened (iPhone HEIC photos this browser couldn't convert)" : "opened or saved on this phone"}. Your saved ${one ? "trip is" : "trips are"} unchanged. Try again, or with fewer photos at a time.`
+      : jw.full ? `No new photos were added: ${jw.full === 1 ? "the stop it belongs to is" : "the stops they belong to are"} full. Remove a photo from that stop on the trip page, then add again.`
+      : jw.unchecked ? `No new photos were added. Some saved photos couldn't be checked on this phone, so nothing was added, to make sure no photo is saved twice.`
+      : one ? "That trip is already on your globe, with all of these photos" : "Those trips are already on your globe, with all of these photos", null, !!(jw.fail || jw.full)); btn.disabled = false; return; }
   if (!store.set("realTrips", [...existing, ...out])){ toast("Couldn't save: this browser's storage is full"); btn.disabled = false; return; }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { store.set("persisted", ok ? 1 : 0); }).catch(() => {}); } catch(e){} /* ask the browser not to clear your photos when space runs low or the site sits unused */
   if (!L.sample && (!L.manual || store.get("realHome", null))) store.set("realHome", {lat:L.home.lat, lon:L.home.lon, label:L.home.label}); /* a trip made by hand never sets your home by guessing */
@@ -2465,7 +2476,8 @@ const addedCount = v => { const ts = (v.ids || []).map(id => TRIPS.find(t => t.i
 function realAddedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgRealAdded") || "null"); sessionStorage.removeItem("tgRealAdded"); } catch(e){} if (!v) return;
   store.set("guideShown", true); /* the ready card below is the guided finish now; the step-by-step guide waits under More */
   if (openLaunchpad(v)) return;
-  if (v.failed) toast(`Added ${addedCount(v)}, but ${plural(v.failed, "photo")} couldn't be opened${v.heicFails ? ". They're iPhone HEIC photos and the converter couldn't load. Check your connection and load them again, or use Safari" : " in this browser"}.`, null, true);
+  const what = [v.n ? `Added ${addedCount(v)}` : "", ...(v.joined || []).map(j => `Added ${plural(j.n, "new photo")} to ${j.title}`)].filter(Boolean).join(". ");
+  if (v.failed) toast(`${what || "Nothing was added"}, but ${plural(v.failed, "photo")} couldn't be opened${v.heicFails ? ". They're iPhone HEIC photos and the converter couldn't load. Check your connection and load them again, or use Safari" : " in this browser"}.`, null, true);
   else toast(`${[v.n ? `Added ${addedCount(v)} from your photos` : "", ...(v.joined || []).map(j => `Added ${plural(j.n, "new photo")} to ${j.title}`)].filter(Boolean).join(". ")}${v.heicUsed ? ` (${plural(v.heicUsed, "iPhone photo")} converted on this device)` : ""}`); }
 /* after an import: the trip, ready to play, with an honest receipt */
 function openLaunchpad(v){
@@ -2843,8 +2855,8 @@ function momentPhoto(el, src, whole){
 const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 async function replay(id, opts = {}){
-  const t = findTrip(id); if (!t) return; const st = stopsOf(t); const back = ["trip", "vedit"].includes($("#overlay").dataset.kind) && TRIPS.some(x => x.id === id) ? id : null; /* started from the trip page: Done goes back there (Muse r20) */ $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
-  const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
+  const t = findTrip(id); if (!t) return; const st = stopsOf(t); const back = ["trip", "vedit", "ready"].includes($("#overlay").dataset.kind) && TRIPS.some(x => x.id === id) ? id : null, fromEdit = $("#overlay").dataset.kind === "vedit"; /* started from the trip page: Done goes back there (Muse r20); from Edit my story, back to the editor; from the ready screen after an import, to the trip page (Cooper r21) */ $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
+  const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back, fromEdit}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
   const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
@@ -2932,9 +2944,9 @@ function endReplay(){
   if (rec && rec.mr.state !== "inactive" && !rec.finishing) recAbort();
   music.stop(); setTimeout(() => { if (!replayState) music.stopNow(); }, 1500);
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
-  const back = replayState && replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null;
+  const back = replayState && replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null, toEdit = back && replayState.fromEdit;
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
-  if (back && TRIPS.some(x => x.id === back)){ setTimeout(() => { if (!replayState) openTrip(back); }, 250); return; } /* after the story has wound down */
+  if (back && TRIPS.some(x => x.id === back)){ setTimeout(() => { if (!replayState){ if (toEdit) openVideoEdit(back); else openTrip(back); } }, 250); return; } /* after the story has wound down */
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
 
@@ -3370,17 +3382,17 @@ function vedSumText(t){ const VP = vidPlan(t), n = stopsOf(t).reduce((a, s) => a
 function vedMusicName(t){ const m = musicChoice(t.id); return m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m); }
 function openVideoEdit(id){ const t = findTrip(id); if (!t) return; VED_BACK = id;
   if (!vedOf(t)) VEDIT[id] = {out:[]}; /* every photo starts in, the same as the story */
-  const cov = tripCover(t).id, ed = vedOf(t), tile = p => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
-    return `<div class="vedph${on ? "" : " off"}" data-vedph="${p.id}"><button class="vedimg${wh ? " whole" : ""}" data-vedtog="${p.id}" aria-pressed="${on}" aria-label="${on ? "In the video" : "Left out"}: ${nm}. Tap to ${on ? "leave it out" : "put it back"}"><img src="${photoURL(p)}" alt="" loading="lazy" draggable="false"><span class="vedarr up" aria-hidden="true">▲</span><span class="vedarr down" aria-hidden="true">▼</span><span class="vedtick" aria-hidden="true">${on ? "✓" : ""}</span></button>
+  const cov = tripCover(t).id, ed = vedOf(t), tile = (p, hint) => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
+    return `<div class="vedph${on ? "" : " off"}" data-vedph="${p.id}"><button class="vedimg${wh ? " whole" : ""}" data-vedtog="${p.id}" aria-pressed="${on}" aria-label="${on ? "In the video" : "Left out"}: ${nm}. Tap to ${on ? "leave it out" : "put it back"}"><img src="${photoURL(p)}" alt="" loading="lazy" draggable="false"><span class="vedarr up" aria-hidden="true">▲</span><span class="vedarr down" aria-hidden="true">▼</span>${hint ? `<span class="vedhint" aria-hidden="true">⇅ Hold to move</span>` : ""}<span class="vedtick" aria-hidden="true">${on ? "✓" : ""}</span></button>
       <div class="vedside"><button class="btn vedcov${cov === p.id ? " on" : ""}" data-vedcover="${p.id}" aria-pressed="${cov === p.id}">${cov === p.id ? "★ Cover" : "☆ Make cover"}</button><button class="btn" data-vedrot="${p.id}" aria-label="Turn ${nm} a quarter turn">⟳ Turn</button><button class="btn" data-vedwhole="${p.id}" aria-pressed="${wh}">${wh ? "✓ Whole photo" : "⤢ Whole photo"}</button></div></div>`; };
   /* its own back bar goes to the trip page it came from, (the trip page has the way back to the globe) (Alan 11-14) */
-  openSheet(`<div class="backbar"><button class="btn" data-open-trip="${t.id}">‹ Back to ${esc(t.title)}</button></div><div class="pad" style="padding-top:18px">${sheetHead("Edit my story")}
+  openSheet(`${TRIPS.includes(t) ? TRIPBAR(t) : BACKBAR}<div class="pad" style="padding-top:18px">${sheetHead("Edit my story")}
     <p class="vedsum" id="vedSum" aria-live="polite">${vedSumText(t)}</p>
     ${onceNote("vedTip", `<p class="note" style="margin:0;font-size:calc(17px * var(--fs,1))">Tap a photo to leave it out of your story and video. <b>Press and hold</b> a photo to move it. <b>☆ Make cover</b> picks the trip's main photo. <b>⤢ Whole photo</b> shows all of it, with no zoom. Nothing is deleted.</p>`)}
     <div class="vedmusic"><span aria-hidden="true">♪</span><span class="t">Music: <b>${esc(vedMusicName(t))}</b></span><button class="btn" data-ved-music="${t.id}">Change</button></div>
-    ${stopsOf(t).map(s => `<h3 class="vedstop">${esc(stopName(s))}</h3><div class="vedlist" data-vedstop="${s.id}">${s.photos.map(tile).join("")}</div>`).join("")}
+    ${stopsOf(t).map(s => `<h3 class="vedstop">${esc(stopName(s))}</h3><div class="vedlist" data-vedstop="${s.id}">${s.photos.map((p, k) => tile(p, k === 0 && s.photos.length > 1)).join("")}</div>`).join("")}
     <button class="btn primary playbig" data-ved-play="${t.id}" style="margin-top:8px">▶ Play my story</button><button class="btn playbig" data-ved-go="${t.id}">🎬 Make a shareable video</button>
-    <p style="margin:0;text-align:center"><button class="linkbtn" data-ved-reset="${t.id}" style="background:none;border:0;padding:8px">Start over with the automatic picks</button></p></div>`, "vedit"); }
+    <div id="vedReset" style="text-align:center"><button class="linkbtn" data-ved-reset-ask="${t.id}" style="background:none;border:0;padding:8px">Start over with the automatic picks</button></div></div>`, "vedit"); }
 function vedSave(){ store.set("vidEdit", VEDIT); store.set("vidWhole", [...VWHOLE]); const t = VED_BACK && findTrip(VED_BACK), el = document.getElementById("vedSum"); if (t && el) el.textContent = vedSumText(t); }
 function vedToggle(pid){ const t = findTrip(VED_BACK); if (!t) return; const ed = vedOf(t), s = stopsOf(t).find(x => x.photos.some(p => p.id === pid)); if (!ed || !s) return;
   if (ed.has(pid)){ if (s.photos.filter(p => ed.has(p.id)).length <= 1){ toast("Each stop keeps at least one photo in the video"); return; } ed.delete(pid); } else ed.add(pid);
@@ -3389,6 +3401,12 @@ function vedCover(pid){ const t = findTrip(VED_BACK); if (!t) return; COVERS[t.i
   document.querySelectorAll("[data-vedcover]").forEach(b => { const on = b.dataset.vedcover === pid; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); b.textContent = on ? "★ Cover" : "☆ Make cover"; }); toast("This is now the cover"); }
 async function vedTurn(pid){ const ph = PHOTOS.find(p => p.id === pid); if (!ph || !(await turnPhoto(ph))) return; const im = document.querySelector(`[data-vedph="${pid}"] img`); if (im) im.src = photoURL(ph); }
 function vedWhole(pid){ if (VWHOLE.has(pid)) VWHOLE.delete(pid); else VWHOLE.add(pid); vedSave(); const el = document.querySelector(`[data-vedph="${pid}"]`); if (el){ const on = VWHOLE.has(pid); el.querySelector(".vedimg").classList.toggle("whole", on); const b = el.querySelector("[data-vedwhole]"); b.setAttribute("aria-pressed", on); b.textContent = on ? "✓ Whole photo" : "⤢ Whole photo"; } }
+/* a true start over (Cooper, Muse r21): picks, whole photo, order, cover and music go back to automatic; a turn is a fix to the photo, so it stays */
+function vedReset(id){ const t = findTrip(id); if (!t) return; delete VEDIT[t.id]; delete COVERS[t.id]; delete tripMusic[t.id];
+  const num = p => +(String(p.id).match(/(\d+)$/) || [0, 0])[1];
+  stopsOf(t).forEach(s => { const all = s.allPhotos || s.photos; all.forEach(p => VWHOLE.delete(p.id)); delete PH_ORDER[s.id]; all.sort((a, b) => num(a) - num(b)); if (s.allPhotos) s.photos = s.allPhotos.filter(o => !o.hidden); });
+  PHOTOS = TRIPS.flatMap(x => x.stops.flatMap(q => q.photos)); store.set("vidEdit", VEDIT); store.set("vidWhole", [...VWHOLE]); store.set("covers", COVERS); store.set("tripMusic", tripMusic); store.set("phOrder", PH_ORDER);
+  openVideoEdit(t.id); toast("Back to the automatic picks"); }
 /* a new order in the editor is the stop's order everywhere, so the story and the video always match */
 function vedOrder(list){ const t = findTrip(VED_BACK); const s = t && stopsOf(t).find(x => x.id === list.dataset.vedstop); if (!s) return; const ids = [...list.querySelectorAll("[data-vedph]")].map(e => e.dataset.vedph), all = s.allPhotos || s.photos;
   const rest = all.filter(p => !ids.includes(p.id)); const next = ids.map(id => all.find(p => p.id === id)).filter(Boolean).concat(rest); all.splice(0, all.length, ...next);
@@ -3831,7 +3849,9 @@ document.addEventListener("click", e => {
   if ((b = g("[data-ved-music]"))){ VED_BACK = b.dataset.vedMusic; openMusicPicker(b.dataset.vedMusic); return; }
   if ((b = g("[data-ved-go]"))){ const id = b.dataset.vedGo; if (!canRecord()){ toast("This browser can't make videos. Try Chrome, Safari or Edge."); return; } VED_BACK = null; closeSheet(); replay(id, {record:true}); return; }
   if ((b = g("[data-ved-play]"))){ VED_BACK = null; replay(b.dataset.vedPlay); return; }
-  if ((b = g("[data-ved-reset]"))){ const t = findTrip(b.dataset.vedReset); if (!t) return; delete VEDIT[t.id]; stopsOf(t).forEach(s => s.photos.forEach(p => VWHOLE.delete(p.id))); store.set("vidEdit", VEDIT); store.set("vidWhole", [...VWHOLE]); openVideoEdit(t.id); toast("Back to the automatic picks"); return; }
+  if ((b = g("[data-ved-reset-ask]"))){ const box = document.getElementById("vedReset"); if (box) box.innerHTML = `<p style="margin:0 0 8px;font-weight:600">Start over? Every photo goes back in, in its first order, with the automatic cover and music. Turned photos stay turned.</p><div class="row-btns" style="margin:0;justify-content:center"><button class="btn primary" data-ved-reset="${b.dataset.vedResetAsk}">Start over</button><button class="btn" data-ved-reset-no>Keep my changes</button></div>`; const f = box && box.querySelector("[data-ved-reset]"); if (f) f.focus(); return; }
+  if (g("[data-ved-reset-no]")){ const box = document.getElementById("vedReset"), t = VED_BACK; if (box) box.innerHTML = `<button class="linkbtn" data-ved-reset-ask="${t}" style="background:none;border:0;padding:8px">Start over with the automatic picks</button>`; return; }
+  if ((b = g("[data-ved-reset]"))){ vedReset(b.dataset.vedReset); return; }
   if ((b = g("[data-video-again]"))){ openVideoStart(b.dataset.videoAgain); return; }
   if (g("[data-video-share]") && lastVideo){ navigator.share({files:[lastVideo.file], title:lastVideo.title}).catch(e => { if (e && e.name !== "AbortError") toast("Sharing didn't work here. Use Save video instead."); }); return; }
   if (g("[data-import]")){ toast("In the app you pick your Timeline file and years of places fill in"); return; }
@@ -3941,7 +3961,9 @@ document.addEventListener("click", e => {
   if ((b = g("[data-music]"))){ VED_BACK = null; openMusicPicker(b.dataset.music); return; }
   if ((b = g("[data-music-set]"))){ const id = document.getElementById("songFile").dataset.trip; const v = b.dataset.musicSet;
     if (v === "song"){ document.getElementById("songFile").click(); return; }
-    tripMusic[id] = v; store.set("tripMusic", tripMusic); openMusicPicker(id, !!replayState);
+    const was = tripMusic[id]; tripMusic[id] = v; store.set("tripMusic", tripMusic);
+    if (VED_BACK === id && !replayState){ music.stop(.4); openVideoEdit(id); toast(v === "off" ? "No music for this story" : "Music set: " + musicLabel(id), () => { if (was) tripMusic[id] = was; else delete tripMusic[id]; store.set("tripMusic", tripMusic); if (VED_BACK === id) openVideoEdit(id); }); return; } /* picked from Edit my story: straight back there, with Undo (Cooper r21) */
+    openMusicPicker(id, !!replayState);
     if (replayState && replayState.trip.id === id) music.play(id); else music.stop(.4);
     toast(v === "off" ? "No music for this story" : "Music set: " + musicLabel(id)); return; }
   if ((b = g("[data-music-preview]"))){ const id = document.getElementById("songFile").dataset.trip; const k = b.dataset.musicPreview;
