@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 403c661 (PR #27) -->
+<!-- number-blast 8c413e1 (PR #28) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -73,14 +73,19 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:6px 10
 .tomorrow{font-size:.95rem;line-height:1.4;margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(245,179,1,.14)}
 .remindrow{margin:8px 0;font-size:1rem}
 .qlist.weekly li.done .g-text{color:var(--muted);text-decoration:line-through}
-/* Holiday decorations: a garland over the board, a colored frame, a few slow falling bits (from Wordglow 1.3) */
+/* Holiday decorations: a garland over the board, a colored frame, and falling bits only on a level clear (Nikola round 11) */
 body.deco .board{box-shadow:0 0 0 4px var(--deco1),0 0 0 7px var(--deco2)}
 #deco{position:absolute;top:-15px;left:0;right:0;text-align:center;font-size:20px;letter-spacing:.35em;line-height:1;pointer-events:none;z-index:4;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
 #deco-fall{position:fixed;inset:0;pointer-events:none;z-index:3;overflow:hidden}
-#deco-fall span{position:absolute;top:-40px;font-size:20px;opacity:.35;animation:decoFall linear infinite}
+#deco-fall span{position:absolute;top:-40px;font-size:22px;opacity:.6;animation:decoFall linear 1 forwards}
 @keyframes decoFall{from{transform:translateY(0) rotate(0)}to{transform:translateY(110vh) rotate(300deg)}}
 @media (prefers-reduced-motion:reduce){#deco-fall{display:none}}
 #deco-help{margin:6px 0}#deco-help .btn{width:100%}
+/* Challenge cues (Nikola round 11): Lucky 7 rings every 7; Bomb board pulses its bombs */
+body.tw-lucky7 .tile.v7{box-shadow:0 0 0 3px #2ecc71,0 0 10px 2px rgba(46,204,113,.75)}
+body.tw-bombs .tile.hasbomb{animation:bombPulse 1.4s ease-in-out infinite}
+@keyframes bombPulse{50%{box-shadow:0 0 0 3px #ff7a45,0 0 12px 3px rgba(255,122,69,.7)}}
+@media (prefers-reduced-motion:reduce){body.tw-bombs .tile.hasbomb{animation:none;box-shadow:0 0 0 3px #ff7a45}}
 #expert-help{margin:6px 0}#expert-help .btn{width:100%}.expert-note{color:var(--muted);font-size:.95rem;margin:4px 0 8px}
 .score{text-align:right;font-family:var(--display);font-weight:800;font-size:1.3rem;line-height:1.1;font-variant-numeric:tabular-nums}
 .score small{display:block;font-family:var(--body);font-weight:700;font-size:.85rem}
@@ -330,8 +335,8 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Levels:</b> score enough points and you get a fresh board. The target grows from 10 to 12, then 15, then mixes it up. Levels get slowly harder.</li>
       <li><b>🎉 Holiday decorations:</b> the game dresses up in the days before Thanksgiving, Christmas, New Year, Easter and other holidays. Turn them off above.</li>
       <li><b>🗓️ Weekly goals:</b> every week has a theme (holidays and seasons) and 5 bonus goals in Quests, for Endless and the Daily run. Each pays +15 🪙, and all 5 pay +75 🪙 and a rotate.</li>
-      <li><b>⚡ Challenge levels:</b> in Endless from level 30, every 3rd level has a twist (long sums only, Lucky 7, bomb board, big sums pay double, crowded board) and pays a +20 🪙 bonus. <b>🔥 Expert mode</b> (switch above) makes Endless harder for 1.5x coins.</li>
-      <li><b>🔔 Daily reminder</b> (phone app): one friendly reminder a day when the new Daily run is ready. Turn it on or off above.</li>
+      <li><b>⚡ Challenge levels:</b> in Endless from level 30, every 3rd level has a twist (star board, Lucky 7, bomb board, big sums pay double, crowded board) and pays a +20 🪙 bonus. <b>💎 Expert mode</b> (switch above) makes Endless harder for 1.5x coins.</li>
+      <li><b>🔔 Daily reminder</b> (phone app): one friendly reminder a day when the new Daily run is ready. In the phone app, the switch is at the top of Help.</li>
       <li><b>Coins:</b> earn them by finishing levels, quests and your daily streak. Spend them on erasers, shuffles, rotates or a second chance.</li>
       <li><b>Daily streak:</b> blast at least one sum every day to grow your streak and earn more coins each day. Tap the 🔥 to see your calendar.</li>
       <li>You get three new pieces once all three are used. If the only piece left is a <b>★ star</b>, it's saved for later at the end of the tray (one at a time) and you get three new pieces. The game ends when no piece fits and you have no erasers, shuffles or rotates left that could help.</li>
@@ -351,7 +356,7 @@ const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
              set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BHCloud?.changed?.()}};
 // Kept on this phone only, never sent to the cloud save: sound, ad and promo counters, delivered purchases.
-const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-|granted-tx)/;
+const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-|granted-tx|reminder)/;   // reminders need each phone's own permission
 let cloudApplying=false;
 const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 
@@ -420,7 +425,8 @@ const baseGoal=l=>60+30*(l-1)+10*Math.min(Math.max(0,l-3),7);
 // A change to the switch takes effect from the next level.
 const CHALLENGE_FROM=30,CHALLENGE_COINS=20,EXPERT_KEY='nb-expert';
 const TWISTS=[
-  {id:'long3',short:'Long sums only',tag:'3+ blocks',text:'Long sums only: sums need <b>3 or more blocks</b> this level.'},
+  // Star board replaced "Long sums only" (Muse round 11: with targets of 19+ a 2-block sum can't reach the target anyway).
+  {id:'stars',short:'Star board',tag:'Star board',text:'Star board: the level starts with <b>3 ★ star</b> blocks. A star counts as whatever number finishes a sum.'},
   {id:'lucky7',short:'Lucky 7',tag:'Lucky 7',text:'Lucky 7: any sum with a <b>7</b> in it <b>scores double</b> this level.'},
   {id:'bombs',short:'Bomb board',tag:'Bomb board',text:'Bomb board: the level starts with <b>3 💣 bomb</b> blocks. Blast one to clear the blocks around it.'},
   {id:'big',short:'Big sums pay double',tag:'Big sums x2',text:'Big sums pay: sums of <b>4+ blocks score double</b> this level.'},
@@ -432,10 +438,9 @@ const expertOn=()=>expert&&mode==='endless'&&!tut;
 function twist(){
   if(mode!=='endless'||tut||level<CHALLENGE_FROM||level%3||simNoTwist)return null;
   const t=TWISTS[(level/3)%TWISTS.length];
-  // Expert already needs 3+ blocks; and with a small target, long-sums-only is too tight (bot check), so both get Big sums pay.
-  return t.id==='long3'&&(expertOn()||T<18)?TWISTS[3]:t;
+  return t;
 }
-const minLen=()=>expertOn()||twist()?.id==='long3'?3:2;
+const minLen=()=>expertOn()?3:2;
 const goalFor=l=>expertOn()?Math.round(baseGoal(l)*1.25/10)*10:baseGoal(l);
 // Points multiplier for one sum on a challenge level.
 const twistX=(len,vals)=>{const t=twist()?.id;return t==='big'&&len>=4||t==='lucky7'&&vals&&vals.includes(7)?2:1};
@@ -621,7 +626,7 @@ const GOALS=[
   {id:'len6',text:'Blast a sum of 6 blocks',test:e=>e.len>=6,after:10},
   {id:'down',text:'Blast a sum going down',test:e=>e.dir==='c'},
   {id:'across',text:'Blast a sum going across',test:e=>e.dir==='r'},
-  {id:'combo',text:'Blast 2 sums with one drop',test:e=>e.combo>1},
+  {id:'combo',text:'Blast 2 sums with one drop',test:e=>e.combo>1&&e.first},
   {id:'chain',text:'Reach a x2 chain',test:e=>e.chainX>=2},
   {id:'one',text:'Use a 1 in a sum',test:e=>!!e.vals&&e.vals.includes(1)},
   {id:'odd',text:'Blast a sum of only odd numbers',test:e=>!!e.vals&&e.vals.every(v=>v%2===1)},
@@ -730,21 +735,27 @@ function applyDeco(){
   document.body.classList.add('deco','deco-'+h.id);
   document.documentElement.style.setProperty('--deco1',h.c1);document.documentElement.style.setProperty('--deco2',h.c2);
   const g=document.createElement('div');g.id='deco';g.setAttribute('aria-hidden','true');g.textContent=h.garland;$('boardwrap').appendChild(g);
-  const f=document.createElement('div');f.id='deco-fall';f.setAttribute('aria-hidden','true');
-  const bits=[...h.fall.match(/\p{Extended_Pictographic}\ufe0f?/gu)];
-  for(let i=0;i<7;i++){const sp=document.createElement('span');sp.textContent=bits[i%bits.length];
-    sp.style.left=(6+i*14+Math.random()*6)+'%';sp.style.animationDuration=(11+Math.random()*7)+'s';sp.style.animationDelay=(-Math.random()*16)+'s';f.appendChild(sp)}
-  document.body.appendChild(f);
   // On the holiday itself, say so once.
   if(h.days===0&&store.get('nb-deco-greet',null)!==dayKey()&&store.get('nb-tutorial-done',false)){
     store.set('nb-deco-greet',dayKey());setTimeout(()=>news(`${h.garland.split(' ')[1]} ${h.name}!`,true),1500);
   }
   return h;
 }
+// A short shower of the holiday's falling bits when a level is cleared; never over the board during play.
+function decoBurst(){
+  const h=store.get(DECO_KEY,true)?holidayNow():null;if(!h)return;
+  $('deco-fall')?.remove();
+  const f=document.createElement('div');f.id='deco-fall';f.setAttribute('aria-hidden','true');
+  const bits=[...h.fall.match(/\p{Extended_Pictographic}\ufe0f?/gu)];
+  for(let i=0;i<10;i++){const sp=document.createElement('span');sp.textContent=bits[i%bits.length];
+    sp.style.left=(4+i*9.5+Math.random()*4)+'%';sp.style.animationDuration=(2.6+Math.random()*1.6)+'s';sp.style.animationDelay=(Math.random()*.8)+'s';f.appendChild(sp)}
+  document.body.appendChild(f);setTimeout(()=>f.remove(),5000);
+}
 function renderDecoHelp(){
   const body=$('sheet').querySelector('.helpbody');if(!body)return;
-  $('deco-help')?.remove();const on=store.get(DECO_KEY,true);
-  body.insertAdjacentHTML('beforebegin',`<div id="deco-help"><button type="button" class="btn plain" id="deco-toggle" aria-pressed="${on}">🎉 Holiday decorations: <b>${on?'On':'Off'}</b></button></div>`);
+  const on=store.get(DECO_KEY,true),old=$('deco-help');
+  const html=`<div id="deco-help"><button type="button" class="btn plain" id="deco-toggle" aria-pressed="${on}">🎉 Holiday decorations: <b>${on?'On':'Off'}</b></button></div>`;
+  if(old)old.outerHTML=html;else body.insertAdjacentHTML('beforebegin',html);
   $('deco-toggle').onclick=()=>{store.set(DECO_KEY,!on);track('deco_toggle',{on:!on});applyDeco();renderDecoHelp()};
 }
 // Weekly bonus goals: 5 a week, the same for everyone (picked by the week), progress over the whole week,
@@ -753,8 +764,8 @@ const WEEK_COINS=15,WEEK_MEGA=75;
 const WEEK_GOALS=[
   {id:'w4',text:'Blast a sum of 4 blocks',need:3,test:e=>e.len>=4},
   {id:'w5',text:'Blast a sum of 5 blocks',need:1,test:e=>e.len>=5},
-  {id:'wcombo',text:'Blast 2 sums with one drop',need:2,test:e=>e.combo>1},
-  {id:'wchain',text:'Reach a x2 chain',need:3,test:e=>e.chainX>=2},
+  {id:'wcombo',text:'Blast 2 sums with one drop',need:2,test:e=>e.combo>1&&e.first},
+  {id:'wchain',text:'Reach a x2 chain',need:3,test:e=>e.chainX>=2&&e.first},
   {id:'wstar',text:'Use a ★ star in a sum',need:3,test:e=>e.star},
   {id:'wbomb',text:'Set off a 💣 bomb',need:2,test:e=>e.bomb},
   {id:'wodd',text:'Blast a sum of only odd numbers',need:3,test:e=>!!e.vals&&e.vals.every(v=>v%2===1)},
@@ -786,11 +797,18 @@ function checkWeekly(e){
     if(w.prog[i]===g.need){addCoins(WEEK_COINS);track('weekly_goal',{goal:g.id});msgs.push(`${th.icons[i]} Weekly goal done!\n${g.text} · +${WEEK_COINS} 🪙`)}
   });
   if(!w.all&&gs.every((g,i)=>w.prog[i]>=g.need)){
-    w.all=true;addCoins(WEEK_MEGA);rotates=Math.min(MAX_ROTATES,rotates+1);track('weekly_all',{theme:th.id});
-    msgs.push(`${th.e} All 5 weekly goals!\nMegabonus +${WEEK_MEGA} 🪙 and a ↻ rotate`);
+    const full=rotates>=MAX_ROTATES;w.all=true;addCoins(WEEK_MEGA);rotates=Math.min(MAX_ROTATES,rotates+1);track('weekly_all',{theme:th.id});
+    msgs.push(`${th.e} All 5 weekly goals!\nMegabonus +${WEEK_MEGA} 🪙${full?' (↻ rotates already full)':' and a ↻ rotate'}`);
   }
   store.set('nb-week',w);
   return msgs;
+}
+// One quiet line on the level card: how the week's goals stand and the closest one (all three reviewers, round 11).
+function weekLine(){
+  const w=curWeek(),gs=weekGoals(w.wk),th=weekTheme(w.wk),done=gs.filter((g,i)=>w.prog[i]>=g.need).length;
+  if(w.all)return '';
+  const open=gs.map((g,i)=>({g,i,left:g.need-w.prog[i],frac:w.prog[i]/g.need})).filter(x=>x.left>0).sort((a,b)=>b.frac-a.frac||a.left-b.left)[0];
+  return `<p class="weeknote">${th.e} This week: ${done} of 5 goals · next: ${th.icons[open.i]} ${open.g.text}${open.g.need>1?` (${w.prog[open.i]} of ${open.g.need})`:''}</p>`;
 }
 function weeklyHtml(){
   const w=curWeek(),gs=weekGoals(w.wk),th=weekTheme(w.wk),left=7-weekDays().indexOf(dayKey());
@@ -850,9 +868,9 @@ function noteFirstDay(){
 function welcomeBack(){
   if(!wgift||wgift.paid||wgift.day>=dayKey()||tut)return false;
   wgift.paid=true;store.set('nb-welcome',wgift);
-  addCoins(WELCOME_COINS);rotates=Math.min(MAX_ROTATES,rotates+1);renderHUD();saveGame();
+  const rotFull=rotates>=MAX_ROTATES;addCoins(WELCOME_COINS);rotates=Math.min(MAX_ROTATES,rotates+1);renderHUD();saveGame();
   track('welcome_gift',{});SFX.big();
-  openSheet(`<h3>🎁 Welcome back!</h3><p>Here's your welcome gift for coming back:</p><div class="adbox"><span class="count">+${WELCOME_COINS} 🪙 · +1 ↻</span></div>
+  openSheet(`<h3>🎁 Welcome back!</h3><p>Here's your welcome gift for coming back:</p><div class="adbox"><span class="count">+${WELCOME_COINS} 🪙${rotFull?'':' · +1 ↻'}</span></div>${rotFull?'<p class="weeknote">Your ↻ rotates are already full (3), so the gift is coins only.</p>':''}
     <p>A new 📅 <b>Daily run</b> is ready, and blasting one sum today grows your 🔥 streak.</p>
     <div class="btns"><button class="btn" id="wb-daily">Play today's Daily run</button><button class="btn plain" id="wb-go">Keep playing ${mode==='daily'?'':'Endless'}</button></div>`);
   $('wb-daily').onclick=()=>{closeSheet();if(mode!=='daily')switchMode('daily')};
@@ -860,9 +878,12 @@ function welcomeBack(){
   return true;
 }
 // One line for the end of a run or level: what tomorrow brings.
+// Shown once per session, so it doesn't repeat on every card (Cooper and Muse round 11).
+let tomorrowShown=false;
 function tomorrowNote(){
-  if(firstDay())return `<p class="tomorrow">🌅 <b>Come back tomorrow</b> for a 🎁 welcome gift (+${WELCOME_COINS} 🪙 and a ↻ rotate), day 2 of your 🔥 streak and a new 📅 Daily run.</p>`;
-  if(streak.last===dayKey())return `<p class="tomorrow">🔥 Come back tomorrow for day ${streak.n+1} of your streak (+${5*Math.min(streak.n+1,7)} 🪙).</p>`;
+  if(tomorrowShown)return '';
+  if(firstDay()){tomorrowShown=true;return `<p class="tomorrow">🌅 <b>Come back tomorrow</b> for a 🎁 welcome gift (+${WELCOME_COINS} 🪙 and a ↻ rotate), day 2 of your 🔥 streak and a new 📅 Daily run.</p>`}
+  if(streak.last===dayKey()){tomorrowShown=true;return `<p class="tomorrow">🔥 Come back tomorrow for day ${streak.n+1} of your streak (+${5*Math.min(streak.n+1,7)} 🪙).</p>`}
   return '';
 }
 
@@ -1059,7 +1080,7 @@ function toast(text,big=false,ms=0,lane='main'){
 function tileHTML(t){
   if(!t)return '';
   if(t.star)return '<div class="tile star">★</div>';
-  return `<div class="tile${t.bomb?' hasbomb':''}" style="background:var(--n${t.v})">${t.v}${t.bomb?'<span class="bomb">💣</span>':''}</div>`;
+  return `<div class="tile${t.bomb?' hasbomb':''}${t.v===7?' v7':''}" style="background:var(--n${t.v})">${t.v}${t.bomb?'<span class="bomb">💣</span>':''}</div>`;
 }
 function buildBoard(){boardEl.innerHTML='';for(let i=0;i<N*N;i++){const d=document.createElement('div');d.className='cell';d.dataset.i=i;boardEl.appendChild(d)}}
 const tutCell=()=>tut?LESSONS[tut.step].cell:-1;
@@ -1105,8 +1126,9 @@ function renderTray(){
 }
 function renderHUD(){
   $('target').textContent=T;
+  const tw=twist()?.id;document.body.classList.toggle('tw-lucky7',tw==='lucky7');document.body.classList.toggle('tw-bombs',tw==='bombs');
   if(tut){$('lvl').innerHTML='Lesson '+(tut.step+1)+' of '+LESSONS.length+'<span class="sub">Learn to play</span>';$('bar').style.width=(tut.step/LESSONS.length*100)+'%'}
-  else{$('lvl').innerHTML=`Level ${level}${expertOn()?' <span title="Expert">🔥</span>':''}${twist()?' <span class="tw" title="Challenge level">⚡</span>':''} · <span class="lp">${Math.min(levelPts(),goalFor(level))} of ${goalFor(level)}</span><span class="sub">${mode==='daily'?`<span class="ladder" title="Daily #${dailyNo()}">${(c=>starStr(starsFor(c))+((n=>n?` next: level ${n}`:' all 3 today!')(STAR_LEVELS.find(l=>l>c))))(hudCleared??level-1)}</span>`:twist()?`⚡ ${twist().short}`:expertOn()?'🔥 Expert · points to clear':'Endless · points to clear'}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
+  else{$('lvl').innerHTML=`Level ${level}${expertOn()?' <span title="Expert">💎</span>':''}${twist()?' <span class="tw" title="Challenge level">⚡</span>':''} · <span class="lp">${Math.min(levelPts(),goalFor(level))} of ${goalFor(level)}</span><span class="sub">${mode==='daily'?`<span class="ladder" title="Daily #${dailyNo()}">${(c=>starStr(starsFor(c))+((n=>n?` next: level ${n}`:' all 3 today!')(STAR_LEVELS.find(l=>l>c))))(hudCleared??level-1)}</span>`:twist()?`⚡ ${twist().short}`:expertOn()?'💎 Expert · points to clear':'Endless · points to clear'}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
   $('score').innerHTML='<small>Score</small>'+score.toLocaleString();
   $('eraserN').textContent=erasers;$('shuffleN').textContent=shuffles;
   $('eraser').classList.toggle('on',erasing);$('eraser').setAttribute('aria-pressed',erasing);
@@ -1143,6 +1165,8 @@ function setHint(){
     (tool==='eraser'?`, or tap <b>Eraser</b> to clear a block and open up a sum.`:tool==='shuffle'?`, or tap <b>Shuffle</b> for new pieces.`:'.');
   else if(movable&&moveHintNow)h.innerHTML='Wrong spot? <b>Drag</b> the piece you just placed to move it, until you pick up the next one.';
   else if(levelStartHint&&level===2)h.innerHTML='Fresh board! Each level needs a few more points to clear.';
+  else if(twist()&&!expertOn())h.innerHTML=`⚡ ${twist().text} Make <b>${T}</b>.`;   // the strip names this level's twist instead of the everyday rule (Nikola round 11)
+  else if(minLen()>2)h.innerHTML=`<b>💎 Expert:</b> only <b>3 or more</b> touching blocks that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
   else h.innerHTML=`Touching blocks in a row or column that add up to exactly <b>${T}</b> blast. <b>Gold</b> means it will blast!`;
   // A nearly full board with no sum to make: offer to end the run instead of spending tools one by one (Muse round 7).
   const endOffer=endRunOffer();
@@ -1292,7 +1316,7 @@ function blast(cascade=0){
       if(r.cells.length>=4&&erasers<MAX_ERASERS){erasers++;earned=true}
       if(r.cells.length>=5&&rotates<MAX_ROTATES){rotates++;rotEarned=true}
       if(!bestRun||r.cells.length>bestRun.length)bestRun=vals||r.cells.map(()=>'?');
-      const ev={len:r.cells.length,dir:r.dir,vals,isNew,combo:k,chainX,
+      const ev={len:r.cells.length,dir:r.dir,vals,isNew,combo:k,chainX,first:i===0,
         star:r.cells.some(c=>board[c].star),bomb:extra.size>0&&r.cells.some(c=>board[c].bomb)};
       goalsDone.push(...checkGoals(ev));weekMsgs.push(...checkWeekly(ev));
     });
@@ -1311,7 +1335,8 @@ function blast(cascade=0){
   // The day's streak bonus rides on this same message, so it is never lost in the queue (Muse round 10).
   const st=tut?null:markPlayed(),stTxt=st?` · 🔥 Day ${st.n} streak +${st.bonus} 🪙`:'';
   // Two short lines in the message strip: what you made, then what it scored.
-  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+(got?` · ${got} earned!`:'')+stTxt,longest>=4||k>1||extra.size>0||!!st,CASH_MS);
+  // Earned tools go on their own line so a long score line never cuts them off (Nikola round 11).
+  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt+(got?`\n🎁 ${got} earned!`:''),longest>=4||k>1||extra.size>0||!!st,CASH_MS);
   if(cascade&&!store.get('nb-cascade-seen',false)){store.set('nb-cascade-seen',true);news(`Cascade! ${label}\nClearing blocks made a new ${T}, so it blasted too, with a chain bonus.`,true)}
   const extras=[];
   if(!tut){
@@ -1401,11 +1426,12 @@ function levelBoard(){
   const tw=twist();
   if(tw?.id==='crowded')seedStarters(7);
   if(tw?.id==='bombs')seedStarters(3,true);
+  if(tw?.id==='stars')seedStarters(3,false,true);
 }
-function seedStarters(n,bomb=false){
+function seedStarters(n,bomb=false,star=false){
   for(let tries=0,placed=0;placed<n&&tries<200;tries++){
     const k=ri(0,N*N-1);if(board[k])continue;
-    board[k]={v:ri(1,Math.min(9,T-1)),star:false,bomb};
+    board[k]=star?{v:null,star:true,bomb:false}:{v:ri(1,Math.min(9,T-1)),star:false,bomb};
     if(findRuns(board).length)board[k]=null;else placed++;
   }
 }
@@ -1414,7 +1440,7 @@ function levelUp(){
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   const paid3=mode==='daily'&&dailyStars(level);hudCleared=level;renderHUD();
   saveGame();   // a reload on the level-complete card comes back to this card, not to the drop before it (Nikola round 10)
-  toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();
+  toast(`Level ${level} complete!`,true);SFX.big();buzz([30,40,30]);fireworks();decoBurst();
   const left=[];board.forEach((t,k)=>t&&left.push(k));
   left.forEach((k,n)=>setTimeout(()=>{const el=boardEl.children[k].firstElementChild;el&&el.classList.add('pop')},300+n*40));
   const chal=twist()?CHALLENGE_COINS:0,earned=Math.round((10+2*level)*(expertOn()?1.5:1))+chal,next=targetFor(level+1);
@@ -1424,11 +1450,11 @@ function levelUp(){
   if(introDaily)store.set('nb-daily-intro',true);
   setTimeout(()=>{
     board=Array(N*N).fill(null);renderBoard();
-    openSheet(`<h3>Level ${level} complete!</h3><p>You earned${chal?` (⚡ challenge bonus +${chal} 🪙${expertOn()?', 🔥 Expert x1.5':''})`:expertOn()?' (🔥 Expert x1.5)':''}</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
+    openSheet(`<h3>Level ${level} complete!</h3><p>You earned${chal?` (⚡ challenge bonus +${chal} 🪙${expertOn()?', 💎 Expert x1.5':''})`:expertOn()?' (💎 Expert x1.5)':''}</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
       ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level))} this run${(n=>n?` · next star at level ${n}`:paid3?` · all 3 stars! +${THREE_STAR_COINS} 🪙 bonus`:' · all 3 stars!')(STAR_LEVELS.find(l=>l>level))}</p><p class="weeknote">${store.get(chestKey(),false)?'🎁 This week\'s chest is open.':`🎁 ${Math.min(weekStars(),CHEST_STARS)} of ${CHEST_STARS} ⭐ this week toward the chest (${CHEST_COINS} 🪙)`}</p>`:''}
-      <p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
+      ${mode==='endless'&&!introDaily?weekLine():''}<p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
       ${introDaily?`<p class="tomorrow">📅 New: today's <b>Daily run</b>. Everyone gets the same pieces, and clearing levels 1, 3 and 5 earns ⭐ stars.</p>`:''}${firstDay()?tomorrowNote():''}
-      <div class="btns"><button class="btn" id="next">Next level</button><button class="btn plain ad" id="dbl">📺 Watch an ad: get +${earned*2} 🪙 instead</button>${introDaily?'<button class="btn plain" id="try-daily">📅 Try today\'s Daily run</button>':''}</div>`,true);
+      <div class="btns">${introDaily?'<button class="btn" id="try-daily">📅 Try today\'s Daily: earn your first ⭐</button>':''}<button class="btn${introDaily?' plain':''}" id="next">Next level</button><button class="btn plain ad" id="dbl">📺 Watch an ad: get +${earned*2} 🪙 instead</button></div>`,true);
     const go=(n,dbl,then=startNextLevel)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);maybeInterstitial(()=>{then();askReminder()})};
     $('dbl').onclick=()=>watchAd(()=>go(earned*2,true),()=>go(earned));
     $('next').onclick=()=>go(earned);
@@ -1490,7 +1516,7 @@ function gameOver(){
   $('over').innerHTML=`<div>
     <h2>${endedByChoice?'Run ended':newBest?(mode==='daily'&&!prevFinal?`Daily #${dailyNo()} done!`:'New best!'):close?'So close!':'Board full'}</h2>${endedByChoice&&newBest?`<p class="why next">${mode==='daily'&&!prevFinal?'Today\'s best so far':'New best!'}</p>`:''}
     <p class="why">${endedByChoice?'You ended the run':board.some(x=>!x)?'No piece fits the gaps left':'No room left for a piece'}</p>
-    <p>${close?`Only <b>${need} points</b> from level ${level+1}`:`You reached <b>level ${level}</b>`}</p>
+    <p>${close?`Only <b>${need} points</b> short of clearing level ${level}`:`You reached <b>level ${level}</b>`}</p>
     <div class="big">${score.toLocaleString()}</div>
     <p>${blastsGame} blast${blastsGame===1?'':'s'}${bestRun?`, best sum ${esc(bestRun.join(' + '))}`:''}</p>
     ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level-1))} this run · best today ${starStr(todayStars())}</p><p class="why next">${nextStar(level)}</p>${weekStrip()}<p>New Daily run in ${nextDaily}</p>`:''}${tomorrowNote()}
@@ -1777,10 +1803,10 @@ function showHelp(){
 // Expert switch in Help (Endless only). It takes effect from the next level, or at once when nothing is in play.
 function renderExpertHelp(){
   const body=$('sheet').querySelector('.helpbody');if(!body)return;
-  $('expert-help')?.remove();
-  const on=store.get(EXPERT_KEY,false);
-  body.insertAdjacentHTML('beforebegin',`<div id="expert-help"><button type="button" class="btn plain" id="expert-toggle" aria-pressed="${on}">🔥 Expert mode: <b>${on?'On':'Off'}</b></button>
-    <p class="expert-note">Endless only. Sums need 3+ blocks, levels need 25% more points, and you earn 1.5x level coins.${on===expert||mode!=='endless'?'':' Starts with your next level.'}</p></div>`);
+  const on=store.get(EXPERT_KEY,false),old=$('expert-help');
+  const html=`<div id="expert-help"><button type="button" class="btn plain" id="expert-toggle" aria-pressed="${on}">💎 Expert mode: <b>${on?'On':'Off'}</b></button>
+    <p class="expert-note">Endless only. Sums need 3+ blocks, levels need 25% more points (about a quarter longer to play), and you earn 1.5x level coins.${on===expert||mode!=='endless'?'':on?' Starts with your next level.':' Stays on until this level ends.'}</p></div>`;
+  if(old)old.outerHTML=html;else body.insertAdjacentHTML('beforebegin',html);   // re-drawn in place, so the rows don't swap (Nikola round 11)
   $('expert-toggle').onclick=()=>{
     store.set(EXPERT_KEY,!on);track('expert_toggle',{on:!on,level});
     if(over||tut)expert=!on;
@@ -1851,7 +1877,12 @@ function mergeKey(k,a,b){  // a = this phone, b = cloud
   if(a==null)return b;if(b==null)return a;
   if(k==='nb-coins'||k==='nb-best-endless'||/^nb-(best-daily|final|dstars)-/.test(k))return Math.max(+a||0,+b||0);
   if(/^nb-(noads|bought-coins|tutorial-done|special-seen|rotate-seen|book-done-|book-half-|level-ms-|chest-|d3bonus-)/.test(k))return !!(a||b);
-  if(k==='nb-streak-saved')return a>b?a:b;
+  if(k==='nb-streak-saved'||k==='nb-week-seen')return a>b?a:b;
+  if(/^nb-(daily-intro|daily-started)$/.test(k))return !!(a||b);
+  // Weekly goals: the later week wins; the same week keeps the most progress on each goal (Muse round 11).
+  if(k==='nb-week'){if(a.wk!==b.wk)return a.wk>b.wk?a:b;return {wk:a.wk,prog:(a.prog||[]).map((p,i)=>Math.max(p||0,(b.prog||[])[i]||0)),all:!!(a.all||b.all)}}
+  // The welcome gift is paid once across all phones.
+  if(k==='nb-welcome')return {day:a.day<b.day?a.day:b.day,paid:!!(a.paid||b.paid)};
   if(k==='nb-book'){const m={};new Set([...Object.keys(a),...Object.keys(b)]).forEach(t=>m[t]=[...new Set([...(a[t]||[]),...(b[t]||[])])]);return m}
   if(k==='nb-stats'){
     const m={...b,...a};['blasts','topLevel','bestCombo'].forEach(f=>m[f]=Math.max(a[f]||0,b[f]||0));
@@ -1880,6 +1911,7 @@ function applyCloudSave(m){
 function restoreFromSave(){
   book=store.get('nb-book',{});stats=store.get('nb-stats',stats);coins=store.get('nb-coins',0);
   streak=store.get('nb-streak',streak);specialSeen=store.get('nb-special-seen',false);
+  week=store.get('nb-week',week);wgift=store.get('nb-welcome',wgift);
   renderCoins();renderStreak();
   // Bring back a game that got further on the other phone, unless one is mid-move or just ended.
   if(busy||drag||over)return;
@@ -2095,14 +2127,15 @@ else if(!resumeGame()&&!resumeGame('nb-save-endless',false))newGame('endless'); 
 }
 if(!welcomeBack())checkStreakAtRisk();
 weeklyHello();applyDeco();
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){applyDeco();weeklyHello()}});   // a new week or holiday while the app was away
+// A new day, week or holiday while the app was away; a phone left open overnight still gets the day-2 gift (Nikola round 11).
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){applyDeco();weeklyHello();if(!busy&&!drag&&$('modal').hidden)welcomeBack()}});
 scheduleReminders();   // pushes the next 7 days of reminders forward from today
 if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple is set up for Sumburst (App.entitlements)
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
 if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('score'in o)score=o.score;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins)},finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint(),giveTool:k=>giveTool(k),setLongPlaced:k=>{longPlaced=k},lesson:n=>{if(!tut)startTutorial();tut.step=n;loadLesson()},markPlayed:()=>markPlayed(),endSession:()=>endSession(),
-  twist:()=>twist(),expertOn:()=>expertOn(),goalFor:l=>goalFor(l),weekTheme:m=>weekTheme(m),weekGoals:m=>weekGoals(m),checkWeekly:e=>checkWeekly(e),
+  twist:()=>twist(),expertOn:()=>expertOn(),goalFor:l=>goalFor(l),weekTheme:m=>weekTheme(m),weekGoals:m=>weekGoals(m),weekDays:()=>weekDays(),weekPool:()=>WEEK_GOALS,renderBoard:()=>renderBoard(),checkWeekly:e=>checkWeekly(e),
   // Bot check that challenge levels can be cleared: plays one level with greedy drops and no tools, synchronously.
   simLevel:(lv,games,exp=false,noTw=false)=>{let wins=0;simNoTwist=noTw;
     for(let g=0;g<games;g++){
