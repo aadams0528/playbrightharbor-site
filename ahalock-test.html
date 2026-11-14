@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.1 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2649,10 +2649,15 @@ function showGoals() {
 // ---------- bonus puzzle (every 3rd day you finish the Daily Three; one twist; never fails you) ----------
 const TWISTS = { nohint: { e: '🚫💡', n: 'No hints', d: 'Solve it without hints. The hint button is off.' }, onetry: { e: '🎯', n: 'One try', d: 'Get it right on your first Lock it in for a ⭐. You can keep trying after a miss.' }, clock: { e: '⏱', n: 'Beat the clock', d: 'Solve it in under 3 minutes for a ⭐. No rush: it never runs out.' } };
 function doneDays() { const set = {}; [false, true].forEach(x => { [store.get(RK(x), {}), store.get(AK(x), {})].forEach(all => Object.keys(all).forEach(d => { if (all[d] && all[d].on) set[d] = 1; })); }); return Object.keys(set).sort(); }
-const bonusGet = () => { const b = store.get('bonus', null); return b && typeof b === 'object' ? { n: b.n || 0, days: b.days || {}, seen: b.seen ? 1 : 0 } : { n: 0, days: {}, seen: 0 }; };
+const bonusGet = () => { const b = store.get('bonus', null); return b && typeof b === 'object' ? { n: b.n || 0, days: b.days || {}, seen: b.seen ? 1 : 0, got: b.got || {} } : { n: 0, days: {}, seen: 0, got: {} }; };
+// Every 3 days you finish earns one bonus. Once today has earned one it is kept (in b.got), so playing older
+// days in the archive, or choosing Later, never takes it away. A bonus already played is never offered twice.
 function bonusToday() {
-  const dd = doneDays(); const i = dd.indexOf(realToday);
-  return i >= 0 && (i + 1) % 3 === 0;
+  const b = bonusGet(); if (b.got[realToday]) return true;
+  const dd = doneDays(); if (dd.indexOf(realToday) < 0) return false;
+  const given = {}; Object.keys(b.got).concat(Object.keys(b.days)).forEach(d => given[d] = 1);
+  if (Object.keys(given).length >= Math.floor(dd.length / 3)) return false;
+  b.got[realToday] = 1; store.set('bonus', b); return true;
 }
 const bonusDone = () => !!bonusGet().days[realToday];
 function bonusPz(ds) {
@@ -2723,7 +2728,7 @@ function renderHome() {
     '<div class="optrow"><button class="linkbtn" id="opts">⚙️ Options</button></div>' +
     '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.1' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('opts').onclick = showOptions;
@@ -3788,7 +3793,7 @@ function mergeAhalock(local, cloud) {
   if (local.xres || cloud.xres) out.xres = mergeDays(local.xres, cloud.xres);
   if (local.xarch || cloud.xarch) out.xarch = mergeDays(local.xarch, cloud.xarch);
   if (local.wk || cloud.wk) out.wk = mergeWeek(local.wk, cloud.wk);
-  if (local.bonus || cloud.bonus) { const a = local.bonus || {}, b = cloud.bonus || {}; out.bonus = { n: Math.max(a.n || 0, b.n || 0), days: Object.assign({}, b.days || {}, a.days || {}), seen: a.seen || b.seen ? 1 : 0 }; }
+  if (local.bonus || cloud.bonus) { const a = local.bonus || {}, b = cloud.bonus || {}; out.bonus = { n: Math.max(a.n || 0, b.n || 0), days: Object.assign({}, b.days || {}, a.days || {}), got: Object.assign({}, b.got || {}, a.got || {}), seen: a.seen || b.seen ? 1 : 0 }; }
   const ls = local.story && typeof local.story === 'object' ? local.story : null, cs = cloud.story && typeof cloud.story === 'object' ? cloud.story : null;
   if (ls || cs) {
     const st = Object.assign({}, cs || {}, ls || {});
