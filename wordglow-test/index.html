@@ -315,6 +315,7 @@ body.deco .board { box-shadow: 0 0 0 4px var(--deco1), 0 0 0 7px var(--deco2); }
 .legend .badge.x2 { font-size: 0.7rem; padding: 1px 3px; }
 .tile.sp-x2 { box-shadow: inset 0 0 0 2px #e0457b, inset 0 -4px 0 rgba(0,0,0,0.18); }
 .tile.sp-bomb { box-shadow: inset 0 0 0 2px #2a2a35, inset 0 -4px 0 rgba(0,0,0,0.18); }
+.tile.sp-ice { background-image: linear-gradient(135deg, rgba(220,240,255,.75), rgba(160,210,255,.45)); box-shadow: inset 0 0 0 3px #bfe3ff, inset 0 -4px 0 rgba(0,0,0,0.18); }
 .piece .pc .badge.x2 { font-size: calc(var(--cell) * 0.9 * 0.22); }
 #wordlist { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
 .chip { font: 800 0.9rem var(--font-display); background: var(--gold); color: var(--tile-ink); padding: 2px 9px; border-radius: 6px; }
@@ -461,7 +462,7 @@ button.pill { cursor: pointer; }
     <div class="over" id="over" hidden></div>
   </div>
 
-  <p class="legend" id="legend" hidden><span><i class="badge bomb">💣</i> Bomb clears around it</span><span><i class="badge x2">2x</i> Doubles the word</span></p>
+  <p class="legend" id="legend" hidden><span><i class="badge bomb">💣</i> Bomb clears around it</span><span id="lg-x2"><i class="badge x2">2x</i> Doubles the word</span><span id="lg-ice" hidden>❄️ Thaws when used, +5</span></p>
 
   <div class="tray" id="tray"></div>
 
@@ -593,13 +594,16 @@ const TWISTS = [
   { id: "bombs", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
   { id: "big", short: "Big words pay double", tag: "Big words x2", text: "Big words pay: words of <b>6+ letters score double</b> this level." },
   { id: "crowded", short: "Crowded board", tag: "Crowded", text: "Crowded board: <b>lots of extra letters</b> to use or clear this level." },
+  // Placement twists (Muse round 13 idea; Alan chose both 2026-11-14).
+  { id: "ice", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
+  { id: "norefill", short: "No refills", tag: "No refills", text: "No refills: new pieces come only <b>after you score a word</b>. Plan where all 3 go." },
 ];
 let expert = store.get(EXPERT_KEY, false);   // the switch as it applies to the level being played
 const expertOn = () => expert && mode === "endless" && !tut;
 function twist() {
   if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
   if (picked?.level === level) return TWISTS.find(t => t.id === picked.id);   // the player chose this one
-  const t = TWISTS[(level / 3) % TWISTS.length];
+  const t = TWISTS[((level - CHALLENGE_FROM) / 3) % TWISTS.length];   // 30 long words, 33 E, 36 bombs, 39 big, 42 crowded, 45 ice, 48 no refills
   return t.id === "long4" && expertOn() ? TWISTS[3] : t;   // Expert already needs 4+ letters
 }
 // Every 3rd challenge level (36, 45, 54...) the player picks between this level's twist and the next one (Cooper round 13).
@@ -823,6 +827,13 @@ function seedBoard() {
     if (scanWords(board).length) { board[r][c] = null; continue; }
     n++;
   }
+  // Ice blocks: frozen letters, spread out, in friendly letters so they can be used.
+  for (let n = 0, tries = 0; twist()?.id === "ice" && n < ICE_BLOCKS && tries < 300; tries++) {
+    const r = Math.floor(rng() * N), c = Math.floor(rng() * N);
+    if (!free(r, c) || !clear(r, c)) continue;
+    board[r][c] = { ch: rng() < 0.5 ? pick(VOWELS) : pick(EASY_CONS), color: 1 + Math.floor(rng() * 6), special: "ice" };
+    n++;
+  }
   // Bomb board: a few letters already on the board carry a bomb (Muse round 13: it started with none).
   if (twist()?.id === "bombs") {
     const spots = [];
@@ -834,7 +845,7 @@ function seedBoard() {
     }
   }
 }
-const CROWDED_EXTRA = 10, BOARD_BOMBS = 3;
+const CROWDED_EXTRA = 10, BOARD_BOMBS = 3, ICE_BLOCKS = 4, THAW_PTS = 5;
 
 function newGame(m, replay = false) {
   defGen++;
@@ -1095,7 +1106,7 @@ for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
   const d = document.createElement("div"); d.className = "cell"; boardEl.appendChild(d); cellEls.push(d);
 }
 const cellEl = (r, c) => cellEls[r * N + c];
-const BADGE = { x2: `<i class="badge x2">2x</i>`, bomb: `<i class="badge bomb" aria-label="bomb">💣</i>` };
+const BADGE = { x2: `<i class="badge x2">2x</i>`, bomb: `<i class="badge bomb" aria-label="bomb">💣</i>`, ice: `<i class="badge bomb ice" aria-label="frozen">❄️</i>` };
 const tileHTML = (ch, color, sp) => `<div class="tile c${color}${sp ? " sp-" + sp : ""}">${ch.toUpperCase()}<sub>${PTS[ch]}</sub>${sp ? BADGE[sp] : ""}</div>`;
 
 let lit = [], toolHint = false;   // toolHint: the hint line is showing what the eraser or rotate does
@@ -1128,6 +1139,9 @@ function renderBoard() {
   // Hidden while the special-blocks intro is the hint above the board: it says the same thing.
   const lg = document.getElementById("legend");
   lg.hidden = specialIntro || !(board.flat().some(v => v && v.special) || tray.some(p => !p.used && p.specials?.some(Boolean)));
+  // On an ice level the frozen letters take the 2x line's place, so the legend stays one line.
+  const iced = board.flat().some(v => v?.special === "ice");
+  document.getElementById("lg-ice").hidden = !iced; document.getElementById("lg-x2").hidden = iced;
   // Specials can turn up from level 2: from then on the line keeps its space, so the board never jumps.
   lg.classList.toggle("keep", !tut && level >= 2);
 }
@@ -1716,6 +1730,11 @@ function cashIn(group) {
   // Blocks around any bomb in the group get blown up too, worth 3 points each (the same squares the preview rings).
   const extra = blastCells(group).filter(([R, C]) => board[R][C]);
   score += extra.length * 3;
+  // Ice blocks: a frozen letter in the word (or in a blast) thaws and stays, +5 each.
+  const isIce = ([r, c]) => board[r][c]?.special === "ice";
+  const thaw = [...cells, ...extra].filter(isIce);
+  score += thaw.length * THAW_PTS;
+  if (thaw.length) track("ice_thaw", { level, n: thaw.length });
 
   const n = w.cells.length;
   const colors = w.cells.map(([r, c]) => tileColor(board[r][c].color));
@@ -1743,7 +1762,7 @@ function cashIn(group) {
     rotEarned ? "Rotate earned!" : rotFull && `Rotates full (${MAX_ROTATES})`,
     questLines.trim(), rare && `💎 Rare letter${rare > 1 ? "s" : ""}: +${5 * rare} 🪙`, ...weekLines, ...levelBonusLines(group)].filter(Boolean);
   toast((praise ? praise + "\n" : "") + label + ` +${total}` + (why.length ? "\n" + SMALL + why.join(" · ") : "") +
-    (extra.length ? `\nBOOM! +${extra.length * 3}` : "") + rewardLines.map(l => "\n" + MID + l).join(""),
+    (extra.length ? `\nBOOM! +${extra.length * 3}` : "") + (thaw.length ? `\n❄️ Thawed! +${thaw.length * THAW_PTS}` : "") + rewardLines.map(l => "\n" + MID + l).join(""),
     longest >= 5 || k > 1 || extra.length > 0 || weekLines.length > 0, CASH_MS + 600 * rewardLines.length, false, wordY(group, rewardLines.length));
   // Extra news after the main toast. To keep things quick, at most two items, shown together in one
   // more message, most important first. Every reward is still given; the coin count shows it.
@@ -1766,8 +1785,8 @@ function cashIn(group) {
   const gap = 70, start = 220;
   w.cells.forEach(([r, c], k) => setTimeout(() => {
     const el = cellEl(r, c), b = el.getBoundingClientRect();
-    el.classList.add("pop");
-    burst(b.left + b.width / 2, b.top + b.height / 2, [colors[k], GOLD, "#ffffff"], 10 + n * 2, 0.7 + n * 0.08);
+    if (!isIce([r, c])) el.classList.add("pop");
+    burst(b.left + b.width / 2, b.top + b.height / 2, isIce([r, c]) ? ["#bfe3ff", "#ffffff"] : [colors[k], GOLD, "#ffffff"], 10 + n * 2, 0.7 + n * 0.08);
     SFX.pop(k); buzz(12);
   }, start + k * gap));
   const wordDone = start + n * gap;
@@ -1784,14 +1803,15 @@ function cashIn(group) {
       });
       extra.forEach(([r, c]) => {
         const el = cellEl(r, c), b = el.getBoundingClientRect();
-        el.classList.add("pop");
+        if (!isIce([r, c])) el.classList.add("pop");
         burst(b.left + b.width / 2, b.top + b.height / 2, [tileColor(board[r][c].color), "#ff6a3d"], 12, 1.1);
       });
     }
   }, wordDone);
   setTimeout(() => {
-    w.cells.forEach(([r, c]) => board[r][c] = null);
-    extra.forEach(([r, c]) => board[r][c] = null);
+    const gone = ([r, c]) => { if (isIce([r, c])) board[r][c].special = null; else board[r][c] = null; };
+    w.cells.forEach(gone); extra.forEach(gone);
+    scoredSinceDeal = true;
     busy = false; finishTurn();
   }, wordDone + (extra.length ? 450 : 320));
 }
@@ -1813,6 +1833,7 @@ function setHint() {
     h.innerHTML = "💣 <b>Bomb word!</b> Scoring it also blows up the <b style='color:#e5484d'>red squares</b>. Tap the word to set it off.";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
+  else if (refillHeld) h.innerHTML = "No refills: <b>tap a glowing word</b> to get new pieces.";
   else if (softHint?.eraser) h.innerHTML = "Stuck? Tap the <b>Eraser</b> below, then a block, to make room.";
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
@@ -1839,7 +1860,10 @@ function finishTurn() {
   for (const w of scanWords(board)) if (w.w.length === 3) { const k = w.cells.join("|"); if (!glowMemory.includes(k)) glowMemory.push(k); }
   if (movable && moveHints < 3) store.set("wb-move-hints", ++moveHints);
   if (!over && levelPts() >= target()) return levelUp();
-  if (tray.every(p => p.used)) { tray = dealTray(); rotPaid = null; }
+  // No refills: an empty tray waits for a scored word, unless nothing on the board can be scored (never stuck).
+  refillHeld = tray.every(p => p.used) && twist()?.id === "norefill" && !scoredSinceDeal && scanWords(board).length > 0;
+  if (tray.every(p => p.used) && !refillHeld) { tray = dealTray(); rotPaid = null; scoredSinceDeal = false; }
+  if (refillHeld) setHint();
   const rescued = rescueTray();
   // After a swap, the row or column where the new piece makes a word glows too (Muse round 10).
   const hadHint = softHint;
@@ -1850,7 +1874,7 @@ function finishTurn() {
   store.set(mode === "daily" ? "wb-best-daily-" + todayKey() : "wb-best-endless", best);
   if (!tray.some(p => !p.used && canFitAnywhere(p))) {
     if (lit.length) {
-      toast("No room!\nTap a glowing word", false, READ_MS);
+      toast(refillHeld ? "No refills this level\nTap a glowing word for new pieces" : "No room!\nTap a glowing word", false, READ_MS);
       // Make the glowing word easy to find, even under the message (Muse round 10).
       lit.forEach(w => w.cells.forEach(([r, c]) => cellEl(r, c).classList.add("nudge")));
     }
@@ -2289,7 +2313,7 @@ function beginLevel() {
     board = Array.from({ length: N }, () => Array(N).fill(null));
     seedBoard();
     tray = dealTray();
-    busy = false; levelStartHint = true;
+    busy = false; levelStartHint = true; scoredSinceDeal = false; refillHeld = false;
     setHint(); renderAll(); saveGame();
     const tw = twist();
     if (tw) { track("challenge_start", { level, twist: tw.id, expert: expertOn() }); const live = document.getElementById("sr-live"); if (live) live.textContent = `Challenge level ${level}. ${tw.short}. Plus ${CHALLENGE_COINS} coins.`; }
@@ -2300,6 +2324,7 @@ function beginLevel() {
   }
 }
 let levelStartHint = false;
+let scoredSinceDeal = true, refillHeld = false;   // No refills twist: a word scored since the tray was dealt
 
 // Messages over the board show one at a time, each held still long enough to read; the next one
 // waits its turn. A "minor" message (like the name of a word that just lit up) gives way as soon as
@@ -2757,7 +2782,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "d37d136 2026-11-14 01:05Z";
+const BUILD_STAMP = "bb227e6 2026-11-14 04:14Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
