@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.14.1 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.14.2 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -82,7 +82,7 @@ h1#title svg{width:30px;height:30px}
 .tester{margin-top:14px;font-size:13px;color:var(--ink-soft);text-align:center}
 /* play */
 .hud{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 6px;min-height:44px} /* v0.11 board-first: one slim row under the title */
-.lvname{font-weight:800;font-size:18px;line-height:1.2;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lvname{font-weight:800;font-size:18px;line-height:1.2;flex:1 1 auto;min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow-wrap:anywhere} /* v0.14.2 (Nikola r14): a long name wraps to a 2nd line instead of being cut */
 .lvname small{display:inline;font:inherit;color:inherit}
 .counter{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:14px;padding:6px 12px;box-shadow:var(--shadow);font-weight:700;font-size:16.5px;white-space:nowrap;flex:0 0 auto}
 .counter b{font-size:20px}
@@ -187,6 +187,7 @@ body.still #board .glint,body.still #board .caustic,body.still #scene .sway,body
 @keyframes glow{50%{box-shadow:0 0 0 6px rgba(240,180,41,.55),var(--shadow)}}
 #btnUndo.glow{outline:3px solid #f0b429;outline-offset:2px} /* v0.6.6 (Muse r7): a steady gold ring, so the Undo nudge shows even in a still screenshot */
 /* overlay */
+#winCard .btn.sharego{display:block;width:100%;margin:0 0 10px;font-size:17px;min-height:48px} /* v0.14.2 (Nikola r14, Alan yes): Daily share */
 #winCard .btn.dailygo:not(.primary){display:block;width:100%;margin:0 0 10px;background:#fff4d6;color:#1f3d37;border:2px solid #e0a82e;font-size:17px;min-height:48px;animation:glow 1.6s ease-in-out 2}
 .tomorrow{display:flex;align-items:center;gap:10px;margin:8px 0 0}
 .tomorrow svg{width:46px;height:46px;flex:0 0 46px;border-radius:50%;background:#dfeee9}
@@ -240,7 +241,7 @@ body[data-theme="moon"] .visitor .vcap{color:#eef4ff}body[data-theme="moon"] .vi
 .card .row{display:flex;gap:10px;margin-top:14px}
 .card .row .btn{flex:1}
 .toast.clue{top:auto;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 76px);pointer-events:auto;cursor:pointer;background:#24473f;border:2px solid #f3dc8b;max-width:min(460px,calc(100vw - 24px))}
-.toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:16px;z-index:20;transition:opacity .3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+.toast{position:fixed;left:50%;top:var(--toastTop,70px);transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:14px;padding:10px 16px;font-weight:700;font-size:16px;z-index:20;transition:opacity .3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
 :root{transition:none}
 body{transition:background .5s}
 body[data-theme="moon"] .lvname,body[data-theme="moon"] #title{color:#eef4ff}
@@ -316,7 +317,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     <div class="cloud" id="cloudRow"></div>
     <div class="shop" id="storeRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.14.1 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.14.2 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -384,6 +385,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
         </div>
       </div>
       <button class="btn dailygo hidden" id="btnDailyNow">📅 Try today’s Daily pond</button>
+      <button class="btn sharego hidden" id="btnShare">📤 Share today’s pond</button>
       <div class="row"><button class="btn" id="btnReplay">Play again</button><button class="btn primary" id="btnNext">Next pond</button></div>
     </div>
   </div>
@@ -1827,7 +1829,7 @@ function enterPond(level, title, sub) {
   setPlaying(true);
   $('lvName').innerHTML = '';
   $('lvName').appendChild(document.createTextNode(title));
-  var sm = document.createElement('small'); sm.textContent = ' · ' + sub + (expertNow() ? ' · 🔥 Expert' : settings.expert && G.mode === 'chapter' ? ' · teaching pond, no Expert' : ''); $('lvName').appendChild(sm); $('lvName').title = title + ' · ' + sub; // v0.11: one line, full ink
+  var sm = document.createElement('small'); sm.textContent = ' · ' + sub + (expertNow() ? ' · 🔥 Expert' : settings.expert && G.mode === 'chapter' ? ' · Expert skips this one' : ''); $('lvName').appendChild(sm); $('lvName').title = title + ' · ' + sub; // v0.11: one line, full ink
   G.theme = themeFor(level); applyTheme(G.theme);
   drawBoard();
   sceneSoon();
@@ -2039,6 +2041,7 @@ function win() {
     else $('winVisitor').classList.add('hidden');
     if (G.expertWin) $('winTip').textContent = '🔥 Expert star! ' + $('winTip').textContent;
     $('winWeek').textContent = wkLine; $('winWeek').classList.toggle('hidden', !wkLine); // v0.14.1: on the card, not a toast, so every win shows it
+    $('btnShare').classList.toggle('hidden', G.mode !== 'daily'); $('btnShare').textContent = '📤 Share today’s pond';
     if (G.mode === 'daily') {
       var sk = streakNow();
       if (first) { // v0.12.0: the day's first win says what tomorrow brings
@@ -2754,7 +2757,14 @@ function fitTray() { // v0.10.4 (Cooper + Nikola r12): an open tray never resize
 function toast(msg, ms) {
   ms = ms || 1800;
   [].forEach.call(document.querySelectorAll('.toast'), function (x) { x.remove(); });
+  document.body.style.setProperty('--toastTop', '70px');
   var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t);
+  var hdr = $('lvName') && $('lvName').parentNode;
+  if (hdr && !$('screenPlay').classList.contains('hidden')) { // v0.14.2 (Nikola r14): on a pond a toast sits in the gap under the name and tap counter when it fits there, so neither is covered and the pond cells never are
+    var cTop = Infinity; [].forEach.call(document.querySelectorAll('#board rect[data-cell]'), function (c) { cTop = Math.min(cTop, c.getBoundingClientRect().top); });
+    var under = Math.round(hdr.getBoundingClientRect().bottom + 6);
+    if (under + t.getBoundingClientRect().height <= cTop - 4) document.body.style.setProperty('--toastTop', under + 'px');
+  }
   setTimeout(function () { t.style.opacity = '0'; }, ms); setTimeout(function () { t.remove(); }, ms + 400);
   if (ms > 60000) t.addEventListener('click', function () { t.remove(); });
   return t;
@@ -2798,7 +2808,7 @@ board.addEventListener('pointerdown', function (ev) {
   if (hold) clearTimeout(hold.timer);
   hold = { id: ev.pointerId, idx: idx, x: ev.clientX, y: ev.clientY, shown: false };
   if (noPv) hold.timer = setTimeout(function () { if (!hold || G.busy || G.won) return; hold.shown = 'none';
-    toast((G.mode === 'challenge' ? '🌙 Moonlit pond' : '🔥 Expert pond') + ': no preview here, so that hold used no pebble. Tap to drop one.', 2600); }, 400);
+    toast(G.mode === 'challenge' ? '🌙 No preview tonight, so that hold used no pebble. Tap to try a ripple. Undo is free.' : '🔥 Expert pond: no preview here, so that hold used no pebble. Tap to drop one.', 2800); }, 400);
   else hold.timer = setTimeout(function () { if (hold && !G.busy && !G.won) hold.shown = showHold(hold.idx); }, 250);
 });
 board.addEventListener('pointermove', function (ev) {
@@ -2841,7 +2851,7 @@ $('btnBig').addEventListener('click', function () {
   if (G.st.big <= 0) return;
   G.useBig = !G.useBig; $('btnBig').classList.remove('glow'); hud();
 });
-$('btnReplay').addEventListener('click', function () { if (G.mode === 'daily') startDaily(); else if (G.mode === 'challenge') startChallenge(G.ck); else startLevel(G.li); });
+$('btnReplay').addEventListener('click', function () { if (G.mode === 'daily') startDaily(); else if (G.mode === 'challenge') { if (CHAL[G.ck].pick) showPick(G.ck); else startChallenge(G.ck); } else startLevel(G.li); }); // v0.14.2 (Nikola r14): Play again lets you pick the other twist
 function chapterOf(i) { return (LEVELS[i] && LEVELS[i].chapter) || 1; }
 function lastOfChapter(i) { return i === LEVELS.length - 1 || chapterOf(i + 1) !== chapterOf(i); }
 $('btnDailyNow').addEventListener('click', function () { $('winCard').classList.add('hidden'); clearWinPlace(); startDaily(); });
@@ -2903,6 +2913,7 @@ window.__ripple = { get state() { return { level: G.mode === 'daily' ? 'daily' :
    start: function (i) { startLevel(i); }, startDaily: startDaily, startChallenge: function (k) { startChallenge(k); }, // v0.14.0 test aids below
   v14: function () { return { chal: JSON.parse(JSON.stringify(chal)), expert: JSON.parse(JSON.stringify(expert)), weekly: JSON.parse(JSON.stringify(weekly)), week: weekNow(), deco: holidayNow(), twist: G.twist, expertNow: expertNow(), previewOn: previewOn(), visitors: habitatCounts(), chalCount: CHAL.length }; },
   dailyLevel: function () { return dailyLevel(todayKey()); },
+  shareText: function () { return shareText(); },
   coachTarget: function () { var c = G.coach; return c && c.steps[c.i] && c.steps[c.i].target != null ? c.steps[c.i].target : -1; }, hold: function (i, big) { var ub = G.useBig; G.useBig = !!big; var r = showHold(i); G.useBig = ub; return r; }, unhold: hideHold };
 
 /* ---------- v0.12.0 daily reminder: phone app only (remind.js gives window.BHRemind), asked after the first Daily win ---------- */
@@ -3017,7 +3028,7 @@ function extrasOpen() { return tester || !!progress.stars[LEVELS[11].id]; } // a
 /* --- Challenge ponds: chapter ponds 5-36 again, mirrored or flipped, each with one twist (all solver-checked in gen-chal.js) --- */
 var TWIST = {
   turned: { name: 'Turned pond', line: function () { return 'A pond you know, turned around. Same rules, fresh eyes.'; } },
-  moonlit: { name: 'Moonlit pond', line: function () { return 'No hold-to-preview tonight. Plan each ripple in your head.'; } },
+  moonlit: { name: 'Moonlit pond', line: function () { return 'No hold-to-preview tonight. Plan each ripple in your head. Undo is free, so try an idea and take it back.'; } }, // v0.14.2 (Alan: keep Moonlit, make it kinder)
   tight: { name: 'Tight pond', line: function (par) { return 'Only ' + par + ' pebbles, exactly par. Undo gives one back.'; } },
   bigonly: { name: 'Big stone pond', line: function () { return 'Every drop is a big stone, so each leaf it reaches slides 2 steps. They never run out.'; } }
 };
@@ -3040,7 +3051,7 @@ function startChallenge(k) {
   if (v.bigOnly) { lv.bigOnly = true; lv.big = 0; }
   if (v.twist === 'moonlit') lv.theme = 'moon';
   G.mode = 'challenge'; G.ck = k; G.twist = v.twist; G.li = c.src;
-  enterPond(lv, '⚡ Challenge ' + (k + 1), TWIST[v.twist].name);
+  enterPond(lv, '⚡ Challenge ' + (k + 1), TWIST[v.twist].name + (v.twist === 'moonlit' ? ' · Undo is free' : '')); // v0.14.2: Moonlit keeps a kind reminder on the name line
   G.coach = null; $('btnHelp').classList.remove('hidden');
   showCoach(); hud();
   tipTray('⚡ ' + TWIST[v.twist].name + ': ' + TWIST[v.twist].line(v.par));
@@ -3048,10 +3059,12 @@ function startChallenge(k) {
 function showPick(k) {
   var c = CHAL[k]; $('winCard').classList.add('hidden'); clearWinPlace();
   $('pickTitle').textContent = '⚡ Challenge ' + (k + 1) + ': pick your twist';
+  G.pickBack = $('screenPlay').classList.contains('hidden') ? null : { name: $('lvName').innerHTML, won: G.won };
+  if (G.pickBack) $('lvName').textContent = '⚡ Challenge ' + (k + 1) + ' · pick a twist'; // v0.14.2 (Nikola r14): not the last pond's name behind the card
   [0, 1].forEach(function (j) {
     var v = c.pick[j], b = $('btnPick' + j);
     b.innerHTML = '<b>' + TWIST[v.twist].name + '</b><span>' + TWIST[v.twist].line(v.par) + '</span>';
-    b.onclick = function () { chal.pick[k] = j; store.set('chal', chal); $('pickCard').classList.add('hidden'); startChallenge(k); };
+    b.onclick = function () { G.pickBack = null; chal.pick[k] = j; store.set('chal', chal); $('pickCard').classList.add('hidden'); startChallenge(k); };
   });
   $('pickCard').classList.remove('hidden');
 }
@@ -3086,7 +3099,7 @@ $('btnExpert').addEventListener('click', function () {
   settings.expert = !settings.expert; store.set('settings', settings); renderExpertBtn();
   if (settings.expert && !seen.expertIntro) {
     seen.expertIntro = true; store.set('seen', seen);
-    showInfo('🔥 Expert', 'From the next pond you play:<br>• no hold-to-preview<br>• no Hint or Show me<br><br>Ponds that teach something new (with a lesson or a tip card, like pond 4) stay normal. Expert ponds say 🔥 Expert next to their name.<br><br>Solve one at par or better for a 🔥 on its tile. ' + EXPERT_CRANE_AT + ' 🔥 ponds bring a rare crane. Turn it off here any time.', 'Got it');
+    showInfo('🔥 Expert', 'From the next pond you play:<br>• no hold-to-preview<br>• no Hint or Show me<br><br>Ponds that teach something new (with a lesson or a tip card, like pond 4) stay normal. Expert ponds say 🔥 Expert next to their name.<br><br>Solve one at par or better for a 🔥 on its tile. ' + EXPERT_CRANE_AT + ' 🔥 ponds bring a rare crane. Turn it off with this same switch any time.', 'Got it');
   } else toast(settings.expert ? '🔥 Expert is on, from the next pond.' : 'Expert is off. Preview and hints are back.', 2200);
 });
 
@@ -3123,6 +3136,7 @@ function weekTheme(key) { // { wk: Monday's date key, name, keep }
 }
 var GOALS = {
   daily: { n: 3, text: 'Solve 3 Daily ponds' },
+  days: { n: 3, text: 'Play on 3 different days' }, // v0.14.2 (Nikola r14, Alan: two goals take more than one day)
   three: { n: 4, text: 'Get 3 stars on 4 ponds' },
   nohint: { n: 2, text: 'Solve 2 ponds without Hint' },
   visit: { n: 2, text: 'Bring 2 new visitors' },
@@ -3133,23 +3147,26 @@ var GOALS = {
 function weekGoals(wk) { // the Daily goal every week, plus 4 of the other 6, picked by the week
   var R = rnd(dayNum(wk) * 31 + 5), rest = ['three', 'nohint', 'visit', 'chal', 'solve', 'noundo'];
   for (var i = rest.length - 1; i > 0; i--) { var j = (R() * (i + 1)) | 0, t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
-  return ['daily'].concat(rest.slice(0, 4));
+  var chalLeft = CHAL.filter(function (c, k) { return !chal.stars[k]; }).length; // v0.14.2 (Nikola r14): never a goal that can't be done this week
+  if (chalLeft < GOALS.chal.n) rest = rest.filter(function (g) { return g !== 'chal'; });
+  return ['daily', 'days'].concat(rest.slice(0, 3)); // two goals that need different days, plus 3 more
 }
 var weekly = store.get('weekly', {}) || {}; weekly.keep = weekly.keep || {}; // { wk, c: {goal: n}, all, keep: {wk: keepId} }
 function weekNow() {
   var t = weekTheme();
-  if (weekly.wk !== t.wk) { weekly.wk = t.wk; weekly.c = {}; weekly.ids = {}; weekly.all = false; }
+  if (weekly.wk !== t.wk) { weekly.wk = t.wk; weekly.c = {}; weekly.ids = {}; weekly.all = false; weekly.goals = null; }
   weekly.c = weekly.c || {}; weekly.ids = weekly.ids || {};
-  t.goals = weekGoals(t.wk); return t;
+  if (!weekly.goals || weekly.goals.length !== 5) { weekly.goals = weekGoals(t.wk); store.set('weekly', weekly); } // v0.14.2 (Nikola r14): set once a week, so goals never change mid-week
+  t.goals = weekly.goals; return t;
 }
 function weeklyWin(o) { // o: { s, first, mode, noHint, noUndo, pid }; returns the line for the win card ('' if none)
   if (!extrasOpen() || G.solved) return '';
   var t = weekNow(), lines = [], doneNow = [];
-  var PER_POND = { three: 1, nohint: 1, solve: 1, noundo: 1 }; // v0.14.1 (Muse r14): each pond counts once a week for these
-  var hit = { daily: o.mode === 'daily' && o.first, three: o.s === 3, nohint: o.noHint, visit: o.first && o.mode !== 'challenge', chal: o.mode === 'challenge' && o.first, solve: true, noundo: o.noUndo };
+  var PER_POND = { three: 1, nohint: 1, solve: 1, noundo: 1, days: 1 }; // v0.14.1 (Muse r14): each pond counts once a week for these
+  var hit = { daily: o.mode === 'daily' && o.first, three: o.s === 3, nohint: o.noHint, visit: o.first && o.mode !== 'challenge', chal: o.mode === 'challenge' && o.first, solve: true, noundo: o.noUndo, days: true };
   t.goals.forEach(function (g) {
     var c = weekly.c[g] || 0; if (!hit[g] || c >= GOALS[g].n) return;
-    if (PER_POND[g]) { var seenIds = weekly.ids[g] = weekly.ids[g] || {}; if (seenIds[o.pid]) return; seenIds[o.pid] = 1; }
+    if (PER_POND[g]) { var pk = g === 'days' ? todayKey() : o.pid, seenIds = weekly.ids[g] = weekly.ids[g] || {}; if (seenIds[pk]) return; seenIds[pk] = 1; }
     weekly.c[g] = c + 1;
     if (c + 1 === GOALS[g].n) doneNow.push(GOALS[g].text);
   });
@@ -3229,7 +3246,30 @@ function showInfo(title, html, btn, then) {
   $('btnInfoOk').onclick = function () { $('infoCard').classList.add('hidden'); if (then) then(); };
   $('infoCard').classList.remove('hidden');
 }
-$('btnPickBack').addEventListener('click', function () { $('pickCard').classList.add('hidden'); });
+/* --- v0.14.2 Daily share (Nikola r14; Alan chose it): a short spoiler-free line, through the phone's share sheet when there is one, else copied --- */
+function shareText() {
+  var key = G.dailyKey, s = daily.done[key] || 0, best = daily.best[key], sk = streakNow();
+  return ['Pebble Pond Daily · ' + prettyDate(key), (G.level.name ? G.level.name + ': ' : '') + '⭐'.repeat(s) + ' in ' + best + (best === 1 ? ' tap' : ' taps') + ' (par ' + G.level.par + ')',
+    sk > 1 ? '🔥 ' + sk + '-day streak' : '', 'playbrightharbor.com'].filter(Boolean).join('\n');
+}
+$('btnShare').addEventListener('click', function () {
+  var txt = shareText(), b = $('btnShare');
+  function copied() { b.textContent = 'Copied! Paste it in a text'; }
+  function fallback() { (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(copied, function () { toast(txt, 8000); }); }
+  if (navigator.share) navigator.share({ text: txt }).catch(function (e) { if (!e || e.name !== 'AbortError') fallback(); });
+  else fallback();
+});
+$('btnPickBack').addEventListener('click', function () {
+  $('pickCard').classList.add('hidden');
+  var pb = G.pickBack; G.pickBack = null; if (!pb) return; // from a pond: back to its win card, as it was
+  $('lvName').innerHTML = pb.name;
+  if (pb.won && G.won) { $('winCard').classList.remove('hidden'); placeWinCard(); } else showSelect();
+});
+document.addEventListener('keydown', function (ev) { // v0.14.2 (Nikola r14): Escape closes the pick and info cards
+  if (ev.key !== 'Escape') return;
+  if (!$('infoCard').classList.contains('hidden')) { ev.preventDefault(); $('btnInfoOk').click(); }
+  else if (!$('pickCard').classList.contains('hidden')) { ev.preventDefault(); $('btnPickBack').click(); }
+});
 
 /* ---------- phone app: cloud save (shared BHCloud module; in a browser BHCloud is absent and this does nothing) ---------- */
 function cloudData() { return { progress: store.get('progress', { stars: {}, best: {} }), daily: store.get('daily', {}), seen: store.get('seen', {}), chal: store.get('chal', {}), expert: store.get('expert', {}), weekly: store.get('weekly', {}) }; }
