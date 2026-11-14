@@ -126,7 +126,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 .ghost{background:transparent;border:1.5px solid rgba(255,255,255,.18);border-radius:14px;padding:10px;font-weight:800;font-size:14px}
 .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
 .lv{aspect-ratio:1;border-radius:14px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);font-family:var(--display);font-weight:800;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px;max-width:100%}
-.lv small{font-family:var(--body);font-size:10px;color:var(--lantern);letter-spacing:0;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:clip}
+.lv small{font-family:var(--body);font-size:10px;color:var(--lantern);letter-spacing:0;max-width:100%;white-space:nowrap;line-height:1.15;text-align:center}
 .lv[disabled]{opacity:.35;cursor:default}
 .chap{display:flex;justify-content:space-between;align-items:baseline;margin:6px 2px -4px;font-family:var(--display);font-size:15px;text-align:left}.chap span{font-size:12px;color:var(--lantern)}
 .saga{max-height:min(56vh,520px);overflow-y:auto;margin:4px -6px;border-radius:16px;background:linear-gradient(#173c2a,#10291e);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
@@ -177,7 +177,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.87 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.88 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -726,7 +726,7 @@ function updateCrew(){const b=$("crewBtn"),T=G&&G.tool&&CREW[G.tool];b.hidden=!T
   b.textContent=G.toolUsed?`${T.icon} ${G.tool==="saw"?"Saw":"Pick"} used`:`${T.icon} ${T.name}`;b.classList.toggle("aim",aiming);b.classList.toggle("used",G.toolUsed);}
 $("lvTitle").onclick=()=>{glowTip();markTip();};$("tipBtn").onclick=glowTip;
 // how ink is counted, on a tap of the ink (Muse, round 7; Alan chose Nov 14)
-document.querySelector(".ink").onclick=()=>toast("Ink counts every step your streams take. A shared cell counts once for each stream through it.",3600);
+{const ik=document.querySelector(".ink");ik.onclick=()=>toast("Ink counts every step your streams take. A shared cell counts once for each stream through it.",3600);ik.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();ik.onclick();}};} // keyboard too (Nikola, round 8)
 $("crewBtn").onclick=()=>{if(won||!G.tool)return;if(G.toolUsed){toast("Restart the level to put it back");return;}
   aiming=!aiming;updateCrew();if(aiming){toast(CREW[G.tool].aim);if(lesson)lessonCheck();}};
 // the blocker comes apart: planks fly off a sawn dam, chips off a cracked clump, and the water rushes through
@@ -843,7 +843,8 @@ cv.addEventListener("pointerdown",e=>{
     // pressing a cell two streams share: a stream whose tip is here carries on, otherwise cut the top one
     if(owners.length){active=owners.find(k=>paths[k][paths[k].length-1]===c)??owners[owners.length-1];pressed=paths[active].slice();paths[active].length=cutPoint(paths[active],c)+1;
       // say which stream a press on a shared cell picked up (Muse, v0.74 and v0.75: it trimmed red without a word)
-      if(owners.length>1&&pressed.length-paths[active].length>1){const m=G.sources[active]&&NAMES[G.sources[active].mask];if(m)toast(`Redrawing the ${m} stream from here. Undo puts it back.`);}}
+      if(pressed.length-paths[active].length>1){ // any pick-up from the middle of a stream says so, not only on shared cells (Muse, round 8: "den-grab")
+      const m=G.sources[active]&&NAMES[G.sources[active].mask];if(m)toast(`Redrawing the ${m} stream from here. Undo puts it back.`);}}
     // a press on a pool is not a stream (Muse, v0.64: pressing a pool next to a den started that den's stream)
     else if(cell.t==="tunnel"){undoStack.pop();teachOnce("poolpress","Pools aren't streams. Start from a critter, then draw into the pool.");return;}
     else{active=nearTip(e);if(active<0){undoStack.pop();return;}pressed=paths[active].slice();lastCell=-1;cv.setPointerCapture(e.pointerId);follow(e);return;}
@@ -1364,7 +1365,7 @@ function markKey(ids){const z=ids.some(isZap),f=ids.some(i=>prog.fire&&prog.fire
   return `<p class="chnote">${z?"⚡ Bonus river: your first ★★★ there pays +1 hint, then it shows ⚡✓.":""}${z&&f?" ":""}${f?"🔥 Cleared at ★★★ in Expert, with no hint.":""}</p>`;}
 function showChapter(id){
   const C=CHAPTERS.find(c=>c.id===id),I=chapterInfo(C);
-  const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}${prog.stars[ID(i)]?`, ${prog.stars[ID(i)]} star${prog.stars[ID(i)]>1?"s":""}`:""}${isZap(i)?(prog.zap&&prog.zap[ID(i)]?", bonus river, hint paid":", bonus river"):""}${prog.fire&&prog.fire[ID(i)]?", Expert clear":""}${i<openCount()?"":", locked"}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}${(isZap(i)?(prog.zap&&prog.zap[ID(i)]?"⚡✓":"⚡"):"")+(prog.fire&&prog.fire[ID(i)]?"🔥":"")}</small></button>`;
+  const btn=i=>`<button class="lv ${i===lv?"cur":""}" data-lv="${i}" ${i<openCount()?"":"disabled"} aria-label="Level ${i+1}${prog.stars[ID(i)]?`, ${prog.stars[ID(i)]} star${prog.stars[ID(i)]>1?"s":""}`:""}${isZap(i)?(prog.zap&&prog.zap[ID(i)]?", bonus river, hint paid":", bonus river"):""}${prog.fire&&prog.fire[ID(i)]?", Expert clear":""}${i<openCount()?"":", locked"}">${i+1}<small>${"★".repeat(prog.stars[ID(i)]||0)||"&nbsp;"}${(()=>{const m=(isZap(i)?(prog.zap&&prog.zap[ID(i)]?"⚡✓":"⚡"):"")+(prog.fire&&prog.fire[ID(i)]?"🔥":"");return m?`<br>${m}`:"";})()}</small></button>`;
   openSheet(`<button class="ghost back" id="back">‹ River map</button><div class="chap"><b>${C.id?`Chapter ${chNo(C.id)} · `:""}${C.title}</b><span>★ ${I.got}/${I.max}</span></div>
     ${C.note?`<p class="chnote">${C.note}</p>`:""}${I.shut?`<p class="chnote">🔒 Opens at ★ ${chGoal(I.prev)} in Chapter ${chNo(I.prev)} (you have ${chStars(I.prev)})</p>`:""}
     <div class="grid">${I.ids.map(btn).join("")}</div>${markKey(I.ids)}<button class="ghost" id="close">Close</button>`);
@@ -1535,7 +1536,8 @@ function reserveTip(){const t=document.querySelector(".tip"),L=!daily&&LESSONS[L
 // The level's goal line floats over the header, glows when the level starts, then fades so the board has the room;
 // tapping the level name shows it again (board-first layout rule 6, Alan, Nov 12)
 function markTip(){if(daily||bonus)return;const z=isZap(lv),f=opts.expert;if(!z&&!f)return;
-  toast([z?"⚡ Bonus river: your first ★★★ here pays +1 hint.":"",f?"🔥 Expert is on: clear at ★★★ with no hint to earn a 🔥.":""].filter(Boolean).join(" "),3600);}
+  const id=ID(lv),paid=prog.zap&&prog.zap[id],lit=prog.fire&&prog.fire[id]; // say what's already earned (Cooper, round 8)
+  toast([z?(paid?"⚡ Bonus river: its +1 hint is already yours (⚡✓).":"⚡ Bonus river: your first ★★★ here pays +1 hint."):"",f?(lit?"🔥 Expert is on: you already have this river's 🔥.":"🔥 Expert is on: clear at ★★★ with no hint to earn a 🔥."):""].filter(Boolean).join(" "),3600);}
 function glowTip(){const tp=$("lvTip");if(!tp.classList.contains("float"))return;tp.classList.remove("glow");void tp.offsetWidth;tp.classList.add("glow");}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
 function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
@@ -1740,8 +1742,8 @@ function weeklyWin(s){const W=weekNow(),wk=wkNow(),c=wk.c,add=(k,n)=>{if(n>0)c[k
   if(daily&&!(prog.daily&&prog.daily[daily.day]))add("daily",1); // the first win of each day's Daily (recordDaily runs after this)
   const pay=dayShift?0:1; // ?day= previews show the goals but never pay real hints (Muse, round 7)
   W.goals.forEach(g=>{if(!wk.paid[g.k]&&(c[g.k]||0)>=g.n){wk.paid[g.k]=1;prog.bonusHints=(prog.bonusHints||0)+pay;
-    winNews.push(`🗓️ ${g.name} +1 hint`);T("weekly_goal",{goal:g.k});}});
-  if(!wk.mega&&W.goals.every(g=>wk.paid[g.k])){wk.mega=1;prog.bonusHints=(prog.bonusHints||0)+5*pay;winNews.push("🗓️ All 5 goals +5 hints");T("weekly_all",{});}}
+    winNews.push(`🗓️ ${g.name} ${pay?"+1 hint":"(preview)"}`);T("weekly_goal",{goal:g.k});}});
+  if(!wk.mega&&W.goals.every(g=>wk.paid[g.k])){wk.mega=1;prog.bonusHints=(prog.bonusHints||0)+5*pay;winNews.push(pay?"🗓️ All 5 goals +5 hints":"🗓️ All 5 goals (preview)");T("weekly_all",{});}}
 // a goal row opens the next river that would count for it; replays don't count, so this can't farm hints (Cooper, round 7; Alan chose Nov 14)
 function weekTarget(k,color){if(k==="daily")return dailyOpen()&&!(prog.daily&&prog.daily[dayNum()])?"daily":null;
   const n=openCount(),has=i=>LEVELS[i].map.some(r=>[...r].some(ch=>NEST[ch]===color)),find=f=>{for(let i=0;i<n;i++)if(f(i))return i;return -1;};
@@ -1775,7 +1777,7 @@ let toastQ=[],toastOn="";
 function toast(t,ms=1900){if(t===toastOn||toastQ.some(q=>q.t===t))return;toastQ.push({t,ms:Math.max(ms,1900)});if(toastQ.length>2)toastQ.shift();if(!toastOn)nextToast();}
 function nextToast(){const el=$("toast"),q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;el.textContent=q.t;
   // sit just above the colour chart when it shows, else just above the board: never on either (board-first layout, Nov 12; Muse, round 7: it hid the chart)
-  const m=document.querySelector(".tip .rules").getBoundingClientRect(),r=cv.getBoundingClientRect(),top=m.height>4&&m.top<r.top?m.top:r.top;
+  const tp=$("lvTip"),inFlow=!tp.hidden&&!tp.classList.contains("float")&&tp.offsetHeight>0,m=(inFlow?tp:document.querySelector(".tip .rules")).getBoundingClientRect(),r=cv.getBoundingClientRect(),top=m.height>4&&m.top<r.top?m.top:r.top; // above the hint too when it sits in the page, as on lesson levels (Nikola, round 8)
   el.style.bottom=r.height?Math.max(8,innerHeight-top+6)+"px":"";el.classList.add("show");
   toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";nextToast();},300);},q.ms);}
 function clearToast(){clearTimeout(toastTimer);toastQ=[];toastOn="";const el=$("toast");el.classList.remove("show");el.textContent="";}
