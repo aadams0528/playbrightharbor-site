@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.21.0 (Seasons & Holidays globe style) -->
+<!-- Tripsake v0.21.1 (Cooper r19 fixes: no duplicate on re-import) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -560,6 +560,8 @@ const store = {
 };
 const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
 const fmtShort = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric"});
+/* the day a real photo was taken, from its saved time ("Apr 2, 6:00 PM"); the stop's day if it has none. A photo you added from another day shows its own date (Cooper r19) */
+function phDay(ph, s){ const m = ph && ph.scene === "real" && /^([A-Z][a-z]{2}) (\d{1,2})\b/.exec(ph.caption || ""); if (!m || !s || !s.date) return s ? fmt(s.date) : ""; const y = +s.date.slice(0, 4), base = new Date(s.date + "T12:00:00"); let d = new Date(`${m[1]} ${m[2]}, ${y} 12:00`); if (!isNaN(d) && Math.abs(d - base) > 183 * DAY) d = new Date(`${m[1]} ${m[2]}, ${y + (d < base ? 1 : -1)} 12:00`); /* a trip over New Year */ return isNaN(d) ? fmt(s.date) : d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); }
 /* "Jul 8, 2025", not "Jul 8 – Jul 8, 2025", for a one-day range (Nikola r18) */
 function dRange(a, b, long){ return !b || a === b ? fmt(a) : `${long ? fmt(a) : fmtShort(a)} – ${fmt(b)}`; } //
 
@@ -1417,7 +1419,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.21.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1642,7 +1644,7 @@ function lbRemove(id){ const s = photoStop(id); if (!s) return;
 function closeLB(){ const el = document.getElementById("lb"); if (el) el.remove(); }
 function photoLB(phId){
   const p = PHOTOS.find(x => x.id === phId); const s = p.stop;
-  const list = s.photos.map(ph => ({id:ph.id, src:photo(ph.scene, ph.id, 960, 720), cap:ph.scene === "real" ? stopName(s) : ph.caption, sub:`${stopName(s)} · ${fmt(s.date)}${ph.scene === "real" ? "" : " · sample photo"}`}));
+  const list = s.photos.map(ph => ({id:ph.id, src:photo(ph.scene, ph.id, 960, 720), cap:ph.scene === "real" ? stopName(s) : ph.caption, sub:`${stopName(s)} · ${phDay(ph, s)}${ph.scene === "real" ? "" : " · sample photo"}`}));
   lightbox(list, s.photos.indexOf(p));
 }
 function undoCountdown(t, ms){ const bar = document.createElement("i"); bar.className = "tbar"; bar.style.animationDuration = ms + "ms"; t.appendChild(bar); const ub = t.querySelector("button:not(.tx)"), end = Date.now() + ms; { const k = t.querySelector(".tkeep"); if (k) k.remove(); }
@@ -2166,7 +2168,7 @@ function drawTiles(){ const L = loadState; if (!L) return; document.querySelecto
 /* set where one no-location photo goes: v = trip index, or -1 to leave it out */
 function setPlace(k, v){ const L = loadState, p = L && L.noLocAll[k]; if (!p) return;
   if (!L.skip) L.skip = new Set(); L.skip.add(p.file); if (v < 0) L.placed.delete(p.file); else { const t = L.trips[v]; if (!t) return; L.placed.set(p.file, t.pts[0]); { const k2 = document.querySelector(`[data-ld-keep="${v}"]`); if (k2 && !k2.checked){ k2.checked = true; reviewSave(); updateAddCount(); } } /* adding a photo to a trip keeps that trip */ const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${dRange(t.start, t.end)}). It's added anyway; tap it again and choose Leave out if that's wrong.`); }
-  refreshWhy(); drawTiles(); }
+  refreshWhy(); drawTiles(); L.trips.forEach(t => { if (t.repeat) replanRepeat(t); }); /* a trip already on your globe checks its new photos again, so its count is right before you save (Cooper r19) */ }
 /* the big view of one no-location photo: see it, then add it to a trip or leave it out */
 let pvIdx = -1;
 function placeList(){ return (loadState && loadState.noLocAll) || []; }
@@ -2225,7 +2227,8 @@ function tripCounts(t, cap){ const info = capInfo(t, cap), all = info.reduce((b,
 /* the line on each trip card that makes the headline add up: "2 new · 2 already on your globe" */
 const cardPhotos = t => { let c = null; try { c = tripCounts(t, stopCap()); } catch(e){} return Math.max(t.photos, c ? c.all : 0); }; /* located + matched by date, so the header agrees with the card's own count line */
 function tripCountLine(t){ const c = tripCounts(t, stopCap());
-  if (t.repeat && !t.forceJoin){ const n = c ? c.saved : 0; return `<b>Already on your globe as ${esc(t.repeat.title)}</b>, so it's unticked.${t.repeat.pending ? " Checking for new photos…" : n ? ` Tick it to add its ${plural(n, "new photo")} to that trip.` : " No new photos in it."}`; }
+  if (t.repeat && !t.forceJoin){ const n = c ? c.saved : 0; if (loadState && tripTicked(loadState, t)) return `<b>Already on your globe as ${esc(t.repeat.title)}</b>.${t.repeat.pending ? " Checking for new photos…" : n ? ` Its ${plural(n, "new photo")} will be added to that trip.` : " No new photos in it, so nothing will be added."}`; /* ticked: say what will happen, not that it's unticked (Cooper r19) */
+    return `<b>Already on your globe as ${esc(t.repeat.title)}</b>, so it's unticked.${t.repeat.pending ? " Checking for new photos…" : n ? ` Tick it to add its ${plural(n, "new photo")} to that trip.` : " No new photos in it."}`; }
   if (!c) return ""; const byDate = Math.max(0, c.all - t.photos); if (!c.already && !byDate) return "";
   const head = byDate ? `${plural(c.all, "photo")} in all: ${t.photos.toLocaleString()} with a location + ${byDate.toLocaleString()} matched by date` : "";
   const split = c.already ? `<b>${c.saved ? plural(c.saved, "new photo") : "No new photos"}</b> · ${c.already.toLocaleString()} already on your globe, so not saved twice` : "";
@@ -2285,13 +2288,19 @@ function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { c
 /* for a loader trip that matches a saved one: which of its photos are not in the saved trip yet (by picture fingerprint) */
 /* no-location photos you kept for a trip that's already on your globe: matched by date, so they aren't in its first check */
 function repeatKept(t){ const ck = (t.repeat && t.repeat.checked) || new Set(); return [...extraPts(t).values()].flat().filter(p => !ck.has(p.file)); }
-const repeatNew = t => { const L = loadState; return (t.repeat.newPts || []).filter(x => !(x.x && L && L.skip && L.skip.has(x.p.file))).length + repeatKept(t).length; };
+/* a no-location photo you chose Leave out for stays out; one you put into this trip stays in */
+const repeatOut = (L, t, x) => !!(x.x && L && L.skip && L.skip.has(x.p.file) && !(L.placed && L.placed.get(x.p.file) === t.pts[0]));
+const repeatNew = t => { const L = loadState; return (t.repeat.newPts || []).filter(x => !repeatOut(L, t, x)).length + repeatKept(t).length; };
 /* a trip that's already on your globe is checked again when you Keep or Leave out one of its no-location photos, so its count stays exact */
 async function replanRepeat(t){ const L = loadState; if (!t || !t.repeat || t.repeat.pending || !L) return; const e = travelRaw(store.get("realTrips", [])).find(x => x.id === t.repeat.eid); if (!e) return; t.repeat.pending = true; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
 async function repeatPlan(t, e){ const prints = []; for (const o of e.stops) for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); }
   const list = []; for (const s of t.stops) for (const p of s.pts) list.push({s, p}); if (t.repeat) extraPts(t).forEach((ps, s) => ps.forEach(p => { if (!list.some(x => x.p.file === p.file)) list.push({s, p, x:true}); })); /* no-location photos matched by date are checked too, so a kept one is counted (and one already saved isn't) */
-  const out = []; for (const {s, p, x} of list){ if (t.repeat && t.repeat.checked) t.repeat.checked.add(p.file); let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) continue; out.push(x ? {s, p, x} : {s, p}); }
+  const out = []; for (const {s, p, x} of list){ if (t.repeat && t.repeat.checked) t.repeat.checked.add(p.file); let u = null; try { u = await thumb(p.file, 320); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; if (f && prints.some(q => samePic(f, q))) continue;
+    if (f && prints.some(q => picCorr(f, q) > .9) && await savedSame(p.file, prints)) continue; /* a close call: look again at the size it was saved at, so the same photo is never added twice (Cooper r19) */
+    out.push(x ? {s, p, x} : {s, p}); }
   return out; }
+/* the photo shrunk and saved exactly as a saved one was (1024 px), so a re-import of the same picture matches it closely */
+async function savedSame(file, prints){ let u = null; try { u = await thumb(file, 1024, true); } catch(e){} if (u instanceof Blob){ try { u = await blobURL(u); } catch(e){ u = null; } } const f = typeof u === "string" ? await picPrint(u) : null; return !!f && prints.some(q => samePic(f, q)); }
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = travelRaw(store.get("realTrips", []));
   (async () => { for (const t of L.trips){ if (t.homeMem || L.homeMem) continue; const e = existing.find(x => sameTripAs(x, t));
     if (!e){ if (!existing.length) continue; { const w = existing.find(x => duringTrip(x, t)); if (w){ t.maybeJoin = {eid:w.id, title:w.title}; if (t.photos <= 3){ tickKeep(t); forceJoin(L.trips.indexOf(t), true); } } } /* a day or two of photos (1 to 3) from the days of a saved trip joins it, ticked from the start; untick to keep it apart */ /* a day out far away in the middle of a saved trip: ask, rather than guess */ t.dupe = {pending:true, drop:new Set()}; refreshCapNotes(); try { t.dupe.drop = await dupeScan(t, existing); } catch(err){} t.dupe.pending = false; refreshCapNotes(); continue; }
@@ -2342,7 +2351,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
   const cap = stopCap(); const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + stopPick(s.pts, cap).keep.length, 0), 0);
   for (const {t, i} of pick){
     { const e = t.homeMem || L.homeMem ? null : travelRaw(existing).find(x => t.forceJoin ? x.id === t.forceJoin : sameTripAs(x, t)); if (e){ /* already saved: same dates and places, so only its new photos join that trip */
-      let plan = (t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep).filter(x => !(x.x && L.skip && L.skip.has(x.p.file))); let got = 0;
+      let plan = (t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep).filter(x => !repeatOut(L, t, x)); let got = 0;
       { const have = new Set(plan.map(x => x.p.file)), kept = t.stops.map(s => ({s, pts:s.pts.filter(p => p.pinned && !have.has(p.file))})).filter(x => x.pts.length); /* a no-location photo you tapped Keep on joins this trip too, unless that same picture is already in it */
         if (kept.length){ const more = await repeatPlan({stops:kept.map(x => ({pts:x.pts, own:x.s}))}, e); plan = plan.concat(more.map(r => ({s:r.s.own, p:r.p}))); } }
       for (const {s, p} of plan){ let es = e.stops.map(q => ({q, d:d3.geoDistance([q.lon, q.lat], [s.lon, s.lat])})).sort((a, b) => a.d - b.d)[0]; es = es.d * KM < 15 ? es.q : null;
@@ -2350,7 +2359,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
         const vis = es.photos.filter((ph, k) => !PH_HIDDEN[es.id + "-" + k]).length; if (vis >= Math.max(stopLimit(es), cap) && !p.pinned) continue;
         let url = await thumb(p.file, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e2){ url = null; } } if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ failed++; continue; }
         try { await idb.put("rp:" + es.id + "-" + es.photos.length, url); } catch(e2){ failed++; continue; } es.photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); got++; done++; prog.textContent = `Saving photos ${done} of ${total}…`; }
-      if (got){ joined.push({title:e.title, n:got, id:e.id}); const ds = e.stops.map(q => q.date).concat(plan.map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
+      if (got){ joined.push({title:e.title, n:got, id:e.id}); const near = k => { const a = new Date(e.start + "T12:00:00") - 2 * DAY, b = new Date(e.end + "T12:00:00") + 2 * DAY; return k >= a && k <= b; }; const ds = e.stops.map(q => q.date).concat(plan.filter(({p}) => near(p.t)).map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); /* only a photo from a day or two either side stretches the trip; one you added from weeks away keeps its own date but not the trip's (Cooper r19) */ if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
     const drop = t.dupe && !t.dupe.pending ? t.dupe.drop : (existing.length ? await dupeScan(t, existing) : new Set()); /* never save a photo twice, whatever its name or time */
     if (drop.size && t.stops.every(s => s.pts.every(p => drop.has(p)))) continue;
     const id = "rt" + base + i; const title = (names.get(i) || t.title).trim().slice(0, 80);
@@ -3356,7 +3365,7 @@ function openPhotoReview(id, at){ const t = TRIPS.find(x => x.id === id); if (!t
 function drawPhotoReview(){ const R = prev, ph = R.list[R.i], s = ph.stop, off = !!R.hidden[ph.id];
   const stopLeft = (s.allPhotos || s.photos).filter(p => !R.hidden[p.id]).length; const isCover = (COVERS[R.trip.id] || "") === ph.id;
   const kept = R.list.filter(p => !R.hidden[p.id]).length, tn = tnoun(R.trip); /* a memory is never called a trip (Nikola r18) */
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">Photo ${R.i + 1} of ${R.list.length} in this ${tn} · ${kept === R.list.length ? `all in the ${tn}` : `${kept} in the ${tn}, ${R.list.length - kept} removed`}</div><div class="note" style="margin:-4px 0 0">${esc(stopName(s))} · ${fmt(s.date)} · ${(s.allPhotos || s.photos).length === 1 ? "the only photo here" : `${(s.allPhotos || s.photos).length} photos here`}${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Go through your photos")}<div class="steps">Photo ${R.i + 1} of ${R.list.length} in this ${tn} · ${kept === R.list.length ? `all in the ${tn}` : `${kept} in the ${tn}, ${R.list.length - kept} removed`}</div><div class="note" style="margin:-4px 0 0">${esc(stopName(s))} · ${phDay(ph, s)} · ${(s.allPhotos || s.photos).length === 1 ? "the only photo here" : `${(s.allPhotos || s.photos).length} photos here`}${ph.by ? ` · photo: ${esc(ph.by)}` : ""}</div>
     <div style="position:relative;border-radius:14px;overflow:hidden;background:#0b0f1a"><img src="${photo(ph.scene, ph.id, 960, 720)}" alt="${esc(phLabel(ph) || ph.caption)}" style="width:100%;aspect-ratio:4/3;object-fit:contain;display:block;${off ? "opacity:.3;filter:grayscale(1)" : ""}">
       ${off ? `<div style="position:absolute;inset:auto 0 12px 0;text-align:center"><span class="badge">Removed from this ${tn}</span></div>` : isCover ? `<div style="position:absolute;top:10px;left:10px"><span class="badge">★ ${tn === "memory" ? "Memory" : "Trip"} cover</span></div>` : ""}</div>
     <div><label class="l" for="prCap">Caption</label><input type="text" id="prCap" data-phlabel="${ph.id}" maxlength="60" value="${esc(phLabel(ph))}" placeholder="${ph.scene === "real" ? "What's in this photo? Shows in your story and video" : esc(ph.caption)}"></div>
@@ -3615,7 +3624,9 @@ document.addEventListener("click", e => {
   if (g("[data-bb-stay]")){ const bb = g(".backbar"); if (bb) bb.outerHTML = BACKBAR; return; }
   if ((b = g("[data-nav]"))){ const k = b.dataset.nav;
     if (k === "globe" && b.closest(".backbar") && !b.hasAttribute("data-bb-leave") && document.querySelector("[data-ld-add]") && loadState && loadState.trips && loadState.trips.length && !SAVING){ /* the import review isn't saved yet: ask before throwing it away (Nikola r18) */
-      const n = loadState.trips.length; b.closest(".backbar").innerHTML = `<p style="margin:0 0 8px;font-weight:600">Leave without adding ${n === 1 ? "this trip" : `these ${n} trips`}?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`; return; }
+      const L = loadState, on = L.trips.filter(t => tripTicked(L, t)), fresh = on.filter(t => !t.repeat || t.forceJoin).length, more = on.filter(t => t.repeat && !t.forceJoin).reduce((a, t) => a + repeatNew(t), 0); /* say what would really be added: the ticked trips, and new photos for ones already on your globe (Cooper r19) */
+      const what = [fresh && (fresh === 1 ? "this trip" : `these ${fresh} trips`), more && (more === 1 ? "this new photo" : `these ${more} new photos`)].filter(Boolean).join(" and ");
+      if (what) { b.closest(".backbar").innerHTML = `<p style="margin:0 0 8px;font-weight:600">Leave without adding ${what}?</p><div class="row-btns" style="margin:0"><button class="btn primary" data-bb-stay>Stay and finish</button><button class="btn" data-nav="globe" data-bb-leave>Leave</button></div>`; return; } }
     if (k === "globe"){ closeSheet(); if (isPhone()) setSheet("peek"); renderTabs(); } else if (k === "add") openAddMenu(); return; }
   if (g("[data-trip-more]")){ tripMoreOpen = !tripMoreOpen; const b2 = g("[data-trip-more]"); if (tripMoreOpen) TRIP_MORE.add(b2.dataset.tripId); else TRIP_MORE.delete(b2.dataset.tripId); b2.setAttribute("aria-expanded", tripMoreOpen); b2.textContent = "More for this " + ((TRIPS.find(u => u.id === b2.dataset.tripId) || {}).homeMem ? "memory " : "trip ") + (tripMoreOpen ? "▴" : "▾"); const tm = document.querySelector("#overlay .tripmore"); if (tm) tm.hidden = !tripMoreOpen; return; }
   if (g("[data-open-layers]")){ openLayers(); return; }
