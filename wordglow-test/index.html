@@ -9,6 +9,7 @@
 </head>
 <body>
 <title>Wordglow</title>
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
@@ -284,7 +285,7 @@ body.chain-on #deco { opacity: 0; }   /* the chain line takes the garland's spot
   50% { transform: scale(0.94) rotate(3deg); } 100% { transform: scale(1); } }
 .cell.thaw .badge.ice { animation: iceOff 0.6s ease-out forwards; }
 @keyframes iceOff { to { transform: translateY(-18px) scale(1.6); opacity: 0; } }
-.thawpop { position: absolute; left: 50%; top: 0; z-index: 6; pointer-events: none; white-space: nowrap; font: 800 1rem var(--font-display); color: #e8f6ff;
+.thawpop { position: fixed; z-index: 31; pointer-events: none; white-space: nowrap; font: 800 1rem var(--font-display); color: #e8f6ff;
   text-shadow: 0 1px 2px rgba(0,0,0,0.7); animation: thawUp 1.1s ease-out forwards; }
 @keyframes thawUp { 0% { opacity: 0; transform: translate(-50%, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -140%); } }
 @media (prefers-reduced-motion: reduce) { .cell.thaw .tile, .cell.thaw .badge.ice { animation: none; } .thawpop { animation-duration: 0.01s; } }
@@ -616,7 +617,7 @@ const TWISTS = [
   { id: "needE", line: "Words without an E don't count.", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
   { id: "bombs", line: "A 💣 word blasts the squares around it, +3 each.", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
   // Replaced "Big words pay double", which only paid off now and then (Nikola round 15 idea; Alan 2026-11-14).
-  { id: "combo", line: "2 or more words scored together pay x3.", short: "Combos pay triple", tag: "Combo x3", text: "Combos pay triple: score <b>2 or more touching words together</b> for <b>x3</b>." },
+  { id: "combo", line: "2 or more touching words scored together pay x3.", short: "Combos pay triple", tag: "Combo x3", text: "Combos pay triple: score <b>2 or more touching words together</b> for <b>x3</b>." },
   { id: "crowded", line: "10 extra letters to use or clear.", short: "Crowded board", chip: "Crowded: 10 extra letters", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
   // Placement twists (Muse round 13 idea; Alan chose both 2026-11-14).
   { id: "ice", line: "Frozen ❄️ letters stay; using one thaws it, +5.", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
@@ -628,12 +629,13 @@ const expertOn = () => expert && mode === "endless" && !tut;
 // Twist of the day (Nikola round 15 idea; Alan 2026-11-14): every Daily Board has one gentle twist, the same for everyone.
 const DAILY_TWISTS = ["bombs", "combo", "ice"];
 const dailyTwistFor = no => TWISTS.find(t => t.id === DAILY_TWISTS[no % DAILY_TWISTS.length]);
+let dailyRunNo = null;   // the Daily played, fixed when the run starts, so midnight never changes its twist (Nikola round 16)
 function twist() {
-  if (mode === "daily" && !tut) return dailyTwistFor(dailyNo());
+  if (mode === "daily" && !tut) return dailyTwistFor(dailyRunNo ?? dailyNo());
   if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
   if (picked?.level === level) return TWISTS.find(t => t.id === picked.id);   // the player chose this one
   const t = TWISTS[((level - CHALLENGE_FROM) / 3) % TWISTS.length];   // 30 long words, 33 E, 36 bombs, 39 combos, 42 crowded, 45 ice, 48 no refills
-  return t.id === "long4" && expertOn() ? TWISTS[3] : t;   // Expert already needs 4+ letters
+  return t.id === "long4" && expertOn() ? TWISTS.find(x => x.id === "combo") : t;   // Expert already needs 4+ letters
 }
 // Every 3rd challenge level (36, 45, 54...) the player picks between this level's twist and the next one (Cooper round 13).
 let picked = null;
@@ -880,7 +882,7 @@ const CROWDED_EXTRA = 10, BOARD_BOMBS = 3, ICE_BLOCKS = 4, THAW_PTS = 5;
 
 function newGame(m, replay = false) {
   defGen++;
-  mode = m; levelNewWords = []; dropRotGuide(); dryMoves = 0; softHint = null;
+  mode = m; levelNewWords = []; dropRotGuide(); dryMoves = 0; softHint = null; dailyRunNo = m === "daily" ? dailyNo() : null;
   track("game_start", { mode });
   if (m === "daily" && !store.get("wb-daily-started", false)) { store.set("wb-daily-started", true); track("first_daily_start", { day: daysSinceFirst() }); }
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
@@ -1000,6 +1002,7 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   if (!g || g.v !== 1 || (g.mode === "daily" && g.day !== todayKey()) || !saveOk(g)) return false;
   dropRotGuide();
   ({ mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, continued, levelsSinceAd, goalCount, tray } = g);
+  dailyRunNo = mode === "daily" ? dailyNo() : null;   // a Daily save is only resumed on its own day
   chain = g.chain || 0; chainMoves = g.chainMoves || 0; dryMoves = g.dryMoves || 0; softHint = null; rotates = g.rotates || 0; rotating = false; rotPaid = null;
   goals = g.goals.map(x => ({ ...GOALS.find(d => d.id === x.id), ...x }));
   rng = mulberry(g.seed);
@@ -1363,9 +1366,9 @@ function wordsIn(cells, keep = () => true) {
   for (let i = 0; i < s.length; i++) for (let j = i + ml; j <= s.length; j++) {
     const w = s.slice(i, j);
     if (!WORDS.has(w) || !keep(i, j) || (tw === "needE" && !w.includes("e"))) continue;
-    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length, big = 0;
+    const blocks = cells.slice(i, j), dbl = blocks.filter(x => x.special === "x2").length;
     const bomb = blocks.some(x => x.special === "bomb");
-    cand.push({ w, i, j, m: mult(w.length), dbl, big, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** (dbl + big) });
+    cand.push({ w, i, j, m: mult(w.length), dbl, bomb, s: [...w].reduce((a, ch) => a + PTS[ch], 0) * mult(w.length) * 2 ** dbl });
   }
   // Keep every word except ones sitting entirely inside a longer word (TEA inside TEASE).
   // Words that only overlap, like STAR and ARID in STARID, both count.
@@ -1888,7 +1891,9 @@ function cashIn(group) {
       thaw.forEach(([r, c]) => {
         const el = cellEl(r, c), b = el.getBoundingClientRect();
         el.classList.add("thaw"); setTimeout(() => el.classList.remove("thaw"), 700);
-        const pop = document.createElement("span"); pop.className = "thawpop"; pop.textContent = `+${THAW_PTS}`; el.appendChild(pop); setTimeout(() => pop.remove(), 1200);
+        // On its own layer, so the board redraw doesn't cut it short (Nikola round 16).
+        const pop = document.createElement("span"); pop.className = "thawpop"; pop.textContent = `+${THAW_PTS}`;
+        pop.style.left = b.left + b.width / 2 + "px"; pop.style.top = b.top + "px"; document.body.appendChild(pop); setTimeout(() => pop.remove(), 1200);
         burst(b.left + b.width / 2, b.top + b.height / 2, ["#bfe3ff", "#ffffff", "#8fd3ff"], 30, 1.4);
       });
     }
@@ -1916,14 +1921,14 @@ function setHint() {
   if (tut) h.innerHTML = (tut.phase === "place" ? LESSONS[tut.step].place : tut.phase === "tap" ? LESSONS[tut.step].tap : "Nice!") + SKIP;
   else if (rotGuide) h.innerHTML = ROT_GUIDE[rotGuide];
   else if ((toolHint = toolHintWanted())) h.innerHTML = document.getElementById("enote").innerHTML;
-  else if (tutorialJustDone) h.innerHTML = `Your turn! Spell words across or down, then tap them. Score <b>${target()} points</b> to clear level 1.`;
+  else if (tutorialJustDone) h.innerHTML = `Your turn! Score <b>${target()} points</b> to clear level 1.`;
   else if (!specialSeen && tray.some(p => !p.used && p.specials?.some(Boolean))) {
-    h.innerHTML = "Special blocks! <b>2x</b> doubles a word. A <b>💣 bomb</b> also blows up the blocks around it.";
+    h.innerHTML = "<b>2x</b> doubles a word. <b>💣</b> blasts around it.";   // one line, so it stays off the level line (Nikola round 16)
     specialSeen = true; store.set("wb-special-seen", true); specialIntro = true;
   }
   else if (!bombSeen && scanWords(board).some(w => w.bomb)) {
     // The first time a word with a bomb glows, say what will happen; the ringed squares show where.
-    h.innerHTML = "💣 <b>Bomb word!</b> Scoring it also blows up the <b style='color:#e5484d'>red squares</b>. Tap the word to set it off.";
+    h.innerHTML = "💣 Tap it to blast the <b style='color:#e5484d'>red squares</b>!";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
   else if (stuckWords && lit.length) h.innerHTML = `No room! Tap ${stuckWords.map(w => `<b>${w}</b>`).join(" or ")} to make room.`;
@@ -1932,12 +1937,12 @@ function setHint() {
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
-  else if (!found.length && level === 1 && mode === "endless") h.innerHTML = `Score <b>${target()} points</b> to clear level 1 and get a fresh board.`;
+  else if (!found.length && level === 1 && mode === "endless") h.innerHTML = `Score <b>${target()} points</b> to clear level 1.`;
   else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the piece you just placed.";
   // The how-to line is for new players; past level 5 the hint only speaks when it has news (Nikola round 15).
   // The Daily shows it only on its first level, and only to new players (Cooper round 16).
   else if (store.get("wb-best-level", 1) > 5 || (mode === "daily" && level > 1)) h.innerHTML = "";
-  else h.innerHTML = "Spell words <b>across</b> or <b>down</b>. <b>Tap</b> a glowing word to score it.";
+  else h.innerHTML = "Spell words <b>across</b> or <b>down</b>, then <b>tap</b> them.";
   // The everyday reminders repeat what the level line already says; very short screens hide them.
   // The everyday "how to play" line glows and fades once per level, then stays out of the way.
   // A challenge level's twist line does the same (the ⚡ on the level line and the "Not a word yet" message keep reminding).
@@ -2323,6 +2328,10 @@ if (!INVITES_LIVE) { document.getElementById("invitebtn").hidden = true; inviteP
 document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal" && !sheetLocked) closeSheet(); });
 // Escape closes a meaning card or any pop-up that a backdrop tap would close (Nikola round 15).
 document.addEventListener("keydown", e => {
+  // Pick card: arrow keys move between the two twists; Escape takes the first one (Nikola round 16).
+  const pa = !document.getElementById("modal").hidden && document.getElementById("pick-a"), pb = pa && document.getElementById("pick-b");
+  if (pa && /^Arrow/.test(e.key)) { e.preventDefault(); (document.activeElement === pa ? pb : pa).focus(); return; }
+  if (pa && e.key === "Escape") return pa.click();
   if (e.key !== "Escape") return;
   if (document.querySelector(".defcard:not(.out)")) return hideDefinitions();
   if (!document.getElementById("modal").hidden && !sheetLocked) closeSheet();
@@ -2424,6 +2433,7 @@ function pickTwist() {
   const choose = t => { picking = false; picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
   document.getElementById("pick-a").onclick = () => choose(a);
   document.getElementById("pick-b").onclick = () => choose(b);
+  document.getElementById("pick-a").focus({ preventScroll: true });
 }
 function beginLevel() {
   {
@@ -2579,7 +2589,7 @@ function dailyDone(earned, kept = []) {
   track("daily_complete", { score, words: found.length });
   addCoins(earned);
   const top = found.slice().sort((a, b) => b.s - a.s)[0];
-  const result = { no: dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null };
+  const result = { no: dailyRunNo ?? dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null };
   // Keep the best finish of the day; a replay that scores less doesn't replace it.
   const prev = store.get(DAILY_KEY(), null);
   if (!prev || score > prev.score) store.set(DAILY_KEY(), result);
@@ -2918,7 +2928,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "5eba3be 2026-11-14 19:19Z";
+const BUILD_STAMP = "0829fb8 2026-11-14 19:35Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
