@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.22.0 (gentle reminders: your year on the globe, last month's photos) -->
+<!-- Tripsake v0.22.1 (Muse r20 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1001,13 +1001,14 @@ function shNth(y, month, weekday, n){ const first = new Date(y, month, 1), off =
 function shToday(){ const d = window.TG_DATE ? new Date(window.TG_DATE + "T12:00:00") : new Date(); d.setHours(12, 0, 0, 0); return d; }
 function shHoliday(){ const d = shToday(); for (const h of SH_DECOS) for (const y of [d.getFullYear() - 1, d.getFullYear(), d.getFullYear() + 1]){ const at = h.at(y); at.setHours(12, 0, 0, 0); const days = Math.round((at - d) / 864e5); if (days <= h.before && days >= -h.after) return {...h, days}; } return null; }
 // the season in the north; the south is the opposite
-let SH_T0 = performance.now(); document.addEventListener("visibilitychange", () => { if (!document.hidden) SH_T0 = performance.now(); }); const shLeft = () => 30000 - (performance.now() - SH_T0);
+let SH_USED = 0; const shReset = () => { SH_USED = 0; }; document.addEventListener("visibilitychange", () => { if (!document.hidden) shReset(); }); const shLeft = () => 30000 - SH_USED; /* the 30 seconds count only while the leaves are on screen (Muse r20) */
+const shCovered = () => !!(document.querySelector("#overlay .sheet") || document.getElementById("pv") || document.getElementById("lb") || replayState || (typeof isPhone === "function" && !isPhone() && document.querySelector("#panel[data-pos='full']")));
 const SH_SEASONS = ["winter", "spring", "summer", "autumn"], SH_TINT = {winter:"rgba(226,240,255,.34)", spring:"rgba(130,214,150,.26)", summer:"rgba(255,206,110,.28)", autumn:"rgba(186,92,78,.30)"};
 function shSeason(){ const m = shToday().getMonth(), n = SH_SEASONS[Math.floor(((m + 1) % 12) / 3)]; return {north:n, south:SH_SEASONS[(SH_SEASONS.indexOf(n) + 2) % 4]}; }
 const SH_NORTH = d3.geoCircle().center([0, 90]).radius(90)(), SH_SOUTH = d3.geoCircle().center([0, -90]).radius(90)();
 function shDesc(){ const s = shSeason(), h = shHoliday(); return `The real seasons on each half of the world: now ${s.north} in the north and ${s.south} in the south.${h ? ` ${h.days > 0 ? `${h.name.replace(/^(Happy|Merry) /, "")} is coming` : h.name + "!"}, so the globe is dressed for it.` : " Holidays add a little decoration."} Pick another style to turn it off.`; }
 THEMES.seasons = {name:"Seasons & Holidays", get desc(){ return shDesc(); }, dark:true, pin:"#f2b24a", route:THEMES.night.route, diary:THEMES.night.diary, ink:"#eef1f8", label:THEMES.night.label,
-  get animated(){ return !!shHoliday() && !REDUCED() && shLeft() > 0 && !document.querySelector("#overlay .sheet"); }, /* a short shower: 30 seconds after you open the app or pick the style, and never under a sheet, so the phone stays cool (Nikola r19) */
+  get animated(){ return !!shHoliday() && !REDUCED() && shLeft() > 0 && !shCovered(); }, /* a short shower: 30 seconds after you open the app or pick the style, and never under a sheet, so the phone stays cool (Nikola r19) */
   base(x, path, P, R, cx, cy, W, H, t){ const h = shHoliday(), s = shSeason(); x.fillStyle = "#060a14"; x.fillRect(0,0,W,H); starfield(x, W, H, t, "#cfd8ff");
    const glow = h ? h.c1 : "#7aa0ff", atm = x.createRadialGradient(cx,cy,R*.92,cx,cy,R*1.18); atm.addColorStop(0, h ? glow + "66" : "rgba(120,160,255,.28)"); atm.addColorStop(1,"rgba(120,160,255,0)"); x.fillStyle = atm; x.beginPath(); x.arc(cx,cy,R*1.18,0,7); x.fill();
    const oc = x.createRadialGradient(cx-R*.3,cy-R*.35,R*.1,cx,cy,R); oc.addColorStop(0,"#13224a"); oc.addColorStop(1,"#08112a"); x.beginPath(); path(sphere); x.fillStyle = oc; x.fill();
@@ -1118,7 +1119,7 @@ function loop(t){
   if (!spinning) spinFor = 0;
   if (document.hidden){ requestAnimationFrame(loop); return; }
   if (introRunning || selectedTrip || replayState || Math.abs(shiftY) > .5) dirty = true;
-  else if (TH().animated && t - (lastDraw || 0) > 33) dirty = true; /* the falling leaves only need about 30 frames a second */
+  else if (TH().animated){ SH_USED += dt; if (t - (lastDraw || 0) > 33) dirty = true; } /* the falling leaves only need about 30 frames a second */
   if (dirty){ draw(t); dirty = false; lastDraw = t; }
   requestAnimationFrame(loop);
 }
@@ -1457,7 +1458,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.22.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.22.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2219,7 +2220,7 @@ function fillThumbs(){ const L = loadState; if (!L) return; document.querySelect
   if (THUMBS.has(f)){ put(THUMBS.get(f)); return; }
   thumbQ = thumbQ.then(async () => { if (!THUMBS.has(f)) THUMBS.set(f, await thumb(f, 480)); put(THUMBS.get(f)); }); }); }
 function drawTiles(){ const L = loadState; if (!L) return; document.querySelectorAll("[data-nl]").forEach(el => { const p = (L.noLocAll || [])[+el.dataset.nl]; if (!p) return; const to = nlFate(L, p), t = to && tripTicked(L, to) ? to : null;
-  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = t ? "Goes into " + t.title : L.savedNoLoc && L.savedNoLoc.has(p.file) ? `Already on your globe in ${L.savedNoLoc.get(p.file)}` : to ? `Left out: ${to.title} isn't ticked` : "Left out";
+  el.classList.toggle("kept", !!t); const f = el.querySelector("[data-nl-fate]"); if (f) f.textContent = L.savedNoLoc && L.savedNoLoc.has(p.file) ? `Already on your globe in ${L.savedNoLoc.get(p.file)}` : t ? "Goes into " + t.title : to ? `Left out: ${to.title} isn't ticked` : "Left out";
   const kb = el.querySelector("[data-nl-keep]"), ob = el.querySelector("[data-nl-out]"); if (kb){ kb.classList.toggle("primary", !!t); kb.setAttribute("aria-pressed", t ? "true" : "false"); } if (ob){ ob.classList.toggle("primary", !t); ob.setAttribute("aria-pressed", t ? "false" : "true"); } });
   const n = $("#ldNoLocFate"); if (n) n.textContent = noLocFate(L); }
 /* set where one no-location photo goes: v = trip index, or -1 to leave it out */
@@ -2263,7 +2264,7 @@ function whyFate(L, w){ const f = w.file; if (!f) return null; const pin = $("#l
 function nearLeftPts(L){ if (!L || L.manual || !L.home || !L.trips) return []; const inT = new Set(L.trips.flatMap(t => t.pts || [])); return (L.pts || []).map((p, k) => ({p, k})).filter(({p}) => !inT.has(p) && d3.geoDistance([p.lon, p.lat], [L.home.lon, L.home.lat]) * KM <= 100); }
 function whyHTML(L){ const why = ((L && L.why) || []).map((w, k) => ({w, k})).filter(x => x.w && x.w.out), near = nearLeftPts(L); if (!why.length && !near.length) return "";
   const grid = (list, attr) => `<div class="nlgrid">${list.slice(0, 24).map(x => `<div class="nltile"><div class="nlimg"><img ${attr}="${x.k}" alt=""></div><div class="nlcap">${(x.w || x.p).t ? esc(nlDate((x.w || x.p).t)) : ""}</div></div>`).join("")}</div>${list.length > 24 ? `<p class="note">and ${(list.length - 24).toLocaleString()} more</p>` : ""}`;
-  return `<details id="ldWhy" style="margin-top:10px"${whyHTML.open ? " open" : ""}><summary>${(() => { const n = why.length + near.length, all = Math.max(0, (L.total || 0) - (L.lastSaved || 0)); return all > n ? `${n.toLocaleString()} of the ${all.toLocaleString()} photos left out, and why` : `${plural(n, "photo")} left out, and why`; })()}</summary>
+  return `<details id="ldWhy" style="margin-top:10px"${whyHTML.open ? " open" : ""}><summary>${(() => { const n = why.length + near.length, all = Math.max(0, (L.total || 0) - (L.lastSaved || 0)); return `${plural(n, "photo")} left out, and why`; })()}</summary>
     ${near.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(near.length, "photo")} taken near home</b>, so ${near.length === 1 ? "it isn't" : "they aren't"} part of a trip. To keep a day near home, use Add → A memory close to home.</p>${grid(near, "data-near-thumb")}` : ""}
     ${why.length ? `<p class="note" style="margin:8px 0 0"><b>${plural(why.length, "photo")} taken outside your dates.</b> To bring ${why.length === 1 ? "it" : "them"} in, pick a longer time period and add again.</p>${grid(why, "data-why-thumb")}` : ""}</details>`; }
 function refreshWhy(){ const d = $("#ldWhy"); if (d && loadState){ whyHTML.open = d.open; d.outerHTML = whyHTML(loadState); fillThumbs(); } refreshCapNotes(); }
@@ -2292,7 +2293,7 @@ function tripCountLine(t){ const c = tripCounts(t, stopCap());
   return [head, split].filter(Boolean).join(". ") + (c.over ? ` · ${c.over.toLocaleString()} over the photo limit` : ""); }
 // "You picked 102 photos. 96 will be saved…": what you picked, what the ticked trips will keep, and why the rest is left out
 function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; const cap = stopCap(); planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */
-  let saved = 0, already = 0, unticked = 0, over = 0; const checking = L.trips.some((t, i) => live(t, i) && ((t.repeat && t.repeat.pending) || (t.dupe && t.dupe.pending)));
+  let saved = 0, already = 0, unticked = 0, over = 0; const checking = (L.repeatPlanned && !L.repeatDone) || L.trips.some((t, i) => live(t, i) && ((t.repeat && t.repeat.pending) || (t.dupe && t.dupe.pending))); /* trips not checked yet would count as new: wait until every trip is checked, so the numbers never jump (Muse r20) */
   L.trips.forEach((t, i) => { const c = tripCounts(t, cap); if (!c) return;
     if (!live(t, i)){ unticked += c.all; return; }
     saved += c.saved; already += c.already; over += c.over; });
@@ -2370,7 +2371,7 @@ async function savedSame(file, prints){ let u = null; try { u = await thumb(file
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = travelRaw(store.get("realTrips", []));
   (async () => { for (const t of L.trips){ if (t.homeMem || L.homeMem) continue; const e = existing.find(x => sameTripAs(x, t));
     if (!e){ if (!existing.length) continue; { const w = existing.find(x => duringTrip(x, t)); if (w){ t.maybeJoin = {eid:w.id, title:w.title}; if (t.photos <= 3){ tickKeep(t); forceJoin(L.trips.indexOf(t), true); } } } /* a day or two of photos (1 to 3) from the days of a saved trip joins it, ticked from the start; untick to keep it apart */ /* a day out far away in the middle of a saved trip: ask, rather than guess */ t.dupe = {pending:true, drop:new Set()}; refreshCapNotes(); try { t.dupe.drop = await dupeScan(t, existing); } catch(err){} t.dupe.pending = false; refreshCapNotes(); continue; }
-    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; await noLocSaved(L); })(); }
+    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; refreshCapNotes(); await noLocSaved(L); })(); }
 function untickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = false; t.pts.forEach(p => p.off = true); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = false; updateAddCount(); }
 function tickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = true; t.pts.forEach(p => p.off = false); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = true; const o = document.querySelector(`[data-ld-one="${i}"]`); if (o) o.remove(); updateAddCount(); }
 // a batch whose dates sit inside a saved trip's dates (give or take a day), wherever it is
@@ -2425,7 +2426,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
         const vis = es.photos.filter((ph, k) => !PH_HIDDEN[es.id + "-" + k]).length; if (vis >= Math.max(stopLimit(es), cap) && !p.pinned) continue;
         let url = await thumb(p.file, 1024, true); if (url instanceof Blob){ try { url = await blobURL(url); } catch(e2){ url = null; } } if (typeof url !== "string" || url.length < 2000 || !url.startsWith("data:image/")){ failed++; continue; }
         try { await idb.put("rp:" + es.id + "-" + es.photos.length, url); } catch(e2){ failed++; continue; } es.photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); got++; done++; prog.textContent = `Saving photos ${done} of ${total}…`; }
-      if (got){ joined.push({title:e.title, n:got, id:e.id}); const near = k => { const a = new Date(e.start + "T12:00:00") - 2 * DAY, b = new Date(e.end + "T12:00:00") + 2 * DAY; return k >= a && k <= b; }; const ds = e.stops.map(q => q.date).concat(plan.filter(({p}) => near(p.t)).map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); /* only a photo from a day or two either side stretches the trip; one you added from weeks away keeps its own date but not the trip's (Cooper r19) */ if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
+      if (got){ joined.push({title:e.title, n:got, id:e.id}); const near = k => { const a = +new Date(e.start + "T12:00:00") - 2 * DAY, b = +new Date(e.end + "T12:00:00") + 2 * DAY; return k >= a && k <= b; }; /* numbers, not a date string (Muse r20) */ const ds = e.stops.map(q => q.date).concat(plan.filter(({p}) => near(p.t)).map(({p}) => { const dd = new Date(p.t); return dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0"); })).filter(Boolean).sort(); /* only a photo from a day or two either side stretches the trip; one you added from weeks away keeps its own date but not the trip's (Cooper r19) */ if (ds.length){ if (ds[0] < e.start) e.start = ds[0]; if (ds[ds.length - 1] > e.end) e.end = ds[ds.length - 1]; } /* a photo from the day after stretches the trip */ } continue; } }
     const drop = t.dupe && !t.dupe.pending ? t.dupe.drop : (existing.length ? await dupeScan(t, existing) : new Set()); /* never save a photo twice, whatever its name or time */
     if (drop.size && t.stops.every(s => s.pts.every(p => drop.has(p)))) continue;
     const id = "rt" + base + i; const title = (names.get(i) || t.title).trim().slice(0, 80);
@@ -2834,8 +2835,8 @@ function momentPhoto(el, src){
 const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 async function replay(id, opts = {}){
-  const t = findTrip(id); if (!t) return; const st = stopsOf(t); $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
-  const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
+  const t = findTrip(id); if (!t) return; const st = stopsOf(t); const back = $("#overlay").dataset.kind === "trip" && TRIPS.some(x => x.id === id) ? id : null; /* started from the trip page: Done goes back there (Muse r20) */ $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
+  const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
   const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
@@ -2923,7 +2924,9 @@ function endReplay(){
   if (rec && rec.mr.state !== "inactive" && !rec.finishing) recAbort();
   music.stop(); setTimeout(() => { if (!replayState) music.stopNow(); }, 1500);
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
+  const back = replayState && replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null;
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
+  if (back && TRIPS.some(x => x.id === back)){ setTimeout(() => { if (!replayState) openTrip(back); }, 250); return; } /* after the story has wound down */
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
 
@@ -3534,7 +3537,7 @@ function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) retu
     <p class="note" style="margin:0">File: <b>${esc(tripFileName(t))}</b></p>
     <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">Send the ${tnoun(t)} file</button>
     <p class="note" style="margin:0">It goes as one file through Messages, WhatsApp, email or AirDrop. Nothing is uploaded to us, and there's no account.</p></div>`, "tshare");
-  if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el) el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
+  if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el){ el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); const w = el.parentNode; if (w && w.firstChild && w.firstChild.nodeType === 3) w.firstChild.textContent = w.firstChild.textContent.replace(/about $/, ""); } }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
   if (!real) buildTripFile(t, false).then(d => { const el = $("#tsSize"); if (el) el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); }).catch(() => {}); /* the size of the very file that is sent, not a guess (Muse r18) */ }
 async function buildTripFile(t, withPhotos){ const from = myName(); const out = {app:"travel-globe", kind:"trip", v:1, from, sent:new Date().toISOString(), trip:{shareId:tripShareId(t), aka:t.shareIds || [], ...(t.homeMem ? {kind:"home"} : {}), title:t.title, country:t.country, start:t.start, end:t.end, people:[...new Set([from, ...(t.sharedWith || [])].filter(Boolean))], stops:[]}, lines:{}};
   for (const s of t.stops){ const st = getStory(s); const mine = {who:st.who || "", best:st.best || "", note:st.note || ""}; const o = {uid:s.uid || s.id, name:stopName(s), lat:s.lat, lon:s.lon, date:s.date, others:Object.assign({}, s.others || {}), photos:[]};
@@ -3754,7 +3757,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-video-again]"))){ openVideoStart(b.dataset.videoAgain); return; }
   if (g("[data-video-share]") && lastVideo){ navigator.share({files:[lastVideo.file], title:lastVideo.title}).catch(e => { if (e && e.name !== "AbortError") toast("Sharing didn't work here. Use Save video instead."); }); return; }
   if (g("[data-import]")){ toast("In the app you pick your Timeline file and years of places fill in"); return; }
-  if ((b = g(".themeopt[data-theme]"))){ themeKey = b.dataset.theme; SH_T0 = performance.now(); store.set("theme", themeKey); applyTheme(); document.querySelectorAll(".themeopt").forEach(o => o.setAttribute("aria-pressed", o === b)); toast(themeKey === "seasons" ? (() => { const q = shSeason(), c = w => w[0].toUpperCase() + w.slice(1); return `${c(q.north)} in the north, ${q.south} in the south. Your places stay lit in gold`; })() : TH().name + " style on"); /* the season colours aren't places you've been (Muse r19) */ if (tab === "more") renderBody(); if (document.querySelector(".sheet .themeopt")) setTimeout(closeSheet, 450); return; }
+  if ((b = g(".themeopt[data-theme]"))){ themeKey = b.dataset.theme; shReset(); store.set("theme", themeKey); applyTheme(); document.querySelectorAll(".themeopt").forEach(o => o.setAttribute("aria-pressed", o === b)); toast(themeKey === "seasons" ? (() => { const q = shSeason(), c = w => w[0].toUpperCase() + w.slice(1); return `${c(q.north)} in the north, ${q.south} in the south. Your places stay lit in gold`; })() : TH().name + " style on"); /* the season colours aren't places you've been (Muse r19) */ if (tab === "more") renderBody(); if (document.querySelector(".sheet .themeopt")) setTimeout(closeSheet, 450); return; }
   if (g("#zstyle") || g("[data-open-style]")){ openThemePicker(); return; }
   if (g("[data-bucket-add]")){ const c = centerLonLat(); whereDraft = {lon:c[0], lat:c[1], label:"Search below, or drop a pin on the globe", set:false}; openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Add to bucket list")}${whereHTML()}<div><label class="l" for="bucketName">Name it (optional)</label><input type="text" id="bucketName" placeholder="Machu Picchu, Augusta, the Northern Lights…"></div><button class="btn primary" data-bucket-save style="align-self:flex-start">Add place</button></div>`); setTimeout(() => { const q = $("#whereQ"); if (q && !isPhone()) q.focus(); }, 50); return; }
   if ((b = g("[data-where-pick]"))){ const r = whereResults[+b.dataset.wherePick]; if (!r) return; setWhere(r.lon, r.lat, r.name + (r.region.startsWith("On your globe") ? "" : ", " + r.region)); $("#whereQ").value = ""; $("#whereRes").innerHTML = ""; const bn = $("#bucketName"); if (bn && !bn.value.trim()) bn.value = r.name; flyTo(r.lon, r.lat, Math.max(zoom, 4), 800); return; }
