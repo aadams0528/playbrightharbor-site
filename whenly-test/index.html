@@ -262,7 +262,7 @@ body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!importan
 .dist div{display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:center}
 .dist i{display:block;height:18px;background:var(--line);border-radius:4px;min-width:18px;text-align:right;padding-right:6px;font-style:normal;box-sizing:border-box;color:var(--ink);line-height:18px}
 .dist i.me{background:var(--accent);color:var(--accent-ink)}
-.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;max-width:90vw;text-align:center}
+.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
 .coach{position:absolute;left:calc(var(--plate-w,var(--card-h))/2 - 15px);font-size:30px;pointer-events:none;z-index:6;animation:coach 1.6s ease-in-out infinite}
 @keyframes coach{0%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(-80px);opacity:1}100%{opacity:0;transform:translateY(-80px)}}
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
@@ -372,7 +372,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 33</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 34</span></footer>
 </div>
 
 <script>
@@ -1730,9 +1730,10 @@ function help(){sheet(`<h2>How to play</h2>
   <p>A new puzzle comes every day at midnight. The week gets harder as it goes: Monday and Tuesday Easy, Wednesday and Thursday Medium, Friday Tricky, and Saturday and Sunday Hard. The label at the top shows each puzzle's level. On a Hard puzzle, a check only says how many neighbors are in order, not which ones, and history points are worth 1.5 times as much. The daily earns full points; Archive, Practice and Expert earn half, and Practice and Expert each earn points for your first 3 games a day. There's no timer.</p>
   <p><b>🗓️ Weekly goals:</b> five goals each week, the same for everyone, in 📊 Stats. Each one earns ${WG_PTS} history points, and finishing all five earns ${WG_ALL} more and a ❄️ freeze (or 25 more points if you already have 2). A ⚡ goal can show up once challenges unlock. New goals every Monday.</p>
   <p><b>⚡ Challenges:</b> after ${CHAL_AT} Dailies, Practice adds a ⚡ button: one puzzle a day with a twist (Count only, One century, Photo finish or No helpers). Get all five in order for +${CHAL_PTS} history points. Every 3rd challenge, you pick the twist.</p>
+  <div id="textHelp"></div>
   <div id="decoHelp"></div>
   <p style="color:var(--muted);font-size:15px">Card photos are public domain or CC0, from Wikimedia Commons.</p>
-  <p class="ver" style="color:var(--muted);font-size:15px">${($("#foot .build")?.textContent||"").replace(/^\s*·\s*/,"")}</p>`);renderDecoHelp()}
+  <p class="ver" style="color:var(--muted);font-size:15px">${($("#foot .build")?.textContent||"").replace(/^\s*·\s*/,"")}</p>`);renderTextHelp();renderDecoHelp()}
 // History points: every finished puzzle (daily, archive, Practice, Expert) adds its score, so
 // play after the daily still counts. Weekly total resets each Monday; ranks use the lifetime total.
 const RANKS=[[0,"Curious"],[250,"Explorer"],[1000,"Scholar"],[3000,"Chronicler"],[7500,"Archivist"],[15000,"Legend"]];
@@ -2217,6 +2218,23 @@ function renderDecoHelp(){
   $("#decoToggle").onclick=()=>{S.deco=!on;save();track("deco_toggle",{on:!on?1:0});applyDeco();renderDecoHelp()};
 }
 
+// Larger text (Nikola round 18, Alan chose "Add it" 2026-11-14): every font under 20px grows by 15%.
+// Card names of 17px or more are already sized to fit the card, so they stay as they are.
+const BIG=1.15,baseFont=new WeakMap();
+function applyBigText(){
+  const k=S.big?BIG:1;document.body.classList.toggle("bigtext",!!S.big);
+  const walk=rules=>{for(const r of rules){if(r.cssRules&&!r.style){walk(r.cssRules);continue}
+    if(!r.style)continue;let b=baseFont.get(r);
+    if(b===undefined){const f=r.style.fontSize;b=/^[\d.]+px$/.test(f)&&parseFloat(f)<20&&!(parseFloat(f)>=17&&/(^|\s)\.ctext$/.test((r.selectorText||"").trim()))?parseFloat(f):0;baseFont.set(r,b)}
+    if(b)r.style.fontSize=(Math.round(b*k*2)/2)+"px"}};
+  for(const sh of document.styleSheets){try{walk(sh.cssRules)}catch(e){}}
+  if(typeof relayout==="function")relayout();
+}
+function renderTextHelp(){
+  const box=$("#textHelp");if(!box)return;const on=!!S.big;
+  box.innerHTML=`<button type="button" class="btn ghost" id="textToggle" aria-pressed="${on}">🔠 Larger text: <b>${on?"On":"Off"}</b></button>`;
+  $("#textToggle").onclick=()=>{S.big=!on;save();track("text_size",{big:!on?1:0});applyBigText();renderTextHelp()};
+}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){const t=[...document.querySelectorAll(".sheet")].pop();if(t)t.remove()}}); // Nikola, round 18
 // ---------- wire up ----------
 $("#bLock").onclick=check;$("#bHint").onclick=hint;$("#bPlace").onclick=place;$("#bGiveUp").onclick=giveUp;$("#bSpot").onclick=spot;$("#bHelp").onclick=help;$("#bStats").onclick=stats;
@@ -2225,7 +2243,7 @@ const tabGo=m=>()=>{if(tutorial){toast("Finish this short lesson first. Then eve
 $("#tDaily").onclick=tabGo("daily");$("#tPractice").onclick=tabGo("practice");$("#tArchive").onclick=tabGo("archive");$("#tExpert").onclick=tabGo("expert");
 $("#diff").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;if(b.dataset.g==="chal"){openChallenge();return}practiceGap=+b.dataset.g;$("#diff").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));newPractice();render()});
 if(!S.tutorialDone){tutorial=true;newTutorial();render()}else setMode("daily");
-applyDeco();weeklyIntro();
+applyBigText();applyDeco();weeklyIntro();
 initAds().then(loadPrice);remindSync();document.addEventListener("visibilitychange",()=>{if(!document.hidden)remindSync()});
 </script>
 
