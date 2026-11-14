@@ -175,7 +175,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.84 · 260 levels</small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.85 · 260 levels</small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <div class="pill" aria-label="Total stars"><span class="st">★</span><span id="totalStars">0</span></div>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -1008,7 +1008,7 @@ function saveDraft(clear){
 // after two Restarts, or a minute and a quarter and six strokes without a win, the crossing the best route uses glows for a few seconds.
 let nudge=null;
 function crossCells(){const L=LV();if(!L.sol)return[];const r=L.sol.map((_,k)=>{try{return routeOf(k);}catch(e){return[];}}),out=new Set();
-  for(let a=0;a<r.length;a++)for(let b=a+1;b<r.length;b++)r[a].slice(1).forEach(c=>{const t=G.cells[c]&&G.cells[c].t;if(r[b].includes(c)&&!["bridge","tunnel","src","delta","nest"].includes(t))out.add(c);});
+  for(let a=0;a<r.length;a++)for(let b=a+1;b<r.length;b++)r[a].slice(1).forEach(c=>{const t=G.cells[c]&&G.cells[c].t;if(r[b].includes(c)&&!["tunnel","src","delta","nest"].includes(t))out.add(c);});
   return[...out];}
 function checkNudge(){if(!nudge||nudge.done||won||lesson||opts.expert)return;const now=performance.now();
   if(!(nudge.restarts>=2||(now-nudge.t0>75000&&nudge.strokes>=6)))return;const cells=crossCells();nudge.done=true;if(!cells.length)return;
@@ -1718,13 +1718,16 @@ function weekNow(announce){const w=Math.floor(dayNum(calDate())/7),theme=weekThe
 function weeklyWin(s){const W=weekNow(),wk=wkNow(),c=wk.c,add=(k,n)=>{if(n>0)c[k]=(c[k]||0)+n;};
   const ns=(G&&G.nests||[]).filter(x=>!x.out);
   // only new progress counts: a first clear, or a better star score (Nikola, round 6; Alan's call pending). Stars are saved after this runs.
-  const prev=daily?(prog.daily&&prog.daily[daily.day]||0):bonus&&bonus.long?0:(prog.stars[bonus?bonus.id:ID(lv)]||0);
+  let prev;if(bonus&&bonus.long){if(!bonus.long.stage)return; // the upstream board isn't a finished river yet
+    const k=bonus.long.k;prev=prog.stars[LONGS[k].id]||0;s=starsFor(longRun.upInk+inkOf(paths),longPar(k));}
+  else prev=daily?(prog.daily&&prog.daily[daily.day]||0):(prog.stars[bonus?bonus.id:ID(lv)]||0);
   if(!prev){add("clear",1);add("homes",ns.length);add("color",ns.filter(x=>x.mask===W.theme.color).length);}
   if(s===3&&prev<3)add("perfect",1);
   if(daily&&!(prog.daily&&prog.daily[daily.day]))add("daily",1); // the first win of each day's Daily (recordDaily runs after this)
-  W.goals.forEach(g=>{if(!wk.paid[g.k]&&(c[g.k]||0)>=g.n){wk.paid[g.k]=1;prog.bonusHints=(prog.bonusHints||0)+1;
+  const pay=dayShift?0:1; // ?day= previews show the goals but never pay real hints (Muse, round 7)
+  W.goals.forEach(g=>{if(!wk.paid[g.k]&&(c[g.k]||0)>=g.n){wk.paid[g.k]=1;prog.bonusHints=(prog.bonusHints||0)+pay;
     winNews.push(`🗓️ Weekly goal done: ${g.name}! +1 hint`);T("weekly_goal",{goal:g.k});}});
-  if(!wk.mega&&W.goals.every(g=>wk.paid[g.k])){wk.mega=1;prog.bonusHints=(prog.bonusHints||0)+5;winNews.push("🗓️ All 5 weekly goals! +5 hints");T("weekly_all",{});}}
+  if(!wk.mega&&W.goals.every(g=>wk.paid[g.k])){wk.mega=1;prog.bonusHints=(prog.bonusHints||0)+5*pay;winNews.push("🗓️ All 5 weekly goals! +5 hints");T("weekly_all",{});}}
 function weekCard(){const W=weekNow(),wk=wkNow(),c=wk.c,done=W.goals.filter(g=>wk.paid[g.k]).length;
   return `<div class="week" id="weekCard"><div class="wh">🗓️ This week: ${W.theme.emoji} ${W.theme.name}<span>${done} of 5</span></div><ul>${W.goals.map(g=>{const ok=wk.paid[g.k],n=Math.min(g.n,c[g.k]||0);
     return `<li class="${ok?"ok":""}"><div><b>${g.name}:</b> ${g.text}${g.k==="daily"&&!dailyOpen()?" (opens after level 6)":""}${g.k==="color"&&firstColorLevel(W.theme.color)>prog.highest+1?` (from level ${firstColorLevel(W.theme.color)})`:""}</div><span>${ok?"✓":`${n}/${g.n}`}</span></li>`;}).join("")}</ul>
@@ -1735,14 +1738,14 @@ function fireCount(){return Object.keys(prog.fire||{}).length;}
 // The critters and nests never change, so colours stay easy to read. Settings turns it off.
 var DECOS={newyear:["🎆✨🥂","#ffd166","#7aa2ff","✨"],valentine:["💕🌹💕","#ff6b8a","#ffc2d1","💗"],stpat:["☘️🌈☘️","#3fd68a","#ffd166","☘️"],
   easter:["🐣🌷🥚","#c9a0ff","#ffe08a","🌸"],july4:["🎆⭐🎆","#ff5d6c","#5d8bff","⭐"],halloween:["🎃🦇🎃","#ff9a3c","#8a5cff","🍂"],
-  thanksgiving:["🍂🦃🍁","#ff9a3c","#ffd166","🍁"],christmas:["🎄⭐🎁","#3fd68a","#ff5d6c","❄️"]};
+  thanksgiving:["🍂🦃🍁","#ff9a3c","#fff1d6","🍁"],christmas:["🎄⭐🎁","#3fd68a","#ff5d6c","❄️"]};
 const HNAMES={newyear:"Happy New Year",valentine:"Happy Valentine's Day",stpat:"Happy St Patrick's Day",easter:"Happy Easter",july4:"Happy Fourth of July",
   halloween:"Happy Halloween",thanksgiving:"Happy Thanksgiving",christmas:"Merry Christmas"};
 function decoNow(){if(opts.deco===false)return null;const h=holidayNow();return h&&DECOS[h.key]?h:null;}
 function applyDeco(){try{const st=cv.parentElement,el=$("deco"),h=decoNow();st.classList.toggle("decorated",!!h);if(!h){el.textContent="";return;}
   const D=DECOS[h.key];st.style.setProperty("--f1",D[1]);st.style.setProperty("--f2",D[2]);
   el.textContent=Array(4).fill(D[0]).join(" ");requestAnimationFrame(()=>{const room=cv.offsetTop>=24;el.style.top=(cv.offsetTop-22)+"px";el.style.visibility=room?"visible":"hidden";});
-  const gk="greet:"+h.year+h.key;if(h.today&&!prog.seen[gk]){prog.seen[gk]=1;saveProg();toast(`${D[0].slice(0,2)} ${HNAMES[h.key]}!`,3500);}}catch(e){}}
+  const gk="greet:"+h.year+h.key;if(h.today&&(dayShift||!prog.seen[gk])){if(!dayShift){prog.seen[gk]=1;saveProg();}toast(`${D[0].slice(0,2)} ${HNAMES[h.key]}!`,3500);}}catch(e){}}
 function decoFall(){const h=decoNow();if(!h||calm())return;const bit=DECOS[h.key][3];
   for(let i=0;i<7;i++){const s=document.createElement("span");s.className="fall";s.textContent=bit;s.style.left=(5+Math.random()*90)+"vw";
     s.style.animationDelay=(i*.35)+"s";document.body.appendChild(s);setTimeout(()=>s.remove(),8000);}}
