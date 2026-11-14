@@ -401,7 +401,7 @@ button.pill { cursor: pointer; }
 .pill.bump { animation: bump 0.4s ease-out; }
 @keyframes bump { 40% { transform: scale(1.18); } }
 .modal { position: fixed; inset: 0; z-index: 40; background: rgba(10, 12, 30, 0.6); display: grid; place-items: center; padding: 16px; }
-.modal.solid { background: rgba(10, 12, 30, 0.9); }   /* the pick card hides the board behind it (Muse round 15) */
+.modal.solid { background: rgb(10, 12, 30); }   /* the pick card hides the board behind it (Muse round 15) */
 .sheet { background: var(--panel); color: var(--fg); border-radius: 16px; padding: 20px; width: min(360px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .sheet h3 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 6px; }
 .sheet-x { position: sticky; top: 0; float: right; margin: -4px -4px 0 8px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--slot); color: inherit; font-size: 1.1rem; cursor: pointer; z-index: 2; }
@@ -1008,7 +1008,9 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   rng = mulberry(g.seed);
   // Expert as it was when this level started, so a reload never changes the goal or rules mid-level (Cooper round 13).
   expert = typeof g.expert === "boolean" ? g.expert : store.get(EXPERT_KEY, false);
-  picked = g.picked?.level === g.level ? g.picked : null; lvBonus = g.lvBonus || { cross: false, grow: false }; glowMemory = [];
+  picked = g.picked?.level === g.level ? g.picked : null;
+  if (picked?.id === "big") picked = { ...picked, id: "combo" };   // old saves: Big words became Combos pay triple (Muse round 16)
+  lvBonus = g.lvBonus || { cross: false, grow: false }; glowMemory = [];
   // No refills: an empty tray that was waiting for a scored word still waits after a reload (Cooper round 14).
   scoredSinceDeal = typeof g.scoredSinceDeal === "boolean" ? g.scoredSinceDeal : false;   // older saves: hold, don't give a free tray (Cooper round 15)
   tut = null; movable = null; erasing = false; over = false; busy = false; shownScore = score;
@@ -1818,7 +1820,7 @@ function cashIn(group) {
   const n = w.cells.length;
   const colors = w.cells.map(([r, c]) => tileColor(board[r][c].color));
   w.cells.forEach(([r, c]) => { cellEl(r, c).classList.remove("lit"); cellEl(r, c).classList.add("word"); });
-  const praise = k > 1 ? `Combo x${comboMult}!` : longest >= 7 ? "Legendary!" : ["", "", "", "", "Nice!", "Great!", "Amazing!"][longest];
+  const praise = k > 1 ? "Combo!" : longest >= 7 ? "Legendary!" : ["", "", "", "", "Nice!", "Great!", "Amazing!"][longest];
   const label = k > 3 ? group.slice(0, 3).map(g => g.w.toUpperCase()).join(" + ") + ` + ${k - 3} more`
     : k > 1 ? group.map(g => g.w.toUpperCase()).join(" + ")
     : group[0].w.toUpperCase();
@@ -1826,6 +1828,7 @@ function cashIn(group) {
   const why = [];
   if (k === 1 && group[0].m > 1) why.push(`${group[0].w.length} letters x${group[0].m}`);
   if (k === 1 && group[0].dbl) why.push(`2x block${group[0].dbl > 1 ? "s" : ""} x${2 ** group[0].dbl}`);
+  if (k > 1) why.push(`combo x${comboMult}`);   // the combo is itemised, so chain x3 never reads like it (Muse round 16)
   if (chainX > 1) why.push(`chain x${chainX}`);
   if (thaw.length) why.push(`❄️ thawed +${thaw.length * THAW_PTS}`);   // one small line, not its own big one (Cooper round 14)
   // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
@@ -2928,7 +2931,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "0829fb8 2026-11-14 19:35Z";
+const BUILD_STAMP = "9b7717c 2026-11-14 22:36Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
