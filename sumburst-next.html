@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 51d2bf9 (PR #29) -->
+<!-- number-blast 533a537 (PR #30) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -17,7 +17,7 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<title>Sumburst 1.3 preview (test version)</title>
+<title>Sumburst</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1456,25 +1456,35 @@ function levelUp(){
       ${mode==='endless'&&!introDaily?weekLine():''}<p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
       ${introDaily?`<p class="tomorrow">📅 New: today's <b>Daily run</b>. Everyone gets the same pieces, and clearing levels 1, 3 and 5 earns ⭐ stars.</p>`:''}${firstDay()?tomorrowNote():''}
       <div class="btns">${introDaily?'<button class="btn" id="try-daily">📅 Try today\'s Daily: earn your first ⭐</button>':''}<button class="btn${introDaily?' plain':''}" id="next">Next level</button><button class="btn plain ad" id="dbl">📺 Watch an ad: get +${earned*2} 🪙 instead</button></div>`,true);
-    const go=(n,dbl,then=startNextLevel)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);maybeInterstitial(()=>{then();askReminder()})};
+    // The next level starts (and is saved) before any between-level ad, so closing the app during the ad
+    // can never bring back this card and pay it twice (Cooper round 12).
+    const go=(n,dbl,after)=>{closeSheet();addCoins(n);if(dbl)toast(`+${n} 🪙 (doubled)`,true,CASH_MS);
+      const ad=adDue(),oldT=T;startNextLevel(!ad);
+      const fin=()=>{if(ad)levelIntro(oldT);if(after)after();askReminder()};
+      if(ad){busy=true;watchAd(()=>{busy=false;fin()},()=>{busy=false;fin()},'Between-level ad',true)}else fin()};
     $('dbl').onclick=()=>watchAd(()=>go(earned*2,true),()=>go(earned));
     $('next').onclick=()=>go(earned);
-    if(introDaily)$('try-daily').onclick=()=>go(earned,false,()=>{startNextLevel();switchMode('daily')});
+    if(introDaily)$('try-daily').onclick=()=>go(earned,false,()=>switchMode('daily'));
   },900+left.length*40);
 }
 // Sample between-level ad, from level 3 on, every other level, unless ads were removed.
 // Any ad the player watches (rewarded or this one) resets the count, so ads never come back to back.
-function maybeInterstitial(then){
-  if(level<3||store.get('nb-noads',false)||++levelsSinceAd<2)return then();
-  levelsSinceAd=0;watchAd(then,then,'Between-level ad',true);
+function adDue(){
+  if(level<3||store.get('nb-noads',false)||++levelsSinceAd<2)return false;
+  levelsSinceAd=0;return true;
 }
-function startNextLevel(){
+// intro=false starts and saves the level but leaves its card or message for levelIntro() (after an ad).
+function startNextLevel(intro=true){
   const oldT=T;
   level++;hudCleared=null;levelBase=score;T=targetFor(level);expert=store.get(EXPERT_KEY,false);track('level_reached',{mode,level,target:T});
   levelBoard();const tw=twist();
   if(tw)track('challenge_start',{level,twist:tw.id,expert:expertOn()});
   newTray();busy=false;levelStartHint=true;chain=0;
   setHint();renderAll();saveGame();
+  if(intro)levelIntro(oldT);
+}
+function levelIntro(oldT){
+  const tw=twist();
   if(tw)openSheet(`<h3>⚡ Challenge level ${level}</h3><p>${tw.text}</p><p>Clear it for a <b>+${CHALLENGE_COINS} 🪙</b> bonus.${T!==oldT?` New target: make <b>${T}</b>!`:''}</p><div class="btns"><button class="btn" id="tw-go">Let's go</button></div>`),$('tw-go').onclick=closeSheet;
   else if(T!==oldT){news(`Level ${level}\nNew target: make ${T}!`,true);bumpEl($('targetbox'));$('targetbox').classList.remove('newt');void $('targetbox').offsetWidth;$('targetbox').classList.add('newt')}
   else news(`Level ${level}\nScore ${goalFor(level)} to clear it`);
