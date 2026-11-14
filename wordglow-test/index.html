@@ -250,6 +250,7 @@ body.tut .tools { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .rot-gift { margin: 6px auto; }
 .daily-intro, .tomorrow { font-size: 1rem; line-height: 1.4; margin: 10px auto 4px; }
+.btn.pick small { display: block; font-family: var(--font-body); font-weight: 600; font-size: 0.9rem; line-height: 1.3; margin-top: 3px; opacity: 0.85; }
 .next-chal { font-size: 1.05rem; line-height: 1.4; margin: 10px auto 4px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 30%, transparent); }
 .tomorrow b { white-space: nowrap; }
 #remind-help, #expert-help, #deco-help { margin: 4px 0; text-align: center; }
@@ -462,7 +463,7 @@ button.pill { cursor: pointer; }
     <div class="over" id="over" hidden></div>
   </div>
 
-  <p class="legend" id="legend" hidden><span><i class="badge bomb">💣</i> Bomb clears around it</span><span id="lg-x2"><i class="badge x2">2x</i> Doubles the word</span><span id="lg-ice" hidden>❄️ Thaws when used, +5</span></p>
+  <p class="legend" id="legend" hidden><span><i class="badge bomb">💣</i> Bomb clears around it, +3 each</span><span id="lg-x2"><i class="badge x2">2x</i> Doubles the word</span><span id="lg-ice" hidden>❄️ Thaws when used, +5</span></p>
 
   <div class="tray" id="tray"></div>
 
@@ -1133,6 +1134,15 @@ function renderBoard() {
     const hit = ring.filter(([R, C]) => board[R][C]).length;
     const [br, bc] = group.flatMap(g => g.cells).find(([r, c]) => board[r][c]?.special === "bomb");
     if (hit) { cellEl(br, bc).dataset.boom = `💥+${hit * 3}`; cellEl(br, bc).classList.toggle("boom-below", br === 0); }   // same 3 points per block the score gives
+  });
+  // Frozen letters inside a glowing word show what thawing them pays, on the first ice square of the word.
+  const iceShown = new Set();
+  lit.forEach(w => {
+    const ice = w.cells.filter(([r, c]) => board[r][c]?.special === "ice" && !iceShown.has(r * N + c));
+    if (!ice.length) return;
+    ice.forEach(([r, c]) => iceShown.add(r * N + c));
+    const [ir, ic] = ice[0], el = cellEl(ir, ic);
+    if (!el.dataset.boom) { el.dataset.boom = `❄️+${ice.length * THAW_PTS}`; el.classList.toggle("boom-below", ir === 0); }
   });
   movableCells().forEach(([r, c]) => cellEl(r, c).classList.add("movable"));
   movableCells().forEach(([r, c]) => { for (let R = r - 1; R <= r + 1; R++) for (let C = c - 1; C <= c + 1; C++) if (R >= 0 && C >= 0 && R < N && C < N && !board[R][C]) cellEl(R, C).classList.add("nearmove"); });
@@ -2301,12 +2311,14 @@ function nextTwist() {
   [level, picked, expert] = keep;
   return t;
 }
+// One plain line of what a twist does, for the pick card's buttons (Muse round 14).
+const ruleLine = t => t.text.replace(/<[^>]+>/g, "").replace(new RegExp("^" + t.short + ":\\s*", "i"), "").replace(/ this level\.?$/, ".").replace(/^[a-z]/, m => m.toUpperCase());
 function pickTwist() {
   busy = true;
   board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
   const [a, b] = twistChoices();
   openSheet(`<h3>⚡ Pick your challenge</h3><p>Level ${level} is a challenge level. Which twist do you want? Both pay +${CHALLENGE_COINS} 🪙.</p>
-    <div class="btns"><button class="btn" id="pick-a">${a.short}</button><button class="btn" id="pick-b">${b.short}</button></div>`, true);
+    <div class="btns"><button class="btn pick" id="pick-a">${a.short}<small>${ruleLine(a)}</small></button><button class="btn pick" id="pick-b">${b.short}<small>${ruleLine(b)}</small></button></div>`, true);
   const choose = t => { picked = { level, id: t.id }; track("twist_pick", { level, twist: t.id }); closeSheet(); beginLevel(); };
   document.getElementById("pick-a").onclick = () => choose(a);
   document.getElementById("pick-b").onclick = () => choose(b);
@@ -2548,7 +2560,10 @@ function startDrag(e, i, el, fromBoard = false, grab = null) {
   if (!grab && el) {
     const r = el.getBoundingClientRect();
     const clamp = (v, n) => Math.max(0, Math.min(n - 1, Math.floor(v * n)));
-    grab = [clamp((e.clientY - r.top) / r.height, ph), clamp((e.clientX - r.left) / r.width, pw)];
+    // Measured from the piece's center with its unscaled size, so a press while it's still popping in
+    // (or pulsing after a swap) picks the letter under the finger.
+    const w = el.offsetWidth || r.width, h = el.offsetHeight || r.height, cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    grab = [clamp(0.5 + (e.clientY - cy) / h, ph), clamp(0.5 + (e.clientX - cx) / w, pw)];
   }
   const fy = grab ? (grab[0] + 0.5) / ph : 0.5, fx = grab ? (grab[1] + 0.5) / pw : 0.5;
   drag = { i, p, el, g, lift, fx, fy, target: null, fromBoard, origin, id: e.pointerId };
@@ -2573,6 +2588,12 @@ function moveDrag(e) {
   if (!fits(drag.p, r0, c0) && Math.abs(x + gr.width / 2 - (fb.left + fb.right) / 2) < fb.width / 2 && Math.abs(y + gr.height / 2 - (fb.top + fb.bottom) / 2) < fb.height / 2) {
     const [ph, pw] = pieceDims(drag.p), R = Math.max(0, Math.min(N - ph, r0)), C = Math.max(0, Math.min(N - pw, c0));
     if (Math.abs(R - r0) <= 1 && Math.abs(C - c0) <= 1 && fits(drag.p, R, C)) { r0 = R; c0 = C; }
+  }
+  // On touch the piece floats above the finger. If it doesn't fit there but does fit right under the finger,
+  // drop it there; the preview shows which (Muse round 14 aimed at squares under her finger and got "taken").
+  if (!fits(drag.p, r0, c0) && drag.lift) {
+    const r1 = Math.round((y + drag.lift - a.top) / pitch);
+    if (fits(drag.p, r1, c0)) r0 = r1;
   }
   const ok = fits(drag.p, r0, c0) && (!tut || (r0 === LESSONS[tut.step].at[0] && c0 === LESSONS[tut.step].at[1]));
   const t = ok ? [r0, c0] : null;
@@ -2739,7 +2760,7 @@ boardEl.addEventListener("click", e => {
       setTimeout(() => el.classList.remove("nope"), 400);
       // The level's rule comes first, so a challenge or Expert reject always names it (Nikola round 13).
       const rule = minLen() > 3 ? "Words need 4+ letters" : twist()?.id === "needE" ? "Every word needs an E" : "";
-      toast(rule ? `Not a word here. ${rule}` : movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : "Not a word yet");
+      toast(rule ? `${rule}\nNot a word here` : movableCells().some(([R, C]) => R === r && C === c) ? "Not a word yet. Drag it to move it" : "Not a word yet");
     }
     return;
   }
@@ -2763,7 +2784,11 @@ if (!resumeGame() && !resumeGame(SAVE_KEY + "-endless", false)) newGame("endless
 // can be tried without playing 30 levels first. The phone apps ignore it.
 {
   const jump = window.Capacitor?.isNativePlatform?.() ? 0 : parseInt(new URLSearchParams(location.search).get("level"), 10);
-  if (jump >= 2 && jump <= 99) { store.set("wb-tutorial-done", true); newGame("endless"); level = jump - 1; levelBase = score; clearToasts(); startNextLevel(); }
+  if (jump >= 2 && jump <= 99) {
+    store.set("wb-tutorial-done", true); newGame("endless"); level = jump - 1; levelBase = score; clearToasts(); startNextLevel();
+    // Used once: a reload then resumes the level instead of starting it over (Muse round 14).
+    try { const u = new URL(location.href); u.searchParams.delete("level"); history.replaceState(null, "", u); } catch (e) {}
+  }
 }
 renderCoins(); renderStreak(); checkStreakAtRisk(); applyDeco(); weeklyIntro();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyDeco(); weeklyIntro(); } });   // a new week or holiday while the app was away
@@ -2785,7 +2810,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "e072ab5 2026-11-14 05:33Z";
+const BUILD_STAMP = "0c121f1 2026-11-14 07:47Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
