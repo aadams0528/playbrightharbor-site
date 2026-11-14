@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.8 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.9 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -418,7 +418,9 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .chest.badc .bubble::after{border-bottom-color:#fdecea}
 .signno{font-size:11px;font-weight:800;color:var(--ink2);margin-top:4px}
 .howgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.howgrid .btn{justify-content:flex-start;font-size:15px}
+.howgrid .btn{justify-content:flex-start;font-size:16px;color:var(--ink);background:var(--panel2)}
+.homerows .hrow{margin-top:10px}
+.hrow .hi{font-size:28px;width:40px;text-align:center}
 .ticon{line-height:1}
 
 /* bottom actions */
@@ -2648,6 +2650,13 @@ function weekRow() {
   const w = wkGet(); const G = weekGoals(w.w); const d = goalsDone(w, G);
   return '<button class="wkrow' + (w.beacon ? ' lit' : '') + '" id="wkr"><div class="wl">' + G.goals.map((g, i) => '<span class="ln' + (i < d ? '' : ' off') + '">🏮</span>').join('') + '</div><div class="wt"><b>' + esc(G.name) + (w.seen ? '' : '<i class="new">NEW</i>') + '</b><span>' + (w.beacon ? LH + ' Beacon lit!' + (w.gift !== 0 ? ' 🛡️ shield earned' : '') : 'Goals: ' + d + ' of ' + G.goals.length + ' done') + '</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>';
 }
+// All puzzle types, one tap away from home: each opens its short lesson.
+function showHowTo() {
+  openSheet('<h2>How to play</h2><div class="sub">Tap a puzzle type for a short lesson.</div><div class="howgrid">' +
+    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
+    '<div class="sub" style="font-size:16px;margin-top:10px">More puzzle types join the library over time.</div>');
+  document.querySelectorAll('.sheet .how').forEach(b => b.onclick = () => { closeSheet(); startTutorial(b.dataset.t); });
+}
 function showGoals() {
   const w = wkGet(); const G = weekGoals(w.w); const first = !w.seen;
   w.seen = 1; store.set('wk', w);
@@ -2740,18 +2749,17 @@ function renderHome() {
     storyCard() + weekRow() +
     '<div class="sect">' + (expertOn() ? '🧠 Expert week · ' : 'This week · ') + wk.filter(d => dayDone(all[d])).length + ' of 7 days played</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
-    '<div class="sect">Puzzle types · how to play</div><div class="howgrid">' + TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
-    '<div class="optrow"><button class="linkbtn" id="opts">⚙️ Options</button></div>' +
-    '<div class="foot" style="margin-top:8px">More puzzle types join the library over time.</div>' +
+    '<div class="homerows"><button class="wkrow hrow" id="howr"><span class="hi">📖</span><div class="wt"><b>How to play</b><span>' + TL.ROSTER.length + ' puzzle types, with a short lesson each</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>' +
+    '<button class="wkrow hrow" id="opts"><span class="hi">⚙️</span><div class="wt"><b>Options</b><span>Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.8' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.9' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('opts').onclick = showOptions;
   document.getElementById('wkr').onclick = showGoals;
   { const bn = document.getElementById('bon'); if (bn) bn.onclick = startBonus; }
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
-  $app.querySelectorAll('.how').forEach(b => b.onclick = () => startTutorial(b.dataset.t));
+  document.getElementById('howr').onclick = showHowTo;
   renderCloud(); renderRemind(); renderAdsRow();
   { const sk = document.getElementById('stk'); sk.onclick = () => toast('🔥 Days in a row. Finish today\'s Daily Three to keep it going. Older days don\'t count.' + (shieldGet().n ? ' Your 🛡️ shield saves the streak once if you miss a day.' : ''), 4500);
     sk.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); sk.onclick(); } }; }
@@ -3894,7 +3902,7 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = !TEST_BUILD ? { store, toast, onNoAds: null } : { get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, showOptions };
+window.__TL = !TEST_BUILD ? { store, toast, onNoAds: null } : { showHowTo, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, showOptions };
 window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
