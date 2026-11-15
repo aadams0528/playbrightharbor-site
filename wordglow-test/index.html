@@ -1089,7 +1089,7 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   finishTurn();
   // Minor: any other opening message (a holiday greeting, a challenge) replaces it, so only one shows (Cooper round 13).
   // Lower on the board and two lines, so it never drifts over the title or level line (the rule chip already names the twist; Cooper round 15).
-  if (!over && welcome) toast(`Welcome back!\nLevel ${level}`, false, READ_MS, true, 55);
+  if (!over && !busy && welcome) toast(`Welcome back!\nLevel ${level}`, false, READ_MS, true, 55);
   return true;
 }
 
@@ -1625,6 +1625,7 @@ function showModeSwitch() {
        <textarea id="sharetext" rows="5" readonly hidden>${dailyShareText(done)}</textarea>`);
     document.getElementById("d-share").onclick = e => shareResult(dailyShareText(done), e.currentTarget);
     document.getElementById("d-again").onclick = () => { switchMode("daily"); if (over) newGame("daily", true); };
+    document.getElementById("modal").classList.add("solid");   // same solid backdrop as the other mode sheets (Cooper round 18)
     return;
   }
   openTabSheet("mode", toDaily
@@ -2425,6 +2426,9 @@ document.addEventListener("keydown", e => {
 // Level done: clear what's left with a flourish, then a fresh, seeded board and a slightly bigger target.
 function levelUp() {
   defGen++;
+  // Save the cleared board now, so a reload on the level card reopens this card instead of the board
+  // before the last word, and the finishing word's bonuses are never paid twice (Cooper round 18).
+  saveGame();
   track("level_complete", { level });
   busy = true; movable = null; erasing = false;
   renderAll();
@@ -2679,7 +2683,9 @@ const DAILY_LEVELS = 3;
 const DAILY_KEY = (day = todayKey()) => "wb-daily-result-" + day;
 function dailyDone(earned, kept = []) {
   track("daily_complete", { score, words: found.length });
-  addCoins(earned);
+  // A reload just before this screen shows doesn't pay the last level twice (Cooper round 18).
+  const paidKey = "daily:" + (dailyRunDay || todayKey()) + ":" + level;
+  if (store.get("wb-lv-paid", "") !== paidKey) { addCoins(earned); store.set("wb-lv-paid", paidKey); }
   const top = found.slice().sort((a, b) => b.s - a.s)[0];
   const result = { no: dailyRunNo ?? dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null };
   // Keep the best finish of the day; a replay that scores less doesn't replace it.
@@ -3027,7 +3033,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "e86425b 2026-11-15 16:03Z";
+const BUILD_STAMP = "cf00b00 2026-11-15 17:14Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
