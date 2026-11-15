@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast e813a28 (PR #37) -->
+<!-- number-blast 98aada1 (PR #39) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -73,6 +73,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);padding:6px 10
 .lvl .lp{font-variant-numeric:tabular-nums;white-space:nowrap}
 .why{font-size:.85rem;color:var(--muted);margin-top:-4px}
 .tomorrow{font-size:.95rem;line-height:1.4;margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(245,179,1,.14)}
+.earned-last{font-size:1.05rem;font-weight:700;margin:8px 0}
 .remindrow{margin:8px 0;font-size:1rem}
 .qlist.weekly li.done .g-text{color:var(--muted);text-decoration:line-through}
 /* Holiday decorations: a garland over the board, a colored frame, and falling bits only on a level clear (Nikola round 11) */
@@ -166,16 +167,15 @@ body.tw-bombs .tile.hasbomb{animation:bombPulse 1.4s ease-in-out infinite}
 .over>div{margin:auto 0}
 .over .big{font-family:var(--display);font-weight:800;font-size:2.4rem;color:var(--gold);line-height:1;margin:6px 0}
 .over .row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px}
-/* "More from Bright Harbor": a quiet card for our other live games. */
-.promo{display:flex;gap:10px;align-items:center;margin-top:10px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.1);color:inherit;text-decoration:none;text-align:left;font-size:.82rem;line-height:1.25}
-.promo small{display:block;font-size:.68rem;opacity:.75}
-.promo-icon{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--gold);font-size:1.1rem}
-.promo-go{flex:none;margin-left:auto;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--gold);color:#14231f}
-.over .promo{display:inline-flex;margin-top:8px;padding:4px 6px 4px 4px;gap:8px;font-size:.78rem}
-.over .promo-icon{width:24px;height:24px;border-radius:7px;font-size:.85rem}
-.over .promo-go{padding:3px 9px}
+/* "More from Bright Harbor": our other live games (shared bh-games.js). Big text, big tap target. */
+.bh-promo{display:flex;gap:12px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.1);color:inherit;text-decoration:none;text-align:left;font-size:1.05rem;line-height:1.3;min-height:56px}
+.bh-promo small{display:block;font-size:.85rem;opacity:.8}
+.bh-promo-icon{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--gold);font-size:1.3rem}
+.bh-promo-go{flex:none;margin-left:auto;font-weight:700;padding:8px 14px;border-radius:999px;background:var(--gold);color:#14231f}
+.bh-help h4{margin:0 0 6px;font-size:1.05rem}
+.bh-help small{display:none}
 @media (max-height:700px){.over{padding:8px 8px calc(72px + env(safe-area-inset-bottom,0px))}.over h2{font-size:1.6rem}.over .big{font-size:2rem;margin:2px 0}.over p{margin:3px 0}.over .row{margin-top:5px}}
-#sheet .promo{background:none;border:1px solid var(--line,rgba(0,0,0,.12));margin:0 0 10px}
+#sheet .bh-promo{background:none;border:1px solid var(--line,rgba(0,0,0,.12));margin:0 0 10px}
 
 .tray{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;touch-action:none}
 .slot{height:clamp(78px,12dvh,110px);display:flex;align-items:center;justify-content:center;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:grab}
@@ -345,12 +345,101 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily run</b> gives everyone the same pieces today and ends when no piece fits. Clear level 1, 3 and 5 for up to 3 ⭐ (all 3 in a day pays 10 🪙); 15 ⭐ in a week opens a 🎁 coin chest. Switching between them keeps your place in each.</li>
     </ul>
     <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
-    <p class="tester" hidden>Sumburst 1.3.2 test version · ads and purchases are samples.</p>
+    <p class="tester" hidden>Sumburst 1.3.3 test version · ads and purchases are samples.</p>
     <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
 
+<!-- Shared Bright Harbor cross-promo, copied unchanged from src/bh-games.js (canonical: business/crosspromo/bh-games.js). -->
+<script>
+// Bright Harbor cross-promo: one shared list of our games plus the rules for showing them.
+// CANONICAL COPY: /mnt/project-files/business/crosspromo/bh-games.js. Every game copies this file
+// unchanged into its repo (src/bh-games.js, or inlined into src/game.html). To add a game or switch
+// one on, edit ONLY the BH_GAMES list here, then copy it into each game in its next update.
+//
+// Studio rules (Alan 2026-10-13, extended to all games 2026-11-15):
+// - promote only games that are live in that phone's store (iPhone needs an App Store link: Apple 2.3.10)
+// - never reward the install, and never show the card in a player's first 3 sessions
+// - game over: at most every 3rd one, never beside a keep-playing / continue offer
+// - hide a game that is already installed (where the phone lets us check, via @capacitor/app-launcher)
+// - a tapped game rests for 30 days; the next live game takes its turn
+// - kids games show only other kids games (behind the parent gate); other games never show kids games
+// - nothing here blocks play or shows an error when offline
+(function () {
+  const BH_GAMES = [
+    // id, name, one-line pitch, emoji icon, store links (empty = not live there), installed-check ids
+    { id: "wordglow", name: "Wordglow", tag: "Spell words and watch them glow.", icon: "✨",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.spellburst", ios: "",
+      web: "https://playwordglow.com", iosScheme: "wordglow://", androidPkg: "com.playbrightharbor.spellburst" },
+    { id: "sumburst", name: "Sumburst", tag: "Fill groups that add up to the target.", icon: "🔢",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.sumburst", ios: "",
+      web: "https://playsumburst.com", iosScheme: "sumburst://", androidPkg: "com.playbrightharbor.sumburst" },
+    { id: "colorrivers", name: "Color Rivers", tag: "Join the colors into calm flowing rivers.", icon: "🌊",
+      android: "", ios: "", web: "https://playcolorrivers.com", iosScheme: "colorrivers://", androidPkg: "com.playbrightharbor.colorrivers" },
+    { id: "whenly", name: "Whenly", tag: "Put five moments from history in order.", icon: "🗓️",
+      android: "", ios: "", web: "https://playwhenly.com", iosScheme: "whenly://", androidPkg: "com.playbrightharbor.whenly" },
+    { id: "ahalock", name: "Ahalock", tag: "A daily picture logic puzzle.", icon: "🔒",
+      android: "", ios: "", web: "https://playahalock.com", iosScheme: "ahalock://", androidPkg: "com.playbrightharbor.ahalock" },
+    { id: "pebblepond", name: "Pebble Pond", tag: "Ripple the pond to bring every visitor home.", icon: "🪨",
+      android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
+  ];
+
+  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  //   self:   this game's id (it is never promoted to itself)
+  //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
+  //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
+  //   track:  optional analytics function (event, params); omit in kids games
+  // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  const BHPromo = {
+    games: BH_GAMES, opts: null, installed: {}, sessions: 0,
+    init(opts) {
+      this.opts = opts;
+      const s = opts.store, k = opts.prefix + "promo-sessions";
+      this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
+      this.preview = /[?&]promo\b/.test(location.search);
+      const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
+      if (L && p !== "web") for (const g of this.pool()) {
+        const url = p === "ios" ? g.iosScheme : g.androidPkg;
+        if (url) L.canOpenUrl({ url }).then(r => { if (r.value) this.installed[g.id] = true; }).catch(() => {});
+      }
+      return this;
+    },
+    platform() { return window.Capacitor?.getPlatform?.() || "web"; },
+    pool() { const kids = !!this.opts.kids; return BH_GAMES.filter(g => g.id !== this.opts.self && !!g.kids === kids); },
+    link(g) { const p = this.platform(); return p === "web" ? (g.android || g.ios ? g.web : "") : g[p]; },
+    // live, linkable on this phone, not installed, not resting after a tap
+    ready() {
+      if (this.preview) return this.pool().map(g => ({ ...g, href: this.link(g) || g.web }));
+      const now = Date.now(), s = this.opts.store;
+      return this.pool().filter(g => this.link(g) && !this.installed[g.id] && now > s.get(this.opts.prefix + "promo-rest-" + g.id, 0))
+        .map(g => ({ ...g, href: this.link(g) }));
+    },
+    forHelp() { return this.sessions > 3 || this.preview ? this.ready() : []; },
+    forGameOver(offerShown) {
+      if (offerShown) return null;
+      const list = this.forHelp(); if (!list.length) return null;
+      const s = this.opts.store, k = this.opts.prefix + "promo-overs", n = s.get(k, 0) + 1; s.set(k, n);
+      if (n % 3 && !this.preview) return null;
+      return list[Math.floor(n / 3) % list.length];   // rotate through the live games
+    },
+    card(g, where) {
+      this.opts.track?.("promo_shown", { game: g.id, where });
+      return `<a class="bh-promo" data-game="${g.id}" href="${g.href}" target="_blank" rel="noopener">` +
+        `<span class="bh-promo-icon" aria-hidden="true">${g.icon}</span><span><small>More from Bright Harbor</small>` +
+        `<b>${g.name}</b>: ${g.tag}</span><span class="bh-promo-go">Get it</span></a>`;
+    },
+    wire(root, where) {
+      root?.querySelectorAll(".bh-promo").forEach(a => a.addEventListener("click", () => {
+        this.opts.track?.("promo_tap", { game: a.dataset.game, where });
+        this.opts.store.set(this.opts.prefix + "promo-rest-" + a.dataset.game, Date.now() + 30 * 864e5);
+      }));
+    },
+  };
+  window.BH_GAMES = BH_GAMES; window.BHPromo = BHPromo;
+})();
+</script>
 <script>
 (function(){
 const N=8, $=id=>document.getElementById(id);
@@ -358,7 +447,7 @@ const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
              set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BHCloud?.changed?.()}};
 // Kept on this phone only, never sent to the cloud save: sound, ad and promo counters, delivered purchases.
-const DEVICE_ONLY=/^nb-(muted|sessions|promo-overs|free-ads-|granted-tx|reminder|tomorrow-seen)/;   // reminders need each phone's own permission
+const DEVICE_ONLY=/^nb-(muted|sessions|promo-|free-ads-|granted-tx|reminder|tomorrow-seen)/;   // reminders need each phone's own permission
 let cloudApplying=false;
 const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 
@@ -1026,33 +1115,10 @@ let sessionStart=Date.now(),sessionEnded=false;
 const sessionsPlayed=store.get('nb-sessions',0)+1;store.set('nb-sessions',sessionsPlayed);
 
 // ---------- More from Bright Harbor: send players to our other live games ----------
-// Rules (studio-wide): only promote a game that is live in the stores, never reward the install,
-// skip a player's first 3 sessions, show it on at most every 3rd game over, and hide it when the
-// other game is already installed (where the phone lets us check). Add ?promo to preview it.
-const PROMO={name:'Wordglow',tag:'Spell words and watch them glow.',live:true,  // Wordglow is live on Google Play (2026-11-02)
-  ios:'',  // App Store link, filled in once Wordglow is live
-  android:'https://play.google.com/store/apps/details?id=com.playbrightharbor.spellburst',
-  web:'https://playwordglow.com',iosScheme:'wordglow://',androidPkg:'com.playbrightharbor.spellburst'};
-const promoPreview=/[?&]promo\b/.test(location.search);
-let promoInstalled=false;
-(async()=>{try{
-  const L=window.Capacitor?.Plugins?.AppLauncher;if(!L)return;
-  promoInstalled=(await L.canOpenUrl({url:window.Capacitor.getPlatform()==='ios'?PROMO.iosScheme:PROMO.androidPkg})).value;
-}catch{}})();
-// On iPhone the card waits for Wordglow's App Store link: no web or Google Play link in the iOS app (Apple 2.3.10).
-const promoOn=()=>(PROMO.live||promoPreview)&&!promoInstalled&&!(window.Capacitor?.getPlatform?.()==='ios'&&!PROMO.ios);
-function promoUrl(){const p=window.Capacitor?.getPlatform?.();return p==='ios'&&PROMO.ios?PROMO.ios:p==='android'?PROMO.android:PROMO.web}
-function promoCard(where){
-  track('promo_shown',{game:PROMO.name,where});
-  return `<a class="promo" id="promo-${where}" href="${promoUrl()}" target="_blank" rel="noopener"><span class="promo-icon" aria-hidden="true">✨</span><span>${where==='over'?`Try <b>${PROMO.name}</b> from Bright Harbor`:`<small>More from Bright Harbor</small><b>${PROMO.name}</b>: ${PROMO.tag}`}</span><span class="promo-go">Get it</span></a>`;
-}
-function wirePromo(where){const a=$('promo-'+where);if(a)a.onclick=()=>track('promo_tap',{game:PROMO.name,where})}
-function promoForGameOver(offerShown){
-  // never next to the keep-playing offer: only on the final game-over screen
-  if(offerShown||!promoOn()||(sessionsPlayed<4&&!promoPreview))return false;
-  const n=store.get('nb-promo-overs',0)+1;store.set('nb-promo-overs',n);
-  return promoPreview||n%3===0;
-}
+// The shared studio helper (bh-games.js) holds the game list and the rules: live in this phone's store only
+// (iPhone needs an App Store link), not in the first 3 sessions, at most every 3rd game over, never beside
+// the keep-playing offer, hidden when installed, 30-day rest after a tap. Add ?promo to preview every game.
+BHPromo.init({self:'sumburst',prefix:'nb-',store,track});
 function endSession(){
   if(sessionEnded)return;sessionEnded=true;
   track('session_end',{mode,level,score,in_tutorial:!!tut,tutorial_step:tut?tut.step+1:0,board_fill:board.filter(Boolean).length,seconds:Math.round((Date.now()-sessionStart)/1000),
@@ -1356,16 +1422,24 @@ function blast(cascade=0){
   // Kept short: the bonus and chain ride on the score line, and both earned tools share one line.
   // A quest finished by this same blast is named too, so two Erasers from one drop add up.
   // Tools are counted, so two Erasers read "2 Erasers" (Nikola round 13).
-  const toolN={Eraser:+earned,Shuffle:+shuffleEarned,Rotate:+rotEarned};
-  goalsDone.filter(g=>!g.full&&g.reward!=='coins').forEach(g=>{const k=g.reward[0].toUpperCase()+g.reward.slice(1);toolN[k]=(toolN[k]||0)+1});
-  const got=[...Object.entries(toolN).filter(([,n])=>n).map(([k,n])=>n>1?`${n} ${k}s`:k),...goalsDone.filter(g=>!g.full&&g.reward==='coins').map(()=>'+15 🪙')].join(' + ');
+  // A tool or coins from a quest say "(quest)", so extra tools don't look like a different earn rate (Muse round 15).
+  const toolN={Eraser:+earned,Shuffle:+shuffleEarned,Rotate:+rotEarned},questN={};
+  goalsDone.filter(g=>!g.full&&g.reward!=='coins').forEach(g=>{const k=g.reward[0].toUpperCase()+g.reward.slice(1);toolN[k]=(toolN[k]||0)+1;questN[k]=(questN[k]||0)+1});
+  const toolTxt=(k,n)=>{const q=questN[k]||0,name=n>1?`${n} ${k}s`:k;return !q?name:q===n?name+' (quest)':`${name} (${q} from a quest)`};
+  const got=[...Object.entries(toolN).filter(([,n])=>n).map(([k,n])=>toolTxt(k,n)),...goalsDone.filter(g=>!g.full&&g.reward==='coins').map(()=>'+15 🪙 (quest)')].join(' + ');
   // How the points add up: block bonus, chain and bomb, so every number can be traced.
   const how=[k===1&&mult(longest)>1&&`${longest} blocks x${mult(longest)}`,tw2.some(x=>x>1)&&`⚡ x2`,chainX>1&&`chain x${chainX}`,extra.size&&`💣 +3 each`].filter(Boolean).join(' · ');
   // The day's streak bonus rides on this same message, so it is never lost in the queue (Muse round 10).
   const st=tut?null:markPlayed(),stTxt=st?` · 🔥 Day ${st.n} streak +${st.bonus} 🪙`:'';
+  // From level 30, the drop that reaches half the goal says so on this same message, the one the player is
+  // watching, so it can't get lost behind other news (Muse round 15: not seen in three rounds).
+  let halfTxt='';
+  if(!tut&&!over&&level>=HALF_FROM&&!halfPaid&&levelPts()>=goalFor(level)/2&&levelPts()<goalFor(level)){
+    halfPaid=true;addCoins(HALF_COINS);track('halfway',{level});halfTxt=` · 🎯 Halfway! +${HALF_COINS} 🪙`;bumpEl($('coinpill'));
+  }
   // Two short lines in the message strip: what you made, then what it scored.
   // Earned tools get their own message next, so the two-line strip never cuts them off (Nikola r11, Muse r12).
-  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt,longest>=4||k>1||extra.size>0||!!st,CASH_MS);
+  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt+halfTxt,longest>=4||k>1||extra.size>0||!!st||!!halfTxt,halfTxt?READ_MS:CASH_MS);
   // A tool you would have earned but already hold 3 of says so, once a level per tool (Nikola round 12).
   const capNew=[...capHit].filter(x=>!capNoted.has(x));capNew.forEach(x=>capNoted.add(x));
   const capTxt=capNew.length?capNew.map(x=>`${x} full (${MAX_OF[x]})`).join(' · '):'';
@@ -1479,6 +1553,8 @@ function seedStarters(n,bomb=false,star=false){
 }
 function levelUp(){
   busy=true;erasing=false;lockMovable();clearPending(true);track('level_complete',{mode,level});
+  // Tools earned on the level's last drop are named on the level card, not a level late (Muse round 15).
+  const lastEarn=newsQ.filter(x=>/^🎁 .* earned!$/.test(x[0])).map(x=>x[0]);newsQ=newsQ.filter(x=>!lastEarn.includes(x[0]));
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   const paid3=mode==='daily'&&dailyStars(level);hudCleared=level;renderHUD();
   saveGame();   // a reload on the level-complete card comes back to this card, not to the drop before it (Nikola round 10)
@@ -1493,6 +1569,7 @@ function levelUp(){
   setTimeout(()=>{
     board=Array(N*N).fill(null);renderBoard();
     openSheet(`<h3>Level ${level} complete!</h3><p>You earned${chal?` (⚡ challenge bonus +${chal} 🪙${expertOn()?', 💎 Expert x1.5':''})`:expertOn()?' (💎 Expert x1.5)':''}</p><div class="adbox"><span class="count">+${earned} 🪙</span></div>
+      ${lastEarn.map(t=>`<p class="earned-last">${t.replace(/ earned!$/,' earned on your last drop!')}</p>`).join('')}
       ${mode==='daily'?`<p class="dstars">${starStr(starsFor(level))} this run${(n=>n?` · next star at level ${n}`:paid3?` · all 3 stars! +${THREE_STAR_COINS} 🪙 bonus`:' · all 3 stars!')(STAR_LEVELS.find(l=>l>level))}</p><p class="weeknote">${store.get(chestKey(),false)?'🎁 This week\'s chest is open.':`🎁 ${Math.min(weekStars(),CHEST_STARS)} of ${CHEST_STARS} ⭐ this week toward the chest (${CHEST_COINS} 🪙)`}</p>`:''}
       ${mode==='endless'&&!introDaily?weekLine():''}<p style="margin-top:10px">Next up: level ${level+1}. ${next!==T?`New target: make <b>${next}</b>!`:`Target stays at ${next}.`}</p>
       ${introDaily?`<p class="tomorrow">📅 New: today's <b>Daily run</b>. Everyone gets the same pieces, and clearing levels 1, 3 and 5 earns ⭐ stars.</p>`:''}${firstDay()?tomorrowNote():''}
@@ -1576,14 +1653,14 @@ function gameOver(){
     <div class="row"><button class="btn" id="again">${mode==='daily'?'Try today again':'Play again'}</button><button class="btn ghost" id="copy">Share result</button>
       ${mode==='daily'?'<button class="btn ghost" id="endlessbtn">Play Endless</button>':'<button class="btn ghost" id="todaybtn">Play Daily run</button>'}</div>
     ${!continued?`<div class="keep"><p>Or keep this board going (optional):</p><div class="row"><button class="btn ghost" id="cont-ad">Watch an ad</button><button class="btn ghost" id="cont-coins" ${coins<CONTINUE_COST?'disabled':''}>Use ${CONTINUE_COST} 🪙</button></div></div>`:''}
-    ${promoForGameOver(!continued)?promoCard('over'):''}</div>`;
+    ${(g=>g?BHPromo.card(g,'over'):'')(BHPromo.forGameOver(!continued))}</div>`;
   $('over').hidden=false;
   endedByChoice=false;
   $('again').onclick=()=>newGame(mode);
   if(!continued){$('cont-ad').onclick=()=>watchAd(keepPlaying);$('cont-coins').onclick=()=>{if(spendCoins(CONTINUE_COST))keepPlaying()}}
   if($('todaybtn'))$('todaybtn').onclick=()=>switchMode('daily');
   if($('endlessbtn'))$('endlessbtn').onclick=()=>switchMode('endless');
-  wirePromo('over');
+  BHPromo.wire($('over'),'over');
   $('copy').onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(share):Promise.reject()).then(()=>{$('copy').textContent='Copied! Paste it in a text';showShared($('copy'),share)},()=>{openSheet(`<h3>Share result</h3><p>Copy this and paste it in a text:</p><p style="white-space:pre-line;color:var(--fg)">${esc(share)}</p><div class="btns"><button class="btn" id="sh-ok">Done</button></div>`);$('sh-ok').onclick=closeSheet})};
 }
 
@@ -1844,7 +1921,8 @@ function showHelp(){
       $('tr-yes').onclick=()=>{try{Object.keys(localStorage).filter(k=>k.startsWith('nb-')).forEach(k=>localStorage.removeItem(k))}catch(e){}location.reload()};
     };
   }
-  if(promoOn()){$('sheet').querySelector('.helpbody').insertAdjacentHTML('beforebegin',promoCard('help'));wirePromo('help')}
+  const more=BHPromo.forHelp();   // the section only shows when one of our other games is live in this phone's store
+  if(more.length){$('sheet').querySelector('.helpbody').insertAdjacentHTML('beforebegin',`<div class="bh-help" id="bh-help"><h4>More from Bright Harbor</h4>${more.map(g=>BHPromo.card(g,'help')).join('')}</div>`);BHPromo.wire($('bh-help'),'help')}
   renderExpertHelp();renderDecoHelp();
   if(LN){
     $('sheet').querySelector('.helpbody').insertAdjacentHTML('beforebegin',`<p class="remindrow">🔔 Daily reminder: <button class="linkbtn" id="rm-toggle"></button></p>`);
