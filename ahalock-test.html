@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.12 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.13 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -440,6 +440,10 @@ button.tile{font:inherit;color:inherit;cursor:pointer;width:100%;display:block}
 /* overlay */
 .shx{position:sticky;top:0;float:right;margin:-8px -6px 0 8px;width:44px;height:44px;border-radius:50%;border:2px solid #1d2a4a;background:#fff7e6;color:#1d2a4a;font-size:20px;font-weight:800;line-height:1;cursor:pointer;z-index:2}
 body:has(#ov) .actions.stick{visibility:hidden}
+.bh-promo{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border-radius:16px;background:#fff;border:2px solid var(--line);color:var(--ink);text-decoration:none;font-size:17px;line-height:1.35}
+.bh-promo small{display:block;font-size:14px;color:#4b5263;font-weight:700}
+.bh-promo-icon{font-size:34px;flex:0 0 auto}
+.bh-promo-go{margin-left:auto;flex:0 0 auto;background:var(--gold);color:#3b2d14;font-weight:800;border-radius:999px;padding:10px 16px;font-size:16px}
 .ov{position:fixed;inset:0;background:rgba(8,14,28,.7);display:flex;align-items:flex-end;justify-content:center;z-index:50;padding:16px;padding-bottom:calc(var(--sab) + 16px)}
 .sheet{background:var(--panel);color:var(--ink);border-radius:24px;max-width:448px;width:100%;max-height:88vh;overflow:auto;padding:20px 18px;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:up .3s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
@@ -2386,6 +2390,94 @@ html,body{overflow-anchor:none}
 
 </script>
 <script>
+// Bright Harbor cross-promo: one shared list of our games plus the rules for showing them.
+// CANONICAL COPY: /mnt/project-files/business/crosspromo/bh-games.js. Every game copies this file
+// unchanged into its repo (src/bh-games.js, or inlined into src/game.html). To add a game or switch
+// one on, edit ONLY the BH_GAMES list here, then copy it into each game in its next update.
+//
+// Studio rules (Alan 2026-10-13, extended to all games 2026-11-15):
+// - promote only games that are live in that phone's store (iPhone needs an App Store link: Apple 2.3.10)
+// - never reward the install, and never show the card in a player's first 3 sessions
+// - game over: at most every 3rd one, never beside a keep-playing / continue offer
+// - hide a game that is already installed (where the phone lets us check, via @capacitor/app-launcher)
+// - a tapped game rests for 30 days; the next live game takes its turn
+// - kids games show only other kids games (behind the parent gate); other games never show kids games
+// - nothing here blocks play or shows an error when offline
+(function () {
+  const BH_GAMES = [
+    // id, name, one-line pitch, emoji icon, store links (empty = not live there), installed-check ids
+    { id: "wordglow", name: "Wordglow", tag: "Spell words and watch them glow.", icon: "✨",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.spellburst", ios: "",
+      web: "https://playwordglow.com", iosScheme: "wordglow://", androidPkg: "com.playbrightharbor.spellburst" },
+    { id: "sumburst", name: "Sumburst", tag: "Fill groups that add up to the target.", icon: "🔢",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.sumburst", ios: "",
+      web: "https://playsumburst.com", iosScheme: "sumburst://", androidPkg: "com.playbrightharbor.sumburst" },
+    { id: "colorrivers", name: "Color Rivers", tag: "Join the colors into calm flowing rivers.", icon: "🌊",
+      android: "", ios: "", web: "https://playcolorrivers.com", iosScheme: "colorrivers://", androidPkg: "com.playbrightharbor.colorrivers" },
+    { id: "whenly", name: "Whenly", tag: "Put five moments from history in order.", icon: "🗓️",
+      android: "", ios: "", web: "https://playwhenly.com", iosScheme: "whenly://", androidPkg: "com.playbrightharbor.whenly" },
+    { id: "ahalock", name: "Ahalock", tag: "A daily picture logic puzzle.", icon: "🔒",
+      android: "", ios: "", web: "https://playahalock.com", iosScheme: "ahalock://", androidPkg: "com.playbrightharbor.ahalock" },
+    { id: "pebblepond", name: "Pebble Pond", tag: "Ripple the pond to bring every visitor home.", icon: "🪨",
+      android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
+  ];
+
+  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  //   self:   this game's id (it is never promoted to itself)
+  //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
+  //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
+  //   track:  optional analytics function (event, params); omit in kids games
+  // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  const BHPromo = {
+    games: BH_GAMES, opts: null, installed: {}, sessions: 0,
+    init(opts) {
+      this.opts = opts;
+      const s = opts.store, k = opts.prefix + "promo-sessions";
+      this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
+      this.preview = /[?&]promo\b/.test(location.search);
+      const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
+      if (L && p !== "web") for (const g of this.pool()) {
+        const url = p === "ios" ? g.iosScheme : g.androidPkg;
+        if (url) L.canOpenUrl({ url }).then(r => { if (r.value) this.installed[g.id] = true; }).catch(() => {});
+      }
+      return this;
+    },
+    platform() { return window.Capacitor?.getPlatform?.() || "web"; },
+    pool() { const kids = !!this.opts.kids; return BH_GAMES.filter(g => g.id !== this.opts.self && !!g.kids === kids); },
+    link(g) { const p = this.platform(); return p === "web" ? (g.android || g.ios ? g.web : "") : g[p]; },
+    // live, linkable on this phone, not installed, not resting after a tap
+    ready() {
+      if (this.preview) return this.pool().map(g => ({ ...g, href: this.link(g) || g.web }));
+      const now = Date.now(), s = this.opts.store;
+      return this.pool().filter(g => this.link(g) && !this.installed[g.id] && now > s.get(this.opts.prefix + "promo-rest-" + g.id, 0))
+        .map(g => ({ ...g, href: this.link(g) }));
+    },
+    forHelp() { return this.sessions > 3 || this.preview ? this.ready() : []; },
+    forGameOver(offerShown) {
+      if (offerShown) return null;
+      const list = this.forHelp(); if (!list.length) return null;
+      const s = this.opts.store, k = this.opts.prefix + "promo-overs", n = s.get(k, 0) + 1; s.set(k, n);
+      if (n % 3 && !this.preview) return null;
+      return list[Math.floor(n / 3) % list.length];   // rotate through the live games
+    },
+    card(g, where) {
+      this.opts.track?.("promo_shown", { game: g.id, where });
+      return `<a class="bh-promo" data-game="${g.id}" href="${g.href}" target="_blank" rel="noopener">` +
+        `<span class="bh-promo-icon" aria-hidden="true">${g.icon}</span><span><small>More from Bright Harbor</small>` +
+        `<b>${g.name}</b>: ${g.tag}</span><span class="bh-promo-go">Get it</span></a>`;
+    },
+    wire(root, where) {
+      root?.querySelectorAll(".bh-promo").forEach(a => a.addEventListener("click", () => {
+        this.opts.track?.("promo_tap", { game: a.dataset.game, where });
+        this.opts.store.set(this.opts.prefix + "promo-rest-" + a.dataset.game, Date.now() + 30 * 864e5);
+      }));
+    },
+  };
+  window.BH_GAMES = BH_GAMES; window.BHPromo = BHPromo;
+})();
+</script>
+<script>
 (function(){
 'use strict';
 const TEST_BUILD = true;
@@ -2570,20 +2662,24 @@ function holidayFor(ds) {
 }
 const decoOn = () => store.get('deco', true) !== false;
 const holidayNow = () => decoOn() ? holidayFor(realToday) : null;
+// "More from Bright Harbor": our other live games, only on win cards with no keep-going offer, and in Help.
+function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.forGameOver(false) : null; return g ? BHPromo.card(g, 'over') : ''; } catch (e) { return ''; } }
+function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
+function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
 function showHelp() {
   openSheet('<h2>Help &amp; settings</h2><div class="sub" style="margin-bottom:6px"><b>How to play</b> · tap a puzzle type for a short lesson.</div><div class="howgrid">' +
     TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
-    '<div class="sub" style="font-size:16px;margin:10px 0 14px">More puzzle types join the library over time.</div>' + optionsHtml());
+    '<div class="sub" style="font-size:16px;margin:10px 0 14px">More puzzle types join the library over time.</div>' + optionsHtml(promoHelp()));
   document.querySelectorAll('.sheet .how').forEach(b => b.onclick = () => { closeSheet(); startTutorial(b.dataset.t); });
-  wireOptions();
+  wireOptions(); promoWire('help');
 }
-function optionsHtml() {
+function optionsHtml(extra) {
   return '<div class="sub" style="margin-bottom:0"><b>Settings</b></div>' +
     '<label class="tgl"><input type="checkbox" id="oDeco"' + (decoOn() ? ' checked' : '') + '> Holiday decorations</label>' +
     '<div class="sub" style="font-size:15px">Small seasonal touches on the home screen. They never change the puzzles.</div>' +
     '<label class="tgl"><input type="checkbox" id="oExp"' + (expertOn() ? ' checked' : '') + '> 🧠 Expert puzzles</label>' +
-    '<div class="sub" style="font-size:15px">The Daily Three get one step harder. Still no guessing needed. Expert results are saved separately, so your normal days stay as they were. Your streak counts days of either kind.</div>' +
+    '<div class="sub" style="font-size:15px">The Daily Three get one step harder. Still no guessing needed. Expert results are saved separately, so your normal days stay as they were. Your streak counts days of either kind.</div>' + (extra || '') +
     '<div class="col"><button class="btn small" id="oDone">Done</button></div>';
 }
 function wireOptions() {
@@ -2755,7 +2851,8 @@ function bonusSolved(ms) {
   openSheet('<h2>' + (star ? 'Bonus solved! ⭐' : 'Bonus solved!') + '</h2><div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + TWISTS[tw].e + '</b><span>' + TWISTS[tw].n.toUpperCase() + '</span></div></div>' +
     '<div class="sub" style="font-size:15px">' + (star ? 'You earned the ⭐ for ' + TWISTS[tw].n.toLowerCase() + '.' : tw === 'onetry' ? 'No ⭐ this time (there was a miss), but you cracked it!' : 'No ⭐ this time, but you cracked it!') + ' ' + nextBonusLine() + '</div>' +
-    '<div class="col"><button class="btn" id="bh">‹ Back to home</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
+    '<div class="col"><button class="btn" id="bh">‹ Back to home</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>' + promoOver());
+  promoWire('over');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   document.getElementById('bh').onclick = () => { closeSheet(); renderHome(); };
 }
@@ -2785,7 +2882,7 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.12' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.13' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('help').onclick = showHelp;
@@ -3030,7 +3127,8 @@ function replaySolved(ms) {
     openSheet('<h2>' + (beat ? 'You beat your time! 🎉' : 'Nicely done!') + '</h2>' +
       '<div class="statrow"><div class="stat"><b>' + fmtT(now) + '</b><span>THIS TIME</span></div>' + (was != null ? '<div class="stat"><b>' + fmtT(was) + '</b><span>FIRST TIME</span></div>' : '') + '</div>' +
       '<div class="sub" style="font-size:16px">Just for fun: your first result, streak and goals stay as they were.</div>' +
-      '<div class="col"><button class="btn" id="home">‹ Back to home</button>' + (R.all ? '' : '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="nx">Play it again</button>') + '</div>');
+      '<div class="col"><button class="btn" id="home">‹ Back to home</button>' + (R.all ? '' : '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="nx">Play it again</button>') + '</div>' + (R.all ? promoOver() : ''));
+    promoWire('over');
   }
   const nx = document.getElementById('nx'); if (nx) nx.onclick = () => { closeSheet(); more ? startPuzzle(P.ds, P.slot + 1, R) : startReplay(P.ds, P.slot, false); };
   document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
@@ -3972,6 +4070,8 @@ window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
   remindSync(); track('app_open', { streak: streak() });
+  // Bright Harbor cross-promo (shared bh-games.js). Keys tl.v1.promo-* stay on this phone (not in CLOUD_KEYS).
+  try { if (window.BHPromo) BHPromo.init({ self: 'ahalock', prefix: '', store, track }); } catch (e) {}
   { const a = adsGet(); a.s = (a.s || 0) + 1; store.set('ads', a); } }
 // Sign in with Apple is set up for Ahalock (entitlement in ios/App/App/App.entitlements).
 if (window.BHCloud) { BHCloud.config.appleReady = true; BHCloud.onChange(() => { if (S.screen === 'home') renderCloud(); }); BHCloud.init().then(afterSync); document.addEventListener('visibilitychange', () => { if (document.hidden) BHCloud.flush(); }); }
