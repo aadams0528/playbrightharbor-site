@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 270f5f4 (PR #35) -->
+<!-- number-blast 320c43a (PR #36) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1388,7 +1388,7 @@ function blast(cascade=0){
   }
   if(rotEarned||goalsDone.some(g=>g.reward==='rotate'))rotateIntro();
   if(!tut&&longest>=5)store.set('nb-five-done',true);
-  if((earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))&&!store.get('nb-longsum-tip',false))longSumTip();
+  if((earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))&&!store.get('nb-longsum-tip',false))longSumTip(mode,true);   // the tip itself says the Eraser was earned, so the earn isn't hidden behind it (Muse round 14)
   // At most one extra message per blast so players aren't left reading a long line of them:
   // the most important one, plus the headline of the next. Every reward is still given.
   if(extras.length){
@@ -1662,7 +1662,7 @@ function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
   if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();finish(onSkip)};
 }
 const POWER_COST=30,FREE_ADS_PER_DAY=5;
-function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame();if(kind==='eraser'&&!store.get('nb-longsum-tip',false))longSumTip()}
+function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame();if(kind==='eraser'&&!store.get('nb-longsum-tip',false))longSumTip(mode,true)}
 const TOOL_TEXT={eraser:'Deletes any one block.',shuffle:'Swaps your pieces for new ones.',rotate:'Turns a piece a quarter turn.'};
 function offerPowerup(kind){
   const key='nb-free-ads-'+dayKey(),used=store.get(key,0);
@@ -1825,7 +1825,7 @@ function showModeSwitch(){
 }
 function switchMode(m){
   if(busy)return;
-  clearPending();if(!over)saveGame();closeSheet();rotateHintNow=false;
+  clearPending(true);if(!over)saveGame();closeSheet();rotateHintNow=false;   // keep queued news, so an Eraser earned on the last drop isn't lost (Muse round 14)
   if(!resumeGame('nb-save-'+m,false))newGame(m);
   news(m==='daily'?`Daily run #${dailyNo()}`:`Endless · Level ${level}`);
 }
@@ -2096,11 +2096,11 @@ function specialIntro(){
     $('sp-ok').onclick=closeSheet},600);
 }
 // After the first Eraser: a one-time card on building long sums (Alan 2026-11-08, reviewers round 6).
-function longSumTip(m=mode){
+function longSumTip(m=mode,earnedNow=false){
   setTimeout(()=>{if(over||tut||mode!==m||mode==='daily'||store.get('nb-longsum-tip',false))return;if(!$('modal').hidden)return longSumTip(m);
     store.set('nb-longsum-tip',true);
     const v=[0,1,2,3,4].map(i=>Math.floor(T/5)+(i>=5-T%5?1:0));
-    openSheet(`<h3>🧩 Build a long sum</h3><p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
+    openSheet(`<h3>🧩 Build a long sum</h3>${earnedNow?'<p class="tomorrow">🎁 You just earned an <b>Eraser</b>! Tap <b>Eraser</b>, then a block, to clear it.</p>':''}<p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
       <p>Keep one row or column open and fill it with small numbers, like <b>${v.join(' + ')} = ${T}</b>.</p>
       <p>4 blocks earn an <b>Eraser</b>. 5 blocks earn a <b>↻ Rotate</b>.</p>${tray.filter(p=>p&&p.long).length===2?`<p><b>Try it now:</b> the two straight pieces below add up to <b>${T}</b>.</p>`:''}<div class="btns"><button class="btn" id="ls-ok">Got it</button></div>`);
     $('ls-ok').onclick=closeSheet},900);
@@ -2131,7 +2131,7 @@ function clearHint(){
 $('hintbtn').onclick=()=>{
   if(tut||busy||over||erasing)return;clearHint();
   const m=bestMove();track('hint_used',{level,found:!!m});
-  if(!m){const fill=board.filter(Boolean).length;setHint();toast(`No ${T} to make right now.\n`+(fill<3?'Drop a piece to set up a sum.':erasers?'Try the Eraser.':shuffleHelps()?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
+  if(!m){const fill=board.filter(Boolean).length;setHint();toast(`No ${T} to make right now.\n`+(fill<3?'Drop a piece to set up a sum.':erasers?'Tap Eraser, then a block that is in the way.':shuffleHelps()?'Try a Shuffle.':'Drop a piece anywhere.'),false,READ_MS);return}
   const ghost=new Set(),tiles=new Map(),glow=new Set();
   tray[m.i].cells.forEach(x=>{const k=(m.r+x.r)*N+m.c+x.c;ghost.add(k);tiles.set(k,x.t)});
   m.runs.forEach(run=>run.cells.forEach(k=>glow.add(k)));
