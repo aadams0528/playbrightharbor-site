@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.25.2 (Cooper round 22 fixes) -->
+<!-- Tripsake v0.25.3 (round 23 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1458,7 +1458,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.25.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.25.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2851,13 +2851,15 @@ function momentPhoto(el, src, whole){
 }
 const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
-async function replay(id, opts = {}){
+/* a story never strands you (Muse r23): if anything goes wrong while it plays, it ends cleanly with a word, and you're back where you started */
+async function replay(id, opts = {}){ const run = {}; try { await replayRun(id, opts, run); } catch(e){ console.error(e); if (!run.token || (replayState && replayState.token === run.token) || (!replayState && document.body.classList.contains("replaying"))){ endReplay(); setTimeout(() => toast("Sorry, this story ran into a problem and stopped. Your photos are safe."), 300); } } }
+async function replayRun(id, opts, run){
   const t = findTrip(id); if (!t) return; const st = stopsOf(t); const back = ["trip", "vedit", "ready"].includes($("#overlay").dataset.kind) && TRIPS.some(x => x.id === id) ? id : null, fromEdit = $("#overlay").dataset.kind === "vedit"; /* started from the trip page: Done goes back there (Muse r20); from Edit my story, back to the editor; from the ready screen after an import, to the trip page (Cooper r21) */ $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
-  const token = {}; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back, fromEdit}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
+  const token = {}; run.token = token; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back, fromEdit}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
   const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
-    <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { const c = tripCover(t); return photo(c.scene, c.id, 1280, 960); })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
+    <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { try { const c = tripCover(t); return c ? photo(c.scene, c.id, 1280, 960) : ""; } catch(e){ return ""; } })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
     <div class="card" id="rcard" style="opacity:0"></div>
     <div class="bar"><button class="btn" id="rprev" aria-label="Previous stop">‹</button><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rskip" aria-label="Next stop">›</button><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
   const alive = () => replayState?.token === token;
@@ -2894,7 +2896,7 @@ async function replay(id, opts = {}){
     if (replayState.next){ replayState.next = false; i++; continue; } // Next pressed while arriving: go on to the next stop
     mom.querySelector(".pics").innerHTML = "";
     const VP = REC ? vidPlan(t) : null; const per = j0 => j0 === 0 ? (REC ? 6000 * VP.sc : 7000) : (REC ? 2600 * VP.sc : Math.max(1800, Math.min(3200, 9000 / Math.max(1, s.photos.length - 1)))); /* a stop with lots of photos moves along: about 16 seconds a stop at most */ let back = false; // the story card gets its own reading time on the first photo
-    const vph = REC ? vidStopPhotos(t, s, VP.cap) : vedOf(t) ? vidStopPhotos(t, s, 999) : s.photos, nPh = vph.length; let vEnd = 0; // Short and Normal videos keep fewer photos a stop; an edited video keeps your picks
+    const vph0 = REC ? vidStopPhotos(t, s, VP.cap) : vedOf(t) ? vidStopPhotos(t, s, 999) : s.photos, vphOk = vph0.filter(canShow), vph = vphOk.length ? vphOk : vph0.slice(0, 1), nPh = vph.length; /* a photo this phone can't show is skipped; a stop where none can be shown still gets its card (Muse r23) */ let vEnd = 0; // Short and Normal videos keep fewer photos a stop; an edited video keeps your picks
     for (let j = 0; j < nPh; j++){
       const ph = vph[j], last = j === nPh - 1;
       const src = photo(ph.scene, ph.id, 1280, 960), wh = VWHOLE.has(ph.id); momentPhoto(mom, src, wh); recPhoto(src, wh);
@@ -2906,7 +2908,7 @@ async function replay(id, opts = {}){
       if (fresh){ mtxt.classList.remove("show", "still"); void mtxt.offsetWidth; mtxt.classList.add("show"); } else mtxt.classList.add("show", "still");
       const hk = j === 0 ? hikesFor(t).find(x => hikeStopId(x, t) === s.id) : null; if (hk) mtxt.insertAdjacentHTML("beforeend", `<div class="who" style="color:${hikeColor()}">🥾 ${esc(hk.name)} · ${hikeLine(hk)}</div>`);
       if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:hk ? `🥾 ${hk.name} · ${hikeLine(hk)}` : last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
-      mom.classList.add("on"); prog((i + (j+1)/s.photos.length) / st.length);
+      mom.classList.add("on"); prog((i + (j+1)/nPh) / st.length);
       if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
       await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
       // a voice note gets to finish before the story moves on
@@ -2925,10 +2927,10 @@ async function replay(id, opts = {}){
   if (goBack()){ i = st.length - 1; jump = true; continue story; }
   music.soften();
   { const pb = document.getElementById("rpause"); if (pb) pb.style.visibility = "hidden"; } /* the story is over, so there's nothing to pause */
-  const card = document.getElementById("rcard");
+  const card = document.getElementById("rcard"); const doneLabel = replayState.fromEdit ? "Back to Edit my story" : replayState.fromTrip && !REC ? `${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}` : "Back to globe"; /* the guided first story names where Done goes too (Muse r23) */
   card.innerHTML = opts.guided
-    ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>Back to my globe</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
-    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${replayState.fromEdit ? "Back to Edit my story" : replayState.fromTrip && !REC ? `${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}` : "Back to globe"}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
+    ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
+    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
   card.style.opacity = 1; prog(1);
   if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
   // the end card stays until you leave; Previous goes back to the last stop
@@ -2944,7 +2946,7 @@ function endReplay(){
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
   const back = replayState && (cut && TRIPS.includes(replayState.trip) ? replayState.trip.id : replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null), toEdit = back && !cut && replayState.fromEdit;
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
-  if (back && TRIPS.some(x => x.id === back)){ setTimeout(() => { if (!replayState){ if (toEdit) openVideoEdit(back); else openTrip(back); } }, 250); return; } /* after the story has wound down */
+  if (back && TRIPS.some(x => x.id === back)){ if (toEdit) openVideoEdit(back); else openTrip(back); return; } /* straight back, with no flash of the trips list in between (Cooper r23) */
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
 
@@ -3352,7 +3354,8 @@ function openVideoSheet(blob, t, secs, audio){
   const ext = blob.type.includes("mp4") ? "mp4" : "webm"; const name = (t.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "trip") + "." + ext;
   VMADE.add(t.id); store.set("vidMade", [...VMADE]); if (lastVideo) URL.revokeObjectURL(lastVideo.url); const url = URL.createObjectURL(blob); lastVideo = {url, file:new File([blob], name, {type:blob.type}), title:t.title};
   const share = !!(navigator.canShare && (() => { try { return navigator.canShare({files:[lastVideo.file]}); } catch(e){ return false; } })());
-  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Your shareable video")}
+  /* its way back is the trip it was made from, wherever you started it (Muse r23) */
+  openSheet(`${TRIPS.includes(t) ? TRIPBAR(t) : ""}<div class="pad" style="padding-top:18px">${sheetHead("Your shareable video")}
     <video src="${url}" controls playsinline style="width:100%;max-height:52vh;border-radius:14px;background:#000"></video>
     <p class="note" style="margin:0">${esc(t.title)} · ${secs} seconds · ${(blob.size / 1048576).toFixed(1)} MB · ${ext.toUpperCase()}${audio ? " with music" : ", no music"}. It was made on this device and nothing was uploaded.</p>
     ${share ? `<button class="btn primary playbig" data-video-share>📤 Share to Instagram, TikTok, Facebook, Messages…</button><p class="note" style="margin:-4px 0 0;font-size:calc(16px * var(--fs,1))">Your phone shows every app you can share to.</p>` : ""}<div class="row-btns" style="margin:0"><a class="btn${share ? "" : " primary"}" href="${url}" download="${esc(name)}">Save video</a><button class="btn" data-vedit="${t.id}">✎ Edit my story</button>${TRIPS.includes(t) ? `<button class="btn" data-open-trip="${t.id}">Done</button>` : `<button class="btn" data-close>Done</button>`}</div>
