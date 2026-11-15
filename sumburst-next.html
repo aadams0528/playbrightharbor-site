@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 98aada1 (PR #39) -->
+<!-- number-blast c67b7d4 (PR #42) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -124,6 +124,7 @@ body.tw-bombs .tile.hasbomb{animation:bombPulse 1.4s ease-in-out infinite}
   box-shadow:inset 0 -4px 0 rgba(0,0,0,.18),inset 0 2px 0 rgba(255,255,255,.45);position:relative}
 .tile.land{animation:land .18s ease-out}
 @keyframes land{0%{transform:scale(1.15)}100%{transform:scale(1)}}
+.tile.near{box-shadow:inset 0 0 0 4px var(--gold),0 0 12px rgba(245,179,1,.7)}
 .tile.glow{outline:3px solid var(--gold);outline-offset:-1px;box-shadow:0 0 14px var(--gold)}
 .tile.toomuch{outline:3px solid var(--over);outline-offset:-1px}
 .tile.toomuch::after{content:'';position:absolute;inset:0;border-radius:inherit;background:var(--over);opacity:.45}
@@ -312,7 +313,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <nav class="tabbar" aria-label="Menu">
   <button id="tab-quests" class="tab" type="button"><span class="ti" aria-hidden="true">🎯</span>Quests<i class="dot" id="questdot" hidden></i></button>
   <button id="tab-sums" class="tab" type="button"><span class="ti" aria-hidden="true">📒</span>Sums</button>
-  <button id="tab-mode" class="tab" type="button"><span class="ti" aria-hidden="true" id="mode-icon">📅</span><span id="mode-label">Daily</span></button>
+  <button id="tab-mode" class="tab" type="button"><span class="ti" aria-hidden="true" id="mode-icon">☀️</span><span id="mode-label">Daily</span></button>
   <button id="tab-help" class="tab" type="button"><span class="ti" aria-hidden="true">❓</span>Help</button>
 </nav>
 <template id="help-tpl">
@@ -322,7 +323,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <div class="helpbody">
     <ul>
       <li><b>Goal:</b> drag number blocks onto the board. When touching blocks in a row or column add up to <b>exactly</b> the big target number, they blast.</li>
-      <li>The whole group counts, from one gap to the next. If a group goes over the target it stays stuck, so watch where you drop. While you drag, <b>gold</b> means it will blast and <b>red</b> means it's too much.</li>
+      <li>The whole group counts, from one gap to the next. If a group goes over the target it stays stuck, so watch where you drop. While you drag, <b>gold</b> means it will blast and <b>red</b> means it's too much. In levels 1 to 5, a soft gold edge shows a group that one more block can finish.</li>
       <li><b>Longer sums score more:</b> 2 blocks x1, 3 blocks x2, 4 blocks x3, 5 or more x4. So 2 + 3 + 5 beats 4 + 6.</li>
       <li><b>Combos:</b> one drop that blasts two sums (a row and a column) adds 50% for each extra sum.</li>
       <li><b>Hint:</b> tap 💡 to see a drop that blasts (shown faded, with a dotted gold edge).</li>
@@ -345,7 +346,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <li><b>Endless</b> starts easy and gets harder each level. The <b>📅 Daily run</b> gives everyone the same pieces today and ends when no piece fits. Clear level 1, 3 and 5 for up to 3 ⭐ (all 3 in a day pays 10 🪙); 15 ⭐ in a week opens a 🎁 coin chest. Switching between them keeps your place in each.</li>
     </ul>
     <div class="btns"><button type="button" class="btn plain" id="tut-replay">Replay the tutorial</button></div>
-    <p class="tester" hidden>Sumburst 1.3.3 test version · ads and purchases are samples.</p>
+    <p class="tester" hidden>Sumburst 1.3.6 test version · ads and purchases are samples.</p>
     <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
@@ -652,6 +653,23 @@ function groups(b,each){
   }
 }
 const hits=(sum,stars)=>stars===0?sum===T:(T-sum>=stars&&T-sum<=9*stars);
+// Levels 1 to 5 (Alan's choice after Muse round 16): at rest, a group of 2+ blocks that one more block could finish
+// glows soft gold. Its sum is 1 to 9 short of the target and an end square is free (and not touching another group).
+const NEAR_TO=5;
+function nearSums(b){
+  const out=new Set();if(tut||level>NEAR_TO)return out;const ml=minLen();
+  for(const dir of ['r','c'])for(let k=0;k<N;k++){
+    const line=lineIdx(dir,k);let i=0;
+    while(i<N){
+      if(!b[line[i]]){i++;continue}
+      let j=i,sum=0,star=false;while(j<N&&b[line[j]]){const t=b[line[j]];if(t.star)star=true;else sum+=t.v;j++}
+      const free=(e,d)=>e>=0&&e<N&&!b[line[e]]&&(e+d<0||e+d>=N||!b[line[e+d]]);
+      if(!star&&j-i>=2&&j-i+1>=ml&&T-sum>=1&&T-sum<=9&&(free(i-1,-1)||free(j,1)))line.slice(i,j).forEach(x=>out.add(x));
+      i=j;
+    }
+  }
+  return out;
+}
 function findRuns(b){const runs=[],ml=minLen();groups(b,(cells,dir,sum,stars)=>{if(cells.length>=ml&&hits(sum,stars))runs.push({cells,dir})});return runs}
 function tooMuch(b,touched){const out=new Set();groups(b,(cells,dir,sum,stars)=>{if(sum+stars>T&&cells.some(k=>touched.has(k)))cells.forEach(k=>out.add(k))});return out}
 function fitsAt(p,r,c){return p.cells.every(x=>{const rr=r+x.r,cc=c+x.c;return rr>=0&&cc>=0&&rr<N&&cc<N&&!board[rr*N+cc]})}
@@ -1131,10 +1149,18 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){endSession
 const READ_MS=3200, CASH_MS=2400;
 // News (quest done, new sum, milestones) waits its turn in a line and shows one at a time.
 // The next blast doesn't cut it short, and it waits while a pop-up (like level complete) is open.
-let newsQ=[],newsTimer=null,newsWait=0,cantQueued=false;
+let newsQ=[],newsTimer=null,newsWait=0,cantQueued=false,curNews=null;
 // first=true puts it at the front of the line, for news about the drop just made (Muse round 13: earned tools came too late).
 // Several "first" items keep their own order, so a tool earned on a drop stays ahead of the halfway note (Nikola round 14).
-function news(text,big=false,onShow,first=false){const it=[text,big,onShow,first],i=first?newsQ.findIndex(x=>!x[3]):-1;i<0?newsQ.push(it):newsQ.splice(i,0,it);if(!newsTimer)nextNews()}
+// first='now' shows it at once on its own row under the drop's message (or right after the news showing now).
+function news(text,big=false,onShow,first=false){
+  if(first==='now'){
+    const j=newsQ.findIndex(x=>!x[4]);newsQ.splice(j<0?newsQ.length:j,0,[text,big,onShow,true,true]);
+    // Older news on screen steps aside and comes back right after (Muse round 16: earns were seen late).
+    const cur=$('lane-news').firstChild;
+    if(cur&&curNews&&!curNews[4]){cur.remove();const k=newsQ.findIndex(x=>!x[4]);newsQ.splice(k<0?newsQ.length:k,0,[curNews[0],curNews[1],null,true]);curNews=null}
+    if(!$('lane-news').firstChild){clearTimeout(newsTimer);nextNews()}return}
+  const it=[text,big,onShow,first],i=first?newsQ.findIndex(x=>!x[3]):-1;i<0?newsQ.push(it):newsQ.splice(i,0,it);if(!newsTimer)nextNews()}
 // A "+1" rises from a tool's button the moment it is earned, even if a level card is about to open (Nikola round 14).
 function earnFly(el,n){if(!el||!n)return;const b=el.getBoundingClientRect(),f=document.createElement('span');f.className='earnfly';f.textContent='+'+n;
   f.style.left=(b.left+b.width/2)+'px';f.style.top=b.top+'px';document.body.appendChild(f);setTimeout(()=>f.remove(),1500)}
@@ -1142,9 +1168,9 @@ function nextNews(){
   newsTimer=null;if(!newsQ.length)return;
   if(!$('modal').hidden||!$('over').hidden){newsTimer=setTimeout(nextNews,400);return}
   // Let a blast message finish first so both don't squeeze into the box (but never wait more than ~2s).
-  if($('lane-main').firstChild&&newsWait++<8){newsTimer=setTimeout(nextNews,250);return}
+  if(!newsQ[0][4]&&$('lane-main').firstChild&&newsWait++<8){newsTimer=setTimeout(nextNews,250);return}
   newsWait=0;
-  const [text,big,onShow]=newsQ.shift();onShow&&onShow();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
+  curNews=newsQ.shift();const [text,big,onShow]=curNews;onShow&&onShow();toast(text,big,READ_MS,'news');newsTimer=setTimeout(nextNews,READ_MS+150);
 }
 function clearPending(keepNews){
   if(!keepNews){newsQ=[];clearTimeout(newsTimer);newsTimer=null;cantQueued=false}
@@ -1174,7 +1200,8 @@ function tileHTML(t){
 function buildBoard(){boardEl.innerHTML='';for(let i=0;i<N*N;i++){const d=document.createElement('div');d.className='cell';d.dataset.i=i;boardEl.appendChild(d)}}
 const tutCell=()=>tut?LESSONS[tut.step].cell:-1;
 function renderBoard(pv){
-  const cells=boardEl.children;
+  const cells=boardEl.children,near=pv?new Set():nearSums(board);
+  if(near.size&&!store.get('nb-near-seen',false)){store.set('nb-near-seen',true);news(`✨ A soft gold edge means one more block can make ${T}.`,true)}
   for(let i=0;i<N*N;i++){
     const el=cells[i],t=board[i];let cls='cell',html=tileHTML(t);
     if(pv&&pv.ghost.has(i)){html=tileHTML(pv.tiles.get(i));cls+=' ghost'+(pv.hint?' hintg':'')}
@@ -1185,7 +1212,7 @@ function renderBoard(pv){
     el.className=cls;
     if(el._h!==html){el.innerHTML=html;el._h=html}
     const tile=el.firstElementChild;
-    if(tile){tile.classList.toggle('glow',!!(pv&&pv.glow.has(i)));tile.classList.toggle('toomuch',!!(pv&&pv.much.has(i)&&!pv.glow.has(i)))}
+    if(tile){tile.classList.toggle('glow',!!(pv&&pv.glow.has(i)));tile.classList.toggle('toomuch',!!(pv&&pv.much.has(i)&&!pv.glow.has(i)));tile.classList.toggle('near',near.has(i))}
   }
 }
 function pieceSize(p){return {rows:Math.max(...p.cells.map(c=>c.r))+1,cols:Math.max(...p.cells.map(c=>c.c))+1}}
@@ -1431,20 +1458,21 @@ function blast(cascade=0){
   const how=[k===1&&mult(longest)>1&&`${longest} blocks x${mult(longest)}`,tw2.some(x=>x>1)&&`⚡ x2`,chainX>1&&`chain x${chainX}`,extra.size&&`💣 +3 each`].filter(Boolean).join(' · ');
   // The day's streak bonus rides on this same message, so it is never lost in the queue (Muse round 10).
   const st=tut?null:markPlayed(),stTxt=st?` · 🔥 Day ${st.n} streak +${st.bonus} 🪙`:'';
-  // From level 30, the drop that reaches half the goal says so on this same message, the one the player is
-  // watching, so it can't get lost behind other news (Muse round 15: not seen in three rounds).
-  let halfTxt='';
+  // From level 30, the drop that reaches half the goal says so at once, on its own row right under this drop's
+  // message, so it can't get lost behind other news (Muse round 15) or crowd the points line (Cooper round 16).
+  let halfNow=false;
   if(!tut&&!over&&level>=HALF_FROM&&!halfPaid&&levelPts()>=goalFor(level)/2&&levelPts()<goalFor(level)){
-    halfPaid=true;addCoins(HALF_COINS);track('halfway',{level});halfTxt=` · 🎯 Halfway! +${HALF_COINS} 🪙`;bumpEl($('coinpill'));
+    halfPaid=halfNow=true;addCoins(HALF_COINS);track('halfway',{level});bumpEl($('coinpill'));
   }
   // Two short lines in the message strip: what you made, then what it scored.
   // Earned tools get their own message next, so the two-line strip never cuts them off (Nikola r11, Muse r12).
-  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt+halfTxt,longest>=4||k>1||extra.size>0||!!st||!!halfTxt,halfTxt?READ_MS:CASH_MS);
-  // A tool you would have earned but already hold 3 of says so, once a level per tool (Nikola round 12).
-  const capNew=[...capHit].filter(x=>!capNoted.has(x));capNew.forEach(x=>capNoted.add(x));
-  const capTxt=capNew.length?capNew.map(x=>`${x} full (${MAX_OF[x]})`).join(' · '):'';
-  if(got)news(`🎁 ${got} earned!`,true,null,true);
-  if(capTxt)news(`🧰 ${capTxt}: use one to earn more`,false,null,!got);
+  toast((praise?praise+' ':'')+label+`\n+${total}`+(how?` (${how})`:'')+stTxt,longest>=4||k>1||extra.size>0||!!st,halfNow?READ_MS:CASH_MS);
+  if(halfNow)news(`🎯 Halfway there! +${HALF_COINS} 🪙 · ${goalFor(level)-levelPts()} to go`,true,null,'now');
+  // A tool you would have earned but already hold 3 of says so, every time (Nikola round 12, Muse round 16).
+  const capTxt=capHit.size?[...capHit].map(x=>`${x} full (${MAX_OF[x]})`).join(' · '):'';
+  // Earned tools and a full tool show at once under the drop's message, not after it fades (Muse round 16).
+  if(got)news(`🎁 ${got} earned!`,true,null,'now');
+  if(capTxt)news(`🧰 ${capTxt}: use one to earn more`,false,null,'now');
   // The tool's own button bounces right away, so an earn is seen even before its message comes up.
   if(toolN.Eraser)bumpEl($('eraser')),earnFly($('eraser'),toolN.Eraser);
   if(toolN.Shuffle)bumpEl($('shuffle')),earnFly($('shuffle'),toolN.Shuffle);
@@ -1464,7 +1492,7 @@ function blast(cascade=0){
   }
   if(rotEarned||goalsDone.some(g=>g.reward==='rotate'))rotateIntro();
   if(!tut&&longest>=5)store.set('nb-five-done',true);
-  if((earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))&&!store.get('nb-longsum-tip',false))longSumTip(mode,true);   // the tip itself says the Eraser was earned, so the earn isn't hidden behind it (Muse round 14)
+  if((earned||goalsDone.some(g=>g.reward==='eraser'&&!g.full))&&!store.get('nb-longsum-tip',false))longSumTip(mode,toolN.Eraser||1,questN.Eraser||0);   // the tip itself says the Eraser was earned, so the earn isn't hidden behind it (Muse round 14)
   // At most one extra message per blast so players aren't left reading a long line of them:
   // the most important one, plus the headline of the next. Every reward is still given.
   if(extras.length){
@@ -1554,7 +1582,8 @@ function seedStarters(n,bomb=false,star=false){
 function levelUp(){
   busy=true;erasing=false;lockMovable();clearPending(true);track('level_complete',{mode,level});
   // Tools earned on the level's last drop are named on the level card, not a level late (Muse round 15).
-  const lastEarn=newsQ.filter(x=>/^🎁 .* earned!$/.test(x[0])).map(x=>x[0]);newsQ=newsQ.filter(x=>!lastEarn.includes(x[0]));
+  const isEarn=x=>x&&/^🎁 .* earned!$/.test(x[0]),lastEarn=newsQ.filter(isEarn).map(x=>x[0]);newsQ=newsQ.filter(x=>!lastEarn.includes(x[0]));
+  if(isEarn(curNews)&&$('lane-news').firstChild){lastEarn.unshift(curNews[0]);$('lane-news').firstChild.remove();curNews=null;msgState()}
   if(mode==='endless'){stats.topLevel=Math.max(stats.topLevel,level+1);store.set('nb-stats',stats)}
   const paid3=mode==='daily'&&dailyStars(level);hudCleared=level;renderHUD();
   saveGame();   // a reload on the level-complete card comes back to this card, not to the drop before it (Nikola round 10)
@@ -1741,7 +1770,7 @@ function sampleAd(onReward,onSkip=()=>{},title='Sample ad',forced=false){
   if($('adskip'))$('adskip').onclick=()=>{clearInterval(iv);closeSheet();finish(onSkip)};
 }
 const POWER_COST=30,FREE_ADS_PER_DAY=5;
-function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame();if(kind==='eraser'&&!store.get('nb-longsum-tip',false))longSumTip(mode,true)}
+function giveTool(kind){if(kind==='eraser')erasers=Math.min(MAX_ERASERS,erasers+1);else if(kind==='rotate')rotates=Math.min(MAX_ROTATES,rotates+1);else shuffles=Math.min(MAX_SHUFFLES,shuffles+1);toast('+1 '+kind);renderHUD();saveGame();if(kind==='eraser'&&!store.get('nb-longsum-tip',false))longSumTip(mode,1)}
 const TOOL_TEXT={eraser:'Deletes any one block.',shuffle:'Swaps your pieces for new ones.',rotate:'Turns a piece a quarter turn.'};
 function offerPowerup(kind){
   const key='nb-free-ads-'+dayKey(),used=store.get(key,0);
@@ -1905,7 +1934,7 @@ function showModeSwitch(){
 function switchMode(m){
   if(busy)return;
   clearPending(true);if(!over)saveGame();closeSheet();rotateHintNow=false;   // keep queued news, so an Eraser earned on the last drop isn't lost (Muse round 14)
-  if(!resumeGame('nb-save-'+m,false))newGame(m);
+  if(!resumeGame('nb-save-'+m,false))newGame(m,true);   // a first-ever Daily keeps queued news too (Flint, Muse round 16)
   news(m==='daily'?`Daily run #${dailyNo()}`:`Endless · Level ${level}`);
 }
 function showHelp(){
@@ -1974,7 +2003,8 @@ function confirmDeleteAccount(){
     renderCloudBox();
   };
 }
-function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'📅';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
+// The Daily tab shows ☀️, not 📅: phones draw that emoji with a fixed date, "17" (Muse round 16).
+function renderModeTab(){$('mode-icon').textContent=mode==='daily'?'♾️':'☀️';$('mode-label').textContent=mode==='daily'?'Endless':'Daily'}
 function questNews(){$('questdot').hidden=false;bumpEl($('tab-quests'))}
 $('tab-quests').onclick=()=>tabClick('quests',showQuests);
 $('tab-sums').onclick=()=>tabClick('sums',showSums);
@@ -2081,8 +2111,8 @@ function resumeGame(key='nb-save',welcome=true){
   else if(!over&&welcome)news(`Welcome back!\nLevel ${level} · make ${T}`);
   return true;
 }
-function newGame(m){
-  mode=m;clearPending();track('game_start',{mode:m});
+function newGame(m,keepNews=false){
+  mode=m;clearPending(keepNews);track('game_start',{mode:m});
   if(m==='daily'&&!store.get('nb-daily-started',false)){store.set('nb-daily-started',true);track('first_daily_start',{session:sessionsPlayed})}
   rng=mode==='daily'?mulberry(hash('numberblast-'+dayKey())):mulberry(Math.floor(Math.random()*2**31));
   level=1;levelBase=0;score=0;T=targetFor(1);board=Array(N*N).fill(null);erasers=0;shuffles=0;toShuffle=0;rotates=0;rotating=false;rotPaid=null;chain=0;chainMoves=0;
@@ -2176,11 +2206,12 @@ function specialIntro(){
     $('sp-ok').onclick=closeSheet},600);
 }
 // After the first Eraser: a one-time card on building long sums (Alan 2026-11-08, reviewers round 6).
-function longSumTip(m=mode,earnedNow=false){
-  setTimeout(()=>{if(over||tut||mode!==m||mode==='daily'||store.get('nb-longsum-tip',false))return;if(!$('modal').hidden)return longSumTip(m);
+// earned: Erasers just earned (q of them from a quest), named at the top so the count matches the 🎁 line (Muse round 16).
+function longSumTip(m=mode,earned=0,q=0){
+  setTimeout(()=>{if(over||tut||mode!==m||mode==='daily'||store.get('nb-longsum-tip',false))return;if(!$('modal').hidden)return longSumTip(m,earned,q);
     store.set('nb-longsum-tip',true);
     const v=[0,1,2,3,4].map(i=>Math.floor(T/5)+(i>=5-T%5?1:0));
-    openSheet(`<h3>🧩 Build a long sum</h3>${earnedNow?'<p class="tomorrow">🎁 You just earned an <b>Eraser</b>! Tap <b>Eraser</b>, then a block, to clear it.</p>':''}<p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
+    openSheet(`<h3>🧩 Build a long sum</h3>${earned?`<p class="tomorrow">🎁 You just earned ${earned>1?`<b>${earned} Erasers</b>${q?` (${q} from a quest)`:''}`:`an <b>Eraser</b>${q?' (from a quest)':''}`}! Tap <b>Eraser</b>, then a block, to clear it.</p>`:''}<p>Longer sums score more: <b>3 blocks x2, 4 blocks x3, 5 blocks x4</b>.</p>
       <p>Keep one row or column open and fill it with small numbers, like <b>${v.join(' + ')} = ${T}</b>.</p>
       <p>4 blocks earn an <b>Eraser</b>. 5 blocks earn a <b>↻ Rotate</b>.</p>${tray.filter(p=>p&&p.long).length===2?`<p><b>Try it now:</b> the two straight pieces below add up to <b>${T}</b>.</p>`:''}<div class="btns"><button class="btn" id="ls-ok">Got it</button></div>`);
     $('ls-ok').onclick=closeSheet},900);
