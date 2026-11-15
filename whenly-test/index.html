@@ -261,6 +261,9 @@ body.banner .sheet{padding-bottom:calc(80px + 2*env(safe-area-inset-bottom,0px))
 .sheet p{margin:0}
 .remind{border:1px dashed var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}.remind p{margin:0;font-weight:700}
 .remind select,.remindset select{font:inherit;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.steps{margin:0;padding-left:26px;display:flex;flex-direction:column;gap:8px}.steps li{padding-left:2px}
+details.rules{border:1px solid var(--line);border-radius:14px;padding:10px 12px}details.rules>summary{font-weight:700;cursor:pointer;min-height:32px}details.rules[open]>summary{margin-bottom:10px}details.rules>p{margin:0 0 10px}
+.missfix{margin:0;font-size:18px;line-height:1.35;padding:10px 12px;border-radius:12px;background:var(--plate)}
 .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:16px;text-decoration:underline;cursor:pointer;padding:4px;align-self:center}
 body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
 .remindset{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:700}
@@ -376,12 +379,12 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
   <section id="archive" hidden></section>
   <section id="expert" hidden></section>
   <nav class="bnav" role="tablist" aria-label="Modes">
-    <button role="tab" id="tDaily" aria-selected="true"><span class="ni">📅</span>Today</button>
+    <button role="tab" id="tDaily" aria-selected="true"><span class="ni">☀️</span>Today</button>
     <button role="tab" id="tArchive" aria-selected="false"><span class="ni">🗂️</span>Archive</button>
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 39</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 41</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1409,7 +1412,7 @@ function drawChips(){
 const isPlaced=id=>(G.placed||[]).includes(id);
 function keepPlaced(order){const t=sortIds(G.ids),free=order.filter(id=>!isPlaced(id));return t.map(id=>isPlaced(id)?id:free.shift())}
 // Hard puzzles announce the count-only rule before the first Check (Muse, Nikola, Cooper, Nov 9).
-function hardIntro(){return `<span class="hardtag">${G.tw?"⚡ Challenge":G.kind==="practice"?"Hard puzzle":"Hard day"} · counts only</span> A check says how many pairs are in order, not which.`}
+function hardIntro(){return `<span class="hardtag">${G.tw?"⚡ Challenge":G.kind==="practice"?"Hard puzzle":"Hard day"} · counts only</span> A check says how many pairs are in order, not which. Drag a card, or tap it and then its new spot.`}
 function move(id,d){if(G.done)return;if(isPlaced(id)){toast("📌 That card is placed in its spot");return}
   const free=G.order.filter(x=>!isPlaced(x)),i=free.indexOf(id),j=i+d;if(j<0||j>=free.length)return;
   [free[i],free[j]]=[free[j],free[i]];const t=sortIds(G.ids);G.order=t.map(x=>isPlaced(x)?x:free.shift());
@@ -1629,13 +1632,20 @@ function timeline(){
   const t=sortIds(G.ids),y=t.map(yr),lo=y[0],span=Math.max(1,y[y.length-1]-lo),x=y.map(v=>(v-lo)/span*100);
   for(let i=1;i<x.length;i++)x[i]=Math.max(x[i],x[i-1]+11);
   const over=x[x.length-1]-100;if(over>0)for(let i=x.length-1;i>=0;i--){x[i]-=over;if(i<x.length-1)x[i]=Math.min(x[i],x[i+1]-11)}
-  for(let i=0;i<x.length;i++)x[i]=5+x[i]*.9; // keep the end dots and their years inside the card
+  for(let i=0;i<x.length;i++)x[i]=9+x[i]*.82; // keep the end dots and their years well inside the card
   let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
   return `<div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
 }
 function surpriseCard(){ // the card you had furthest from its spot (or the oldest card if you were perfect)
   const t=sortIds(G.ids);let id=t[0],far=0;
   (G.finalOrder||t).forEach((c,i)=>{const d=Math.abs(t.indexOf(c)-i);if(d>far){far=d;id=c}});return id;
+}
+// One insight right after a miss (Cooper, round 19): the first pair still out of order, with years, before any arithmetic.
+function missFix(){
+  if(G.gaveUp||G.marks.every(m=>m==="g"))return "";
+  const o=G.finalOrder||G.order;for(let i=0;i<o.length-1;i++){const a=o[i],b=o[i+1];if(yr(a)>yr(b))
+    return `<p class="missfix">🔁 <b>${EVENTS[b][2]}</b> (${yr(b)}) came before <b>${EVENTS[a][2]}</b> (${yr(a)}).</p>`}
+  return "";
 }
 function showResult(){
   const r=$("#result"),n=G.ids.length;$("#board").after($("#stories"));
@@ -1656,11 +1666,12 @@ function showResult(){
     <div class="row">
       ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
+    ${missFix()}
     ${chalResult()}
     ${daily&&S.giftDay===G.n+1&&!S.giftPaid?`<p class="tomorrow gift">🎁 <b>Day 1 done!</b> Come back tomorrow for puzzle #${G.n+1} and get a free ❄️ streak freeze.</p>`:""}
     ${daily&&S.played===CHAL_AT&&!S.chalTest?`<p class="firstday">⚡ <b>New: Challenges!</b> Practice now has a ⚡ button: one puzzle a day with a twist, worth +${CHAL_PTS} history points.</p>`:""}
     ${daily&&S.played===1?`<p class="firstday">🎲 <b>Play more</b> gives you ${EXTRA_A_DAY} extra puzzles a day that earn history points. Past days are in <b>Archive</b>, and <b>Expert</b> asks for exact years. Both are in the bar at the bottom.</p>`:""}
-    ${daily?`${themeOf(G.n+1)?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)}</b> · ${LEVELS[dayLevel(G.n+1)]}<br>${teaserOf(G.n+1)}</p>`:""}<p class="next">${G.note?G.note+"<br>":""}Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Puzzle #${G.n+1} in <b id="cd"></b></p>`:""}
+    ${daily?`<p class="tomorrow">🔮 <b>Tomorrow: ${themeOf(G.n+1)||"a new mix"}</b> · ${LEVELS[dayLevel(G.n+1)]}<br>${teaserOf(G.n+1)}</p><p class="next">${G.note?G.note+"<br>":""}Streak: <b>${S.streak}</b> ${S.streak===1?"day":"days"} · ❄️ Freezes: ${S.freezes} · Puzzle #${G.n+1} in <b id="cd"></b></p>`:""}
     ${daily||G.kind==="archive"||G.kind==="practice"?`<button class="linkbtn wklink" id="bWk">🗓️ Weekly goals: ${wgState().s.got.length} of 5 done · See them</button>`:""}
     <p class="star why" style="margin:0">${how}. ${whyLine()}</p>
     ${timeline()}
@@ -1836,6 +1847,13 @@ function sheet(html,btn="Got it"){const s=document.createElement("div");s.classN
   s.addEventListener("click",e=>{if(e.target===s||e.target.hasAttribute("data-close"))s.remove()});document.body.appendChild(s);// Focus the close button without scrolling, so long sheets like How to play open at the top (Muse, round 16).
   const c=s.querySelector("[data-close]");if(c)c.focus({preventScroll:true});s.firstElementChild.scrollTop=0;return s}
 function help(){sheet(`<h2>How to play</h2>
+  <div id="textHelp"></div>
+  <ol class="steps">
+    <li><b>Put the five cards in order, oldest at the top.</b> Drag a card, or tap it and then its new spot.</li>
+    <li><b>Tap Check my order.</b> You get 3 tries.</li>
+    <li><b>Read the tags.</b> A green ✓ between two cards means that pair is in order. A red × means it's out of order.</li>
+  </ol>
+  <details class="rules"><summary>All the rules: hints, scoring, streaks and modes</summary>
   <p>You get five things from history: inventions, events, famous firsts.</p>
   <p><b>Put them in order, oldest at the top.</b> Drag a card, tap its arrows, or tap a card and then the card whose spot it should take.</p>
   <p>Tap <b>Check my order</b>. You get 3 tries. After each try, a green ✓ between two cards means they're in the right order, and a red × means those two are out of order. A tag is about that pair only, not a card's final spot. Tags follow the cards as you move them, and only show pairs a check has proved; a new pair stays blank until you check again.</p>
@@ -1846,10 +1864,11 @@ function help(){sheet(`<h2>How to play</h2>
   <p><b>Score:</b> up to 100, for pairs in the right order and cards close to their spots. Solving on your first try scores highest.</p>
   <p><b>Streaks:</b> play every day to build a streak. Earn 1 ❄️ freeze every 7 days in a row, up to 2. Each one covers 1 missed day automatically. If you miss more days than you have freezes, your streak starts over and you keep your freezes.</p>
   <p><b>Archive:</b> play any past day's puzzle. <b>Expert:</b> type the exact year of each card, scored by how close you get.</p>
-  <p>A new puzzle comes every day at midnight. The week gets harder as it goes: Monday and Tuesday Easy, Wednesday and Thursday Medium, Friday Tricky, and Saturday and Sunday Hard. The label at the top shows each puzzle's level. On a Hard puzzle, a check only says how many neighbors are in order, not which ones, and history points are worth 1.5 times as much. The daily earns full points; Archive, Practice and Expert earn half, and Practice and Expert each earn points for your first 3 games a day. There's no timer.</p>
+  <p><b>Each day:</b> a new puzzle at midnight, with no timer. Easy early in the week, Hard on the weekend. The label at the top shows the level. On Hard, a check only says how many pairs are in order, and points count 1.5 times.</p>
+  <p><b>Points:</b> the Daily earns full points. Archive, Practice and Expert earn half, for your first 3 Practice and 3 Expert games a day.</p>
   <p><b>🗓️ Weekly goals:</b> five goals each week, the same for everyone, in 📊 Stats. Each one earns ${WG_PTS} history points, and finishing all five earns ${WG_ALL} more and a ❄️ freeze (or 25 more points if you already have 2). A ⚡ goal can show up once challenges unlock. New goals every Monday.</p>
   <p><b>⚡ Challenges:</b> after ${CHAL_AT} Dailies, Practice adds a ⚡ button: one puzzle a day with a twist (Count only, One century, Photo finish or No helpers). Get all five in order for +${CHAL_PTS} history points. Every 3rd challenge, you pick the twist.</p>
-  <div id="textHelp"></div>
+  </details>
   <div id="decoHelp"></div>
   ${promoHelp()}
   <p style="color:var(--muted);font-size:15px">Card photos are public domain or CC0, from Wikimedia Commons.</p>
@@ -1895,7 +1914,7 @@ function stats(){
   const max=Math.max(1,...TIERS.map(t=>S.tiers[t[1]]||0)),td=S.days[dayNum()],mine=td&&td.g&&td.g.done?tier(td.g.score):"";
   sheet(`<h2>Your stats</h2>
   ${weeklyHtml()}
-  <div class="stats"><div><b>${S.played}</b><span>Played on the day</span></div><div><b>${S.played?Math.round(S.total/S.played):0}</b><span>Avg score</span></div><div><b>${S.streak}</b><span>Streak</span></div><div><b>${S.best}</b><span>Best streak</span></div></div>
+  <div class="stats"><div><b>${S.played}</b><span>Dailies played</span></div><div><b>${S.played?Math.round(S.total/S.played):0}</b><span>Avg score</span></div><div><b>${S.streak}</b><span>Streak</span></div><div><b>${S.best}</b><span>Best streak</span></div></div>
   <p>🏅 <b>${RANKS[rankOf(S.hp||0)][1]}</b> · ${S.hp||0} history points${S.wk&&S.wk.w===weekNo()?` · ${S.wk.pts} this week`:""}. Each puzzle adds its score times its difficulty. The daily earns full rate; Archive, Practice and Expert earn half, and Practice and Expert each count your first 3 games a day.${RANKS[rankOf(S.hp||0)+1]?` ${RANKS[rankOf(S.hp||0)+1][0]-(S.hp||0)} more to reach ${RANKS[rankOf(S.hp||0)+1][1]}.`:""}</p>
   <p style="font-weight:700;margin-bottom:6px">Streak badges</p><div class="badges">${MILESTONES.map(m=>`<span class="${S.best>=m?"got":""}">${S.best>=m?"🏆":"🔒"} ${m} days</span>`).join("")}</div>
   <p>❄️ Streak freezes: <b>${S.freezes}</b> of 2. Earn 1 every 7 days in a row. Each one covers 1 missed day automatically.</p>
@@ -2215,7 +2234,7 @@ function newChallenge(tw){
   track("challenge_start",{twist:tw,try:c.tries});
 }
 const twistRule=()=>G.tw==="century"&&G.twLabel?`All five cards are from ${G.twLabel}.`:TWISTS[G.tw].rule;
-function chalLine(){return `<b>⚡ ${TWISTS[G.tw].name} · ${LEVELS[levelOf(G.ids)]}:</b> ${twistRule()} Get them all in order for +${CHAL_PTS} history points.`}
+function chalLine(){return `<b>⚡ ${TWISTS[G.tw].name} · ${LEVELS[levelOf(G.ids)]}:</b> ${twistRule()} Get them all in order for +${CHAL_PTS} history points. Drag a card, or tap it and then its new spot.`}
 // The ⚡ button in Practice: names today's twist on a short card (or lets you pick one), then deals the set.
 function openChallenge(){
   if(!chalOpen())return;
