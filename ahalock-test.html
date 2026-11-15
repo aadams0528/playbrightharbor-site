@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.10 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.11 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -438,6 +438,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 
 /* overlay */
 .shx{position:sticky;top:0;float:right;margin:-8px -6px 0 8px;width:44px;height:44px;border-radius:50%;border:2px solid #1d2a4a;background:#fff7e6;color:#1d2a4a;font-size:20px;font-weight:800;line-height:1;cursor:pointer;z-index:2}
+body:has(#ov) .actions.stick{visibility:hidden}
 .ov{position:fixed;inset:0;background:rgba(8,14,28,.7);display:flex;align-items:flex-end;justify-content:center;z-index:50;padding:16px;padding-bottom:calc(var(--sab) + 16px)}
 .sheet{background:var(--panel);color:var(--ink);border-radius:24px;max-width:448px;width:100%;max-height:88vh;overflow:auto;padding:20px 18px;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:up .3s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
@@ -2626,7 +2627,7 @@ function beaconCheck() {
   const gift = lightBeacon(w); wkSave(w); setTimeout(() => toast(beaconMsg(gift), 4500), 400);
 }
 // Lights the Beacon; gives the shield only if none is held (w.gift remembers which).
-function lightBeacon(w) { w.beacon = 1; const sh = shieldGet(); const gift = !sh.n; if (gift) { sh.n = 1; store.set('shield', sh); } w.gift = gift ? 1 : 0; return gift; }
+function lightBeacon(w) { w.beacon = 1; const sh = shieldGet(); const gift = !sh.n; if (gift && !WK_PREVIEW) { sh.n = 1; store.set('shield', sh); } w.gift = gift ? 1 : 0; return gift; }
 const beaconMsg = gift => '✨ Harbor Beacon lit! All 5 goals done. ' + (gift ? 'You earned a 🛡️ streak shield (you can hold one at a time).' : 'You already hold a 🛡️ shield (you can hold one at a time).');
 function goalEvent(ev) {
   const w = wkGet(); const G = weekGoals(w.w); const before = goalsDone(w, G);
@@ -2761,7 +2762,7 @@ function renderHome() {
     '<div class="homerows"><button class="wkrow hrow" id="howr"><span class="hi">📖</span><div class="wt"><b>How to play</b><span>' + TL.ROSTER.length + ' puzzle types, with a short lesson each</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>' +
     '<button class="wkrow hrow" id="opts"><span class="hi">⚙️</span><div class="wt"><b>Options</b><span>Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.10' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.11' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('opts').onclick = showOptions;
@@ -2964,11 +2965,17 @@ function hint() {
   P.msg = { k: 'hint', t: '💡 Step ' + (k + 1) + ' of ' + steps.length + ': ' + esc(s.text) };
   renderPuzzle();
 }
+// The Story goal counts whole stops: true only when this solve finishes a stop's last room for the first time.
+function storyStopDone() {
+  if (!P.story) return false; const { s, o } = P.story, st = sget(), n = STORY[s].objs.length;
+  const all = except => Array.from({ length: n }, (_, i) => i).every(i => i === except || sdone(st, s, i));
+  return !all(-1) && all(o);
+}
 function solved() {
   P.solved = true; P.msg = null; P.bad = null; P.hl = null;
   const ms = Date.now() - P.t0; P.solvedMs = ms;
   stopTimer();
-  if (!P.tutorial) { adCount(); goalEvent({ k: 'solve', pz: P.pz, miss: P.miss, hints: P.hints, ms, story: !!P.story, bonus: !!P.bonus }); }
+  if (!P.tutorial) { adCount(); goalEvent({ k: 'solve', pz: P.pz, miss: P.miss, hints: P.hints, ms, story: storyStopDone(), bonus: !!P.bonus }); }
   if (P.tutorial) { renderPuzzle(); ahaPop(); setTimeout(tutSolved, 900); return; }
   if (P.bonus) { renderPuzzle(); ahaPop(); setTimeout(() => bonusSolved(ms), 900); return; }
   if (P.story) { renderPuzzle(); ahaPop(); setTimeout(storySolved, 900); return; }
