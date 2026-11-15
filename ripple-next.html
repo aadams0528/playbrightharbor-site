@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.14.4 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.14.6 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -221,6 +221,7 @@ body[data-theme="moon"] #winCard .tomorrow span{color:#eef3fb}
 #winCard .wtext h2{margin:0 0 2px;font-size:21px}
 #winCard .wtext .stars{justify-content:flex-start;margin:2px 0 4px}
 #winCard .wtext p{margin:2px 0;font-size:16px;line-height:1.3}
+.bh-promo{display:flex;align-items:center;gap:12px;margin:12px 0 0;padding:12px 14px;border-radius:16px;background:#e3f1ec;border:2px solid var(--accent);color:#1f3d37;text-decoration:none;text-align:left;font-size:17px;line-height:1.3;min-height:56px} .bh-promo small{display:block;font-size:15px;font-weight:700;color:#2a6a5c} .bh-promo b{font-weight:800} .bh-promo-icon{font-size:30px;flex:none} .bh-promo-go{flex:none;margin-left:auto;background:var(--accent);color:#fff;font-weight:800;font-size:16px;border-radius:12px;padding:10px 14px} .bhmore h3{font-size:18px;margin:14px 0 4px} body[data-theme="moon"] .bh-promo{background:#1d3a52;color:#eef4ff} body[data-theme="moon"] .bh-promo small{color:#bfe6da} /* v0.14.5 (Alan 11-15): More from Bright Harbor, big and easy to tap */
 #winCard p.winweek{font-size:16px;line-height:1.3;margin:0 0 10px;text-align:center;font-weight:750;color:#2a6a5c} body[data-theme="moon"] #winCard p.winweek{color:#bfe6da} /* v0.14.4 (Nikola r15): full width under the visitor and stars, so it reads as one line */
 #winCard .visitor{margin:0;flex:none;width:108px;text-align:center}
 #winCard .visitor svg{width:80px;height:80px}
@@ -317,7 +318,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     <div class="cloud" id="cloudRow"></div>
     <div class="shop" id="storeRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.14.4 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.14.6 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -357,6 +358,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
         <li>After pond 12, Home adds ⚡ Challenge ponds (a pond you know, turned around, with one twist), 🗓️ five weekly goals and a 🔥 Expert switch.</li>
         <li>Undo, Restart and word clues from Hint are always free. Match par for 3 stars. Only Show me, which points at the exact cell, caps a pond at 2 stars.</li>
       </ul>
+      <div id="bhMore" class="bhmore hidden"><h3>More from Bright Harbor</h3><div id="bhMoreList"></div></div>
       <div class="row"><button class="btn" id="btnHowTutorial">Replay pond 1</button><button class="btn primary" id="btnHowClose">Got it</button></div>
     </div>
   </div>
@@ -387,6 +389,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       <button class="btn dailygo hidden" id="btnDailyNow">📅 Try today’s Daily pond</button>
       <button class="btn sharego hidden" id="btnShare">📤 Share today’s pond</button>
       <div class="row"><button class="btn" id="btnReplay">Play again</button><button class="btn hidden" id="btnWinHome">Home</button><button class="btn primary" id="btnNext">Next pond</button></div>
+      <div id="winPromo" class="hidden"></div>
     </div>
   </div>
 
@@ -416,6 +419,95 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
   </div>
 </div>
 
+<script>
+// Bright Harbor cross-promo: one shared list of our games plus the rules for showing them.
+// CANONICAL COPY: /mnt/project-files/business/crosspromo/bh-games.js. Every game copies this file
+// unchanged into its repo (src/bh-games.js, or inlined into src/game.html). To add a game or switch
+// one on, edit ONLY the BH_GAMES list here, then copy it into each game in its next update.
+//
+// Studio rules (Alan 2026-10-13, extended to all games 2026-11-15):
+// - promote only games that are live in that phone's store (iPhone needs an App Store link: Apple 2.3.10)
+// - never reward the install, and never show the card in a player's first 3 sessions
+// - game over: at most every 3rd one, never beside a keep-playing / continue offer
+// - hide a game that is already installed (where the phone lets us check, via @capacitor/app-launcher)
+// - a tapped game rests for 30 days; the next live game takes its turn
+// - kids games show only other kids games (behind the parent gate); other games never show kids games
+// - nothing here blocks play or shows an error when offline
+(function () {
+  const BH_GAMES = [
+    // id, name, one-line pitch, emoji icon, store links (empty = not live there), installed-check ids
+    { id: "wordglow", name: "Wordglow", tag: "Spell words and watch them glow.", icon: "✨",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.spellburst", ios: "",
+      web: "https://playwordglow.com", iosScheme: "wordglow://", androidPkg: "com.playbrightharbor.spellburst" },
+    { id: "sumburst", name: "Sumburst", tag: "Fill groups that add up to the target.", icon: "🔢",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.sumburst", ios: "",
+      web: "https://playsumburst.com", iosScheme: "sumburst://", androidPkg: "com.playbrightharbor.sumburst" },
+    { id: "colorrivers", name: "Color Rivers", tag: "Join the colors into calm flowing rivers.", icon: "🌊",
+      android: "", ios: "", web: "https://playcolorrivers.com", iosScheme: "colorrivers://", androidPkg: "com.playbrightharbor.colorrivers" },
+    { id: "whenly", name: "Whenly", tag: "Put five moments from history in order.", icon: "🗓️",
+      android: "", ios: "", web: "https://playwhenly.com", iosScheme: "whenly://", androidPkg: "com.playbrightharbor.whenly" },
+    { id: "ahalock", name: "Ahalock", tag: "A daily picture logic puzzle.", icon: "🔒",
+      android: "", ios: "", web: "https://playahalock.com", iosScheme: "ahalock://", androidPkg: "com.playbrightharbor.ahalock" },
+    { id: "pebblepond", name: "Pebble Pond", tag: "Ripple the pond to bring every visitor home.", icon: "🪨",
+      android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
+  ];
+
+  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  //   self:   this game's id (it is never promoted to itself)
+  //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
+  //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
+  //   track:  optional analytics function (event, params); omit in kids games
+  // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  const BHPromo = {
+    games: BH_GAMES, opts: null, installed: {}, sessions: 0,
+    init(opts) {
+      this.opts = opts;
+      const s = opts.store, k = opts.prefix + "promo-sessions";
+      this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
+      this.preview = /[?&]promo\b/.test(location.search);
+      const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
+      if (L && p !== "web") for (const g of this.pool()) {
+        const url = p === "ios" ? g.iosScheme : g.androidPkg;
+        if (url) L.canOpenUrl({ url }).then(r => { if (r.value) this.installed[g.id] = true; }).catch(() => {});
+      }
+      return this;
+    },
+    platform() { return window.Capacitor?.getPlatform?.() || "web"; },
+    pool() { const kids = !!this.opts.kids; return BH_GAMES.filter(g => g.id !== this.opts.self && !!g.kids === kids); },
+    link(g) { const p = this.platform(); return p === "web" ? (g.android || g.ios ? g.web : "") : g[p]; },
+    // live, linkable on this phone, not installed, not resting after a tap
+    ready() {
+      if (this.preview) return this.pool().map(g => ({ ...g, href: this.link(g) || g.web }));
+      const now = Date.now(), s = this.opts.store;
+      return this.pool().filter(g => this.link(g) && !this.installed[g.id] && now > s.get(this.opts.prefix + "promo-rest-" + g.id, 0))
+        .map(g => ({ ...g, href: this.link(g) }));
+    },
+    forHelp() { return this.sessions > 3 || this.preview ? this.ready() : []; },
+    forGameOver(offerShown) {
+      if (offerShown) return null;
+      const list = this.forHelp(); if (!list.length) return null;
+      const s = this.opts.store, k = this.opts.prefix + "promo-overs", n = s.get(k, 0) + 1; s.set(k, n);
+      if (n % 3 && !this.preview) return null;
+      return list[Math.floor(n / 3) % list.length];   // rotate through the live games
+    },
+    card(g, where) {
+      this.opts.track?.("promo_shown", { game: g.id, where });
+      return `<a class="bh-promo" data-game="${g.id}" href="${g.href}" target="_blank" rel="noopener">` +
+        `<span class="bh-promo-icon" aria-hidden="true">${g.icon}</span><span><small>More from Bright Harbor</small>` +
+        `<b>${g.name}</b>: ${g.tag}</span><span class="bh-promo-go">Get it</span></a>`;
+    },
+    wire(root, where) {
+      root?.querySelectorAll(".bh-promo").forEach(a => a.addEventListener("click", () => {
+        this.opts.track?.("promo_tap", { game: a.dataset.game, where });
+        this.opts.store.set(this.opts.prefix + "promo-rest-" + a.dataset.game, Date.now() + 30 * 864e5);
+      }));
+    },
+  };
+  window.BH_GAMES = BH_GAMES; window.BHPromo = BHPromo;
+})();
+
+</script>
 <script>
 /* Ripple - shared move logic. Used by the game (inlined into prototype.html by build.js)
  * and by solver.js / gen.js / check.js in node. Keep this file the ONLY source of rules.
@@ -2060,7 +2152,13 @@ function win() {
     }
     $('winCard').classList.remove('hidden');
     fitVisitor(); fitTomorrow();
-    placeWinCard();
+    var wp = $('winPromo'); wp.innerHTML = ''; wp.classList.add('hidden');
+    if (window.BHPromo && BHPromo.opts && !G.solved) { // v0.14.5 (Alan 11-15): cross-promo on the win card, never beside a keep-playing offer
+      var pg = BHPromo.forGameOver(!$('btnDailyNow').classList.contains('hidden') || G.offerRemind);
+      if (pg) { wp.innerHTML = BHPromo.card(pg, 'over'); BHPromo.wire(wp, 'over'); wp.classList.remove('hidden'); }
+    }
+    var fits = placeWinCard();
+    if (!wp.classList.contains('hidden') && !fits) { wp.classList.add('hidden'); wp.innerHTML = ''; placeWinCard(); } // no room: the pond stays in view instead
   }, RM ? 600 : 1700); // v0.6.4: the solved pond shows a moment longer before the card rises
 }
 function keepArt(wk, n) { var kp = KEEPS[weekly.keep[wk]], sl = KEEP_SLOTS[n % KEEP_SLOTS.length]; return kp ? at(sl[0], sl[1], kp.art) : ''; }
@@ -2083,13 +2181,14 @@ function placeWinCard() { // v0.6.7 (Cooper r7): the win card must not cover the
   bd.querySelectorAll('rect[data-cell]').forEach(function (r) { var q = r.getBoundingClientRect(); b.top = Math.min(b.top, q.top); b.left = Math.min(b.left, q.left); b.bottom = Math.max(b.bottom, q.bottom); b.right = Math.max(b.right, q.right); });
   if (b.top > b.bottom) return;
   function hit() { var c = card.getBoundingClientRect(); return c.top - 30 < b.bottom - 2 && c.bottom > b.top + 2 && c.left < b.right - 2 && c.right > b.left + 2; }
-  if (!hit()) return;
+  if (!hit()) return true;
   // the card may still be rising 30px, so measure where it will rest
   var room = W - b.right - 24;
-  if (room >= need) { wc.style.setProperty('--sideW', Math.min(380, room) + 'px'); wc.classList.add('side'); if (!hit()) return; wc.classList.remove('side'); }
-  wc.classList.add('compact'); if (!hit()) return;
+  if (room >= need) { wc.style.setProperty('--sideW', Math.min(380, room) + 'px'); wc.classList.add('side'); if (!hit()) return true; wc.classList.remove('side'); }
+  wc.classList.add('compact'); if (!hit()) return true;
   var c = card.getBoundingClientRect(), over = b.bottom - (c.top - 30) + 8, up = Math.max(0, b.top - 4);
   bw.classList.add('lift'); bw.style.transform = 'translateY(' + (-Math.min(over, up)) + 'px)';
+  return over <= up; // false: the card still covers part of the pond
 }
 function showTomorrow(sk) { // tomorrow's visitor as a shadow, so there is something to come back for (this line stays on the compact card)
   var n = Object.keys(daily.done).length; // daily visitor number n arrives with the next new daily pond
@@ -2869,6 +2968,10 @@ $('btnNext').addEventListener('click', function () {
 });
 $('btnChapterClose').addEventListener('click', function () { $('chapterCard').classList.add('hidden'); showSelect(); });
 $('btnHowTo').addEventListener('click', function () { $('howCard').classList.remove('hidden'); });
+try { // v0.14.5 (Alan 11-15): shared Bright Harbor cross-promo; its promo-* keys stay on this phone (not in cloudData)
+  if (window.BHPromo) { BHPromo.init({ self: 'pebblepond', prefix: '', store: store });
+    var bhList = BHPromo.forHelp(); if (bhList.length) { $('bhMoreList').innerHTML = bhList.map(function (g) { return BHPromo.card(g, 'help'); }).join(''); BHPromo.wire($('bhMoreList'), 'help'); $('bhMore').classList.remove('hidden'); } }
+} catch (e) {}
 $('btnHowClose').addEventListener('click', function () { $('howCard').classList.add('hidden'); });
 $('btnHowTutorial').addEventListener('click', function () { $('howCard').classList.add('hidden'); startLevel(0, { forceIntro: true }); });
 $('btnPreviewSet').addEventListener('click', function () { setPreviewSetting(!settings.preview); });
@@ -3162,8 +3265,14 @@ function weekGoals(wk) { // the Daily goal every week, plus 4 of the other 6, pi
 var weekly = store.get('weekly', {}) || {}; weekly.keep = weekly.keep || {}; // { wk, c: {goal: n}, all, keep: {wk: keepId} }
 function weekNow() {
   var t = weekTheme();
-  if (weekly.wk && t.wk < weekly.wk) { t.goals = weekly.goals || weekGoals(weekly.wk); return t; } // v0.14.4 (Muse r15): a clock or time zone that goes back across a Monday never wipes this week
-  if (weekly.wk !== t.wk) { weekly.wk = t.wk; weekly.c = {}; weekly.ids = {}; weekly.all = false; weekly.goals = null; weekly.n = null; }
+  if (weekly.wk !== t.wk) { // v0.14.6 (Muse r16): each week keeps its own goals and progress, so a trip to another week (clock, time zone, or a date jump) and back never wipes one
+    var hist = weekly.hist = weekly.hist || {};
+    if (weekly.wk) hist[weekly.wk] = { c: weekly.c || {}, ids: weekly.ids || {}, all: !!weekly.all, goals: weekly.goals || null, n: weekly.n || null };
+    var back = hist[t.wk]; delete hist[t.wk];
+    Object.keys(hist).sort().slice(0, -6).forEach(function (k) { delete hist[k]; }); // the last 6 other weeks are plenty
+    weekly.wk = t.wk; weekly.c = back ? back.c : {}; weekly.ids = back ? back.ids : {}; weekly.all = back ? back.all : false; weekly.goals = back ? back.goals : null; weekly.n = back ? back.n : null;
+    store.set('weekly', weekly);
+  }
   weekly.c = weekly.c || {}; weekly.ids = weekly.ids || {};
   if (!weekly.goals || weekly.goals.length !== 5) { // v0.14.3 (Cooper): a save from before goals were stored keeps every goal it already has progress on
     var fresh = weekGoals(t.wk), had = Object.keys(weekly.c).filter(function (g) { return GOALS[g] && weekly.c[g] > 0 && g !== 'daily' && g !== 'days'; });
@@ -3181,17 +3290,21 @@ function weekNow() {
 }
 function weeklyWin(o) { // o: { s, first, mode, noHint, noUndo, pid }; returns the line for the win card ('' if none)
   if (!extrasOpen() || G.solved) return '';
-  var t = weekNow(), lines = [], doneNow = [];
+  var t = weekNow(), lines = [], doneNow = [], moved = [];
   var PER_POND = { three: 1, nohint: 1, solve: 1, noundo: 1, days: 1 }; // v0.14.1 (Muse r14): each pond counts once a week for these
   var hit = { daily: o.mode === 'daily' && o.first, three: o.s === 3, nohint: o.noHint, visit: o.first && o.mode !== 'challenge', chal: o.mode === 'challenge' && o.first, solve: true, noundo: o.noUndo, days: true };
   t.goals.forEach(function (g) {
     var c = weekly.c[g] || 0; if (!hit[g] || c >= goalN(g)) return;
     if (PER_POND[g]) { var pk = g === 'days' ? todayKey() : o.pid, seenIds = weekly.ids[g] = weekly.ids[g] || {}; if (seenIds[pk]) return; seenIds[pk] = 1; }
     weekly.c[g] = c + 1;
-    if (c + 1 === goalN(g)) doneNow.push(goalText(g));
+    if (c + 1 === goalN(g)) doneNow.push(goalText(g)); else moved.push(g);
   });
   var news = doneNow.length === 1 ? doneNow[0] : doneNow.length + ' weekly goals done'; // v0.14.4 (Nikola r15): one line, even when several finish at once (the week card names them)
   if (doneNow.length) lines.push('🗓️ ✓ ' + news + ' · ' + weekDone(t) + '/5');
+  else if (moved.length) { // v0.14.6 (Alan 11-15, from Muse r16): a win that moves a goal says so in one quiet line
+    moved.sort(function (a, b) { return weekly.c[b] / goalN(b) - weekly.c[a] / goalN(a); });
+    var mg = moved[0]; lines.push('🗓️ ' + goalText(mg) + ' · ' + weekly.c[mg] + '/' + goalN(mg));
+  }
   if (!weekly.all && weekDone(t) === 5) {
     weekly.all = true; weekly.keep[t.wk] = t.keep;
     lines = doneNow.length ? ['🗓️ ✓ ' + news + '.'] : []; // v0.14.3 (Muse): the fifth goal keeps its own line
@@ -3207,7 +3320,8 @@ function goalText(g) { var n = goalN(g); if (n === GOALS[g].n) return GOALS[g].t
 function weekDaysLeft(t) { var p = t.wk.split('-').map(Number), mon = new Date(p[0], p[1] - 1, p[2]), q = todayKey().split('-').map(Number), now = new Date(q[0], q[1] - 1, q[2]); return Math.max(1, 7 - Math.round((now - mon) / 864e5)); }
 function weekLeftText(t) { // v0.14.3 (Nikola): say how long the week has left; a fresh set starts Monday
   var left = weekDaysLeft(t); if (weekly.all) return '';
-  return left <= 1 ? 'Last day of the week. A fresh set starts Monday. ' : left + ' days left. ';
+  var late = (weekly.goals || []).some(function (g) { return (g === 'daily' || g === 'days') && goalN(g) - Math.min(weekly.c[g] || 0, goalN(g)) > left; }); // v0.14.5 (Cooper r16): say why a day goal can't be met any more
+  return (left <= 1 ? 'Last day of the week. A fresh set starts Monday. ' : left + ' days left. ') + (late ? 'These goals were set when your week began. ' : '');
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function renderWeekRow() {
