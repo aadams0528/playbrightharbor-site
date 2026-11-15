@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.15 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.16 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -144,7 +144,9 @@ button.tile{font:inherit;color:inherit;cursor:pointer;width:100%;display:block}
 .wkrow .ln{display:inline-flex}
 .wkrow .ln .ic{width:30px;height:30px;vertical-align:0}
 .wkrow .ln.off{opacity:.6;filter:sepia(.5) saturate(.55) brightness(.95)}
-.wkrow.lit{background:linear-gradient(90deg,rgba(255,212,90,.35),rgba(255,212,90,.12));box-shadow:0 0 0 2px rgba(255,212,90,.6)}
+.wkrow.lit{padding:8px 14px;background:rgba(255,255,255,.06);box-shadow:0 0 0 1px rgba(255,212,90,.45)}
+.bonusline{text-align:center;font-size:16px;font-weight:700;color:#d9dcef;margin:10px 4px 0}
+.wkrow .wb{flex:1;font-size:16px;font-weight:800;color:#f3e6bd}
 .wkrow .lh,.goals .lh,.sub .lh{width:22px;height:22px;vertical-align:-4px}
 .wkrow .wt{flex:1;display:flex;flex-direction:column;gap:2px}
 .wkrow b{font-family:var(--disp);font-size:17px}
@@ -539,6 +541,7 @@ html,body{overflow-anchor:none}
 .notehint{display:none}
 #app.tut .notehint{display:block;font-size:15px;font-weight:700;color:var(--ink)}
 .trayhd{font-size:15px;color:var(--ink);text-transform:none;letter-spacing:0;margin-top:10px}
+.trayhd.maphd{color:#fff3c4;font-size:17px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 .tclue{font-size:16px}
 .compact .tclue{font-size:15.5px}
 .compact .tclue .no,.scales .tclue .no{font-size:14px}
@@ -2778,6 +2781,8 @@ function goalEvent(ev) {
 }
 function weekRow() {
   const w = wkGet(); const G = weekGoals(w.w); const d = goalsDone(w, G);
+  // Cooper R17: once the Beacon is lit, the row turns into one calm status line so the Daily stays the main thing.
+  if (w.beacon) return '<button class="wkrow lit" id="wkr" aria-label="Weekly goals: Harbor Beacon lit. Tap for details."><span class="wb">' + LH + ' Beacon lit' + (w.gift !== 0 ? ' · 🛡️ shield earned' : ' this week') + '</span><div class="sc-go" style="font-size:22px;color:var(--gold)">›</div></button>';
   return '<button class="wkrow' + (w.beacon ? ' lit' : '') + '" id="wkr"><div class="wl">' + G.goals.map((g, i) => '<span class="ln' + (i < d ? '' : ' off') + '">🏮</span>').join('') + '</div><div class="wt"><b>' + esc(G.name) + (w.seen ? '' : '<i class="new" role="img" aria-label="New" title="New"></i>') + '</b><span>' + (w.beacon ? LH + ' Beacon lit!' + (w.gift !== 0 ? ' 🛡️ shield earned' : '') : 'Goals: ' + d + ' of ' + G.goals.length + ' done') + '</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>';
 }
 // All puzzle types, one tap away from home: each opens its short lesson.
@@ -2798,7 +2803,7 @@ function showGoals() {
   document.getElementById('gDone').onclick = () => { closeSheet(); renderHome(); };
 }
 
-// ---------- bonus puzzle (every 3rd day you finish the Daily Three; one twist; never fails you) ----------
+// ---------- bonus puzzle (every 3rd day you finish the Daily Three; one twist; you can't lose it) ----------
 const TWISTS = { nohint: { e: '🚫💡', n: 'No hints', d: 'Solve it without hints. The hint button is off.' }, onetry: { e: '🎯', n: 'One try', d: 'Get it right the first time you tap Lock it in, for a ⭐. You can keep trying after a miss.' }, clock: { e: '⏱', n: 'Beat the clock', d: 'Solve it in under 3 minutes for a ⭐. No rush: it never runs out.' } };
 function doneDays() { const set = {}; [false, true].forEach(x => { [store.get(RK(x), {}), store.get(AK(x), {})].forEach(all => Object.keys(all).forEach(d => { if (all[d] && all[d].on) set[d] = 1; })); }); return Object.keys(set).sort(); }
 const bonusGet = () => { const b = store.get('bonus', null); return b && typeof b === 'object' ? { n: b.n || 0, days: b.days || {}, seen: b.seen ? 1 : 0, got: b.got || {} } : { n: 0, days: {}, seen: 0, got: {} }; };
@@ -2816,7 +2821,7 @@ function bonusToday() {
 }
 const bonusDone = () => !!bonusGet().days[realToday];
 // "Next bonus: finish the Daily Three on 2 more days." (one bonus a day at most)
-function nextBonusLine() { const n = doneDays().length; const b = bonusGet(); const given = new Set(Object.keys(b.got).concat(Object.keys(b.days))).size; const left = Math.max(1, 3 * (given + 1) - n); return 'Next bonus: finish the Daily Three on ' + left + ' more day' + (left > 1 ? 's' : '') + '.'; }
+function nextBonusLine() { const n = doneDays().length; const b = bonusGet(); const given = new Set(Object.keys(b.got).concat(Object.keys(b.days))).size - (BONUS_TEST && b.got[realToday] ? 1 : 0); const left = Math.max(1, 3 * (given + 1) - n); return 'Next bonus: finish the Daily Three on ' + left + ' more day' + (left > 1 ? 's' : '') + '.'; }
 function bonusPz(ds) {
   const today = getDayM(ds, false).map(p => p.type); const rng = TL.rngFrom('ahalock-bonus|' + ds);
   const ty = rng.shuffle(TL.ROSTER.filter(t => today.indexOf(t) < 0))[0];
@@ -2827,7 +2832,7 @@ function startBonus() {
   const b = bonusGet(); const c = b.n;
   const pick = c % 3 === 2;
   const tw = ['nohint', 'onetry', 'clock'][(c + Math.floor(c / 3)) % 3];
-  const intro = (b.seen ? '' : '<div class="sub">New! Every 3rd day you finish the Daily Three, a bonus puzzle appears. It has one twist and it never fails you.</div>');
+  const intro = (b.seen ? '' : '<div class="sub">New! Every 3rd day you finish the Daily Three, a bonus puzzle appears. It has one twist. Beat the twist to earn a ⭐. If you don\'t, you still finish the puzzle.</div>');
   if (pick) {
     openSheet('<h2>⭐ Bonus puzzle</h2>' + intro + '<div class="sub">Your pick! Choose today\'s twist:</div><div class="twists">' +
       Object.keys(TWISTS).map(k => '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" data-tw="' + k + '">' + TWISTS[k].e + ' ' + TWISTS[k].n + '</button>').join('') + '</div><div class="col"><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="bno">Later</button></div>');
@@ -2842,7 +2847,7 @@ function startBonus() {
 function playBonus(tw) {
   closeSheet(); const b = bonusGet(); if (!b.seen) { b.seen = 1; store.set('bonus', b); }
   const pz = bonusPz(realToday);
-  if (!store.get('tut', {})[pz.type]) { startTutorial(pz.type, () => playBonus(tw)); return; }
+  if (!store.get('tut', {})[pz.type]) { const go = () => playBonus(tw); go.noHint = tw === 'nohint'; startTutorial(pz.type, go); return; }
   stopTimer(); track('bonus_start', { twist: tw, type: pz.type });
   P = { ds: null, slot: 0, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false, bonus: { ds: realToday, tw },
     entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null, ex: TYPES[pz.type].explain(pz) };
@@ -2885,9 +2890,10 @@ function renderHome() {
     storyCard() + weekRow() +
     '<div class="sect">' + (expertOn() ? '🧠 Expert week · ' : 'This week · ') + wk.filter(d => dayDone(all[d])).length + ' of 7 days played</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
+    (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="bonusline">⭐ ' + nextBonusLine() + '</div>' : '') +
     '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.15' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.16' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('help').onclick = showHelp;
@@ -3146,7 +3152,7 @@ function showSolved(ms) {
   const head = SOLVEDHEAD[pz.type];
   openSheet('<h2>' + head + '</h2><div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + P.hints + '</b><span>' + (P.hints === 1 ? 'HINT' : 'HINTS') + '</span></div></div>' +
-    '<div class="col"><button class="btn" id="nx">' + (allDone ? 'See today\'s results' : 'Next puzzle') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
+    '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === realToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   document.getElementById('nx').onclick = () => { closeSheet(); const ds = P.ds; if (allDone) showDaySummary(ds); else { const sl = results()[ds].s.findIndex(x => !x); adNext(getDay(ds)[sl].type, () => startPuzzle(ds, sl)); } };
 }
@@ -3703,7 +3709,7 @@ function renderMap() {
   if (cur === undefined) h += '<div class="chdone">✨ Chapter 1 complete ✨<span>Bright Harbor is lit again.</span></div>';
   h += '<div class="beat">' + (cur === undefined ? 'Chapter 1 complete. Chapter 2 is coming soon.' : st.intro ? 'Next: <b>' + esc(STORY[cur].name) + '</b>. ' + esc(STORY[cur].objs.find((O, o) => !sdone(st, cur, o)).hint) : esc(STORY_INTRO)) + '</div>';
   const notes = [0, 1].filter(k => stopDone(st, k));
-  if (notes.length) h += '<div class="trayhd">Keeper\'s log pages for the Lighthouse</div><div class="etray">' + notes.map(k => '<div class="ecard"><div class="et">' + esc(STORY[k].note.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(2, 2), STORY[k].note.clue)) + '</div></div>').join('') + '</div>';
+  if (notes.length) h += '<div class="trayhd maphd">Keeper\'s log pages for the Lighthouse</div><div class="etray">' + notes.map(k => '<div class="ecard"><div class="et">' + esc(STORY[k].note.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(2, 2), STORY[k].note.clue)) + '</div></div>').join('') + '</div>';
   if (cur !== undefined) h += '<button class="btn wide" id="gost">Go to ' + esc(STORY[cur].name) + '</button>';
   h += '<div class="foot" style="margin-top:10px">' + (cur === undefined ? 'Tap any stop on the map to play it again.' : 'Finishing a stop opens the next one. ' + (adsOn() ? 'The first ' + FREE_HINTS + ' hints on each puzzle are free.' : 'Hints are always free.')) + '</div>';
   if (Object.keys(st.done).length) h += '<div class="col" style="margin-top:10px"><button class="btn ghost small" id="restart" style="color:var(--ink);background:var(--panel2)">↺ Start Chapter 1 over</button></div>';
@@ -3960,13 +3966,15 @@ function coachFit(last) {
   if (bot > top - 8) window.scrollBy(0, Math.min(bot - top + 8, Math.max(0, hi - 12)));
 }
 function tutWrong() { /* message already shows which clue breaks */ }
+// Muse R17: a lesson that leads into a No hints bonus doesn't point at the 💡 button.
+const tipFix = t => tutState && tutState.after && tutState.after.noHint ? t.replace(/^Stuck[^?]*\? Tap 💡 Hint[^.]*\. /, '') : t;
 function tutSolved() {
   removeCoach();
   const type = tutState.type;
   const tut = store.get('tut', {}); tut[type] = 1; store.set('tut', tut);
   tutState.def.steps.forEach(s => delete s.passed);
   openSheet('<h2>' + SOLVEDHEAD[type] + '</h2><div class="sub">That\'s all there is to it.</div>' +
-    '<div class="msg info" style="margin-bottom:14px">' + (type === 'cards' ? 'Stuck? Tap 💡 Hint. If you guess wrong, the game shows which card can\'t be what you said.' : type === 'chests' ? 'Stuck? Tap 💡 Hint. If you pick the wrong chest, the game shows which signs don\'t fit the rule.' : type === 'knights' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows whose words don\'t fit what you said.' : type === 'switches' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows which test your wiring breaks.' : TL.PATTERN.indexOf(type) >= 0 ? 'Stuck? Tap 💡 Hint for the next step. Every puzzle has exactly one answer that fits the pattern.' : 'Stuck in a real puzzle? Tap 💡 Hint for the next step. If you\'re wrong, the game shows which clue your answer breaks.') + '</div>' +
+    '<div class="msg info" style="margin-bottom:14px">' + tipFix((type === 'cards' ? 'Stuck? Tap 💡 Hint. If you guess wrong, the game shows which card can\'t be what you said.' : type === 'chests' ? 'Stuck? Tap 💡 Hint. If you pick the wrong chest, the game shows which signs don\'t fit the rule.' : type === 'knights' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows whose words don\'t fit what you said.' : type === 'switches' ? 'Stuck? Tap 💡 Hint. If you\'re wrong, the game shows which test your wiring breaks.' : TL.PATTERN.indexOf(type) >= 0 ? 'Stuck? Tap 💡 Hint for the next step. Every puzzle has exactly one answer that fits the pattern.' : 'Stuck in a real puzzle? Tap 💡 Hint for the next step. If you\'re wrong, the game shows which clue your answer breaks.')) + '</div>' +
     '<button class="btn wide" id="tdone">' + (tutState.after ? 'Start the puzzle' : 'Done') + '</button>');
   document.getElementById('tdone').onclick = () => { const a = tutState.after; tutState = null; closeSheet(); if (a) a(); else renderHome(); };
 }
