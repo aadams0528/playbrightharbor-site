@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.26.1 (round 25 fixes) -->
+<!-- Tripsake v0.26.2 (labelled stop buttons) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -221,7 +221,9 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .legchip{position:absolute;top:max(18px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:3;background:rgba(10,15,30,.86);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:calc(14.5px * var(--fs,1));white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(6px)}
 .legchip span{margin-right:4px}
 #replay.recording .bar,#replay.recording .card{display:none}
-#replay.ended .bar > :not(#rclose){display:none} /* the end card: only Done stays in the bar (Muse r25) */
+#replay.ended .bar > :not(#rclose),#replay.ended .stopnav,#replay.recording .stopnav{display:none}
+.replay .stopnav{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:84px;display:flex;gap:10px;z-index:4;pointer-events:auto} /* the stop buttons, labelled and big enough to find (Alan 11-15) */
+.replay .stopnav .btn{min-height:48px;padding:8px 16px;font-size:calc(18px * var(--fs,1));background:rgba(10,15,30,.88);border:1px solid var(--line);border-radius:14px} /* the end card: only Done stays in the bar (Muse r25) */
 #replay.ended .bar{justify-content:flex-end}
 .vnrow{display:flex;gap:8px;flex-wrap:wrap}.vnrow .btn{font-size:calc(14.5px * var(--fs,1));padding:6px 12px}
 .dayline{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel-2);border-radius:12px;padding:10px 12px;font-size:calc(15.5px * var(--fs,1))}
@@ -274,12 +276,12 @@ body.replaying .app{grid-template-columns:1fr;grid-template-rows:1fr}
 .pvnav{display:flex;justify-content:space-between;gap:8px}
 .sheet .note,#ldWhy li{overflow-wrap:anywhere}
 .ldbar{height:8px;border-radius:4px;background:color-mix(in srgb,var(--ink) 12%,transparent);overflow:hidden;margin:6px 0 2px;max-width:320px}.ldbar>i{display:block;height:100%;background:var(--accent,#3b82f6);border-radius:4px;transition:width .2s}.ldbar.busy>i{width:35%;animation:ldbusy 1.4s ease-in-out infinite}@keyframes ldbusy{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
-.moment{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .7s ease;pointer-events:none;background:#05070d;overflow:hidden;display:flex;flex-direction:column;padding-bottom:84px;box-sizing:border-box}
+.moment{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .7s ease;pointer-events:none;background:#05070d;overflow:hidden;display:flex;flex-direction:column;padding-bottom:142px;box-sizing:border-box}
 .moment .pics{position:relative;flex:1;min-height:0;overflow:hidden}
 .moment.on{opacity:1;pointer-events:auto}
 .moment .pics img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:mfade .9s ease forwards,kb 9s ease-out forwards}
 .moment .pics::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,7,13,.3) 0%,rgba(5,7,13,0) 22%,rgba(5,7,13,0) 80%,rgba(5,7,13,.6) 100%)}
-@media (min-aspect-ratio:5/4){.moment{flex-direction:row;padding-bottom:84px}.moment .mtxt{width:min(38%,460px);align-self:center}}
+@media (min-aspect-ratio:5/4){.moment{flex-direction:row;padding-bottom:84px}.replay .stopnav{right:auto;left:max(16px,env(safe-area-inset-left,0px))}.moment .mtxt{width:min(38%,460px);align-self:center}}
 .mtxt{position:relative;flex:none;z-index:1;box-sizing:border-box;min-height:30%;padding:14px max(22px,env(safe-area-inset-left,0px)) 10px;background:#05070d}
 .mtxt:empty{visibility:hidden}
 .mtxt h2{margin:2px 0 0;font-family:var(--display);font-weight:400;font-size:clamp(38px,8vw,64px);line-height:1;text-wrap:balance}
@@ -1460,7 +1462,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.26.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.26.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2863,7 +2865,8 @@ async function replayRun(id, opts, run){
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
     <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { try { const c = tripCover(t); return c ? photo(c.scene, c.id, 1280, 960) : ""; } catch(e){ return ""; } })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
     <div class="card" id="rcard" style="opacity:0"></div>
-    <div class="bar"><button class="btn" id="rprev" aria-label="Previous stop">‹</button><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rskip" aria-label="Next stop">›</button><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
+    <div class="stopnav"><button class="btn" id="rprev" aria-label="Back one stop">‹ Back</button><button class="btn" id="rskip" aria-label="Next stop">Next stop ›</button></div>
+    <div class="bar"><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
   const alive = () => replayState?.token === token;
   /* a watchdog (Muse r24): a story that stops moving for 30 seconds, while not paused or at its end card, ends with a word and goes back where it started */
   replayState.beat = performance.now(); { const dog = setInterval(() => { if (!alive()){ clearInterval(dog); return; } const rs = replayState; if (rs.paused || rs.ended || (typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin && performance.now() < (rs.voiceUntil || 0))) rs.beat = performance.now(); /* a voice note holds it off only for about its own length plus 5 seconds (Muse r25) */
