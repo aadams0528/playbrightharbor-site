@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.14.6 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.14.7 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -318,7 +318,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     <div class="cloud" id="cloudRow"></div>
     <div class="shop" id="storeRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.14.6 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.14.7 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -2854,6 +2854,7 @@ function fitTray() { // v0.10.4 (Cooper + Nikola r12): an open tray never resize
   var hideBottom = hr && hr.bottom > tr.top, hideTop = hr && hr.top < spTop + tr.height; // a Show me cell must never hide under it
   // v0.10.7 (Nikola r13): it only goes to the top on a short screen (640 px tall or less) or to uncover a Show me cell, so on taller phones the ? Help button is never covered.
   // On a short screen it still covers the title bar while a clue is open: starting below the title bar would hide a whole row of the pond (tried, 389x559 pond 30).
+  if (t.classList.contains('stay') && t.classList.contains('tip')) return; // v0.14.7 (Cooper r17): a dead-end note never jumps over Menu, Help and sound on a short landscape screen; it stays just above Undo
   if ((shortScreen() && overTop < over && !hideTop) || (hideBottom && !hideTop)) {
     t.style.bottom = 'auto'; t.style.top = Math.round(spTop - sp.top) + 'px'; t.classList.add('atTop'); // v0.14.4: tried starting under the name row (Nikola r15), but on 566 px screens it hid 40-70 px of pond cells, so a clue you asked for still covers the header until Got it
   }
@@ -3320,7 +3321,8 @@ function goalText(g) { var n = goalN(g); if (n === GOALS[g].n) return GOALS[g].t
 function weekDaysLeft(t) { var p = t.wk.split('-').map(Number), mon = new Date(p[0], p[1] - 1, p[2]), q = todayKey().split('-').map(Number), now = new Date(q[0], q[1] - 1, q[2]); return Math.max(1, 7 - Math.round((now - mon) / 864e5)); }
 function weekLeftText(t) { // v0.14.3 (Nikola): say how long the week has left; a fresh set starts Monday
   var left = weekDaysLeft(t); if (weekly.all) return '';
-  var late = (weekly.goals || []).some(function (g) { return (g === 'daily' || g === 'days') && goalN(g) - Math.min(weekly.c[g] || 0, goalN(g)) > left; }); // v0.14.5 (Cooper r16): say why a day goal can't be met any more
+  var usedToday = { daily: !!(typeof daily !== 'undefined' && daily.done && daily.done[todayKey()]), days: !!(weekly.ids && weekly.ids.days && weekly.ids.days[todayKey()]) };
+  var late = (weekly.goals || []).some(function (g) { return (g === 'daily' || g === 'days') && goalN(g) - Math.min(weekly.c[g] || 0, goalN(g)) > left - (usedToday[g] ? 1 : 0); }); // v0.14.7 (Muse r17): today counts as used once today's Daily is done or today is already counted // v0.14.5 (Cooper r16): say why a day goal can't be met any more
   return (left <= 1 ? 'Last day of the week. A fresh set starts Monday. ' : left + ' days left. ') + (late ? 'These goals were set when your week began. ' : '');
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -3440,8 +3442,15 @@ function mergeSaves(a, b) { // nothing is ever lost: more stars, fewer taps, eve
   maxInto(out.chal.stars, ca.stars); maxInto(out.chal.stars, cb.stars);
   out.expert = { stars: {} }; maxInto(out.expert.stars, (a.expert || {}).stars); maxInto(out.expert.stars, (b.expert || {}).stars);
   var wa = a.weekly || {}, wb = b.weekly || {}; out.weekly = { keep: Object.assign({}, wb.keep || {}, wa.keep || {}) };
-  var wl = (wa.wk || '') >= (wb.wk || '') ? wa : wb, wo = wl === wa ? wb : wa;
-  if (wl.wk) { out.weekly.wk = wl.wk; out.weekly.c = {}; maxInto(out.weekly.c, wl.c); if (wo.wk === wl.wk) maxInto(out.weekly.c, wo.c); out.weekly.all = !!(wl.all || (wo.wk === wl.wk && wo.all)); }
+  // v0.14.7 (Muse r17): every week on either side survives the merge: counts (the higher), counted ponds (both), the week's goals and late-week targets
+  var weeks = {};
+  function addWeek(k, w) { if (!k || !w) return; var m = weeks[k] = weeks[k] || { c: {}, ids: {}, all: false, goals: null, n: null };
+    maxInto(m.c, w.c); Object.keys(w.ids || {}).forEach(function (g) { m.ids[g] = Object.assign({}, m.ids[g] || {}, w.ids[g]); });
+    m.all = m.all || !!w.all; if (!m.goals && w.goals && w.goals.length === 5) { m.goals = w.goals.slice(); m.n = w.n || null; } }
+  [wa, wb].forEach(function (w) { addWeek(w.wk, w); Object.keys(w.hist || {}).forEach(function (k) { addWeek(k, w.hist[k]); }); }); // this phone (a) first, so its goals win a tie
+  var wks = Object.keys(weeks).sort();
+  if (wks.length) { var top = wks.pop(), tw = weeks[top]; out.weekly.wk = top; out.weekly.c = tw.c; out.weekly.ids = tw.ids; out.weekly.all = tw.all; out.weekly.goals = tw.goals; out.weekly.n = tw.n;
+    out.weekly.hist = {}; wks.slice(-6).forEach(function (k) { out.weekly.hist[k] = weeks[k]; }); }
   return out;
 }
 var cloudChanged = false;
@@ -3454,7 +3463,7 @@ window.BH_SAVE = { game: 'pebblepond', version: 1, get: cloudData,
       daily.done = m.daily.done; daily.best = m.daily.best; daily.streak = m.daily.streak; if (m.daily.last) daily.last = m.daily.last;
       Object.keys(m.seen).forEach(function (k) { seen[k] = m.seen[k]; });
       chal.stars = m.chal.stars; chal.pick = m.chal.pick; expert.stars = m.expert.stars;
-      weekly.keep = m.weekly.keep; if (m.weekly.wk) { weekly.wk = m.weekly.wk; weekly.c = m.weekly.c; weekly.all = m.weekly.all; }
+      weekly.keep = m.weekly.keep; if (m.weekly.wk) { weekly.wk = m.weekly.wk; weekly.c = m.weekly.c; weekly.all = m.weekly.all; weekly.ids = m.weekly.ids || {}; weekly.goals = m.weekly.goals || null; weekly.n = m.weekly.n || null; weekly.hist = m.weekly.hist || {}; } // v0.14.7 (Muse r17)
       store.set('progress', progress); store.set('daily', daily); store.set('seen', seen); store.set('chal', chal); store.set('expert', expert); store.set('weekly', weekly);
     } finally { cloudApplying = false; }
     cloudChanged = JSON.stringify(cloudData()) !== before; return cloudData();
