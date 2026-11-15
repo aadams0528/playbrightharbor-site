@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.25.3 (round 23 fixes) -->
+<!-- Tripsake v0.26.0 (round 24 fixes, trip to revisit) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1391,7 +1391,7 @@ let BIG_TEXT = !!store.get("bigText", false); function applyTextSize(){ document
 function renderBody(){
   const b = $("#tabbody"); let h = "";
   if (tab === "trips"){
-    nudgeCheck(); { const pc = postcardHTML(), otd = onThisDayHTML(); h += [yearHTML(), nudgeHTML(), ...(new Date().getDay() === 0 ? [pc, otd] : [otd, pc]), backAgainHomeHTML()].find(Boolean) || ""; } /* Back again is part of the same single pick (Nikola r21) */ /* one quiet reminder at a time, the most timely first (Nikola + Cooper r20) */
+    nudgeCheck(); { const pc = postcardHTML(), otd = onThisDayHTML(); h += [yearHTML(), nudgeHTML(), ...(new Date().getDay() === 0 ? [pc, otd] : [otd, pc]), backAgainHomeHTML(), revisitHTML()].find(Boolean) || ""; } /* Back again is part of the same single pick (Nikola r21) */ /* one quiet reminder at a time, the most timely first (Nikola + Cooper r20) */
     if (!REAL_TRIPS.length) h += `<button class="item" data-load-photos><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">⤓</div><div class="txt"><div class="t">Try it with your own photos</div><div class="s">Pick a time period and some photos. Your real trips appear on the globe. Nothing is uploaded.</div></div></button>`;
     h += tripsListHTML();
   } else if (tab === "collections"){
@@ -1458,7 +1458,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.25.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.26.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2496,7 +2496,7 @@ function openLaunchpad(v){
 async function forgetTrips(trips){ const tids = new Set(trips.map(t => t.id)), sids = trips.flatMap(t => t.stops.map(s => s.id)); try { dropDupes([...tids]); } catch(e){} { const bw = store.get("bookWords", {}) || {}; let ch = false; tids.forEach(id => { if (bw[id]){ delete bw[id]; delete BOOK_WORDS[id]; ch = true; } }); if (ch) store.set("bookWords", bw); }
   const hit = k => tids.has(k) || sids.some(sid => k === sid || k.startsWith(sid + "-") || k === "vn:stop:" + sid);
   for (const t of trips) for (const s of t.stops){ const n = (s.allPhotos || s.photos).length + 25; for (let i = 0; i < n; i++){ try { await idb.del("rp:" + s.id + "-" + i); } catch(e){} } try { await idb.del("vn:stop:" + s.id); } catch(e){} }
-  ["stories", "stopState", "stopNames", "phLabels", "phHidden", "phRot", "phOrder", "covers", "tripMusic", "backSeen", "voiceLen", "notes"].forEach(k => { const o = store.get(k, {}); if (!o || typeof o !== "object" || Array.isArray(o)) return; let ch = false; Object.keys(o).forEach(x => { if (hit(x)){ delete o[x]; ch = true; } }); if (ch) store.set(k, o); });
+  ["stories", "stopState", "stopNames", "phLabels", "phHidden", "phRot", "phOrder", "covers", "tripMusic", "backSeen", "watched", "voiceLen", "notes"].forEach(k => { const o = store.get(k, {}); if (!o || typeof o !== "object" || Array.isArray(o)) return; let ch = false; Object.keys(o).forEach(x => { if (hit(x)){ delete o[x]; ch = true; } }); if (ch) store.set(k, o); });
   // journal lines and day voice notes for the trip's days go too, unless another trip you keep covers that day
   const keep = TRIPS.filter(t => !tids.has(t.id)), days = new Set();
   for (const t of trips){ for (let d = new Date(t.start + "T12:00"); d <= new Date(t.end + "T12:00"); d = new Date(+d + DAY)){ const k = d.toISOString().slice(0, 10); if (!keep.some(o => k >= o.start && k <= o.end)) days.add(k); } }
@@ -2856,22 +2856,25 @@ async function replay(id, opts = {}){ const run = {}; try { await replayRun(id, 
 async function replayRun(id, opts, run){
   const t = findTrip(id); if (!t) return; const st = stopsOf(t); const back = ["trip", "vedit", "ready"].includes($("#overlay").dataset.kind) && TRIPS.some(x => x.id === id) ? id : null, fromEdit = $("#overlay").dataset.kind === "vedit"; /* started from the trip page: Done goes back there (Muse r20); from Edit my story, back to the editor; from the ready screen after an import, to the trip page (Cooper r21) */ $("#overlay").dataset.kind = ""; closeSheet(); closePlace(); closeLB(); selectedTrip = t;
   const token = {}; run.token = token; replayState = {trip:t, leg:-1, token, paused:false, opts, fromTrip:back, fromEdit}; const REC = !!opts.record; const savedPace = replayPace; if (REC) replayPace = "normal";
-  const el = $("#replay"); el.hidden = false; document.body.classList.add("replaying"); setTimeout(resize, 30);
+  const el = $("#replay"); el.hidden = false; el.classList.toggle("recording", REC); /* only a live recording hides the bar and Done (Cooper r24) */ document.body.classList.add("replaying"); setTimeout(resize, 30);
   el.innerHTML = `<div class="legchip" id="rleg" hidden></div>
     <div class="moment" id="rmoment"><div class="pics"></div><div class="mtxt" id="rmtxt"></div></div>
     <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { try { const c = tripCover(t); return c ? photo(c.scene, c.id, 1280, 960) : ""; } catch(e){ return ""; } })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
     <div class="card" id="rcard" style="opacity:0"></div>
     <div class="bar"><button class="btn" id="rprev" aria-label="Previous stop">‹</button><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rskip" aria-label="Next stop">›</button><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
   const alive = () => replayState?.token === token;
+  /* a watchdog (Muse r24): a story that stops moving for 30 seconds, while not paused or at its end card, ends with a word and goes back where it started */
+  replayState.beat = performance.now(); { const dog = setInterval(() => { if (!alive()){ clearInterval(dog); return; } const rs = replayState; if (rs.paused || rs.ended || (typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin)) rs.beat = performance.now();
+    if (performance.now() - rs.beat > 30000){ clearInterval(dog); console.error("story stalled", rs.leg); endReplay(); setTimeout(() => toast("Sorry, this story ran into a problem and stopped. Your photos are safe."), 300); } }, 2000); }
   if (REC){ el.classList.add("recording"); el.insertAdjacentHTML("beforeend", `<div class="recchip" id="recchip"><i></i> Making your video · <button id="rcancel">Cancel</button></div>`);
     const wasMuted = musicMuted; musicMuted = false; try { await document.fonts.ready; } catch(e){} await music.play(t.id); musicMuted = wasMuted; if (!alive()) return;
     if (!recStart(t)){ toast("This browser couldn't start recording"); endReplay(); return; } }
   else { music.play(t.id); if (musicMuted && musicChoice(t.id) !== "off") toast("Music is off. Tap 🔇 in the bar below to hear it"); } /* a mute set in an earlier story would otherwise look like broken music */
-  const wait = (ms, paced = true) => new Promise(res => { let left = ms * (paced ? PACE[replayPace] : 1), last = performance.now(); (function tick(){ if (!alive()) return res(); const now = performance.now(); if (!replayState.paused) left -= now - last; last = now; if (left <= 0 || replayState.skip || replayState.back){ replayState.skip = false; return res(); } setTimeout(tick, 40); })(); }); /* a timer, not animation frames: the story keeps moving even when the browser slows drawing */
+  const wait = (ms, paced = true) => new Promise(res => { let left = ms * (paced ? PACE[replayPace] : 1), last = performance.now(); replayState.beat = performance.now(); (function tick(){ if (!alive()) return res(); const now = performance.now(); if (!replayState.paused) left -= now - last; last = now; if (left <= 0 || replayState.skip || replayState.back){ replayState.skip = false; replayState.beat = performance.now(); return res(); } setTimeout(tick, 40); })(); }); /* a timer, not animation frames: the story keeps moving even when the browser slows drawing */
   const prog = k => { const p = document.getElementById("rprog"); if (p) p.style.width = (k*100) + "%"; };
   const mom = document.getElementById("rmoment"), mtxt = document.getElementById("rmtxt"), chip = document.getElementById("rleg"), title = document.getElementById("rtitle");
   { const s0 = startOf(t); flyTo(s0[0], s0[1], homeFor(t) ? 2.2 : Math.max(zoom, 3), 1800); } await wait(2600); if (!alive()) return;
-  title.classList.add("out"); if (rec) rec.titleT = 0;
+  title.classList.add("out"); if (rec) rec.titleT = 0; if (!REC && TRIPS.includes(t)){ WATCHED[t.id] = todayStr(); store.set("watched", WATCHED); } /* "A trip to revisit" leads with the ones you haven't watched */
   const goBack = () => { if (!replayState.back) return false; replayState.back = false; return true; };
   let i = 0, jump = false;
   story: for (;;){
@@ -2931,11 +2934,11 @@ async function replayRun(id, opts, run){
   card.innerHTML = opts.guided
     ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
     : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
-  card.style.opacity = 1; prog(1);
+  card.style.opacity = 1; prog(1); replayState.ended = true;
   if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
   // the end card stays until you leave; Previous goes back to the last stop
   await new Promise(res => { (function tick(){ if (!alive() || replayState.back) return res(); requestAnimationFrame(tick); })(); }); if (!alive()) return;
-  replayState.back = false; replayState.paused = false; card.style.opacity = 0; card.innerHTML = ""; { const pb = document.getElementById("rpause"); if (pb){ pb.style.visibility = ""; pb.textContent = "❚❚"; pb.setAttribute("aria-label", "Pause"); } }
+  replayState.back = false; replayState.paused = false; replayState.ended = false; replayState.beat = performance.now(); card.style.opacity = 0; card.innerHTML = ""; { const pb = document.getElementById("rpause"); if (pb){ pb.style.visibility = ""; pb.textContent = "❚❚"; pb.setAttribute("aria-label", "Pause"); } }
   i = st.length - 1; jump = true; music.unsoften && music.unsoften(); }
 }
 function endReplay(){
@@ -2945,7 +2948,7 @@ function endReplay(){
   music.stop(); setTimeout(() => { if (!replayState) music.stopNow(); }, 1500);
   document.body.classList.remove("replaying"); setTimeout(resize, 30);
   const back = replayState && (cut && TRIPS.includes(replayState.trip) ? replayState.trip.id : replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null), toEdit = back && !cut && replayState.fromEdit;
-  replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; dirty = true;
+  replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; $("#replay").classList.remove("recording"); dirty = true;
   if (back && TRIPS.some(x => x.id === back)){ if (toEdit) openVideoEdit(back); else openTrip(back); return; } /* straight back, with no flash of the trips list in between (Cooper r23) */
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
@@ -3171,7 +3174,7 @@ const recTracksOff = r => { try { r.stream.getTracks().forEach(t => t.stop()); }
 function recAbort(){ const r = rec; rec = null; music.recEnd(); if (r){ try { r.mr.onstop = null; r.mr.stop(); } catch(e){} recTracksOff(r); } }
 async function recFinish(){
   const r = rec; if (!r || r.finishing) return; r.finishing = true; await new Promise(res => { r.mr.onstop = res; try { r.mr.stop(); } catch(e){ res(); } }); if (rec === r) rec = null; music.recEnd(); recTracksOff(r);
-  const type = (r.mime || "video/webm").split(";")[0]; const blob = new Blob(r.chunks, {type}); const secs = Math.round((performance.now() - r.t0) / 1000);
+  const type = (r.mime || "video/webm").split(";")[0]; const blob = new Blob(r.chunks, {type}); const secs = Math.floor((performance.now() - r.t0) / 1000); /* never more than the player shows (Muse r24: said 24, showed 0:23) */
   endReplay(); openVideoSheet(blob, r.trip, secs, r.audio);
 }
 /* ---------- v0.13: trip cover everywhere, trip book, back again, people and life chapters, install ---------- */
@@ -3192,6 +3195,15 @@ function backAgain(t){ if (t.homeMem) return []; const prev = TRAVEL().filter(x 
 function backLine(h){ return `Your ${ordinal(h.nth)} time in ${esc(stopName(h.stop))}. Last here ${monthYear(h.last.stop.date)} on ${esc(h.last.trip.title)}.`; }
 function backAgainHTML(t){ const hs = backAgain(t); if (!hs.length) return "";
   return `<div class="suggest backcard"><b>🔁 Back again</b>${hs.slice(0, 3).map(h => `<p>${backLine(h)} <button class="linkbtn" data-open-trip="${h.last.trip.id}">Open that trip</button></p>`).join("")}${hs.length > 3 ? `<p>And ${plural(hs.length - 3, "more place")} you'd been before.</p>` : ""}</div>`; }
+/* A trip to revisit (Alan 11-15): when nothing else is timely, one past trip a day, the ones you haven't watched for longest first */
+let WATCHED = store.get("watched", {}) || {}; if (typeof WATCHED !== "object" || Array.isArray(WATCHED)) WATCHED = {};
+function revisitPick(){ const now = shToday(), past = TRAVEL().filter(t => t.end && now - new Date(t.end + "T12:00:00") > 30 * 864e5); if (!past.length) return null;
+  const w = t => WATCHED[t.id] || "", never = past.filter(t => !w(t)), list = (never.length ? never : past).sort((a, b) => w(a).localeCompare(w(b)) || a.start.localeCompare(b.start));
+  const day = Math.floor(now / 864e5); return list[day % Math.min(list.length, 3)]; }
+function revisitHTML(){ if (store.get("revisitHidden", "") === todayStr()) return ""; const t = revisitPick(); if (!t) return "";
+  const mo = Math.max(1, Math.round((shToday() - new Date(t.end + "T12:00:00")) / (30.44 * 864e5))), ago = mo < 24 ? `${plural(mo, "month")} ago` : `${plural(Math.floor(mo / 12), "year")} ago`, n = stopsOf(t).length;
+  let img = ""; try { const c = tripCover(t); if (c) img = `<img src="${photo(c.scene, c.id, 960, 480)}" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:12px;display:block;margin:4px 0 8px">`; } catch(e){}
+  return `<div class="postcard" aria-label="A trip to revisit"><div class="stamp" aria-hidden="true">↺</div><small>A trip to revisit</small><h3>${esc(t.title)}</h3>${img}<p style="margin:0">${ago} · ${plural(n, "place")}</p><div class="row-btns" style="margin-top:8px"><button class="btn primary" data-replay="${t.id}">▶ Watch its story</button><button class="btn" data-open-trip="${t.id}">See this trip</button></div><p class="note"><button style="text-decoration:underline;color:var(--muted);font-size:inherit" data-revisit-hide>Not today</button></p></div>`; }
 function backAgainHomeHTML(){ const recent = [...TRIPS].sort((a, b) => b.start.localeCompare(a.start)).slice(0, 2); const off = store.get("backSeen", {}) || {};
   for (const t of recent){ if (off[t.id]) continue; const hs = backAgain(t); if (!hs.length) continue; const h = hs.sort((a, b) => b.nth - a.nth)[0];
     return `<div class="suggest backcard" style="position:relative;padding-right:56px"><b>🔁 Back again · ${esc(t.title)}</b><p>${backLine(h)}</p><div class="row-btns" style="margin-top:8px"><button class="btn" data-open-trip="${t.id}">See this trip</button><button class="btn" data-open-trip="${h.last.trip.id}">See last time</button></div><button class="close" style="top:6px;right:6px" data-back-dismiss="${t.id}" aria-label="Hide this card">✕</button></div>`; }
@@ -3357,9 +3369,10 @@ function openVideoSheet(blob, t, secs, audio){
   /* its way back is the trip it was made from, wherever you started it (Muse r23) */
   openSheet(`${TRIPS.includes(t) ? TRIPBAR(t) : ""}<div class="pad" style="padding-top:18px">${sheetHead("Your shareable video")}
     <video src="${url}" controls playsinline style="width:100%;max-height:52vh;border-radius:14px;background:#000"></video>
-    <p class="note" style="margin:0">${esc(t.title)} · ${secs} seconds · ${(blob.size / 1048576).toFixed(1)} MB · ${ext.toUpperCase()}${audio ? " with music" : ", no music"}. It was made on this device and nothing was uploaded.</p>
+    <p class="note" style="margin:0">${esc(t.title)} · <span id="vidSecs">${secs}</span> seconds · ${(blob.size / 1048576).toFixed(1)} MB · ${ext.toUpperCase()}${audio ? " with music" : ", no music"}. It was made on this device and nothing was uploaded.</p>
     ${share ? `<button class="btn primary playbig" data-video-share>📤 Share to Instagram, TikTok, Facebook, Messages…</button><p class="note" style="margin:-4px 0 0;font-size:calc(16px * var(--fs,1))">Your phone shows every app you can share to.</p>` : ""}<div class="row-btns" style="margin:0"><a class="btn${share ? "" : " primary"}" href="${url}" download="${esc(name)}">Save video</a><button class="btn" data-vedit="${t.id}">✎ Edit my story</button>${TRIPS.includes(t) ? `<button class="btn" data-open-trip="${t.id}">Done</button>` : `<button class="btn" data-close>Done</button>`}</div>
     ${ext === "webm" ? `<p class="note" style="margin:0">This browser makes WebM videos. They play on computers and Android; for iPhone, make the video on the iPhone itself, which saves MP4.</p>` : ""}</div>`);
+  { const v = document.querySelector("#overlay video"), sp = document.getElementById("vidSecs"); if (v && sp) v.addEventListener("loadedmetadata", () => { if (isFinite(v.duration) && v.duration > 0) sp.textContent = Math.floor(v.duration); }); } /* the real length, the same as the player */
 }
 // keep a video near 90 seconds: fewer photos a stop first, then shorter photo time (never under half)
 // video length: Short aims for 45 seconds, Normal for 90, Full keeps every photo at its normal pace
@@ -3384,7 +3397,7 @@ const vedAll = t => stopsOf(t).flatMap(s => s.photos.map(p => p.id));
 const vedOf = t => { const e = VEDIT[t.id]; if (!e || !Array.isArray(e.out)) return null; const o = new Set(e.out); return new Set(vedAll(t).filter(id => !o.has(id))); };
 /* the photos one stop shows in the video: the ones you picked, or the first few */
 function vidStopPhotos(t, s, cap){ const ed = vedOf(t); if (ed){ const k = s.photos.filter(p => ed.has(p.id)); return k.length ? k : s.photos.slice(0, 1); } return s.photos.slice(0, cap); }
-function vedSumText(t){ const VP = vidPlan(t, vidLen, true), n = stopsOf(t).reduce((a, s) => a + vidStopPhotos(t, s, VP.cap).length, 0); return `${plural(n, "photo")} · about ${secsText(VP.est)}`; }
+function vedSumText(t){ const VP = vidPlan(t, vidLen), /* the same plan the video will use (Cooper r24: said 30 s, made 19 s) */ n = stopsOf(t).reduce((a, s) => a + vidStopPhotos(t, s, VP.cap).length, 0); return `${plural(n, "photo")} · about ${secsText(VP.est)}`; }
 function vedMusicName(t){ const m = musicChoice(t.id); return m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m); }
 function openVideoEdit(id){ const t = findTrip(id); if (!t) return; VED_BACK = id;
   const cov = tripCover(t).id, ed = vedOf(t) || new Set(vedAll(t)) /* every photo starts in, the same as the story; nothing is stored until you change something (Nikola r21) */, tile = (p, hint) => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
@@ -3853,6 +3866,7 @@ document.addEventListener("click", e => {
   if (g("[data-book-close]")){ closeBook(); return; }
   if (g("[data-book-page]")){ openBookPage(); return; }
   if (g("[data-book-all]")){ bookAll = !bookAll; store.set("bookAll", bookAll); const id = $("#book .bookpages").dataset.bookId; closeBook(true); openBook(id); return; }
+  if (g("[data-revisit-hide]")){ store.set("revisitHidden", todayStr()); renderBody(); toast("A different trip tomorrow"); return; }
   if ((b = g("[data-back-dismiss]"))){ const o = store.get("backSeen", {}) || {}; o[b.dataset.backDismiss] = 1; store.set("backSeen", o); renderBody(); return; }
   if ((b = g("[data-tgroup]"))){ tripGroup = b.dataset.tgroup; store.set("tripGroup", tripGroup); renderBody(); return; }
   if (g("[data-ch-new]")){ openChapter(); return; }
