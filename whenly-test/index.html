@@ -227,6 +227,11 @@ details.how{font-size:16px;color:var(--muted)}details.how summary{cursor:pointer
 .chalres{margin:0;font-size:16px;line-height:1.4;text-align:center}
 #dChal{color:#b26a00;border-color:#f5a623}#dChal[aria-pressed="true"]{background:var(--ink);border-color:#f5a623;box-shadow:0 0 0 2px #f5a623 inset}#dChal.cleared{opacity:.6}
 .twpick{display:grid;gap:8px}.twpick .btn{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;width:100%}.twpick .btn span{font-weight:400;font-size:15px;color:var(--muted)}
+.bh-promo{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:4px 0;border:2px solid var(--accent);border-radius:14px;background:var(--paper);color:var(--ink);text-decoration:none;font-size:17px;line-height:1.35;min-height:56px}
+.bh-promo small{display:block;font-size:15px;color:var(--muted);font-weight:600}
+.bh-promo-icon{font-size:32px;flex:none}
+.bh-promo-go{margin-left:auto;flex:none;background:var(--accent);color:var(--accent-ink);font-weight:800;border-radius:10px;padding:10px 14px;font-size:17px}
+.bhmore h3{margin:14px 0 6px;font-size:18px}.bhmore .bh-promo small{display:none}
 .wkbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px}.wkh{margin:0 0 6px;font-size:17px}
 .wkgoals{list-style:none;margin:0;padding:0;display:grid;gap:5px;font-size:16px}.wkgoals li{display:flex;gap:8px;align-items:baseline}.wkgoals li>span{width:18px;flex:none;color:var(--muted);font-weight:700}
 .wkgoals li.got>span{color:#2f9e44}.wkgoals li.got{color:var(--muted)}.wkgoals small{color:var(--muted);font-size:14px;margin-left:auto;white-space:nowrap}.wknote{margin:8px 0 0;font-size:15px;color:var(--muted)}
@@ -372,9 +377,97 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 34</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 35</span></footer>
 </div>
 
+<script id="bh-games">
+// Bright Harbor cross-promo: one shared list of our games plus the rules for showing them.
+// CANONICAL COPY: /mnt/project-files/business/crosspromo/bh-games.js. Every game copies this file
+// unchanged into its repo (src/bh-games.js, or inlined into src/game.html). To add a game or switch
+// one on, edit ONLY the BH_GAMES list here, then copy it into each game in its next update.
+//
+// Studio rules (Alan 2026-10-13, extended to all games 2026-11-15):
+// - promote only games that are live in that phone's store (iPhone needs an App Store link: Apple 2.3.10)
+// - never reward the install, and never show the card in a player's first 3 sessions
+// - game over: at most every 3rd one, never beside a keep-playing / continue offer
+// - hide a game that is already installed (where the phone lets us check, via @capacitor/app-launcher)
+// - a tapped game rests for 30 days; the next live game takes its turn
+// - kids games show only other kids games (behind the parent gate); other games never show kids games
+// - nothing here blocks play or shows an error when offline
+(function () {
+  const BH_GAMES = [
+    // id, name, one-line pitch, emoji icon, store links (empty = not live there), installed-check ids
+    { id: "wordglow", name: "Wordglow", tag: "Spell words and watch them glow.", icon: "✨",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.spellburst", ios: "",
+      web: "https://playwordglow.com", iosScheme: "wordglow://", androidPkg: "com.playbrightharbor.spellburst" },
+    { id: "sumburst", name: "Sumburst", tag: "Fill groups that add up to the target.", icon: "🔢",
+      android: "https://play.google.com/store/apps/details?id=com.playbrightharbor.sumburst", ios: "",
+      web: "https://playsumburst.com", iosScheme: "sumburst://", androidPkg: "com.playbrightharbor.sumburst" },
+    { id: "colorrivers", name: "Color Rivers", tag: "Join the colors into calm flowing rivers.", icon: "🌊",
+      android: "", ios: "", web: "https://playcolorrivers.com", iosScheme: "colorrivers://", androidPkg: "com.playbrightharbor.colorrivers" },
+    { id: "whenly", name: "Whenly", tag: "Put five moments from history in order.", icon: "🗓️",
+      android: "", ios: "", web: "https://playwhenly.com", iosScheme: "whenly://", androidPkg: "com.playbrightharbor.whenly" },
+    { id: "ahalock", name: "Ahalock", tag: "A daily picture logic puzzle.", icon: "🔒",
+      android: "", ios: "", web: "https://playahalock.com", iosScheme: "ahalock://", androidPkg: "com.playbrightharbor.ahalock" },
+    { id: "pebblepond", name: "Pebble Pond", tag: "Ripple the pond to bring every visitor home.", icon: "🪨",
+      android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
+  ];
+
+  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  //   self:   this game's id (it is never promoted to itself)
+  //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
+  //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
+  //   track:  optional analytics function (event, params); omit in kids games
+  // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  const BHPromo = {
+    games: BH_GAMES, opts: null, installed: {}, sessions: 0,
+    init(opts) {
+      this.opts = opts;
+      const s = opts.store, k = opts.prefix + "promo-sessions";
+      this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
+      this.preview = /[?&]promo\b/.test(location.search);
+      const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
+      if (L && p !== "web") for (const g of this.pool()) {
+        const url = p === "ios" ? g.iosScheme : g.androidPkg;
+        if (url) L.canOpenUrl({ url }).then(r => { if (r.value) this.installed[g.id] = true; }).catch(() => {});
+      }
+      return this;
+    },
+    platform() { return window.Capacitor?.getPlatform?.() || "web"; },
+    pool() { const kids = !!this.opts.kids; return BH_GAMES.filter(g => g.id !== this.opts.self && !!g.kids === kids); },
+    link(g) { const p = this.platform(); return p === "web" ? (g.android || g.ios ? g.web : "") : g[p]; },
+    // live, linkable on this phone, not installed, not resting after a tap
+    ready() {
+      if (this.preview) return this.pool().map(g => ({ ...g, href: this.link(g) || g.web }));
+      const now = Date.now(), s = this.opts.store;
+      return this.pool().filter(g => this.link(g) && !this.installed[g.id] && now > s.get(this.opts.prefix + "promo-rest-" + g.id, 0))
+        .map(g => ({ ...g, href: this.link(g) }));
+    },
+    forHelp() { return this.sessions > 3 || this.preview ? this.ready() : []; },
+    forGameOver(offerShown) {
+      if (offerShown) return null;
+      const list = this.forHelp(); if (!list.length) return null;
+      const s = this.opts.store, k = this.opts.prefix + "promo-overs", n = s.get(k, 0) + 1; s.set(k, n);
+      if (n % 3 && !this.preview) return null;
+      return list[Math.floor(n / 3) % list.length];   // rotate through the live games
+    },
+    card(g, where) {
+      this.opts.track?.("promo_shown", { game: g.id, where });
+      return `<a class="bh-promo" data-game="${g.id}" href="${g.href}" target="_blank" rel="noopener">` +
+        `<span class="bh-promo-icon" aria-hidden="true">${g.icon}</span><span><small>More from Bright Harbor</small>` +
+        `<b>${g.name}</b>: ${g.tag}</span><span class="bh-promo-go">Get it</span></a>`;
+    },
+    wire(root, where) {
+      root?.querySelectorAll(".bh-promo").forEach(a => a.addEventListener("click", () => {
+        this.opts.track?.("promo_tap", { game: a.dataset.game, where });
+        this.opts.store.set(this.opts.prefix + "promo-rest-" + a.dataset.game, Date.now() + 30 * 864e5);
+      }));
+    },
+  };
+  window.BH_GAMES = BH_GAMES; window.BHPromo = BHPromo;
+})();
+</script>
 <script>
 // [year, icon, title, did-you-know, category, Wikipedia article]. Icons are Phosphor duotone (MIT); scripts/icons.mjs builds the sprite.
 // Categories: h history, i invention, f fun & pop culture, s space & science, p sports & places
@@ -1550,6 +1643,7 @@ function showResult(){
     ${G.kind==="practice"?"":`<p class="connect">${nearMiss()}</p>`}
     ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
     ${pointsLine(G.gain)}
+    ${promoCard()}
     ${dorA||G.kind==="practice"?`<p class="crowd" id="crowd" hidden></p>`:""}
     ${daily&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:""}
     <details class="how"><summary>More: how scoring works${dorA?", this week's stories":""}</summary>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 out of order.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty (Easy ×1, Medium ×1.15, Tricky ×1.3, Hard ×1.5), rounded to the nearest point. Archive, Practice and Expert earn at half rate, and Practice and Expert each earn points for your first 3 games a day.</p>
@@ -1571,6 +1665,7 @@ function showResult(){
   if($("#toPractice"))$("#toPractice").onclick=()=>{newPractice();render()};
   if($("#noads"))$("#noads").onclick=buyNoAds;
   if($("#bWk"))$("#bWk").onclick=stats;
+  BHPromo.wire(r,"over");
   showBanner();
 }
 function shareText(){
@@ -1732,8 +1827,9 @@ function help(){sheet(`<h2>How to play</h2>
   <p><b>⚡ Challenges:</b> after ${CHAL_AT} Dailies, Practice adds a ⚡ button: one puzzle a day with a twist (Count only, One century, Photo finish or No helpers). Get all five in order for +${CHAL_PTS} history points. Every 3rd challenge, you pick the twist.</p>
   <div id="textHelp"></div>
   <div id="decoHelp"></div>
+  ${promoHelp()}
   <p style="color:var(--muted);font-size:15px">Card photos are public domain or CC0, from Wikimedia Commons.</p>
-  <p class="ver" style="color:var(--muted);font-size:15px">${($("#foot .build")?.textContent||"").replace(/^\s*·\s*/,"")}</p>`);renderTextHelp();renderDecoHelp()}
+  <p class="ver" style="color:var(--muted);font-size:15px">${($("#foot .build")?.textContent||"").replace(/^\s*·\s*/,"")}</p>`);renderTextHelp();renderDecoHelp();BHPromo.wire([...document.querySelectorAll(".sheet")].pop(),"help")}
 // History points: every finished puzzle (daily, archive, Practice, Expert) adds its score, so
 // play after the daily still counts. Weekly total resets each Monday; ranks use the lifetime total.
 const RANKS=[[0,"Curious"],[250,"Explorer"],[1000,"Scholar"],[3000,"Chronicler"],[7500,"Archivist"],[15000,"Legend"]];
@@ -2218,6 +2314,19 @@ function renderDecoHelp(){
   $("#decoToggle").onclick=()=>{S.deco=!on;save();track("deco_toggle",{on:!on?1:0});applyDeco();renderDecoHelp()};
 }
 
+// Bright Harbor cross-promo (Alan chose "All games", 2026-11-15). bh-games.js above is the studio's canonical copy.
+// Its whenly-promo-* keys sit outside S, so the cloud save never carries them (phone-only, like the prefs backup).
+const promoStore={get:(k,f)=>{try{const v=localStorage.getItem(k);return v==null?f:JSON.parse(v)}catch(e){return f}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+try{BHPromo.init({self:"whenly",prefix:"whenly-",store:promoStore,track})}catch(e){}
+// Final result of a Daily, Archive or Practice puzzle only; never with the reminder or gift offer, or a challenge retry.
+function promoCard(){
+  if(!["daily","archive","practice"].includes(G.kind)||G.tw&&!G.chalCleared)return"";
+  const offer=G.kind==="daily"&&((NATIVE&&S.remind==null)||(S.giftDay===G.n+1&&!S.giftPaid));
+  try{const g=BHPromo.forGameOver(offer);return g?BHPromo.card(g,"over"):""}catch(e){return""}
+}
+function promoHelp(){
+  try{const l=BHPromo.forHelp();return l.length?`<div class="bhmore"><h3>More from Bright Harbor</h3>${l.map(g=>BHPromo.card(g,"help")).join("")}</div>`:""}catch(e){return""}
+}
 // Larger text (Nikola round 18, Alan chose "Add it" 2026-11-14): every font under 20px grows by 15%.
 // Card names of 17px or more are already sized to fit the card, so they stay as they are.
 const BIG=1.15,baseFont=new WeakMap();
