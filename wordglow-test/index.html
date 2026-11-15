@@ -172,7 +172,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .defcard.out { opacity: 0; transform: translateY(-12px); }
 .defcard .dw { font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; color: var(--gold); letter-spacing: 0.5px; }
 .defcard .dp { font-size: 0.8rem; color: #b9bff0; font-style: italic; margin-left: 6px; }
-.defcard .dd { font-size: 0.95rem; line-height: 1.35; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.defcard .dd { font-size: 0.95rem; line-height: 1.35; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .defcard .drow + .drow { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); }
 .defcard .dnew { font-size: 0.72rem; color: #b9bff0; margin-top: 4px; }
 /* "tap anywhere to close" fades in once a tap would close the card, so the short guard isn't a surprise (Nikola round 12). */
@@ -537,7 +537,7 @@ button.pill { cursor: pointer; }
       <li><b>Level bonuses:</b> once a level, +10 🪙 for scoring two words that cross (✚ Crossword), and +10 🪙 for growing a glowing 3-letter word into 5 or more letters (🌱; not in Expert or on 4+ letter levels).</li>
       <li><b>🗓️ Weekly words:</b> every week has 5 themed words (see 🎯 Quests). Spell one on the board for +15 🪙, and all 5 for +75 🪙 and a Rotate.</li>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
-      <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total.</li>
+      <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total, and on a ⚡ Combos level they pay x3.</li>
       <li><b>Chains:</b> score another word within 2 moves of the last one and it scores more: x1.5, then x2, up to x3.</li>
       <li>Words of 7 or more letters win bonus coins, and so do words with the rare letters J, Q, X or Z.</li>
       <li>From level 2, special blocks appear. A <b>2x</b> block doubles the word it's in. A <b>💣 bomb</b> block blows up the 8 blocks around it when you score a word that uses the 💣 block itself: <b>BOOM!</b> +3 points per block, and any glowing word it hits scores too. The red squares show what will go, and the 💥 number shows the BOOM points.</li>
@@ -619,7 +619,7 @@ const TWISTS = [
   { id: "needE", line: "Words without an E don't count.", short: "Every word needs an E", tag: "Needs an E", text: "Every word needs an <b>E</b> this level." },
   { id: "bombs", line: "A 💣 word blasts the squares around it, +3 each.", short: "Bomb board", tag: "Bomb board", text: "Bomb board: <b>💣 bombs</b> on the board and in pieces. Score a word with a bomb to blow up the 8 squares around it, <b>+3 each</b>." },
   // Replaced "Big words pay double", which only paid off now and then (Nikola round 15 idea; Alan 2026-11-14).
-  { id: "combo", line: "2 or more touching words scored together pay x3.", short: "Combos pay triple", tag: "Combo x3", text: "Combos pay triple: score <b>2 or more touching words together</b> for <b>x3</b>." },
+  { id: "combo", chip: "Combos x3: words must touch", line: "2 or more touching words scored together pay x3.", short: "Combos pay triple", tag: "Combo x3", text: "Combos pay triple: score <b>2 or more touching words together</b> for <b>x3</b>." },
   { id: "crowded", line: "10 extra letters to use or clear.", short: "Crowded board", chip: "Crowded: 10 extra letters", tag: "Crowded", text: "Crowded board: <b>10 extra letters</b> to use or clear this level." },
   // Placement twists (Muse round 13 idea; Alan chose both 2026-11-14).
   { id: "ice", line: "Frozen ❄️ letters stay; using one thaws it, +5.", short: "Ice blocks", tag: "Ice blocks", text: "Ice blocks: <b>❄️ frozen letters</b> don't clear. Use one in a word to <b>thaw it, +5</b>, and it stays to use again." },
@@ -631,7 +631,7 @@ const expertOn = () => expert && mode === "endless" && !tut;
 // Twist of the day (Nikola round 15 idea; Alan 2026-11-14): every Daily Board has one gentle twist, the same for everyone.
 const DAILY_TWISTS = ["bombs", "combo", "ice"];
 const dailyTwistFor = no => TWISTS.find(t => t.id === DAILY_TWISTS[no % DAILY_TWISTS.length]);
-let dailyRunNo = null;   // the Daily played, fixed when the run starts, so midnight never changes its twist (Nikola round 16)
+let dailyRunNo = null, dailyRunDay = null;   // dailyRunDay: the day that Daily belongs to, kept across midnight (Cooper round 17)   // the Daily played, fixed when the run starts, so midnight never changes its twist (Nikola round 16)
 function twist() {
   if (mode === "daily" && !tut) return dailyTwistFor(dailyRunNo ?? dailyNo());
   if (mode !== "endless" || tut || level < CHALLENGE_FROM || level % 3) return null;
@@ -883,8 +883,9 @@ function seedBoard() {
 const CROWDED_EXTRA = 10, BOARD_BOMBS = 3, ICE_BLOCKS = 4, THAW_PTS = 5;
 
 function newGame(m, replay = false) {
+  store.set("wb-lv-paid", "");
   defGen++;
-  mode = m; levelNewWords = []; dropRotGuide(); dryMoves = 0; softHint = null; dailyRunNo = m === "daily" ? dailyNo() : null;
+  mode = m; levelNewWords = []; dropRotGuide(); dryMoves = 0; softHint = null; dailyRunNo = m === "daily" ? dailyNo() : null; dailyRunDay = m === "daily" ? todayKey() : null;
   track("game_start", { mode });
   if (m === "daily" && !store.get("wb-daily-started", false)) { store.set("wb-daily-started", true); track("first_daily_start", { day: daysSinceFirst() }); }
   rng = mode === "daily" ? mulberry(hash("wordblocks-" + todayKey())) : mulberry(Math.floor(Math.random() * 2 ** 31));
@@ -972,7 +973,7 @@ const SAVE_KEY = "wb-save";
 function saveGame() {
   if (tut || over) return;
   const save = {
-    v: 1, day: todayKey(), mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, rotates,
+    v: 1, day: mode === "daily" && dailyRunDay ? dailyRunDay : todayKey(), runNo: dailyRunNo, mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, rotates,
     continued, levelsSinceAd, goalCount, chain, chainMoves, dryMoves, seed: rng.seed(), expert, picked, lvBonus, scoredSinceDeal,
     tray: tray.map(p => ({ ...p, fresh: false })),
     goals: goals.map(g => ({ id: g.id, prog: g.prog, need: g.need, reward: g.reward })),
@@ -1004,7 +1005,8 @@ function resumeGame(key = SAVE_KEY, welcome = true) {
   if (!g || g.v !== 1 || (g.mode === "daily" && g.day !== todayKey()) || !saveOk(g)) return false;
   dropRotGuide();
   ({ mode, level, levelBase, score, board, found, erasers, shuffles, toShuffle, continued, levelsSinceAd, goalCount, tray } = g);
-  dailyRunNo = mode === "daily" ? dailyNo() : null;   // a Daily save is only resumed on its own day
+  dailyRunNo = mode === "daily" ? g.runNo ?? dailyNo() : null;   // a Daily save is only resumed on its own day,
+  dailyRunDay = mode === "daily" ? g.day : null;                   // and keeps its own number and twist (Cooper round 17)
   chain = g.chain || 0; chainMoves = g.chainMoves || 0; dryMoves = g.dryMoves || 0; softHint = null; rotates = g.rotates || 0; rotating = false; rotPaid = null;
   goals = g.goals.map(x => ({ ...GOALS.find(d => d.id === x.id), ...x }));
   rng = mulberry(g.seed);
@@ -1552,7 +1554,9 @@ function showModeSwitch() {
   const done = store.get(DAILY_KEY(), null);
   if (toDaily && done) {
     openTabSheet("mode", `<h3>📅 Daily Board #${done.no} done ✅</h3>
+       <p class="twist-badge">⚡ ${dailyTwistFor(done.no).short}</p>
        <p>You scored <b>${done.score.toLocaleString()}</b>${done.top ? ` and your best word was <b>${done.top.w.toUpperCase()}</b> for ${done.top.s}` : ""}. A new board comes out tomorrow.</p>
+       <p class="tomorrow-twist">⚡ Tomorrow's twist: <b>${dailyTwistFor(done.no + 1).short}</b></p>
        <div class="btns"><button class="btn" id="d-share">Share result</button><button class="btn plain" id="d-again">Play it again</button></div>
        <textarea id="sharetext" rows="5" readonly hidden>${dailyShareText(done)}</textarea>`);
     document.getElementById("d-share").onclick = e => shareResult(dailyShareText(done), e.currentTarget);
@@ -1567,6 +1571,7 @@ function showModeSwitch() {
     : `<h3>♾️ Endless</h3><p>${saved ? `Pick up your Endless game at level ${saved.level}.` : "Start an Endless game. It gets a little harder each level."}</p>
        <p>Today's Daily Board is saved too.</p>
        <div class="btns"><button class="btn" id="go-mode">${saved ? "Back to Endless" : "Play Endless"}</button></div>`);
+  document.getElementById("modal").classList.add("solid");   // the board behind it is about to change (Muse round 17)
   document.getElementById("go-mode").onclick = () => switchMode(toDaily ? "daily" : "endless");
 }
 // Switching keeps each mode's game: the one you leave is saved, the one you open picks up where it was.
@@ -1636,6 +1641,8 @@ function defText(w) {
 // over the board). With several new words, the card shows the longest; the rest are in the word book.
 // It stays until the player next touches the screen; that touch still goes through to the game.
 let defGen = 0;   // goes up with every new game or level
+// A long meaning ends at a whole word with "…", never mid-word (Muse round 17).
+const clipWords = (t, n) => t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, "").replace(/[,;:]$/, "") + "…";
 function showDefinitions(words) {
   // A word scored before the meanings finish loading still gets its card, once they arrive.
   // It's dropped if a new game or level has started by then, so a late card never shows out of place.
@@ -1646,11 +1653,11 @@ function showDefinitions(words) {
   const [w, d] = items[0], more = items.length - 1;
   const el = document.createElement("div");
   el.className = "defcard"; el.setAttribute("role", "status");
-  el.innerHTML = `<div class="drow"><span class="dw">${esc(w.toUpperCase())}</span><span class="dp">${esc(d.pos)}</span><div class="dd">${esc(d.text)}</div></div>`
+  el.innerHTML = `<div class="drow"><span class="dw">${esc(w.toUpperCase())}</span><span class="dp">${esc(d.pos)}</span><div class="dd">${esc(clipWords(d.text, 110))}</div></div>`
     + `<div class="dnew">${more ? `+${more} more new word${more > 1 ? "s" : ""} in your word book` : "Added to your word book"}<span class="dclose"> · tap anywhere to close</span></div>`;
   const app = appEl.getBoundingClientRect(), lv = document.getElementById("level").getBoundingClientRect();
   el.style.left = app.left + "px"; el.style.width = app.width + "px";
-  el.style.top = Math.round(lv.bottom + 6) + "px"; el.style.maxHeight = "132px";
+  el.style.top = Math.round(lv.bottom + 6) + "px";
   document.body.appendChild(el);
   // Wait a moment so the tap that cashed the word in (or a quick next tap) doesn't close it before it's read.
   setTimeout(() => document.addEventListener("pointerdown", hideDefinitions, { once: true, capture: true }), 1200);
@@ -1700,6 +1707,8 @@ const ERR_TOAST = /^(Doesn't fit|Not a word|Locked in|Rotate is off|Drop it on)/
 function dropErrToasts() {
   toastQ = toastQ.filter(q => !ERR_TOAST.test(q.text));
   if (toastNow && ERR_TOAST.test(toastNow.text)) endToast(toastNow);
+  const live = document.getElementById("sr-live");   // screen readers don't keep hearing an old "Doesn't fit" (Muse round 17)
+  if (live && ERR_TOAST.test(live.textContent)) live.textContent = "";
 }
 function put(p, r0, c0, moved = false) {
   dropErrToasts();
@@ -1779,6 +1788,7 @@ function wordY(group, lines = 0) {
 }
 function cashIn(group) {
   if (!Array.isArray(group)) group = [group];
+  store.set("wb-tap-taught", true);
   movable = null;
   bombReach(group);
   const k = group.length, comboMult = twist()?.id === "combo" && k > 1 ? Math.max(3, 1 + 0.5 * (k - 1)) : 1 + 0.5 * (k - 1);   // Combos pay triple
@@ -1944,9 +1954,11 @@ function setHint() {
   else if (softHint?.eraser) h.innerHTML = "Stuck? Tap the <b>Eraser</b> below, then a block, to make room.";
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
+  // Players who skipped the tutorial learn to tap the first time a word glows (Muse round 17).
+  else if (lit.length && !book.size && !store.get("wb-tap-taught", false)) h.innerHTML = "<b>Tap</b> a glowing word to score it!";
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
   else if (!found.length && level === 1 && mode === "endless") h.innerHTML = `Score <b>${target()} points</b> to clear level 1.`;
-  else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the piece you just placed.";
+  else if (movable && moveHints < 3) h.innerHTML = "Wrong spot? <b>Drag</b> the dashed piece before your next one.";   // says when it locks (Muse round 17)
   // The how-to line is for new players; past level 5 the hint only speaks when it has news (Nikola round 15).
   // The Daily shows it only on its first level, and only to new players (Cooper round 16).
   else if (store.get("wb-best-level", 1) > 5 || (mode === "daily" && level > 1)) h.innerHTML = "";
@@ -2385,6 +2397,9 @@ function levelUp() {
   setTimeout(() => {
     board = Array.from({ length: N }, () => Array(N).fill(null)); renderBoard();
     if (dailyEnd) return dailyDone(earned, kept);
+    // The coins land while the card shows them (Muse round 17). A reload that shows this card again doesn't pay twice.
+    const paidKey = mode + ":" + level;
+    if (store.get("wb-lv-paid", "") !== paidKey) { addCoins(earned + msCoins); store.set("wb-lv-paid", paidKey); }
     const msLine = msCoins ? `🏅 Level ${msLevel} reached: +${msCoins} 🪙` : "";
     const chalLine = chal ? `⚡ Challenge cleared: +${chal} 🪙 (included)` : "";
     const nt = mode === "endless" ? nextTwist() : null;
@@ -2397,15 +2412,15 @@ function levelUp() {
     if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); }
     // After the 3rd Endless level, ask once about a daily reminder (phone apps only).
     const askRemind = mode === "endless" && level >= 3;
-    const go = (n, then = startNextLevel) => {
-      closeSheet(); addCoins(n + msCoins);
+    const go = (then = startNextLevel) => {
+      closeSheet(); store.set("wb-lv-paid", "");
       if (msCoins) store.set("wb-level-ms-" + msLevel, true);
       maybeInterstitial(() => { then(); if (askRemind) setTimeout(maybeAskReminder, 1500); });
     };
     const td = document.getElementById("todaydaily");
-    if (td) td.onclick = () => go(earned, () => { startNextLevel(); switchMode("daily"); });
-    document.getElementById("dbl").onclick = () => watchAd(() => go(earned * 2), () => go(earned));
-    document.getElementById("next").onclick = () => go(earned);
+    if (td) td.onclick = () => go(() => { startNextLevel(); switchMode("daily"); });
+    document.getElementById("dbl").onclick = () => watchAd(() => { addCoins(earned); go(); }, () => go());   // the ad adds the extra only
+    document.getElementById("next").onclick = () => go();
   }, 900 + left.length * 40);
 }
 // Between-level ad, from level 3 on, every 3rd level clear, unless ads were removed (Alan 2026-11-09: was every other).
@@ -2597,15 +2612,16 @@ function gameOver() {
 
 // ---------- the Daily Board ends after 3 levels, with a result to share ----------
 const DAILY_LEVELS = 3;
-const DAILY_KEY = () => "wb-daily-result-" + todayKey();
+const DAILY_KEY = (day = todayKey()) => "wb-daily-result-" + day;
 function dailyDone(earned, kept = []) {
   track("daily_complete", { score, words: found.length });
   addCoins(earned);
   const top = found.slice().sort((a, b) => b.s - a.s)[0];
   const result = { no: dailyRunNo ?? dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null };
   // Keep the best finish of the day; a replay that scores less doesn't replace it.
-  const prev = store.get(DAILY_KEY(), null);
-  if (!prev || score > prev.score) store.set(DAILY_KEY(), result);
+  // A Daily finished just after midnight is filed under the day it was played, so the new day's board stays open (Cooper round 17).
+  const key = DAILY_KEY(dailyRunDay || todayKey()), prev = store.get(key, null);
+  if (!prev || score > prev.score) store.set(key, result);
   // The finished board isn't resumed: opening the Daily again today shows this result.
   store.set(SAVE_KEY + "-daily", null);
   if (store.get(SAVE_KEY, null)?.mode === "daily") store.set(SAVE_KEY, store.get(SAVE_KEY + "-endless", null));
@@ -2614,7 +2630,7 @@ function dailyDone(earned, kept = []) {
 function showDailyResult(r, earned, fresh, kept = []) {
   hideDefinitions();
   over = true; busy = false; movable = null;
-  const best = store.get(DAILY_KEY(), r);
+  const best = store.get(DAILY_KEY(fresh && dailyRunDay || todayKey()), r);
   const share = dailyShareText(r);
   const el = document.getElementById("over");
   el.innerHTML = `<div>
@@ -2667,6 +2683,7 @@ let drag = null, tutorialJustDone = false, suppressClick = false;
 // Drag a piece from the tray, or (fromBoard) the movable piece already on the board.
 function startDrag(e, i, el, fromBoard = false, grab = null) {
   if (busy || over || drag) return;
+  hideDefinitions();   // a drag closes the meaning card, so it never hides where the piece goes (Muse round 17)
   if (rotating && !fromBoard) { e.preventDefault(); return rotatePiece(i); }
   if (rotating) { if (rotPaid === null) toast("Rotate is off. It turns pieces in the tray below"); rotating = false; rotPaid = null; renderTools(); }
   if (erasing) { erasing = false; renderTools(); }
@@ -2943,7 +2960,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "80b519b 2026-11-14 23:30Z";
+const BUILD_STAMP = "62ac39c 2026-11-15 15:55Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
