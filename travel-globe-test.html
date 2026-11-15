@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.25.0 (photo grid editor, tidier More, Add, Share and Trip book) -->
+<!-- Tripsake v0.25.1 (Muse round 22 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1458,7 +1458,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.25.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.25.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1517,7 +1517,8 @@ function lastPlayed(c){ const r = allRounds(c); return r.length ? r.map(x => x.d
 const NO_BACKBAR = new Set(["welcome", "homeq", "homefirst", "memheld", "memask", "prev", "ready"]); /* first-run questions, photo review and the ready screen have their own way on */
 /* a sheet opened from a trip page (share, video) leads back to that trip page, by its bar and by ✕ (Cooper, Muse r21) */
 let PEND_TRIP = null; const TRIPBAR = t => `<div class="backbar"><button class="btn" data-open-trip="${t.id}">‹ ${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}</button></div>`; /* never "Back to Back to the Rockies" (Nikola r21) */
-document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-share],[data-tshare]"); PEND_TRIP = b && $("#overlay").dataset.kind === "trip" && $("#overlay").contains(b) && selectedTrip ? selectedTrip.id : null; }, true);
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-share],[data-tshare]"), ov = $("#overlay"); PEND_TRIP = b && ov.dataset.kind === "trip" && ov.contains(b) && selectedTrip ? selectedTrip.id : null;
+  if (!PEND_TRIP && e.target.closest && e.target.closest("[data-vlen]") && ov.dataset.trip) PEND_TRIP = ov.dataset.trip; }, true); /* a "How long?" tap redraws the video screen: keep its way back to the trip (Muse r22) */
 function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vrecCancel(); const ft = kind !== "trip" && PEND_TRIP && TRIPS.find(x => x.id === PEND_TRIP); PEND_TRIP = null;
   if (!NO_BACKBAR.has(kind) && !html.includes('class="backbar"')) html = (ft ? TRIPBAR(ft) : BACKBAR) + html; $("#overlay").dataset.kind = kind; $("#overlay").dataset.trip = ft ? ft.id : kind === "vedit" && VED_BACK && TRIPS.some(x => x.id === VED_BACK) ? VED_BACK : ""; $("#overlay").innerHTML = `<div class="sheet" data-sheet-bg><div class="sheet-in" role="dialog" aria-modal="true"><div class="sheet-grip" title="Drag down to close"><i></i></div>${html}</div></div>`; }
 // drag the grip (or a sheet title) down to close a sheet; titles don't select text while dragging
@@ -2926,7 +2927,7 @@ async function replay(id, opts = {}){
   const card = document.getElementById("rcard");
   card.innerHTML = opts.guided
     ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>Back to my globe</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
-    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>Back to globe</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
+    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${replayState.fromEdit ? "Back to Edit my story" : replayState.fromTrip && !REC ? `${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}` : "Back to globe"}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
   card.style.opacity = 1; prog(1);
   if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
   // the end card stays until you leave; Previous goes back to the last stop
@@ -3171,7 +3172,10 @@ async function recFinish(){
   endReplay(); openVideoSheet(blob, r.trip, secs, r.audio);
 }
 /* ---------- v0.13: trip cover everywhere, trip book, back again, people and life chapters, install ---------- */
-function tripCover(t){ const st = stopsOf(t); const c = PHOTOS.find(p => p.id === COVERS[t.id] && p.stop.trip === t); if (c) return c; const cs = st.find(s => s.photos.length > 1) || st[0] || t.stops[0]; return cs.photos[0]; }
+/* a photo that can't be shown on this phone never becomes the cover (Muse r22) */
+const canShow = p => p && p.scene !== "missing" && (p.scene !== "real" || imgCache.has("rp:" + p.id));
+function tripCover(t){ const st = stopsOf(t); const c = PHOTOS.find(p => p.id === COVERS[t.id] && p.stop.trip === t); if (c && canShow(c)) return c; const cs = st.find(s => s.photos.length > 1) || st[0] || t.stops[0];
+  const ok = [cs, ...st, ...t.stops].reduce((f, s) => f || (s && s.photos.find(canShow)), null); return ok || c || cs.photos[0]; }
 const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({1:"st", 2:"nd", 3:"rd"}[n % 10] || "th"));
 const monthYear = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", year:"numeric"});
 
@@ -3364,9 +3368,10 @@ function vidPlan(t, len = vidLen, asEd){ const L = VLEN[len] || VLEN.normal; con
     return {fly:here ? .7 : (car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) / 1000, note:getStory(s).note ? 2.5 : 0, voice:vk ? 1.5 + (vl[vk] || 0) : 0, n:ed ? vidStopPhotos(t, s, 99).length : s.photos.length}; });
   const FIX = 2.6 + 1.9 + 3.5; // title card, overview, end card (the start-up before recording isn't in the video)
   const est = (cap, sc) => FIX + legs.reduce((a, g) => { const k = Math.min(cap, g.n), ph = sc * (6 + 2.6 * (k - 1)) + g.note; return a + g.fly + .6 + Math.max(ph, g.voice) + .5; }, 0);
-  if (ed) return {cap:99, sc:1, est:Math.round(est(99, 1))}; /* your picks are the video: no trimming, and the line at the top says how long */
+  const slack = 1.1 * legs.length; /* measured: a recorded video runs about a second longer per stop than the timings add up to (Muse r22: said 33 s, made 37 s) */
+  if (ed) return {cap:99, sc:1, est:Math.round(est(99, 1) + slack)}; /* your picks are the video: no trimming, and the line at the top says how long */
   let cap = L.cap; while (cap > 1 && est(cap, 1) > L.target) cap--; let sc = 1; if (est(cap, 1) > L.target){ const fixed = est(cap, 0), ph = est(cap, 1) - fixed; sc = Math.max(.5, (L.target - fixed) / ph); }
-  return {cap, sc, est:Math.round(est(cap, sc))}; }
+  return {cap, sc, est:Math.round(est(cap, sc) + slack)}; }
 function secsText(n){ return n < 100 ? `${n} seconds` : `${Math.round(n / 60 * 2) / 2} minutes`; }
 /* Edit video (Alan 11-14): the first video is automatic; then you choose its photos, their order, its music, and keep a photo whole (no zoom) */
 const VEDIT = store.get("vidEdit", {}) || {}, VWHOLE = new Set(store.get("vidWhole", []) || []), VMADE = new Set(store.get("vidMade", []) || []); let VED_BACK = null;
