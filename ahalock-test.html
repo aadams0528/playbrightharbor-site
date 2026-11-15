@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.11 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.12 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,6 +49,7 @@ h1,h2,h3{font-family:var(--disp);margin:0}
 .dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
 .dots i.on{background:var(--amber)}
 .tile.done{border-color:var(--green);background:#eefaf2}
+button.tile{font:inherit;color:inherit;cursor:pointer;width:100%;display:block}
 .tile.done::after{content:"✓";position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:18px 0 8px}
 .wd{background:rgba(255,255,255,.08);border-radius:12px;padding:8px 0;text-align:center;font-size:13px;color:#c6d0e6;border:2px solid transparent}
@@ -2569,6 +2570,27 @@ function holidayFor(ds) {
 }
 const decoOn = () => store.get('deco', true) !== false;
 const holidayNow = () => decoOn() ? holidayFor(realToday) : null;
+// Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
+function showHelp() {
+  openSheet('<h2>Help &amp; settings</h2><div class="sub" style="margin-bottom:6px"><b>How to play</b> · tap a puzzle type for a short lesson.</div><div class="howgrid">' +
+    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
+    '<div class="sub" style="font-size:16px;margin:10px 0 14px">More puzzle types join the library over time.</div>' + optionsHtml());
+  document.querySelectorAll('.sheet .how').forEach(b => b.onclick = () => { closeSheet(); startTutorial(b.dataset.t); });
+  wireOptions();
+}
+function optionsHtml() {
+  return '<div class="sub" style="margin-bottom:0"><b>Settings</b></div>' +
+    '<label class="tgl"><input type="checkbox" id="oDeco"' + (decoOn() ? ' checked' : '') + '> Holiday decorations</label>' +
+    '<div class="sub" style="font-size:15px">Small seasonal touches on the home screen. They never change the puzzles.</div>' +
+    '<label class="tgl"><input type="checkbox" id="oExp"' + (expertOn() ? ' checked' : '') + '> 🧠 Expert puzzles</label>' +
+    '<div class="sub" style="font-size:15px">The Daily Three get one step harder. Still no guessing needed. Expert results are saved separately, so your normal days stay as they were. Your streak counts days of either kind.</div>' +
+    '<div class="col"><button class="btn small" id="oDone">Done</button></div>';
+}
+function wireOptions() {
+  document.getElementById('oDeco').onchange = e => { store.set('deco', e.target.checked); track('option', { deco: e.target.checked }); };
+  document.getElementById('oExp').onchange = e => { store.set('expert', e.target.checked); track('option', { expert: e.target.checked }); toast(e.target.checked ? '🧠 Expert on: harder clues from today.' : 'Expert off: back to the normal Daily Three.'); };
+  document.getElementById('oDone').onclick = () => { closeSheet(); renderHome(); };
+}
 function showOptions() {
   openSheet('<h2>Options</h2>' +
     '<label class="tgl"><input type="checkbox" id="oDeco"' + (decoOn() ? ' checked' : '') + '> Holiday decorations</label>' +
@@ -2742,6 +2764,8 @@ function bonusSolved(ms) {
 let titleTaps = 0;
 function renderHome() {
   stopTimer(); removeCoach(); beaconCheck();
+  // Coming back from a puzzle, results or Story, home shows today again (picking a day on the week strip keeps it).
+  if (S.screen && S.screen !== 'home') S.date = realToday;
   S.screen = 'home';
   const ds = S.date; const day = getDay(ds); const all = results(); const e = all[ds];
   const wk = weekOf(realToday);
@@ -2751,25 +2775,25 @@ function renderHome() {
   $app.innerHTML = iconize(
     '<div class="home-top"><div class="logo" id="logo">' + lockIcon(40) + '<h1>Aha<span>lock</span></h1>' + (hol ? '<span class="hol" aria-hidden="true">' + hol.e + '</span>' : '') + '</div><div class="streak" id="stk" role="button" tabindex="0" title="Days in a row" aria-label="Streak: ' + st + (st === 1 ? ' day' : ' days') + ' in a row' + (shieldGet().n ? ', shield held' : '') + '">🔥 ' + st + (shieldGet().n ? ' <span title="Streak shield: saves your streak once if you miss a day">🛡️</span>' : '') + '</div></div>' +
     '<div class="tag">Three little logic puzzles a day. No guessing needed.</div>' + (hol ? '<div class="tag holtag">' + hol.g + ' ' + esc(hol.t) + '</div>' : '') +
-    '<div class="today"><div class="when"><h2>' + (ds === realToday ? 'Today' : nice(ds)) + '</h2><div class="mood">' + (expertOn() ? '🧠 Expert · ' : '') + TL.DAYMOOD[TL.weekday(ds)] + ' day</div></div>' +
-    '<div class="trio">' + day.map((p, i) => '<div class="tile' + (e && e.s[i] ? ' done' : '') + '"><div class="ico">' + typeIcon(p.type, 44) + '</div><div class="nm">' + TYPENAME[p.type] + '</div><div class="dots">' + [1, 2, 3, 4].slice(0, p.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[p.tier] ? 'on' : '') + '"></i>').join('') + '</div></div>').join('') + '</div>' +
-    '<div class="dotkey">Dots show how hard each puzzle is.</div>' + (next === -1 ? (ds === realToday ? bonusBtn() : '') + '<button class="btn wide" id="go">See results</button>' : '<button class="btn wide" id="go">' + (next > 0 ? 'Continue (' + (next + 1) + ' of 3)' : 'Play') + '</button>') + (ds !== realToday ? bonusBtn() : '') +
+    '<div class="today"><div class="when"><h2>' + (ds === realToday ? 'Today' : nice(ds)) + '</h2>' + (ds !== realToday ? '<button class="linkbtn" id="toToday">Back to today</button>' : '') + '<div class="mood">' + (expertOn() ? '🧠 Expert · ' : '') + TL.DAYMOOD[TL.weekday(ds)] + ' day</div></div>' +
+    '<div class="trio">' + day.map((p, i) => (e && e.s[i] ? '<button class="tile done" data-rp="' + i + '" aria-label="Play ' + TYPENAME[p.type] + ' again">' : '<div class="tile">') + '<div class="ico">' + typeIcon(p.type, 44) + '</div><div class="nm">' + TYPENAME[p.type] + '</div><div class="dots">' + [1, 2, 3, 4].slice(0, p.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[p.tier] ? 'on' : '') + '"></i>').join('') + '</div>' + (e && e.s[i] ? '</button>' : '</div>')).join('') + '</div>' +
+    '<div class="dotkey">' + (e && e.s.some(Boolean) ? 'Dots show how hard each puzzle is. Tap a solved one to play it again.' : 'Dots show how hard each puzzle is.') + '</div>' + (next === -1 ? (ds === realToday ? bonusBtn() : '') + '<button class="btn wide" id="go">See results</button>' : '<button class="btn wide" id="go">' + (next > 0 ? 'Continue (' + (next + 1) + ' of 3)' : 'Play') + '</button>') + (ds !== realToday ? bonusBtn() : '') +
     '</div>' +
     (ds === realToday ? '<div class="nextline" id="cd">' + nextLine() + '</div>' : '') +
     storyCard() + weekRow() +
     '<div class="sect">' + (expertOn() ? '🧠 Expert week · ' : 'This week · ') + wk.filter(d => dayDone(all[d])).length + ' of 7 days played</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
-    '<div class="homerows"><button class="wkrow hrow" id="howr"><span class="hi">📖</span><div class="wt"><b>How to play</b><span>' + TL.ROSTER.length + ' puzzle types, with a short lesson each</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button>' +
-    '<button class="wkrow hrow" id="opts"><span class="hi">⚙️</span><div class="wt"><b>Options</b><span>Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
+    '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.11' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.12' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
-  document.getElementById('opts').onclick = showOptions;
+  document.getElementById('help').onclick = showHelp;
+  { const tt = document.getElementById('toToday'); if (tt) tt.onclick = () => { S.date = realToday; renderHome(); }; }
+  $app.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => startReplay(ds, +b.dataset.rp, false));
   document.getElementById('wkr').onclick = showGoals;
   { const bn = document.getElementById('bon'); if (bn) bn.onclick = startBonus; }
   $app.querySelectorAll('.wd').forEach(b => b.onclick = () => { S.date = b.dataset.d; renderHome(); });
-  document.getElementById('howr').onclick = showHowTo;
   renderCloud(); renderRemind(); renderAdsRow();
   { const sk = document.getElementById('stk'); sk.onclick = () => toast('🔥 Days in a row. Finish today\'s Daily Three to keep it going. Older days don\'t count.' + (shieldGet().n ? ' Your 🛡️ shield saves the streak once if you miss a day.' : ''), 4500);
     sk.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); sk.onclick(); } }; }
@@ -2800,14 +2824,14 @@ function testerMenu() {
 
 // =================== PUZZLE ===================
 let P = null; // current puzzle state
-function startPuzzle(ds, slot) {
+function startPuzzle(ds, slot, replay) {
   const pz = getDay(ds)[slot];
   const tut = store.get('tut', {});
   if (!tut[pz.type]) { startTutorial(pz.type, () => startPuzzle(ds, slot)); return; }
   P = { ds, slot, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false,
     entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null,
     ex: TYPES[pz.type].explain(pz) };
-  P.glow = true;
+  P.glow = true; if (replay) P.replay = replay;
   track('puzzle_start', { slot: slot + 1, type: pz.type, tier: pz.tier, today: ds === realToday ? 1 : 0 });
   renderPuzzle();
   stopTimer(); timerInt = setInterval(() => { const t = document.getElementById('tm'); if (t && !P.solved) t.textContent = fmtT(Date.now() - P.t0); }, 500);
@@ -2818,8 +2842,8 @@ function renderPuzzle() {
   const pz = P.pz;
   const res = results()[P.ds];
   const SO = P.story ? STORY[P.story.s].objs[P.story.o] : null;
-  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? STORY[P.story.s].name + (SO.fin ? ' · final lock' : ' · ' + TYPENAME[pz.type]) : (P.slot + 1) + ' of 3 <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '')) + '</div></div><div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
-    (P.tutorial || SO || P.bonus ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + (res && res.s[i] ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? STORY[P.story.s].name + (SO.fin ? ' · final lock' : ' · ' + TYPENAME[pz.type]) : (P.replay ? '🔁 Play again · ' : '') + (P.slot + 1) + ' of 3 <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '')) + '</div></div><div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
+    (P.tutorial || SO || P.bonus ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
@@ -2835,7 +2859,7 @@ function renderPuzzle() {
   if (P.solved && !P.tutorial) {
     // closed the success sheet: Continue brings it back (or goes on), Home goes home
     document.getElementById('hint').onclick = () => renderHome();
-    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.bonus ? renderHome() : dailyNext(P.ds);
+    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.bonus ? renderHome() : P.replay ? replayNext() : dailyNext(P.ds);
   } else {
     document.getElementById('chk').onclick = check;
     document.getElementById('hint').onclick = hint;
@@ -2975,6 +2999,7 @@ function solved() {
   P.solved = true; P.msg = null; P.bad = null; P.hl = null;
   const ms = Date.now() - P.t0; P.solvedMs = ms;
   stopTimer();
+  if (P.replay) { renderPuzzle(); ahaPop(); setTimeout(() => replaySolved(ms), 900); return; }
   if (!P.tutorial) { adCount(); goalEvent({ k: 'solve', pz: P.pz, miss: P.miss, hints: P.hints, ms, story: storyStopDone(), bonus: !!P.bonus }); }
   if (P.tutorial) { renderPuzzle(); ahaPop(); setTimeout(tutSolved, 900); return; }
   if (P.bonus) { renderPuzzle(); ahaPop(); setTimeout(() => bonusSolved(ms), 900); return; }
@@ -2989,6 +3014,29 @@ function whyToggle() { const w = document.getElementById('whybox'); w.classList.
 function whyList(ex, extraCls) { return '<ol class="why">' + ex.steps.map(s => '<li class="' + (s.kind === 'done' ? 'done' : '') + '">' + esc(s.text) + '</li>').join('') + '</ol>'; }
 // The next unsolved puzzle of that day, or the day's results once all three are done.
 function dailyNext(ds) { const r = results()[ds]; const sl = r ? r.s.findIndex(x => !x) : 0; if (dayDone(r)) showDaySummary(ds); else adNext(getDay(ds)[sl].type, () => startPuzzle(ds, sl)); }
+// Play a finished day again, just for fun: nothing is saved, so results, streak and goals stay as they were.
+// all = the whole Daily Three in a row (from the results card); otherwise one puzzle (tap a solved tile on home).
+function startReplay(ds, slot, all) { closeSheet(); track('replay', { all: all ? 1 : 0 }); startPuzzle(ds, slot, { all: !!all, ms: [] }); }
+function replaySolved(ms) {
+  const R = P.replay; R.ms[P.slot] = ms; const e = results()[P.ds]; const first = e && e.s[P.slot] ? e.s[P.slot].ms : null;
+  const more = R.all && P.slot < 2;
+  if (more) {
+    openSheet('<h2>' + SOLVEDHEAD[P.pz.type] + '</h2><div class="sub">Solved again in ' + fmtT(ms) + (first != null ? ' · first time ' + fmtT(first) : '') + '</div>' +
+      '<div class="col"><button class="btn" id="nx">Next puzzle</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button></div>');
+  } else {
+    const now = R.all ? R.ms.reduce((a, x) => a + (x || 0), 0) : ms;
+    const was = R.all ? (e ? e.s.reduce((a, x) => a + (x ? x.ms : 0), 0) : null) : first;
+    const beat = was != null && now < was;
+    openSheet('<h2>' + (beat ? 'You beat your time! 🎉' : 'Nicely done!') + '</h2>' +
+      '<div class="statrow"><div class="stat"><b>' + fmtT(now) + '</b><span>THIS TIME</span></div>' + (was != null ? '<div class="stat"><b>' + fmtT(was) + '</b><span>FIRST TIME</span></div>' : '') + '</div>' +
+      '<div class="sub" style="font-size:16px">Just for fun: your first result, streak and goals stay as they were.</div>' +
+      '<div class="col"><button class="btn" id="home">‹ Back to home</button>' + (R.all ? '' : '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="nx">Play it again</button>') + '</div>');
+  }
+  const nx = document.getElementById('nx'); if (nx) nx.onclick = () => { closeSheet(); more ? startPuzzle(P.ds, P.slot + 1, R) : startReplay(P.ds, P.slot, false); };
+  document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
+}
+// The solved bar after a replay card: the next puzzle of the run, or home.
+function replayNext() { const R = P.replay; if (R.all && P.slot < 2) startPuzzle(P.ds, P.slot + 1, R); else renderHome(); }
 function showSolved(ms) {
   const pz = P.pz; const isLast = P.slot === 2;
   const res = results()[P.ds]; const allDone = dayDone(res);
@@ -3025,7 +3073,7 @@ function showDaySummary(ds) {
     '<div class="sub" style="margin-top:-6px;font-size:15px">' + legendLine(e) + '</div>' +
     '<label class="tgl"><input type="checkbox" id="stime"' + (sh.showTime ? ' checked' : '') + '> Show my time when I share</label>' +
     tomorrowCard(ds) + (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="sub" style="font-size:16px">⭐ ' + nextBonusLine() + '</div>' : '') +
-    '<div class="col"><button class="btn" id="share">Share result</button>' + bonusBtn() + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button></div>' +
+    '<div class="col"><button class="btn" id="share">Share result</button>' + bonusBtn() + keepGoingBtn() + '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="again">🔁 Play this day again</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button></div>' +
     (adsOn() && window.AL_STORE ? '<div class="sub" style="text-align:center;font-size:15px;margin-top:8px">Enjoying Ahalock? <button class="linkbtn" id="dsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button></div>' : ''));
   const db = document.getElementById('dsBuy'); if (db) db.onclick = async () => { if (await AL_STORE.buy()) showDaySummary(ds); };
   const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
@@ -3036,6 +3084,7 @@ function showDaySummary(ds) {
     try { await navigator.clipboard.writeText(sh.text); toast('Copied! Paste it anywhere.'); } catch (err) { toast('Could not copy'); }
   };
   document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
+  document.getElementById('again').onclick = () => startReplay(ds, 0, true);
   document.getElementById('stime').onchange = (ev) => { store.set('shareTime', ev.target.checked); showDaySummary(ds); };
 }
 // "See you tomorrow": the first thing after today's result says what tomorrow brings and keeps the streak in view.
@@ -3918,7 +3967,7 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = !TEST_BUILD ? { store, toast, onNoAds: null } : { showHowTo, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, showOptions };
+window.__TL = !TEST_BUILD ? { store, toast, onNoAds: null } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, showOptions };
 window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
