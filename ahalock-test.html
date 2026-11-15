@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.14 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.15 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -568,6 +568,8 @@ html,body{overflow-anchor:none}
 .coach .cstep{font-size:14px}
 @media (max-height:620px){.coach .cbox{padding:8px 12px 8px}.coach .ctext{font-size:16px;margin:2px 0 6px;line-height:1.25}.coach .cbox .shx{width:36px;height:36px;font-size:16px}}
 .coach .tcue{font-size:15px}
+.coach .cprac{font-weight:900;font-size:16px;color:var(--ink);background:#fff4d6;border-radius:10px;padding:4px 10px;margin:6px 0 0;display:inline-block}
+@media (max-height:620px){.coach .cprac{font-size:15px;padding:2px 8px;margin:4px 0 0}}
 .picker.two .pk{font-size:14px;white-space:nowrap;letter-spacing:-.2px}
 .tmrw{background:#fff3c4;border:2px solid #f4c430;border-radius:16px;padding:12px 14px;margin:4px 0 14px;text-align:center;color:var(--ink);font-weight:700;font-size:16px;line-height:1.4}
 .tmrw b{display:block;font-family:var(--disp);font-size:22px;margin-bottom:2px}
@@ -2802,8 +2804,11 @@ function doneDays() { const set = {}; [false, true].forEach(x => { [store.get(RK
 const bonusGet = () => { const b = store.get('bonus', null); return b && typeof b === 'object' ? { n: b.n || 0, days: b.days || {}, seen: b.seen ? 1 : 0, got: b.got || {} } : { n: 0, days: {}, seen: 0, got: {} }; };
 // Every 3 days you finish earns one bonus. Once today has earned one it is kept (in b.got), so playing older
 // days in the archive, or choosing Later, never takes it away. A bonus already played is never offered twice.
+// Test page only: ?bonus=1 hands out today's bonus so reviewers can see the button without playing three days first.
+const BONUS_TEST = TEST_BUILD && params.get('bonus') === '1';
 function bonusToday() {
-  const b = bonusGet(); if (b.got[realToday]) return true;
+  const b = bonusGet(); if (BONUS_TEST && !b.got[realToday] && !b.days[realToday]) { b.got[realToday] = 1; store.set('bonus', b); }
+  if (b.got[realToday]) return true;
   const dd = doneDays(); if (dd.indexOf(realToday) < 0) return false;
   const given = {}; Object.keys(b.got).concat(Object.keys(b.days)).forEach(d => given[d] = 1);
   if (Object.keys(given).length >= Math.floor(dd.length / 3)) return false;
@@ -2882,7 +2887,7 @@ function renderHome() {
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
     '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.14' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.15' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('help').onclick = showHelp;
@@ -3131,10 +3136,10 @@ function replaySolved(ms) {
     promoWire('over');
   }
   const nx = document.getElementById('nx'); if (nx) nx.onclick = () => { closeSheet(); more ? startPuzzle(P.ds, P.slot + 1, R) : startReplay(P.ds, P.slot, false); };
-  document.getElementById('home').onclick = () => { closeSheet(); renderHome(); };
+  document.getElementById('home').onclick = () => { closeSheet(); S.date = realToday; renderHome(); };
 }
 // The solved bar after a replay card: the next puzzle of the run, or home.
-function replayNext() { const R = P.replay; if (R.all && P.slot < 2) startPuzzle(P.ds, P.slot + 1, R); else renderHome(); }
+function replayNext() { const R = P.replay; if (R.all && P.slot < 2) startPuzzle(P.ds, P.slot + 1, R); else { S.date = realToday; renderHome(); } }
 function showSolved(ms) {
   const pz = P.pz; const isLast = P.slot === 2;
   const res = results()[P.ds]; const allDone = dayDone(res);
@@ -3932,7 +3937,7 @@ function tutAfterRender() {
   const box = document.createElement('div'); box.className = 'coach'; box.id = 'coach';
   const last = tutState.i === tutState.def.steps.length - 1;
   const needs = st.wait && !st.wait();
-  box.innerHTML = '<div class="cbox"><button class="shx" id="tx" aria-label="Skip lesson">✕</button><div class="cstep">How to play · step ' + (tutState.i + 1) + ' of ' + tutState.def.steps.length + '</div><div class="ctext">' + iconize(st.t) + '</div><div class="crow"><button class="skip" id="tskip">Skip lesson</button>' +
+  box.innerHTML = '<div class="cbox"><button class="shx" id="tx" aria-label="Skip lesson">✕</button><div class="cstep">How to play · step ' + (tutState.i + 1) + ' of ' + tutState.def.steps.length + '</div>' + (tutState.i === 0 ? '<div class="cprac">This is a practice example.</div>' : '') + '<div class="ctext">' + iconize(st.t) + '</div><div class="crow"><button class="skip" id="tskip">Skip lesson</button>' +
     (needs ? '<span class="tcue">Your turn: tap above ↑</span>' : last ? '<span class="tcue">Your turn</span>' : '<button class="btn small" id="tnext">Next</button>') + '</div></div>';
   document.body.appendChild(box);
   coachFit(last);
