@@ -381,7 +381,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 38</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 39</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1984,7 +1984,18 @@ function interstitial(then){
   if(!adsAllowed()||Date.now()-lastAd<180000)return then();
   lastAd=Date.now();hideBanner();track("ad_interstitial",{mode:G?G.kind:""});
   const u=AD_UNITS[PLATFORM]||AD_UNITS.android;
-  AdMob.prepareInterstitial({adId:u.interstitial,isTesting:ADS_TESTING}).then(()=>AdMob.showInterstitial()).catch(()=>{}).finally(then);
+  AdMob.prepareInterstitial({adId:u.interstitial,isTesting:ADS_TESTING}).then(()=>AdMob.showInterstitial()).then(()=>{S.adsSeen=(S.adsSeen||0)+1;save()}).catch(()=>{}).finally(()=>{then();if(adsAllowed()&&adOfferDue())setTimeout(showAdOffer,400)});
+}
+// Remove ads offer (Alan chose the usual practice, Nov 15): right after a full-screen ad closes, from the 3rd ad on,
+// at most once a week, with a clear "Not now". The result-screen link and the Stats button stay as they are.
+const WEEK=7*864e5;
+function adOfferDue(){return !noAds()&&(S.adsSeen||0)>=3&&!(Date.now()-(S.adOfferAt||0)<WEEK)}
+function showAdOffer(){
+  S.adOfferAt=Date.now();save();track("remove_ads_offer");
+  const s=sheet(`<h2>Tired of ads?</h2><p>Remove them for good with a one-time purchase. Every puzzle stays the same, just without ads.</p>
+    <button class="btn primary noads" id="offerBuy">Remove ads · ${removePrice}</button>`,"Not now");
+  s.querySelector("[data-close]").className="btn ghost";
+  s.querySelector("#offerBuy").onclick=()=>{s.remove();buyNoAds()};
 }
 function showBanner(){
   if(!adsAllowed()||bannerOn)return;bannerOn=true;document.body.classList.add("banner");
