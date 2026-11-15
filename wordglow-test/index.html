@@ -539,7 +539,7 @@ button.pill { cursor: pointer; }
       <li><b>Level bonuses:</b> once a level, +10 🪙 for scoring two words that cross (✚ Crossword), and +10 🪙 for growing a glowing 3-letter word into 5 or more letters (🌱; not in Expert or on 4+ letter levels).</li>
       <li><b>🗓️ Weekly words:</b> every week has 5 themed words (see 🎯 Quests). Spell one on the board for +15 🪙, and all 5 for +75 🪙 and a Rotate.</li>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
-      <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Each extra word adds 50% to the total, and on a ⚡ Combos level they pay x3.</li>
+      <li><b>Combos:</b> glowing words that touch (like STAR and ARID in STARID, a word crossing another, or two words side by side) score together. Two touching words pay x1.5, three pay x2, and so on. On a ⚡ Combos level, any combo pays x3.</li>
       <li><b>Chains:</b> score another word within 2 moves of the last one and it scores more: x1.5, then x2, up to x3.</li>
       <li>Words of 7 or more letters win bonus coins, and so do words with the rare letters J, Q, X or Z.</li>
       <li>From level 2, special blocks appear. A <b>2x</b> block doubles the word it's in. A <b>💣 bomb</b> block blows up the 8 blocks around it when you score a word that uses the 💣 block itself: <b>BOOM!</b> +3 points per block, and any glowing word it hits scores too. The red squares show what will go, and the 💥 number shows the BOOM points.</li>
@@ -1908,7 +1908,7 @@ function cashIn(group) {
   const why = [];
   if (k === 1 && group[0].m > 1) why.push(`${group[0].w.length} letters x${group[0].m}`);
   if (k === 1 && group[0].dbl) why.push(`2x block${group[0].dbl > 1 ? "s" : ""} x${2 ** group[0].dbl}`);
-  if (k > 1) why.push(`combo x${comboMult}`);   // the combo is itemised, so chain x3 never reads like it (Muse round 16)
+  if (k > 1) why.push(`${k} touching words x${comboMult}`);   // the combo is itemised, so chain x3 never reads like it (Muse round 16)
   if (chainX > 1) why.push(`chain x${chainX}`);
   if (thaw.length) why.push(`❄️ thawed +${thaw.length * THAW_PTS}`);   // one small line, not its own big one (Cooper round 14)
   // Every quest and rare-letter reward is named on the score message itself, so none hides behind a meaning card.
@@ -2478,7 +2478,7 @@ function levelUp() {
     openSheet(`<h3>Level ${level} complete!</h3><div class="adbox" style="background:none;color:inherit;padding:2px 6px"><span class="count">+${earned + msCoins} 🪙</span></div>
       ${msCoins ? `<p style="color:var(--muted);font-size:0.85rem;margin:0">Level clear +${earned} · milestone +${msCoins}</p>` : ""}
       ${lines.length ? `<ul class="earned">${lines.map(l => `<li>${l.trim()}</li>`).join("")}</ul>` : ""}${newWordsRecap()}${nextLine}${dailyIntro ? `<p class="daily-intro">📅 <b>Today's Daily Board</b> is ready: the same pieces for everyone, 3 levels, then share your score. Your game here stays saved.</p>` : ""}<div class="btns"><button class="btn" id="next">Next level</button>${dailyIntro ? `<button class="btn plain" id="todaydaily">📅 Try today's Daily Board</button>` : ""}<button class="btn plain ad" id="dbl">Watch an ad: get +${earned} more 🪙</button></div>`, true);
-    if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); }
+    if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); document.getElementById("modal").classList.add("solid"); }   // solid like the other cards (Muse path to 9)
     // After the 3rd Endless level, ask once about a daily reminder (phone apps only).
     const askRemind = mode === "endless" && level >= 3;
     const go = (then = startNextLevel) => {
@@ -2817,7 +2817,7 @@ function moveDrag(e) {
   }
   const ok = fits(drag.p, r0, c0) && (!tut || (r0 === LESSONS[tut.step].at[0] && c0 === LESSONS[tut.step].at[1]));
   const t = ok ? [r0, c0] : null;
-  drag.at = [r0, c0];
+  drag.at = [r0, c0]; drag.lastXY = [e.clientX, e.clientY, pitch];
   // Remember whether the piece is over the board, so a drop that doesn't fit can say so.
   // Judge by the finger (and the lifted piece): a long piece hanging off the edge still counts.
   const bb = boardEl.getBoundingClientRect(), over = (px, py) => px > bb.left && px < bb.right && py > bb.top && py < bb.bottom;
@@ -2844,7 +2844,9 @@ function endDrag(e) {
   // A second finger lifting doesn't drop the piece; keep listening for the one that holds it.
   if (otherFinger(e)) { addEventListener(e.type, e.type === "pointerup" ? endDrag : cancelDrag, { once: true }); return; }
   // Drop where the finger lifts, not where the last move event happened to land.
-  if (e && e.type === "pointerup" && Number.isFinite(e.clientX)) moveDrag(e);
+  // A finger that lifts within half a square of its last spot drops on the squares shown, so lifting never nudges it a square over (Muse path to 9).
+  const lx = drag.lastXY, still = lx && drag.target && e && Math.hypot(e.clientX - lx[0], e.clientY - lx[1]) < lx[2] / 2;
+  if (e && e.type === "pointerup" && Number.isFinite(e.clientX) && !still) moveDrag(e);
   const { i, p, el, g, target, fromBoard, origin, overBoard, at } = drag;
   removeEventListener("pointermove", moveDrag);
   removeEventListener("pointerup", endDrag);
@@ -3033,7 +3035,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "cf00b00 2026-11-15 17:14Z";
+const BUILD_STAMP = "a7f4deb 2026-11-15 17:44Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
