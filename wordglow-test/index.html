@@ -392,7 +392,7 @@ body.chain-on #deco { opacity: 0; }   /* the chain line takes the garland's spot
 .help-more { margin-top: 8px; border-top: 1px solid var(--line, rgba(127,127,127,.25)); }
 .help-more summary { cursor: pointer; color: var(--fg); font-weight: 700; font-size: 1.05rem; min-height: 48px; display: flex; align-items: center; padding: 4px 2px; }
 .help-more[open] summary { color: var(--accent); }
-.btn.feedback { display: block; text-decoration: none; margin: 4px 0 12px; }
+.btn.feedback { display: block; text-decoration: none; margin: 12px 0; }
 .modal.dock .booklist { max-height: none; overflow: visible; }
 .bookhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
 .bookhead h4 { margin: 0; }
@@ -551,12 +551,7 @@ button.pill { cursor: pointer; }
 <template id="help-tpl">
   <button type="button" class="sheet-x" id="help-x" aria-label="Close">✕</button>
   <h3>How to play</h3>
-  <a class="btn feedback" id="feedback" href="#">✉️ Send feedback or ideas</a>
-  <div id="cloud-help"></div>
-  <div id="remind-help"></div>
-  <div id="expert-help"></div>
-  <div id="deco-help"></div>
-  <!-- Help opens with the basics; the rest folds into short sections, one tap each (Cooper round 21, Alan's pick). -->
+  <!-- The 5 basics come first, ahead of settings, for every player (Cooper round 23). -->
   <div class="helpbody">
     <ul class="help-basics">
       <li><b>Goal:</b> spell words of <b>3 or more letters</b> with the letter blocks, then tap them to score points.</li>
@@ -565,6 +560,14 @@ button.pill { cursor: pointer; }
       <li>Or keep building: TEA can grow into TEASE. Longer words multiply their points: 4 letters x2, 5 letters x3, 6 or more x4. Rare letters (the small number on each block) score more.</li>
       <li><b>Levels:</b> score enough points (30 for level 1, then a little more each level) and you get a fresh board. Each board starts with a few letters to build on. Levels get slowly harder.</li>
     </ul>
+  </div>
+  <a class="btn feedback" id="feedback" href="#">✉️ Send feedback or ideas</a>
+  <div id="cloud-help"></div>
+  <div id="remind-help"></div>
+  <div id="expert-help"></div>
+  <div id="deco-help"></div>
+  <!-- Help opens with the basics; the rest folds into short sections, one tap each (Cooper round 21, Alan's pick). -->
+  <div class="helpbody">
     <details class="help-more"><summary>🧰 Tools and moving pieces</summary><ul>
       <li>Placed a piece in the wrong spot? Drag it (it has a dashed outline) to move it. It locks in when you pick up the next piece, score a word, or use an eraser or shuffle.</li>
       <li>A word of 5 or more letters earns an <b>eraser</b> (hold up to 3). Tap Eraser, then tap any block to delete it.</li>
@@ -2836,7 +2839,8 @@ function dailyDone(earned, kept = []) {
   const top = found.slice().sort((a, b) => b.s - a.s)[0];
   const levels = [...runLv, earned + lvCoins].slice(-DAILY_LEVELS), tools = {};
   for (const t in runTools) tools[t] = runTools[t] + lvTools[t];
-  const run = { levels, tools, total: levels.reduce((a, b) => a + b, 0) };
+  // A Daily started before this tally existed only knows its later levels: name them by their real numbers (Cooper round 23).
+  const run = { levels, first: Math.max(1, level - levels.length + 1), tools, total: levels.reduce((a, b) => a + b, 0) };
   const result = { no: dailyRunNo ?? dailyNo(), score, words: found.length, top: top ? { w: top.w, s: top.s } : null, run };
   // Keep the best finish of the day; a replay that scores less doesn't replace it.
   // A Daily finished just after midnight is filed under the day it was played, so the new day's board stays open (Cooper round 17).
@@ -2887,9 +2891,11 @@ function dailyReceipt(run, kept = []) {
   const full = kept.find(l => l.startsWith("Tools full: ")), lastWord = kept.filter(l => l !== full);
   const tools = Object.keys(TOOL_NAME).filter(t => run.tools?.[t] > 0).map(t => `+${run.tools[t]} ${TOOL_NAME[t]}${run.tools[t] > 1 ? "s" : ""}`);
   const toolRow = [...tools, full].filter(Boolean).join(" · ");
-  return `<div class="receipt daily"><div class="rc-total"><span class="count">+${run.total} 🪙</span><span class="rc-sub">earned on today's board</span></div>
+  const first = Number.isFinite(run.first) ? run.first : 1, n = run.levels.length, last = first + n - 1;
+  const sub = first === 1 ? "earned on today's board" : `earned on level${n > 1 ? `s ${first} to ${last}` : ` ${first}`}`;
+  return `<div class="receipt daily"><div class="rc-total"><span class="count">+${run.total} 🪙</span><span class="rc-sub">${sub}</span></div>
     ${toolRow ? `<p class="rc-tools">🧰 ${toolRow}</p>` : ""}
-    <details class="rc-more"><summary>See how you earned it</summary><ul class="earned">${run.levels.map((c, i) => `<li>Level ${i + 1} +${c} 🪙</li>`).join("")}</ul>
+    <details class="rc-more"><summary>See how you earned it</summary><ul class="earned">${run.levels.map((c, i) => `<li>Level ${first + i} +${c} 🪙</li>`).join("")}</ul>
     ${lastWord.length ? `<p class="rc-h">Your last word</p><ul class="earned small">${lastWord.map(l => `<li>${l.trim()}</li>`).join("")}</ul>` : ""}</details></div>`;
 }
 function dailyShareText(r) {
@@ -3207,7 +3213,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "7dd97cc 2026-11-16 04:18Z";
+const BUILD_STAMP = "67ae4ed 2026-11-16 06:27Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
