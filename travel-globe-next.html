@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.26.3 (round 26 fixes: In video badges, quiet Sunday Home, Back off on stop 1) -->
+<!-- Tripsake v0.27.0 (round 28: 1x/2x speed, story arc, shorter legs + tap to land, reminders surface, ?day= tester link) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1009,6 +1009,8 @@ const SH_DECOS = [
 ];
 function shEaster(y){ const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451); return new Date(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1); }
 function shNth(y, month, weekday, n){ const first = new Date(y, month, 1), off = (weekday - first.getDay() + 7) % 7; return new Date(y, month, 1 + off + 7 * (n - 1)); }
+/* tester link (web test page only, never in the phone app): ?day=2026-07-12 opens Home as that day, so reviewers can see the Sunday postcard or a quiet day (Muse r27). TODO at ship: strip with TG_DATE */
+try { const dq = new URLSearchParams(location.search).get("day"); if (dq && /^\d{4}-\d{2}-\d{2}$/.test(dq) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) window.TG_DATE = dq; } catch(e){}
 function shToday(){ const d = window.TG_DATE ? new Date(window.TG_DATE + "T12:00:00") : new Date(); d.setHours(12, 0, 0, 0); return d; }
 function shHoliday(){ const d = shToday(); for (const h of SH_DECOS) for (const y of [d.getFullYear() - 1, d.getFullYear(), d.getFullYear() + 1]){ const at = h.at(y); at.setHours(12, 0, 0, 0); const days = Math.round((at - d) / 864e5); if (days <= h.before && days >= -h.after) return {...h, days}; } return null; }
 // the season in the north; the south is the opposite
@@ -1162,7 +1164,7 @@ canvas.addEventListener("pointermove", e => { if (!pts.has(e.pointerId)) return;
   const dx = cur[0] - prev[0], dy = cur[1] - prev[1]; moved += Math.abs(dx) + Math.abs(dy);
   const k = 90 / (baseR * zoom); rot[0] += dx * k * 1.2; rot[1] = Math.max(-85, Math.min(85, rot[1] - dy * k * 1.2)); dirty = true; });
 function endPtr(e){ if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (pts.size < 2) pinch0 = null; if (pts.size === 0){ dragging = false; canvas.classList.remove("dragging"); if (moved < 6) tap(e); } }
-canvas.addEventListener("pointerup", e => { if (!replayTap) return; const far = Math.hypot(e.clientX - replayTap[0], e.clientY - replayTap[1]) > 12; replayTap = null; if (far || !replayState) return; const pb = document.getElementById("rpause"); if (pb && !document.getElementById("rcard").style.opacity.startsWith("1")){ pb.click(); toast(replayState.paused ? "Paused · tap again to play" : "Playing"); } });
+canvas.addEventListener("pointerup", e => { if (!replayTap) return; const far = Math.hypot(e.clientX - replayTap[0], e.clientY - replayTap[1]) > 12; replayTap = null; if (far || !replayState) return; { const lc = document.getElementById("rleg"); if (lc && !lc.hidden && anim && !replayState.paused){ replayState.land = true; const a = anim; a.step(1); anim = null; a.done && a.done(); return; } } /* a tap during a flight or drive lands you there now (Muse + Cooper r27) */ const pb = document.getElementById("rpause"); if (pb && !document.getElementById("rcard").style.opacity.startsWith("1")){ pb.click(); toast(replayState.paused ? "Paused · tap again to play" : "Playing"); } });
 canvas.addEventListener("pointerup", endPtr); canvas.addEventListener("pointercancel", endPtr);
 canvas.addEventListener("wheel", e => { e.preventDefault(); spinning = false; setZoom(zoom * Math.exp(-e.deltaY * .0015)); }, {passive:false});
 $("#zin").onclick = () => { spinning = false; const c = centerLonLat(); flyTo(c[0], c[1], Math.min(40, zoom*2), 500); };
@@ -1271,7 +1273,7 @@ function renderTabs(){ const peek = isPhone() && sheetPos === "peek"; const sel 
 // the one Add button: four big choices
 function openAddMenu(){ const row = (attr, icon, t, sub) => `<button class="morerow big" ${attr}><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">${icon}</div><div class="txt"><div class="t">${t}</div><div class="s">${sub}</div></div></button>`;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Add")}
-    ${REAL_TRIPS.length ? "" : row("data-sample-photos", "▶", "Try it with sample photos", "See how it works first. Takes a few seconds")}
+    ${REAL_TRIPS.length ? "" : row("data-sample-photos", "▶", "Practice adding photos (sample set)", "The sample trips are already here. This shows how adding your own photos works") /* Muse r27: the old label read like "look at the samples" */}
     ${row("data-load-photos", "⤓", "Photos from a trip", "Pick photos. We find the trips and places in them")}
     ${row("data-home-mem", "🏠", "A memory close to home", "A night out, a birthday, a ball game. It doesn't count as travel")}
     ${row("data-add-memory", "✦", "A moment", "A meal, a view, a hike, a place you want to keep")}
@@ -1337,7 +1339,7 @@ document.addEventListener("click", e => { const g = q => e.target.closest && e.t
   if (g("[data-nudge-go]")){ const m = lastMonth(); store.set("nudgeDone", m.key); openLoader(); loadState.period = "custom"; const c = $("#ldCustom"); if (c) c.hidden = false; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x.dataset.ldPeriod === "custom")); const f = $("#ldFrom"), t = $("#ldTo"); if (f) f.value = m.from; if (t) t.value = m.to; nativeImport(); return; } });
 /* Sunday postcard: this week in past years */
 function postcardData(){
-  const now = new Date(); const ds = d => { const x = new Date(d + "T12:00:00"); return Date.UTC(2001, x.getMonth(), x.getDate()); };
+  const now = shToday(); const ds = d => { const x = new Date(d + "T12:00:00"); return Date.UTC(2001, x.getMonth(), x.getDate()); };
   const sun = new Date(now); sun.setDate(now.getDate() - now.getDay()); const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
   const a = Date.UTC(2001, sun.getMonth(), sun.getDate()), b = Date.UTC(2001, sat.getMonth(), sat.getDate());
   const inWeek = d => { const v = ds(d); return a <= b ? v >= a && v <= b : v >= a || v <= b; };
@@ -1357,7 +1359,7 @@ function postcardHTML(){
   if (store.get("postcardOff", false)) return "";
   const p = postcardData(); if (!p.years.length) return "";
   // if On This Day already shows the same trip, one card is enough
-  const o = store.get("otdHidden", "") === todayStr() ? null : otdPick();
+  const o = store.get("otdHidden", "") === todayStr() || shToday().getDay() === 0 ? null : otdPick(); /* on Sunday the postcard has the slot, so On This Day steps back (Muse + Cooper r27) */
   if (o && p.years.every(y => y.items.every(i => i.trip === o.best.stop.trip.id))) return "";
   const rows = p.years.map(({y, items}) => { const names = [...new Set(items.map(i => i.name))]; const trip = items.find(i => i.trip);
     return `<div class="yr"><b>${y}</b><span>${esc(names.slice(0, 3).join(" · "))}${names.length > 3 ? ` · +${names.length - 3} more` : ""}<br><small style="text-transform:none;letter-spacing:0;font-family:inherit;color:var(--muted);font-size:calc(14px * var(--fs,1))">${thisYearAgo(y)}</small></span>${trip ? `<button data-replay="${trip.trip}">▶ Play</button>` : items[0].mem ? `<button data-mem="${items[0].mem}">Open</button>` : ""}</div>`; }).join("");
@@ -1395,7 +1397,7 @@ let BIG_TEXT = !!store.get("bigText", false); function applyTextSize(){ document
 function renderBody(){
   const b = $("#tabbody"); let h = "";
   if (tab === "trips"){
-    nudgeCheck(); { const pc = postcardHTML(), otd = onThisDayHTML(); h += [yearHTML(), nudgeHTML(), ...(new Date().getDay() === 0 && store.get("otdHidden", "") !== todayStr() ? [pc, otd] : [otd, pc]) /* hidden On This Day keeps the slot quiet on Sundays too (Alan 11-15, Muse r26) */, backAgainHomeHTML(), revisitHTML()].find(Boolean) || ""; } /* Back again is part of the same single pick (Nikola r21) */ /* one quiet reminder at a time, the most timely first (Nikola + Cooper r20) */
+    nudgeCheck(); { const pc = postcardHTML(), otd = onThisDayHTML(), otdHid = store.get("otdHidden", "") === todayStr(), op = otdHid ? null : otdPick(), seen = op && WATCHED[op.best.stop.trip.id] === todayStr(), rv = revisitHTML(); h += [yearHTML(), nudgeHTML(), ...(shToday().getDay() === 0 && !otdHid ? [pc] : []), ...(seen ? [rv] : []), otd, pc, backAgainHomeHTML(), rv].find(Boolean) || ""; } /* hidden On This Day keeps the slot quiet, Sundays too (Alan 11-15); once today's On This Day story is watched, "A trip to revisit" takes the slot (Muse + Cooper r27) */ /* Back again is part of the same single pick (Nikola r21) */ /* one quiet reminder at a time, the most timely first (Nikola + Cooper r20) */
     if (!REAL_TRIPS.length) h += `<button class="item" data-load-photos><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">⤓</div><div class="txt"><div class="t">Try it with your own photos</div><div class="s">Pick a time period and some photos. Your real trips appear on the globe. Nothing is uploaded.</div></div></button>`;
     h += tripsListHTML();
   } else if (tab === "collections"){
@@ -1452,6 +1454,7 @@ function renderBody(){
     h += `<div class="sec">Settings</div>`;
     h += `<label class="morerow switchrow"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
     h += `<button class="morerow" data-postcard-toggle><div class="flag ring">✉</div><div class="txt"><div class="t">Sunday postcard</div><div class="s">${store.get("postcardOff", false) ? "Off · tap to turn on" : "On · this week in past years, every Sunday"}</div></div></button>`;
+    h += `<button class="morerow" data-arc-toggle><div class="flag ring">🎞</div><div class="txt"><div class="t">Story arc</div><div class="s">${arcOn() ? "On · stories open on your arrival, linger on your best photos and end on a closing shot" : "Off · stories play every photo in date order. Tap to turn on"}</div></div></button>`;
     { const rh = store.get("realHome", null); h += `<button class="morerow" data-home-edit><div class="flag ring">🏠</div><div class="txt"><div class="t">Home</div><div class="s">${rh ? esc(rh.label) : "Not set · tap to set it"}</div></div></button>`; }
     if (REAL_TRIPS.length) h += `<button class="morerow" data-sample-toggle><div class="flag ring">◌</div><div class="txt"><div class="t">Sample traveler</div><div class="s">${NOSAMPLE ? "Hidden · tap to show the sample trips again" : "Shown next to your trips · tap to hide"}</div></div></button>`;
     if (!IN_APP) h += `<button class="morerow" data-install><div class="flag ring">📲</div><div class="txt"><div class="t">Install to home screen</div><div class="s">${esc(installStatus())}</div></div></button>`;
@@ -1462,7 +1465,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.26.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.27.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1979,9 +1982,9 @@ function openLoader(){
     <div id="ldCustom" hidden style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="l" for="ldFrom">From</label><input type="date" id="ldFrom"></div><div><label class="l" for="ldTo">To</label><input type="date" id="ldTo"></div></div>
     ${NATIVE_LIB ? `<button class="btn primary ldgo" data-ld-native>Get my photos</button><p class="ldhow" style="margin:0">Tripsake looks through your photos from that time and finds the trips. Nothing is uploaded.</p>` : `<label class="btn primary ldgo" style="cursor:pointer">Choose photos<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>
     <p class="ldhow" style="margin:0">On iPhone, tap <b>Options</b> at the top of the picker and turn on <b>Location</b>, or the trips can't be placed.</p>`}
-    ${REAL_TRIPS.length ? "" : `<button class="btn" data-sample-photos style="justify-content:center;min-height:52px">▶ No photos handy? Try it with sample photos</button>`}
+    ${REAL_TRIPS.length ? "" : `<button class="btn" data-sample-photos style="justify-content:center;min-height:52px">▶ No photos handy? Practice with the sample set</button>`}
     <details class="ldtips"><summary>More help and other ways</summary><p class="note" style="margin:6px 0">Select a lot at once, or all of them. Only photos inside your time period are used. <b>In the phone app there's no picking:</b> it reads your photo library for these dates by itself. A web page isn't allowed to open your album, so here you choose the photos. A computer works too.</p>
-    <div class="row-btns" style="margin:0">${NATIVE_LIB ? `<label class="btn" style="cursor:pointer">Pick photos myself<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}${REAL_TRIPS.length ? `<button class="btn" data-sample-photos>Try it with sample photos</button>` : ""}<button class="btn" data-ld-manual>Make one trip by hand</button></div></details>
+    <div class="row-btns" style="margin:0">${NATIVE_LIB ? `<label class="btn" style="cursor:pointer">Pick photos myself<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}${REAL_TRIPS.length ? `<button class="btn" data-sample-photos>Practice with the sample set</button>` : ""}<button class="btn" data-ld-manual>Make one trip by hand</button></div></details>
     <div id="ldProg" class="note" style="margin:0"></div></div>`, "loader");
 }
 document.addEventListener("focusin", e => { if (e.target.id === "myName" && e.target.value) setTimeout(() => { try { e.target.select(); } catch(er){} }, 0); });
@@ -2788,6 +2791,7 @@ function along(road, u){
   return {p:d3.geoInterpolate(road.pts[i], road.pts[i+1])(f), i};
 }
 async function travel(a, b, ms){
+  if (replayState) replayState.land = false;
   if (REDUCED()) ms = Math.min(ms, 200); // reduced motion: legs jump instead of animating (flyTo already caps itself)
   const dist = d3.geoDistance(a, b);
   if (dist < DRIVE_MAX){
@@ -2795,8 +2799,8 @@ async function travel(a, b, ms){
     const mid = d3.geoInterpolate(a, b)(.5), fit = Math.max(3, Math.min(260, .6 * Math.min(W, H) / (Math.max(dist, 1e-4) * baseR)));
     const road = roadPoints(a, b); if (replayState) replayState.lastRoad = road;
     if (replayState) replayState.mover = {road, p:a, ahead:along(road, .02).p, behind:a, i:0, car:true};
-    await flyTo(mid[0], mid[1], fit, 1300);
-    if (!replayState) return;
+    await flyTo(mid[0], mid[1], fit, 900);
+    if (!replayState) return; if (replayState.land){ replayState.land = false; replayState.mover = null; rot = [-b[0], Math.max(-80, Math.min(80, -b[1]))]; return; } /* tapped to land during the framing */
     return new Promise(res => { anim = {t0:performance.now(), ms, step:k => { const e = d3.easeSinInOut(k); const c = along(road, e);
       if (replayState) replayState.mover = {road, p:c.p, i:c.i, ahead:along(road, e + .015).p, behind:along(road, e - .015).p, car:true}; },
       done:() => { if (replayState) replayState.mover = null; res(); }}; });
@@ -2853,7 +2857,7 @@ function momentPhoto(el, src, whole){
   const img = new Image(); img.src = src; img.alt = ""; img.className = whole ? "kb whole" : "kb"; el.querySelector(".pics").appendChild(img);
   const pics = el.querySelectorAll(".pics img"); if (pics.length > 2) pics[0].remove();
 }
-const PACE = {slow:1.6, normal:1, fast:.6}, PACE_LABEL = {slow:"Slow", normal:"Normal", fast:"Fast"};
+const PACE = {normal:1, fast:.5}, PACE_LABEL = {normal:"1×", fast:"2×"}; /* one tap between 1× and a true 2× (Alan 11-15); an old "slow" save plays at 1× */
 let replayPace = store.get("pace", "normal"); if (!PACE[replayPace]) replayPace = "normal";
 /* a story never strands you (Muse r23): if anything goes wrong while it plays, it ends cleanly with a word, and you're back where you started */
 async function replay(id, opts = {}){ const run = {}; try { await replayRun(id, opts, run); } catch(e){ console.error(e); if (!run.token || (replayState && replayState.token === run.token) || (!replayState && document.body.classList.contains("replaying"))){ endReplay(); setTimeout(() => toast("Sorry, this story ran into a problem and stopped. Your photos are safe."), 300); } } }
@@ -2866,7 +2870,7 @@ async function replayRun(id, opts, run){
     <div class="titlecard" id="rtitle" style="background:radial-gradient(circle at 50% 50%,rgba(6,10,20,.45),rgba(6,10,20,.9)),url('${(() => { try { const c = tripCover(t); return c ? photo(c.scene, c.id, 1280, 960) : ""; } catch(e){ return ""; } })()}') center/cover"><div><div class="d">${dRange(t.start, t.end, true)}</div><h2>${esc(t.title)}</h2><p>${tripPeople(t).length ? "With " + esc(tripPeople(t).join(", ")) : ""}</p></div></div>
     <div class="card" id="rcard" style="opacity:0"></div>
     <div class="stopnav"><button class="btn" id="rprev" aria-label="Back one stop">‹ Back</button><button class="btn" id="rskip" aria-label="Next stop">Next stop ›</button></div>
-    <div class="bar"><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rpace" aria-label="Story pace">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
+    <div class="bar"><button class="btn" id="rpause" aria-label="Pause">❚❚</button><div class="prog"><i id="rprog"></i></div><button class="btn" id="rpace" aria-label="Story speed: ${replayPace === "fast" ? "double" : "normal"}. Tap to change">${PACE_LABEL[replayPace]}</button><button class="btn" id="rmusic" aria-label="Choose music">♪</button><button class="btn" id="rmute" aria-label="${musicMuted ? "Turn sound on" : "Mute"}">${musicMuted ? "🔇" : "🔊"}</button><button class="btn" id="rclose">Done</button></div>`;
   const alive = () => replayState?.token === token;
   /* a watchdog (Muse r24): a story that stops moving for 30 seconds, while not paused or at its end card, ends with a word and goes back where it started */
   replayState.beat = performance.now(); { const dog = setInterval(() => { if (!alive()){ clearInterval(dog); return; } const rs = replayState; if (rs.paused || rs.ended || (typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin && performance.now() < (rs.voiceUntil || 0))) rs.beat = performance.now(); /* a voice note holds it off only for about its own length plus 5 seconds (Muse r25) */
@@ -2893,8 +2897,8 @@ async function replayRun(id, opts, run){
     if (replayState.repause) jump = true; // Previous/Next pressed while paused: go straight to the stop
     if (jump){ chip.hidden = true; await flyTo(s.lon, s.lat, Math.max(zoom, 4), REDUCED() ? 1 : 700); jump = false; }
     else {
-      chip.innerHTML = `<span>${car ? "🚗" : "✈"}</span> ${esc(prevName)} → <b>${esc(stopName(s))}</b> · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi`; chip.hidden = false; if (rec) rec.chip = `${car ? "🚗" : "✈"} ${prevName} → ${stopName(s)} · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi`;
-      await travel(prev, to, (car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) * Math.min(1.2, PACE[replayPace])); if (!alive()) return;
+      chip.innerHTML = `<span>${car ? "🚗" : "✈"}</span> ${esc(prevName)} → <b>${esc(stopName(s))}</b> · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi${REC ? "" : ` <small style="opacity:.75">· tap to land</small>`}`; chip.hidden = false; if (rec) rec.chip = `${car ? "🚗" : "✈"} ${prevName} → ${stopName(s)} · ${Math.max(1, Math.round(dist * MI)).toLocaleString()} mi`;
+      await travel(prev, to, (car ? 1200 + Math.min(1000, dist * MI * 15) : 1600 + Math.min(1400, dist * 1600)) * Math.min(1.2, PACE[replayPace])); /* about 40% shorter legs (Muse + Cooper r27) */ if (!alive()) return;
       if (goBack()){ i = Math.max(0, i - 2); jump = true; continue; } // still on the way: the last card you saw was the previous stop, so go one before it
     }
     replayState.next = false;
@@ -2904,7 +2908,7 @@ async function replayRun(id, opts, run){
     if (replayState.next){ replayState.next = false; i++; continue; } // Next pressed while arriving: go on to the next stop
     mom.querySelector(".pics").innerHTML = "";
     const VP = REC ? vidPlan(t) : null; const per = j0 => j0 === 0 ? (REC ? 6000 * VP.sc : 7000) : (REC ? 2600 * VP.sc : Math.max(1800, Math.min(3200, 9000 / Math.max(1, s.photos.length - 1)))); /* a stop with lots of photos moves along: about 16 seconds a stop at most */ let back = false; // the story card gets its own reading time on the first photo
-    const vph0 = REC ? vidStopPhotos(t, s, VP.cap) : vedOf(t) ? vidStopPhotos(t, s, 999) : s.photos, vphOk = vph0.filter(canShow), vph = vphOk.length ? vphOk : vph0.slice(0, 1), nPh = vph.length; /* a photo this phone can't show is skipped; a stop where none can be shown still gets its card (Muse r23) */ let vEnd = 0; // Short and Normal videos keep fewer photos a stop; an edited video keeps your picks
+    const ARC = !vedOf(t) && arcOn(), vph0 = REC ? vidStopPhotos(t, s, VP.cap) : vedOf(t) ? vidStopPhotos(t, s, 999) : ARC ? arcPhotos(t, s) : s.photos, vphOk = vph0.filter(canShow), vph = vphOk.length ? vphOk : vph0.slice(0, 1), nPh = vph.length; /* a photo this phone can't show is skipped; a stop where none can be shown still gets its card (Muse r23) */ let vEnd = 0; // Short and Normal videos keep fewer photos a stop; an edited video keeps your picks
     for (let j = 0; j < nPh; j++){
       const ph = vph[j], last = j === nPh - 1;
       const src = photo(ph.scene, ph.id, 1280, 960), wh = VWHOLE.has(ph.id); momentPhoto(mom, src, wh); recPhoto(src, wh);
@@ -2918,7 +2922,7 @@ async function replayRun(id, opts, run){
       if (rec){ rec.text = {d:`${fmt(s.date)} · ${lab ? stopName(s) + " · " : ""}Stop ${i+1} of ${st.length}`, name:lab || stopName(s), best:main || "", who:story.who || "", n:hk ? `🥾 ${hk.name} · ${hikeLine(hk)}` : last && story.note ? story.note : ph.scene !== "real" ? ph.caption : "", t:fresh ? performance.now() : (rec.text ? rec.text.t : 0), still:!fresh}; rec.onT = 1; }
       mom.classList.add("on"); prog((i + (j+1)/nPh) / st.length);
       if (replayState.repause){ replayState.repause = false; replayState.paused = true; mtxt.classList.add("still"); const pb = document.getElementById("rpause"); if (pb){ pb.textContent = "▶"; pb.setAttribute("aria-label", "Play"); } }
-      await wait(per(j) + (last && story.note ? 2500 : 0)); if (!alive()) return;
+      await wait((ARC && !REC ? Math.max(1500, per(j) * (j === 0 ? 1 : arcHigh(t, ph) ? 1.35 : .8)) + (i === 0 && j === 0 ? 1000 : 0) + (last && i === st.length - 1 && nPh > 1 ? 1500 : 0) : per(j)) + (last && story.note ? 2500 : 0)); if (!alive()) return; /* story arc: the arrival and the closing shot linger, highlights stay longer, the rest move along */
       // a voice note gets to finish before the story moves on
       if (last && vEnd > performance.now() && !replayState.next && !replayState.back){ await wait(vEnd - performance.now(), false); if (!alive()) return; }
       { const cap = performance.now() + 20000; while (last && vEnd && typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin && !replayState.next && !replayState.back && alive() && (replayState.paused || performance.now() < cap)) await wait(200, false); if (alive() && performance.now() >= cap && typeof voiceNow !== "undefined" && voiceNow && !voiceNow._fin){ voiceNow.pause(); voiceNow._done && voiceNow._done(); voiceNow = null; } } // still talking (it was paused): let it finish; a voice note that never ends is stopped (Muse r25)
@@ -3387,7 +3391,7 @@ let vidLen = store.get("vidLen", "normal"); if (!VLEN[vidLen]) vidLen = "normal"
 function vidPlan(t, len = vidLen, asEd){ const L = VLEN[len] || VLEN.normal; const st = stopsOf(t), vl = store.get("voiceLen", {}) || {}, ed = asEd || !!vedOf(t);
   const legs = st.map((s, i) => { const prev = i ? [st[i-1].lon, st[i-1].lat] : startOf(t), dist = d3.geoDistance(prev, [s.lon, s.lat]); const car = dist < DRIVE_MAX, here = dist * KM < 2; /* Replay jumps straight there when you start at the stop (no home set) */
     const vk = hasVoice_(s.id) ? "vn:stop:" + s.id : VOICE.has("vn:day:" + s.date) ? "vn:day:" + s.date : null;
-    return {fly:here ? .7 : (car ? 2000 + Math.min(1600, dist * MI * 25) : 2600 + Math.min(2600, dist * 3000)) / 1000, note:getStory(s).note ? 2.5 : 0, voice:vk ? 1.5 + (vl[vk] || 0) : 0, n:ed ? vidStopPhotos(t, s, 99).length : s.photos.length}; });
+    return {fly:here ? .7 : (car ? 1200 + Math.min(1000, dist * MI * 15) : 1600 + Math.min(1400, dist * 1600)) / 1000, note:getStory(s).note ? 2.5 : 0, voice:vk ? 1.5 + (vl[vk] || 0) : 0, n:ed ? vidStopPhotos(t, s, 99).length : arcOn() ? arcPhotos(t, s).length : s.photos.length}; });
   const FIX = 2.6 + 1.9 + 3.5; // title card, overview, end card (the start-up before recording isn't in the video)
   const est = (cap, sc) => FIX + legs.reduce((a, g) => { const k = Math.min(cap, g.n), ph = sc * (6 + 2.6 * (k - 1)) + g.note; return a + g.fly + .6 + Math.max(ph, g.voice) + .5; }, 0);
   const slack = 1.1 * legs.length; /* measured: a recorded video runs about a second longer per stop than the timings add up to (Muse r22: said 33 s, made 37 s) */
@@ -3401,8 +3405,21 @@ const vedAll = t => stopsOf(t).flatMap(s => s.photos.map(p => p.id));
 /* the photos you kept in (everything but the ones you left out), or null before you edit; stored as left-out ids, so photos added later are in */
 const vedOf = t => { const e = VEDIT[t.id]; if (!e || !Array.isArray(e.out)) return null; const o = new Set(e.out); return new Set(vedAll(t).filter(id => !o.has(id))); };
 /* the photos one stop shows in the video: the ones you picked, or the first few */
-function vidStopPhotos(t, s, cap){ const ed = vedOf(t); if (ed){ const k = s.photos.filter(p => ed.has(p.id)); return k.length ? k : s.photos.slice(0, 1); } return s.photos.slice(0, cap); }
-function vedSumText(t){ const VP = vidPlan(t, vidLen), /* the same plan the video will use (Cooper r24: said 30 s, made 19 s) */ n = stopsOf(t).reduce((a, s) => a + vidStopPhotos(t, s, VP.cap).length, 0), m = vedAll(t).length; /* "N of M" (Cooper r25) */ return `${n} of ${plural(m, "photo")} in your video · about ${secsText(VP.est)}${!vedOf(t) && n < m ? `. Until you change something, it uses the first ${plural(VP.cap, "photo")} of each stop` : ""}`; }
+function vidStopPhotos(t, s, cap){ const ed = vedOf(t); if (ed){ const k = s.photos.filter(p => ed.has(p.id)); return k.length ? k : s.photos.slice(0, 1); } return arcOn() ? arcPhotos(t, s, cap) : s.photos.slice(0, cap); }
+/* Story arc (Cooper r26 idea, Alan 11-15): open on the arrival, best photos first and longer, end on a closing shot. Stops stay in date order. More > Settings turns it off */
+const arcOn = () => !store.get("arcOff", false);
+function arcScore(t, p, cov = tripCover(t).id){ return (cov === p.id ? 3 : 0) + (p.rating || 0) + (p.col ? 1.5 : 0); }
+const arcHigh = (t, p) => arcScore(t, p) > 0;
+function arcPhotos(t, s, cap = 999){ const st = stopsOf(t), first = st[0] === s, lastStop = st[st.length - 1] === s, cov = tripCover(t).id, sc = p => arcScore(t, p, cov);
+  /* shots taken the same minute count as one: keep the best of them */
+  const ph = []; for (const p of s.photos){ const prev = ph[ph.length - 1]; if (prev && p.scene === "real" && prev.scene === "real" && p.caption && p.caption === prev.caption){ if (sc(p) > sc(prev)) ph[ph.length - 1] = p; continue; } ph.push(p); }
+  if (ph.length <= 1) return ph;
+  const arrive = first ? ph[0] : null; let rest = ph.filter(p => p !== arrive);
+  let close = null; if (lastStop && rest.length){ const best = rest.filter(p => sc(p) > 0); close = best.length ? best.reduce((a, b) => sc(b) > sc(a) ? b : a) : rest[rest.length - 1]; rest = rest.filter(p => p !== close); }
+  rest = rest.map((p, k) => ({p, k})).sort((a, b) => sc(b.p) - sc(a.p) || a.k - b.k).map(x => x.p);
+  const room = Math.max(0, cap - (arrive ? 1 : 0) - (close ? 1 : 0)); const out = [...(arrive ? [arrive] : []), ...rest.slice(0, room), ...(close && cap > (arrive ? 1 : 0) ? [close] : [])];
+  return out.length ? out.slice(0, Math.max(1, cap)) : ph.slice(0, 1); }
+function vedSumText(t){ const VP = vidPlan(t, vidLen), /* the same plan the video will use (Cooper r24: said 30 s, made 19 s) */ n = stopsOf(t).reduce((a, s) => a + vidStopPhotos(t, s, VP.cap).length, 0), m = vedAll(t).length; /* "N of M" (Cooper r25) */ return `${n} of ${plural(m, "photo")} in your video · about ${secsText(VP.est)}${!vedOf(t) && n < m ? `. Until you change something, it uses ${arcOn() ? "your best" : "the first"} ${plural(VP.cap, "photo")} of each stop` : ""}`; }
 function vedMusicName(t){ const m = musicChoice(t.id); return m === "off" ? "No music" : choiceName(m === "auto" ? autoChoice(t.id) : m); }
 function openVideoEdit(id){ const t = findTrip(id); if (!t) return; VED_BACK = id;
   const cov = tripCover(t).id, ed = vedOf(t) || new Set(vedAll(t)) /* every photo starts in, the same as the story; nothing is stored until you change something (Nikola r21) */, tile = (p, hint) => { const on = ed.has(p.id), wh = VWHOLE.has(p.id), nm = esc(phLabel(p) || p.caption || "photo");
@@ -4000,6 +4017,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-trip-rename-go]"))){ const id = b.dataset.tripRenameGo, nm = (($("#tripNewName") || {}).value || "").trim().slice(0, 80); if (!nm){ toast("Type a name first"); return; } const raw = store.get("realTrips", []) || [], r = raw.find(x => x.id === id); if (!r) return; r.title = nm; if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; } refreshTrips(id).then(() => { openTrip(id, true); toast(`Renamed to “${nm}”`); }); return; }
   if ((b = g("[data-trip-del-yes]"))){ deleteRealTrip(b.dataset.tripDelYes); return; }
   if (g("[data-postcard-toggle]")){ const off = !store.get("postcardOff", false); store.set("postcardOff", off); renderBody(); toast(off ? "Sunday postcard off" : "Sunday postcard on"); return; }
+  if (g("[data-arc-toggle]")){ const off = arcOn(); store.set("arcOff", off); renderBody(); toast(off ? "Story arc off. Stories play every photo in date order" : "Story arc on"); return; }
   if (g("[data-postcard-off]")){ store.set("postcardOff", true); renderBody(); toast("Sunday postcard turned off. Turn it back on in More, under Settings", () => { store.set("postcardOff", false); renderBody(); }); return; }
   if (g("[data-otd-hide]")){ store.set("otdHidden", todayStr()); renderBody(); toast("On This Day hidden until tomorrow", () => { store.set("otdHidden", ""); renderBody(); }); return; }
   if (g("[data-otd-show]")){ store.set("otdHidden", ""); renderBody(); return; }
@@ -4060,7 +4078,7 @@ $("#replay").addEventListener("click", e => {
   if (e.target.id === "rpause"){ replayState.paused = !replayState.paused; e.target.textContent = replayState.paused ? "Play" : "Pause"; }
   if ((e.target.id === "rprev" || e.target.id === "rskip") && replayState && replayState.paused){ replayState.paused = false; replayState.repause = true; }
   if (e.target.id === "rprev" && replayState){ replayState.back = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
-  if (e.target.id === "rpace" && replayState){ replayPace = {slow:"normal", normal:"fast", fast:"slow"}[replayPace]; store.set("pace", replayPace); e.target.textContent = PACE_LABEL[replayPace]; toast("Story pace: " + {slow:"slow", normal:"normal", fast:"fast"}[replayPace]); }
+  if (e.target.id === "rpace" && replayState){ replayPace = replayPace === "fast" ? "normal" : "fast"; store.set("pace", replayPace); e.target.textContent = PACE_LABEL[replayPace]; e.target.setAttribute("aria-label", `Story speed: ${replayPace === "fast" ? "double" : "normal"}. Tap to change`); toast(replayPace === "fast" ? "Story speed: 2× (twice as fast)" : "Story speed: 1× (normal)"); }
   if (e.target.id === "rskip" && replayState){ replayState.skip = true; replayState.next = true; if (anim){ anim.step(1); const a = anim; anim = null; a.done && a.done(); } }
   if (e.target.id === "rclose" || e.target.id === "rcancel"){ endReplay(); if (e.target.id === "rcancel") toast("Video cancelled"); }
   if (e.target.id === "rpause" && replayState){ e.target.textContent = replayState.paused ? "▶" : "❚❚"; e.target.setAttribute("aria-label", replayState.paused ? "Play" : "Pause"); }
