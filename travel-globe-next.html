@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.27.4 (bottom pane drag follows your finger) -->
+<!-- Tripsake v0.27.4 (pane drag, keep all photos per trip, fast scroll) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -118,6 +118,10 @@ button.stat:hover{background:var(--panel-2)}
 .tabs{display:flex;gap:2px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line)}
 .tab{flex:1;padding:10px 4px;font-size:calc(14.5px * var(--fs,1));font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--lit)}
+#fastscroll{position:fixed;z-index:60;width:44px;height:72px;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+#fastscroll[hidden]{display:none}
+#fastscroll i{width:14px;height:60px;border-radius:8px;background:var(--lit);opacity:.75;box-shadow:0 2px 8px rgba(0,0,0,.45);transition:width .15s,opacity .15s}
+#fastscroll.on i{width:20px;opacity:1}
 .tabbody{overflow-y:auto;flex:1;min-height:0;padding-block:12px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:10px}
 .otd{display:flex;gap:12px;align-items:center;background:linear-gradient(120deg,rgba(242,178,74,.16),rgba(242,178,74,.02));border:1px solid rgba(242,178,74,.3);border-radius:14px;padding:10px;text-align:left}
 .otd img{width:70px;height:54px;border-radius:9px;object-fit:cover;flex:none}
@@ -1525,6 +1529,23 @@ function setSheet(pos){ sheetPos = pos; try { renderTabs(); } catch(e){} const p
 (function(){ const st = $("#stage"); const fit = () => { const h = st.getBoundingClientRect().height; document.body.classList.toggle("tinystage", h > 0 && h < 200); document.body.classList.toggle("shortstage", h >= 200 && h < 290); };
   try { new ResizeObserver(fit).observe(st); } catch(e){ addEventListener("resize", fit); } fit();
   $("#panelAdd").addEventListener("click", () => openSnap(tab === "collections" && colFilter ? colFilter : "food")); })();
+
+/* fast scroll (Alan 11-16: 57 trips take a lot of swiping): a long list gets a gold grip on its right edge; hold it and slide to jump through the list */
+(function(){
+  const fs = document.createElement("div"); fs.id = "fastscroll"; fs.hidden = true; fs.setAttribute("role", "scrollbar"); fs.setAttribute("aria-label", "Drag to scroll quickly"); fs.innerHTML = "<i></i>"; document.body.appendChild(fs);
+  let sc = null, drag = null, raf = 0;
+  const pick = () => { const sh = document.querySelector("#overlay .sheet-in"); if (sh) return sh; const tb = $("#tabbody"); return tb && tb.offsetParent ? tb : null; };
+  const place = () => { raf = 0; if (!drag) sc = pick(); if (!sc || sc.scrollHeight < sc.clientHeight * 2.5 || document.body.classList.contains("replaying")){ fs.hidden = true; return; }
+    const r = sc.getBoundingClientRect(), H = fs.offsetHeight || 72, track = Math.max(1, r.height - H - 8), f = sc.scrollTop / Math.max(1, sc.scrollHeight - sc.clientHeight);
+    fs.hidden = false; fs.style.left = (r.right - 46) + "px"; fs.style.top = (r.top + 4 + f * track) + "px"; };
+  const soon = () => { if (!raf) raf = requestAnimationFrame(place); };
+  document.addEventListener("scroll", soon, true); addEventListener("resize", soon); setInterval(soon, 600);
+  fs.addEventListener("pointerdown", e => { if (!sc) return; fs.setPointerCapture(e.pointerId); const r = fs.getBoundingClientRect(); drag = {off:e.clientY - r.top}; fs.classList.add("on"); e.preventDefault(); });
+  fs.addEventListener("pointermove", e => { if (!drag || !sc) return; const r = sc.getBoundingClientRect(), H = fs.offsetHeight || 72, track = Math.max(1, r.height - H - 8);
+    const f = Math.max(0, Math.min(1, (e.clientY - drag.off - r.top - 4) / track)); sc.scrollTop = f * (sc.scrollHeight - sc.clientHeight); place(); e.preventDefault(); });
+  const end = () => { drag = null; fs.classList.remove("on"); soon(); };
+  fs.addEventListener("pointerup", end); fs.addEventListener("pointercancel", end);
+})();
 const showGlobe = () => { if (isPhone() && sheetPos !== "peek") setSheet("peek"); };
 const showList = () => { if (isPhone() && sheetPos === "peek") setSheet("half"); };
 
@@ -1847,7 +1868,8 @@ function whereHTML(hint = ""){ return `<div><label class="l" for="whereQ">Where<
   <input type="search" id="whereQ" placeholder="Search a city or landmark, like Kyoto or Machu Picchu" autocomplete="off" style="margin-top:6px" aria-controls="whereRes">
   <div class="whereres" id="whereRes"></div>${hint ? `<p class="note" style="margin:4px 0 0">${hint}</p>` : ""}</div>`; }
 function setWhere(lon, lat, label){ whereDraft = {lon, lat, label, set:true}; const t = $("#whereText"); if (t) t.textContent = label; const ch = $("#whereChip"); if (ch) ch.classList.remove("guess"); }
-document.addEventListener("change", e => { if (e.target.id === "ldAll" && loadState){ loadState.bigCap = e.target.checked; refreshCapNotes(); return; } if (e.target.dataset && e.target.dataset.ldJoin != null && loadState){ forceJoin(+e.target.dataset.ldJoin, e.target.checked); return; } }, true);
+document.addEventListener("change", e => { if (e.target.id === "ldAll" && loadState){ loadState.bigCap = e.target.checked; (loadState.trips || []).forEach(t => { delete t.bigCap; }); refreshCapNotes(); return; } /* the box for every trip sets them all */
+  if (e.target.dataset && e.target.dataset.ldTripall != null && loadState){ const t = (loadState.trips || [])[+e.target.dataset.ldTripall]; if (t){ t.bigCap = e.target.checked; refreshCapNotes(); } return; } if (e.target.dataset && e.target.dataset.ldJoin != null && loadState){ forceJoin(+e.target.dataset.ldJoin, e.target.checked); return; } }, true);
 document.addEventListener("change", e => { if (e.target.id === "bigText"){ BIG_TEXT = e.target.checked; store.set("bigText", BIG_TEXT); applyTextSize(); toast(BIG_TEXT ? "Larger text on" : "Larger text off"); return; } if (e.target.id === "tripAddFiles" && e.target.files.length){ addPhotosToTrip(e.target.dataset.trip, [...e.target.files]); e.target.value = ""; return; } if (e.target.id === "tripFile" && e.target.files.length){ readTripFile(e.target.files[0]); e.target.value = ""; } if (e.target.id === "ldFiles" && e.target.files.length) processFiles([...e.target.files]); if (e.target.dataset && e.target.dataset.ldPlace !== undefined && loadState){ const p = loadState.noLocAll[+e.target.dataset.ldPlace], v = +e.target.value; if (p){ if (v < 0) loadState.placed.delete(p.file); else { const t = loadState.trips[v]; loadState.placed.set(p.file, t.pts[0]); const [a, b] = tripDayRange(t); if (p.t && (p.t < a - 2 * DAY || p.t > b + 2 * DAY)) toast(`That photo is from ${new Date(p.t).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}, outside ${t.title} (${dRange(t.start, t.end)}). It's added anyway; set it back to Leave out if that's wrong.`); } } refreshWhy(); } if (e.target.id === "ldPin" && $("#ldNoLocFate") && loadState){ $("#ldNoLocFate").textContent = noLocFate(loadState, e.target.checked); refreshWhy(); } if (e.target.dataset && e.target.dataset.ldKeep !== undefined) updateAddCount(); if (e.target.dataset && e.target.dataset.ldSplit !== undefined && e.target.value) splitTrip(+e.target.dataset.ldSplit, e.target.value); if (e.target.id === "gpxFile" && e.target.files.length) loadGPXFiles([...e.target.files]);
   if (e.target.id === "jOn"){ journal.on = e.target.checked; store.set("journal", journal); $("#jMore").hidden = !journal.on; renderBody(); toast(journal.on ? "Trip journal on" : "Trip journal off"); }
   if (e.target.id === "jAway"){ journal.away = e.target.checked; journal.since = journal.away ? dayKey(new Date()) : null; store.set("journal", journal); renderBody(); toast(journal.away ? "Have a great trip! We'll ask each evening." : "Welcome home"); }
@@ -2201,6 +2223,7 @@ function openReview(){
       <div class="ldline">${t.stops.map(s => s.unsure ? `${esc(s.name)}? <span class="checktag">check</span>` : esc(s.name)).join(" → ")}${t.extraStops ? ` <b>+ ${plural(t.extraStops, "more stop")} not shown</b> (the first ${MAX_STOPS} are kept)` : ""}</div></div></div>
       ${!t.keep && t.photos < 2 ? `<div class="ldwarn" data-ld-one="${i}">Not ticked: only 1 photo. Tick it to add it anyway.</div>` : ""}
       <div class="ldwarn ldcap" data-ld-cap="${i}">${capNote(t)}</div><div data-ld-joinbox="${i}">${joinNote(t, i)}</div>
+      ${tripAllBox(t, i)}
       <button class="btn ldfixbtn" data-ld-fix="${i}" aria-expanded="${fixOpen.has(i)}">Fix this ${t.homeMem ? "memory" : "trip"} ${fixOpen.has(i) ? "▴" : "▾"}</button>
       <div class="ldfix" data-ld-fixbox="${i}" ${fixOpen.has(i) ? "" : "hidden"}>
         <label class="l" for="ldt${i}" style="margin:0">Trip name</label><input type="text" id="ldt${i}" data-ld-title="${i}" value="${esc(t.title)}" aria-label="Trip name" style="font-weight:600">
@@ -2214,7 +2237,7 @@ function openReview(){
     ${L.manual ? "" : `<div><div class="l">${L.sample ? "The sample traveler's home" : L.homeGuessed ? "Home (worked out from your photos)" : "Home"}</div><div class="wherechip"><span aria-hidden="true">🏠</span><b>${esc(L.home.label)}</b>${L.sample ? "" : `<button class="btn" data-ld-home>Change</button>`}</div></div>`}
     <div id="ldHomePick" hidden>${whereHTML("Pick your home town. Trips are worked out again from it.")}<button class="btn" data-ld-home-set style="margin-top:6px">Use this as home</button></div>
     ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start">Name every trip by place and month</button>` : ""}
-    ${tr.length ? `<p class="ldhow" style="margin:0">Each stop keeps up to ${stopCap()} photos. Every photo still helps find your trips and stops.</p><label class="switch" id="ldAllWrap" style="gap:10px;align-items:center;justify-content:flex-start"${tr.some(t => capInfo(t, PER_STOP).some(c => c.drop.length)) || L.bigCap ? "" : " hidden"}><input type="checkbox" id="ldAll"${L.bigCap ? " checked" : ""} style="width:22px;height:22px;accent-color:var(--lit)"><span>Keep every photo, up to ${BIG_STOP} a stop (uses more space on this device)</span></label>` : ""}
+    ${tr.length ? `<p class="ldhow" style="margin:0">Each stop keeps up to ${stopCap()} photos. Every photo still helps find your trips and stops.</p><label class="switch" id="ldAllWrap" style="gap:10px;align-items:center;justify-content:flex-start"${tr.some(t => capInfo(t, PER_STOP).some(c => c.drop.length)) || L.bigCap ? "" : " hidden"}><input type="checkbox" id="ldAll"${L.bigCap ? " checked" : ""} style="width:22px;height:22px;accent-color:var(--lit)"><span>Keep all photos for every trip, up to ${BIG_STOP} a stop (uses more space on this device)</span></label>` : ""}
     ${L.homeMem ? "" : tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide"${L.hideChoice === false ? "" : " checked"} style="width:22px;height:22px;accent-color:var(--lit)"><span>Hide the sample traveler's ${plural(SAMPLE_TRIPS.length, "example trip")} that came with the app, so the globe shows only my trips (you can show them again under More)</span></label>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
     <div id="ldProg" class="note" style="margin:0" aria-live="polite"></div></div>`, "loader");
   tr.forEach(async (t, i) => { const u = await thumb(t.stops[0].pts[0].file, 160); const im = document.querySelector(`[data-ld-cover="${i}"]`); if (im && u) im.src = u; });
@@ -2315,8 +2338,8 @@ function tripCounts(t, cap){ const info = capInfo(t, cap), all = info.reduce((b,
   const dn = t.dupe ? t.dupe.drop.size : 0; if (dn){ const k2 = freshKeep(t, cap); return {all, saved:k2, already:dn, over:Math.max(0, all - dn - k2)}; }
   return {all, saved:keep, already:0, over:all - keep}; }
 /* the line on each trip card that makes the headline add up: "2 new · 2 already on your globe" */
-const cardPhotos = t => { let c = null; try { c = tripCounts(t, stopCap()); } catch(e){} return Math.max(t.photos, c ? c.all : 0); }; /* located + matched by date, so the header agrees with the card's own count line */
-function tripCountLine(t){ const c = tripCounts(t, stopCap());
+const cardPhotos = t => { let c = null; try { c = tripCounts(t, stopCap(t)); } catch(e){} return Math.max(t.photos, c ? c.all : 0); }; /* located + matched by date, so the header agrees with the card's own count line */
+function tripCountLine(t){ const c = tripCounts(t, stopCap(t));
   if (t.repeat && !t.forceJoin){ const n = c ? c.saved : 0; if (t.repeat.unchecked && !t.repeat.pending) return `<b>Already on your globe as ${esc(t.repeat.title)}</b>. Some of its saved photos couldn't be checked on this phone, so nothing will be added, to make sure no photo is saved twice.`;
     if (loadState && tripTicked(loadState, t)) return `<b>Already on your globe as ${esc(t.repeat.title)}</b>.${t.repeat.pending ? " Checking for new photos…" : n ? ` Its ${plural(n, "new photo")} will be added to that trip.` : " No new photos in it, so nothing will be added."}`; /* ticked: say what will happen, not that it's unticked (Cooper r19) */
     return `<b>Already on your globe as ${esc(t.repeat.title)}</b>, so it's unticked.${t.repeat.pending ? " Checking for new photos…" : n ? ` Tick it to add its ${plural(n, "new photo")} to that trip.` : " No new photos in it."}`; }
@@ -2325,9 +2348,9 @@ function tripCountLine(t){ const c = tripCounts(t, stopCap());
   const split = c.already ? `<b>${c.saved ? plural(c.saved, "new photo") : "No new photos"}</b> · ${c.already.toLocaleString()} already on your globe, so not saved twice` : "";
   return [head, split].filter(Boolean).join(". ") + (c.over ? ` · ${c.over.toLocaleString()} over the photo limit` : ""); }
 // "You picked 102 photos. 96 will be saved…": what you picked, what the ticked trips will keep, and why the rest is left out
-function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; const cap = stopCap(); planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */
+function ldTotalText(){ const L = loadState; if (!L || !L.trips) return ""; planRepeats(); const live = (t, i) => { const k = document.querySelector(`[data-ld-keep="${i}"]`); return k ? k.checked : t.keep; }; /* the boxes on screen, not the last saved state */
   let saved = 0, already = 0, unticked = 0, over = 0; const checking = (L.repeatPlanned && !L.repeatDone) || L.trips.some((t, i) => live(t, i) && ((t.repeat && t.repeat.pending) || (t.dupe && t.dupe.pending))); /* trips not checked yet would count as new: wait until every trip is checked, so the numbers never jump (Muse r20) */
-  L.trips.forEach((t, i) => { const c = tripCounts(t, cap); if (!c) return;
+  L.trips.forEach((t, i) => { const c = tripCounts(t, stopCap(t)); if (!c) return;
     if (!live(t, i)){ const known = t.repeat && t.repeat.unchecked ? 0 : c.already; already += known; unticked += c.all - known; return; } /* photos already saved stay "already on your globe", ticked or not (Cooper r22) */
     saved += c.saved; already += c.already; over += c.over; });
   const total = L.total || 0, rest = Math.max(0, total - saved - already - unticked - over);
@@ -2346,7 +2369,7 @@ function syncAddBtn(){ const L = loadState; const n = document.querySelectorAll(
   if (!b) return; const none = n && L && !L.lastChecking && L.lastSaved === 0; b.textContent = L && L.homeMem && n && !none ? "Looks good, add this memory" : !n ? "Tick a trip to add" : L && L.lastChecking ? "Checking…" : none ? "Done: nothing new to add" : L && L.lastNewTrips === 0 && L.lastSaved ? `Looks good, add ${plural(L.lastSaved, "photo")} to your trip` : (() => { const k = (L && L.trips || []).filter((t, i) => { const c = document.querySelector(`[data-ld-keep="${i}"]`); return c ? c.checked : t.keep; }); return k.length === n ? `Looks good, add ${n === 1 ? (k[0].homeMem ? "this memory" : "this trip") : `these ${tmCount(k)}`}` : `Looks good, add ${n === 1 ? "this trip" : `these ${plural(n, "trip")}`}`; })(); b.disabled = !n || !!(L && L.lastChecking); b.dataset.none = none ? "1" : ""; }
 const PER_STOP = 20; // photos kept for each stop (the rest still count toward finding trips and stops)
 const BIG_STOP = 60;  // the "keep every photo" limit you can choose in the review
-const stopCap = () => (loadState && loadState.bigCap) ? BIG_STOP : PER_STOP;
+const stopCap = t => (t && t.bigCap != null ? t.bigCap : !!(loadState && loadState.bigCap)) ? BIG_STOP : PER_STOP; /* a trip's own "Keep all photos" box wins over the one for every trip (Alan 11-16) */
 /* a saved stop's limit: 60 if you chose Keep every photo for it, else 20. A stop can hold more when a merge brought everyone's photos or you placed them yourself; adding more by hand then waits until it is under its limit */
 /* a stop's photos you can see (removed ones don't count), and who else's photos it holds */
 function stopVis(s){ return (s.allPhotos || s.photos || []).filter((p, k) => Array.isArray(p) ? !PH_HIDDEN[s.id + "-" + k] : !p.hidden); }
@@ -2356,7 +2379,7 @@ function stopKind(s){ if (s.big) return "big"; if (s.mergedOver) return "merged"
   const own = v.filter(p => !(Array.isArray(p) ? p[5] : p.by)).length; return own > PER_STOP ? "big" : stopSenders(s).length ? "merged" : "placed"; }
 function stopLimit(s){ return stopKind(s) === "big" ? BIG_STOP : PER_STOP; }
 function stopLimitLines(t){ return t.stops.filter(s => stopVis(s).length > PER_STOP).map(s => { const n = stopVis(s).length, nm = esc(stopName(s)), k = stopKind(s);
-  if (k === "big") return `<b>${nm}</b> keeps up to ${BIG_STOP} (you chose Keep every photo)${stopSenders(s).length ? `, including everything ${esc(stopSenders(s).join(" and "))} sent` : ""}.`;
+  if (k === "big") return `<b>${nm}</b> keeps up to ${BIG_STOP} (you chose Keep all photos)${stopSenders(s).length ? `, including everything ${esc(stopSenders(s).join(" and "))} sent` : ""}.`;
   if (k === "merged") return `<b>${nm}</b> has ${n}: everything ${esc([].concat(s.mergedOver || stopSenders(s)).join(" and "))} sent was kept.`;
   return `<b>${nm}</b> has ${n}: every photo you placed was kept.`; }).join(" "); }
 /* which photos a stop keeps: ones you placed (or that go in by date) always stay, the rest are spread across your time there */
@@ -2372,11 +2395,15 @@ function extraPts(t){ const L = loadState, out = new Map(); if (!L) return out; 
   return out; }
 function freshKeep(t, cap){ const drop = (t.dupe && t.dupe.drop) || new Set(); return t.stops.reduce((a, s) => a + stopPick(s.pts.filter(p => !drop.has(p)), cap).keep.length, 0); }
 function capInfo(t, cap){ const ex = extraPts(t); return t.stops.map(s => { const all = [...s.pts, ...(ex.get(s) || [])]; const r = stopPick(all, cap); return {s, total:all.length, keep:r.keep.length, drop:r.drop}; }); }
-function capNote(t){ const cap = stopCap(), info = capInfo(t, cap).filter(c => c.drop.length); if (!info.length) return "";
+/* "Keep all photos" for one trip, on its card (Alan 11-16: 57 trips from 10k photos, he wanted it per trip as well as for all) */
+const tripCapped = t => capInfo(t, PER_STOP).some(c => c.drop.length);
+function tripAllBox(t, i){ const on = stopCap(t) === BIG_STOP; return `<label class="switch ldtripall" data-ld-allbox="${i}" style="gap:10px;align-items:center;justify-content:flex-start"${tripCapped(t) || on ? "" : " hidden"}><input type="checkbox" data-ld-tripall="${i}"${on ? " checked" : ""} style="width:26px;height:26px;accent-color:var(--lit)"><span>Keep all photos for this ${t.homeMem ? "memory" : "trip"} (up to ${BIG_STOP} a stop)</span></label>`; }
+function capNote(t){ const cap = stopCap(t), info = capInfo(t, cap).filter(c => c.drop.length); if (!info.length) return "";
   const nm = p => (p.file && p.file.name) || "a photo";
-  return `Each stop keeps up to ${cap} photos, so its story stays short and your phone stays quick. ${info.map(c => `<b>${esc(c.s.name)}</b> keeps ${c.keep} of ${c.total}, leaving out ${c.drop.length.toLocaleString()}`).join(". ")}. Photos you placed yourself are always kept.${cap < BIG_STOP ? " Tick <b>Keep every photo</b> below, or Split the trip, to keep more." : ""}`; }
+  return `Each stop keeps up to ${cap} photos, so its story stays short and your phone stays quick. ${info.map(c => `<b>${esc(c.s.name)}</b> keeps ${c.keep} of ${c.total}, leaving out ${c.drop.length.toLocaleString()}`).join(". ")}. Photos you placed yourself are always kept.${cap < BIG_STOP ? " Tick <b>Keep all photos for this trip</b> just below, or Split the trip, to keep more." : ""}`; }
 function refreshCapNotes(){ const L = loadState; if (!L || !L.trips) return; { const el = document.getElementById("ldTotal"); if (el) el.textContent = ldTotalText(); } syncAddBtn(); document.querySelectorAll("[data-ld-cap]").forEach(el => { const t = L.trips[+el.dataset.ldCap]; if (t) el.innerHTML = capNote(t); }); document.querySelectorAll("[data-ld-count]").forEach(el => { const t = L.trips[+el.dataset.ldCount]; if (t) el.innerHTML = tripCountLine(t); }); document.querySelectorAll("[data-ld-n]").forEach(el => { const t = L.trips[+el.dataset.ldN]; if (t) el.textContent = plural(cardPhotos(t), "photo"); }); document.querySelectorAll("[data-ld-joinbox]").forEach(el => { const i = +el.dataset.ldJoinbox, t = L.trips[i]; if (t && !el.contains(document.activeElement)) el.innerHTML = joinNote(t, i); });
-  const w = $("#ldAllWrap"); if (w) w.hidden = !(L.bigCap || L.trips.some(t => capInfo(t, PER_STOP).some(c => c.drop.length))); }
+  document.querySelectorAll("[data-ld-allbox]").forEach(el => { const t = L.trips[+el.dataset.ldAllbox]; if (!t) return; const on = stopCap(t) === BIG_STOP; el.hidden = !(tripCapped(t) || on); const cb = el.querySelector("input"); if (cb) cb.checked = on; });
+  const w = $("#ldAllWrap"); if (w) w.hidden = !(L.bigCap || L.trips.some(t => tripCapped(t) || t.bigCap)); const a = $("#ldAll"); if (a) a.checked = !!L.bigCap; }
 /* a trip counts as already on your globe only if the dates match and each of its stops sits within 3 km of a stop of the saved trip; a Tokyo photo on the day of a saved Paris trip is a new trip */
 /* for a loader trip that matches a saved one: which of its photos are not in the saved trip yet (by picture fingerprint) */
 /* no-location photos you kept for a trip that's already on your globe: matched by date, so they aren't in its first check */
@@ -2385,7 +2412,7 @@ function repeatKept(t){ const ck = (t.repeat && t.repeat.checked) || new Set(); 
 const repeatOut = (L, t, x) => !!(x.x && L && L.skip && L.skip.has(x.p.file) && !(L.placed && L.placed.get(x.p.file) === t.pts[0]));
 const repeatNew = t => { const L = loadState; if (t.repeat.unchecked) return 0; return (t.repeat.newPts || []).filter(x => !repeatOut(L, t, x)).length + repeatKept(t).length; };
 /* a trip that's already on your globe is checked again when you Keep or Leave out one of its no-location photos, so its count stays exact */
-async function replanRepeat(t){ const L = loadState; if (!t || !t.repeat || t.repeat.pending || !L) return; const e = travelRaw(store.get("realTrips", [])).find(x => x.id === t.repeat.eid); if (!e) return; t.repeat.pending = true; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
+async function replanRepeat(t){ const L = loadState; if (!t || !t.repeat || t.repeat.pending || !L) return; const e = travelRaw(store.get("realTrips", [])).find(x => x.id === t.repeat.eid); if (!e) return; t.repeat.pending = true; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap(t)); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
 async function repeatPlan(t, e){ const prints = [], blind = new Set(); for (const o of e.stops) for (let k = 0; k < o.photos.length; k++){ if (o.photos[k][0] !== "real") continue; const f = await picPrint(imgCache.get("rp:" + o.id + "-" + k)); if (f) prints.push(f); else if (o.photos[k][1]) blind.add(o.photos[k][1]); }
   /* a saved picture this phone can't read no longer blocks the trip (Alan 11-14): new photos still come in, checked against every picture it can read; one taken at the same minute as an unreadable one is skipped, and a rare copy can be removed on the trip page */
   const list = []; for (const s of t.stops) for (const p of s.pts) list.push({s, p}); if (t.repeat) extraPts(t).forEach((ps, s) => ps.forEach(p => { if (!list.some(x => x.p.file === p.file)) list.push({s, p, x:true}); })); /* no-location photos matched by date are checked too, so a kept one is counted (and one already saved isn't) */
@@ -2406,14 +2433,14 @@ async function savedSame(file, prints){ let u = null; try { u = await thumb(file
 function planRepeats(){ const L = loadState; if (!L || !L.trips || L.repeatPlanned) return; L.repeatPlanned = true; const existing = travelRaw(store.get("realTrips", []));
   (async () => { for (const t of L.trips){ if (t.homeMem || L.homeMem) continue; const e = existing.find(x => sameTripAs(x, t));
     if (!e){ if (!existing.length) continue; { const w = existing.find(x => duringTrip(x, t)); if (w){ t.maybeJoin = {eid:w.id, title:w.title}; if (t.photos <= 3){ tickKeep(t); forceJoin(L.trips.indexOf(t), true); } } } /* a day or two of photos (1 to 3) from the days of a saved trip joins it, ticked from the start; untick to keep it apart */ /* a day out far away in the middle of a saved trip: ask, rather than guess */ t.dupe = {pending:true, drop:new Set()}; refreshCapNotes(); try { t.dupe.drop = await dupeScan(t, existing); } catch(err){} t.dupe.pending = false; refreshCapNotes(); continue; }
-    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; refreshCapNotes(); await noLocSaved(L); })(); }
+    t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; untickKeep(t); /* already on your globe (same dates and places): unticked, and the card says so (Alan 11-13); tick it to add its new photos to that trip */ refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap(t)); t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); } L.repeatDone = true; refreshCapNotes(); await noLocSaved(L); })(); }
 function untickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = false; t.pts.forEach(p => p.off = true); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = false; updateAddCount(); }
 function tickKeep(t){ const L = loadState, i = L.trips.indexOf(t); t.keep = true; t.pts.forEach(p => p.off = false); const k = document.querySelector(`[data-ld-keep="${i}"]`); if (k) k.checked = true; const o = document.querySelector(`[data-ld-one="${i}"]`); if (o) o.remove(); updateAddCount(); }
 // a batch whose dates sit inside a saved trip's dates (give or take a day), wherever it is
 function duringTrip(e, t){ return !!(e.start && t.start && e.stops && e.stops.length && t.start >= dayShift(e.start, -1) && t.end <= dayShift(e.end, 1)); }
 async function forceJoin(i, on){ const L = loadState, t = L.trips[i]; if (!t || !t.maybeJoin) return; const existing = travelRaw(store.get("realTrips", [])), e = existing.find(x => x.id === t.maybeJoin.eid); if (!e) return;
   if (!on){ t.forceJoin = null; t.repeat = null; refreshCapNotes(); return; } tickKeep(t); /* joining a trip means adding these photos: tick the card too */
-  t.forceJoin = e.id; t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap()); if (t.forceJoin !== e.id) return; t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
+  t.forceJoin = e.id; t.repeat = {eid:e.id, title:e.title, pending:true, checked:new Set()}; refreshCapNotes(); const fit = fitJoin(e, await repeatPlan(t, e), stopCap(t)); if (t.forceJoin !== e.id) return; t.repeat.newPts = fit.keep; t.repeat.over = fit.over; t.repeat.pending = false; refreshCapNotes(); }
 function joinNote(t, i){ if (!t.maybeJoin || (t.repeat && !t.forceJoin)) return ""; return `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" data-ld-join="${i}"${t.forceJoin ? " checked" : ""} style="width:22px;height:22px;accent-color:var(--lit)"><span>These photos are from the same days as <b>${esc(t.maybeJoin.title)}</b>. Add them to that trip instead?</span></label>`; }
 const dayShift = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 function sameTripAs(e, t){ if (!e.stops || !e.stops.length || !t.stops.length || !e.start || !t.start) return false;
@@ -2450,8 +2477,8 @@ async function addRealTripsRun(L, pick, names, hideSample){
   if (L.placed && L.placed.size) pick.forEach(({t}) => placeChosen(L, t));
   const btn = document.querySelector("[data-ld-add]") || {}; btn.disabled = true; const progEl = $("#ldProg"); const prog = {set textContent(v){ const el = document.getElementById("ldProg") || progEl; if (el) el.textContent = v; const m = /([\d,]+) of ([\d,]+)/.exec(v || ""); if (m) saveCard(+m[1].replace(/,/g, ""), +m[2].replace(/,/g, "")); }};
   const existing = store.get("realTrips", []); const out = [], joined = []; const base = Date.now().toString(36); let done = 0, failed = 0, heicFails = 0; const jw = {plan:0, full:0, fail:0, unchecked:0, failed:new Set()}; /* why photos meant for a saved trip didn't join it, so the message is honest (Muse r21) */
-  const cap = stopCap(); const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + stopPick(s.pts, cap).keep.length, 0), 0);
-  for (const {t, i} of pick){
+  const total = pick.reduce((a, {t}) => a + t.stops.reduce((b, s) => b + stopPick(s.pts, stopCap(t)).keep.length, 0), 0);
+  for (const {t, i} of pick){ const cap = stopCap(t);
     { const e = t.homeMem || L.homeMem ? null : travelRaw(existing).find(x => t.forceJoin ? x.id === t.forceJoin : sameTripAs(x, t)); if (e){ /* already saved: same dates and places, so only its new photos join that trip */
       let plan = (t.repeat && !t.repeat.pending ? t.repeat.newPts : fitJoin(e, await repeatPlan(t, e), cap).keep).filter(x => !repeatOut(L, t, x)); let got = 0; if (t.repeat && t.repeat.unchecked) jw.unchecked++;
       { const have = new Set(plan.map(x => x.p.file)), kept = t.stops.map(s => ({s, pts:s.pts.filter(p => p.pinned && !have.has(p.file))})).filter(x => x.pts.length); /* a no-location photo you tapped Keep on joins this trip too, unless that same picture is already in it */
