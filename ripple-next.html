@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Pebble Pond (was Ripple) prototype v0.15.1 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
+<!-- Pebble Pond (was Ripple) prototype v0.15.2 (working title; idea pipeline, 2026-11-03). Unlisted test page: not linked from the site. Replace this file to update. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#cfe5d6">
@@ -318,7 +318,7 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
     <div class="cloud" id="cloudRow"></div>
     <div class="shop" id="storeRow"></div>
     <div class="tester hidden" id="testerNote">Tester tools on: all ponds open, Solve button shown.</div>
-    <div class="ver" id="ver">Pebble Pond v0.15.1 prototype</div>
+    <div class="ver" id="ver">Pebble Pond v0.15.2 prototype</div>
   </section>
 
   <section id="screenPlay" class="screen hidden">
@@ -797,6 +797,15 @@ var daily = store.get('daily', {}) || {};
 daily.done = daily.done || {}; daily.best = daily.best || {}; daily.streak = daily.streak || 0;
 var tester = /[?&]unlock=1\b/.test(location.search);
 var dateOverride = (location.search.match(/[?&]date=(\d{4}-\d\d-\d\d)\b/) || [])[1]; // testing aid
+// v0.15.2 testing aid (Muse r19): the tester link plus &played=1 loads a lived-in save once per browser: ponds 1-30 solved, Challenges 1-5 cleared (Challenge 6 next), weekly goals start fresh. Web test page only: the app build has no tester.
+if (tester && /[?&]played=1\b/.test(location.search)) { try { if (!store.get('played', false)) {
+  store.set('played', 1); // once per browser: opening the link again keeps what you played since
+  progress = { stars: {}, best: {} }; LEVELS.slice(0, 30).forEach(function (l, i) { progress.stars[l.id] = i % 7 === 4 ? 2 : 3; });
+  ['tutorial', 'preview', 'pvNudge', 'logRide', 'knockOff', 'dailyIntro'].forEach(function (k) { seen[k] = true; });
+  store.set('progress', progress); store.set('seen', seen);
+  store.set('chal', { stars: { 0: 3, 1: 3, 2: 2, 3: 3, 4: 3 }, pick: {} });
+  try { localStorage.removeItem(store.prefix + 'weekly'); } catch (e) {}
+} } catch (e) {} }
 
 /* ---------- helpers ---------- */
 var $ = function (id) { return document.getElementById(id); };
@@ -1916,7 +1925,7 @@ function visSeed(lv) { return typeof lv.id === 'number' ? lv.id : (lv.seed || 7)
 function enterPond(level, title, sub) {
   G.level = level; G.board = L.makeBoard(level); G.st = L.initialState(level);
   G.hist = []; G.stageHist = []; G.stuckSaid = false; G.stageMax = 0; G.taps = 0; G.busy = false; G.splashing = false; G.queued = null; G.queuedUndo = false; G.won = false; G.useBig = false;
-  G.restarted = false; G.hinted = false; G.solved = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {}; G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; G.pillGlowed = false; G.freeShow = false; G.usedHint = false; G.hintSeen = false; G.usedUndo = false; hideTray();
+  G.restarted = false; G.hinted = false; G.solved = false; G.hint = -1; G.hintStage = 0; G.tipShown = false; G.solCache = {}; G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; G.pillGlowed = false; G.freeShow = false; G.usedHint = false; G.hintSeen = false; G.showSeen = false; G.usedUndo = false; hideTray();
   $('coach').classList.remove('slot');
   hideHold();
   $('screenSelect').classList.add('hidden'); $('screenPlay').classList.remove('hidden');
@@ -2229,7 +2238,8 @@ function undo() {
   placeLeaves(true, 200); hud();
 }
 function resetPond() {
-  G.hinted = false; G.solved = false; G.usedHint = false; G.usedUndo = false; G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; // v0.10.1 (Nikola r11): a fresh start earns 3 stars again, the same as Play again
+  G.hinted = !!G.showSeen; G.solved = false; G.usedHint = false; G.usedUndo = false; // v0.15.2 (Alan 11-16, from Muse r19): after Show me, Restart keeps the 2-star cap until you leave the pond
+  G.lastClue = null; G.lastMove = null; G.lastClueTaps = -1; // v0.10.1 (Nikola r11): a fresh start earns 3 stars again, the same as Play again
   G.st = L.initialState(G.level); G.hist = []; G.stageHist = []; G.stuckSaid = false; G.stageMax = 0; G.taps = 0; G.won = false; G.useBig = false; G.hint = -1; G.hintStage = 0; hideTray();
   $('winCard').classList.add('hidden'); clearWinPlace(); $('btnHelp').classList.remove('hidden'); clearHL();
   placeLeaves(true, 260);
@@ -2395,7 +2405,7 @@ function showMe() {
   if (G.busy || G.won || !hintReady()) return;
   var sol = solveNow(); if (!sol || !sol.length) return;
   clearHL();
-  G.hintSeen = true; if (G.freeShow) G.freeShow = false; else G.hinted = true; // v0.13.0: after a rewarded video this Show me keeps 3 stars
+  G.hintSeen = true; if (G.freeShow) G.freeShow = false; else { G.hinted = true; G.showSeen = true; } // v0.13.0: after a rewarded video this Show me keeps 3 stars
   G.hintStage = 2; G.hint = sol[0].idx;
   hlCell(sol[0].idx, true);
   var w = G.level.w, where = 'Tap row ' + (((sol[0].idx / w) | 0) + 1) + ', column ' + (sol[0].idx % w + 1) + '.';
