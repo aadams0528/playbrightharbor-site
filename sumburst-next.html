@@ -1,12 +1,12 @@
 <!doctype html>
-<!-- number-blast 3fc976e (PR #45) -->
+<!-- number-blast 8fb8bf3 (PR #46) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
-<title>Sumburst 1.3 preview (test version)</title>
+<title>Sumburst 1.4 preview (test version)</title>
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -96,6 +96,8 @@ body.tw-bombs .tile.hasbomb{animation:bombPulse 1.4s ease-in-out infinite}
 /* From level 30 a notch marks half the goal; it turns gold once the halfway coins are paid (Muse round 20). */
 .bar.half::after{content:'';position:absolute;left:calc(50% - 1px);top:0;bottom:0;width:2px;background:var(--bg)}
 .bar.half.paid::after{left:calc(50% - 2px);width:4px;background:var(--gold);box-shadow:0 0 0 1px #8a6d00}
+.ex-row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:.95rem}.ex{display:inline-flex;gap:3px;flex:none}
+.ex i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:7px;font-style:normal;font-weight:800;color:var(--tile-ink);font-family:var(--display);font-size:1rem;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}.ex .ex-gap{background:var(--line);color:var(--muted);box-shadow:none}
 .lvl .half{display:inline-block}.lvl .half.bump{animation:bump .5s ease 3}
 .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:6px;transition:width .4s ease}
 .chainline{position:absolute;left:50%;bottom:-15px;transform:translateX(-50%);z-index:5;white-space:nowrap;font-weight:700;font-size:.9rem;color:var(--ok);background:var(--bg);padding:0 8px;border-radius:999px}
@@ -366,7 +368,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <a class="btn plain" id="insiders" href="https://playbrightharbor.com/insiders.html" target="_blank" rel="noopener">⭐ Join Insiders: play our next games first</a>
       </div>
     </div>
-    <p class="tester" hidden>Sumburst 1.3.11 test version · ads and purchases are samples.</p>
+    <p class="tester" hidden>Sumburst 1.4.0 test version · ads and purchases are samples.</p>
     <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
@@ -691,20 +693,31 @@ function nearSums(b){
   }
   return out;
 }
-// Once ever: a drop that leaves a too-big touching group which holds an exact sum inside it explains the
-// whole-group rule at that moment (Muse round 17). The rule itself is unchanged.
+// Once ever: the first drop that leaves a touching group over the target teaches the whole-group rule and gaps
+// right then, with a worked example (Muse round 17; since 2026-11-16 this replaces tutorial lessons 2 and 3).
+// The rule itself is unchanged.
+const exTiles=(vals)=>vals.map(v=>v==null?'<i class="ex-gap">✕</i>':`<i class="ex-t" style="background:var(--n${v})">${v}</i>`).join('');
 function overNudge(placed){
-  if(tut||store.get('nb-over-seen',false))return;const ml=minLen();let found=0;
+  if(tut||store.get('nb-over-seen',false))return;const ml=minLen();let found=null;
   groups(board,(cells,dir,sum,stars)=>{
     if(found||stars||sum<=T||!cells.some(k=>placed.includes(k)))return;
-    for(let i=0;i<cells.length&&!found;i++){let t=0;for(let j=i;j<cells.length;j++){t+=board[cells[j]].v;if(t===T&&j-i+1>=ml&&j-i+1<cells.length){found=sum;break}if(t>T)break}}
+    let part=false;
+    for(let i=0;i<cells.length&&!part;i++){let t=0;for(let j=i;j<cells.length;j++){t+=board[cells[j]].v;if(t===T&&j-i+1>=ml&&j-i+1<cells.length){part=true;break}if(t>T)break}}
+    found={sum,vals:cells.map(k=>board[k].v),part};
   });
-  if(!found)return;store.set('nb-over-seen',true);
-  // A small card, so the whole note can be read (the message strip cut it to one line: Muse round 18).
+  if(!found)return;store.set('nb-over-seen',true);track('over_lesson',{level,part:found.part});
+  const {sum,vals,part}=found,eq=vals.length<=6?vals.join(' + ')+' = '+sum:'they make '+sum;
+  // A worked example for this target: a pair that makes it, then the same pair with an extra block touching or past a gap.
+  const a=Math.min(9,Math.ceil(T/2)),b=T-a,c=Math.min(9,Math.max(1,a+1));
   if($('modal').hidden){
-    openSheet(`<h3>🧩 The whole group counts</h3><p>Touching blocks in a row or column count as one group. The whole touching group has to make exactly <b>${T}</b>. This one makes <b>${found}</b>, so it stays, even though part of it makes ${T}.</p><p>Wrong spot? Drag your last piece somewhere else before you pick up your next one.</p><div class="btns"><button class="btn" id="ov-ok">Got it</button></div>`);
+    openSheet(`<h3>🧩 The whole group counts</h3>
+      <p>Touching blocks in a row or column add up together. Here ${eq}, which is more than <b>${T}</b>, so they stay${part?`, even though part of the group makes ${T}`:''}.</p>
+      <div class="ex-row"><span class="ex">${exTiles([a,b,c])}</span><span>${a} + ${b} + ${c} = ${a+b+c}: too much, stays</span></div>
+      <div class="ex-row"><span class="ex">${exTiles([a,b,null,c])}</span><span>An empty square splits the group: ${a} + ${b} = ${T} blasts</span></div>
+      <p>While you drag, <b>gold</b> means it will blast and <b>red</b> means too much. Wrong spot? Drag your last piece somewhere else before you pick up your next one.</p>
+      <div class="btns"><button class="btn" id="ov-ok">Got it</button></div>`);
     $('ov-ok').onclick=closeSheet;
-  }else news(`🧩 The whole touching group has to make exactly ${T}. This one makes ${found}, so it stays.`,true,null,'now');
+  }else news(`🧩 The whole touching group has to make exactly ${T}. This one makes ${sum}, so it stays.`,true,null,'now');
 }
 function findRuns(b){const runs=[],ml=minLen();groups(b,(cells,dir,sum,stars)=>{if(cells.length>=ml&&hits(sum,stars))runs.push({cells,dir})});return runs}
 function tooMuch(b,touched){const out=new Set();groups(b,(cells,dir,sum,stars)=>{if(sum+stars>T&&cells.some(k=>touched.has(k)))cells.forEach(k=>out.add(k))});return out}
@@ -1286,7 +1299,7 @@ function renderTray(){
 function renderHUD(){
   $('target').textContent=T;
   const tw=twist()?.id;document.body.classList.toggle('tw-lucky7',tw==='lucky7');document.body.classList.toggle('tw-bombs',tw==='bombs');
-  if(tut){$('lvl').innerHTML='Lesson '+(tut.step+1)+' of '+LESSONS.length+'<span class="sub">Learn to play</span>';$('bar').style.width=(tut.step/LESSONS.length*100)+'%'}
+  if(tut){$('lvl').innerHTML=`Level 1 · <span class="lp">${Math.min(score,goalFor(1))} of ${goalFor(1)}</span><span class="sub">Lesson ${tut.step+1} of ${LESSONS.length}: learn to play</span>`;$('bar').style.width=Math.min(100,score/goalFor(1)*100)+'%'}
   else{$('lvl').innerHTML=`Level ${level}${expertOn()?' <span title="Expert">💎</span>':''}${twist()?' <span class="tw" title="Challenge level">⚡</span>':''} · <span class="lp">${Math.min(levelPts(),goalFor(level))} of ${goalFor(level)}${level>=HALF_FROM&&halfPaid?` <span class="half${halfBump?' bump':''}" title="Halfway: +${HALF_COINS} coins collected" aria-label="Halfway reward collected">🎯</span>`:''}</span><span class="sub">${mode==='daily'?`<span class="ladder" title="Daily #${dailyNo()}">${(c=>starStr(starsFor(c))+((n=>n?` next: level ${n}`:' all 3 today!')(STAR_LEVELS.find(l=>l>c))))(hudCleared??level-1)}</span>`:twist()?`⚡ ${twist().short}`:expertOn()?'💎 Expert · points to clear':'Endless · points to clear'}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%';halfBump=false}
   $('bar').parentNode.classList.toggle('half',!tut&&level>=HALF_FROM);$('bar').parentNode.classList.toggle('paid',!tut&&level>=HALF_FROM&&halfPaid);
   $('score').innerHTML='<small>Score</small>'+score.toLocaleString();
@@ -1312,7 +1325,7 @@ function setHint(){
   const tool=stuck?(erasers?'eraser':shuffleHelps()?'shuffle':null):null;
   $('eraser').classList.toggle('nudge',tool==='eraser');$('shuffle').classList.toggle('nudge',tool==='shuffle');
   if(tut){h.classList.remove('basic','seen');h.innerHTML='<span>'+LESSONS[tut.step].hint+' <button type="button" class="tut-skip" id="tut-skip">Skip tutorial</button></span>';return}
-  if(justTutored)h.innerHTML=`Your turn! Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.`;
+  if(justTutored)h.innerHTML=`Your turn! Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level ${level}.`;
   else if(!specialSeen&&tray.some(p=>p&&p.cells.some(c=>c.t.star||c.t.bomb))){
     h.innerHTML='Special blocks! A <b>★ star</b> counts as whatever number from 1 to 9 finishes the sum. When a <b>💣 bomb</b>\'s sum blasts, it also clears the 8 blocks around it.';
     specialSeen=true;specialIntro();
@@ -2173,20 +2186,19 @@ function newGame(m,keepNews=false){
 }
 
 // ---------- tutorial: three short lessons on scripted boards, then a real level 1 ----------
+// Three short lessons that all blast, and together they are level 1: 10 + 20 + 30 = 60 points, the level 1 goal
+// (Alan 2026-11-16: first win inside a minute). The whole-group rule and gaps are taught the first time a
+// player's own drop goes over the target (overNudge), with a worked example.
 const LESSONS=[
-  {tiles:{27:4},cell:28,piece:6,hint:'<b>Lesson 1 of 5: make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
-  // The whole touching group counts: a drop that makes 10 with one neighbour but touches more is too much.
-  {tiles:{33:5,35:7},cell:34,piece:5,after:'Right! 5 + 5 + 7 = 17 is too much,\nso nothing blasts.',
-    hint:'<b>Lesson 2 of 5: the whole group counts.</b> Drop the <b>5</b> between the 5 and the 7. All the touching blocks add up: 5 + 5 + 7 = 17, not 10. <b>Red</b> means too much.'},
-  {tiles:{33:5,36:7},cell:34,piece:5,gap:35,hint:'<b>Lesson 3 of 5: a gap splits groups.</b> This time an <b>empty square</b> (marked ✕) sits before the 7, so the 7 is not in the group. Drop the <b>5</b> next to the other 5: 5 + 5 = 10 blasts!'},
-  {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Lesson 4 of 5: longer sums.</b> Drag the <b>5</b> onto the end. 2 + 3 + 5 = 10 is worth double!'},
-  {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Lesson 5 of 5: combos.</b> Drop the <b>4</b> where it finishes a sum across and down at once.'},
+  {tiles:{27:4},cell:28,piece:6,hint:'<b>Make 10.</b> Drag the <b>6</b> next to the <b>4</b>. 4 + 6 = 10, so they blast!'},
+  {tiles:{34:2,35:3},cell:36,piece:5,hint:'<b>Longer sums pay more.</b> Drop the <b>5</b> on the end: 2 + 3 + 5 = 10, worth double!'},
+  {tiles:{26:6,19:6},cell:27,piece:4,hint:'<b>Combo!</b> Drop the <b>4</b> to make 10 across and down at once.'},
 ];
 function startTutorial(){
   if(!tut)saveGame();  // a replay from Help keeps the game in progress; it comes back afterwards
   clearPending();closeSheet();$('over').hidden=true;
   mode='endless';level=1;levelBase=0;score=0;T=10;chain=0;erasers=0;shuffles=0;rotates=0;rotating=false;rotPaid=null;over=false;busy=false;erasing=false;movable=null;
-  tut={step:0};loadLesson();
+  tut={step:0,replay:store.get('nb-tutorial-done',false)};loadLesson();   // replay: started again from Help
 }
 function loadLesson(){
   const L=LESSONS[tut.step];board=Array(N*N).fill(null);track('tutorial_step',{step:tut.step+1});
@@ -2200,9 +2212,9 @@ function nextLesson(){
 }
 function endTutorial(skipped){
   track(skipped?'tutorial_skip':'tutorial_complete',skipped?{step:tut.step+1}:{});
-  tut=null;store.set('nb-tutorial-done',true);
+  const tutPts=score,replay=tut.replay;tut=null;store.set('nb-tutorial-done',true);
   // After a replay, the saved Endless run picks up where it was instead of starting over.
-  const back=resumeGame('nb-save-endless',false);
+  const back=replay&&resumeGame('nb-save-endless',false);
   if(!back)newGame('endless');
   if(back&&!skipped){
     setHint();SFX.big();
@@ -2211,11 +2223,8 @@ function endTutorial(skipped){
     $('tut-go').onclick=closeSheet;
   }
   else if(!skipped){
-    justTutored=true;setHint();SFX.big();fireworks();
-    openSheet(`<h3>🎉 Tutorial done!</h3><p>That was practice. <b>Now the real game starts.</b></p>
-      <p>Make <b>${T}</b> with touching blocks. Score <b>${goalFor(level)} points</b> to clear level 1.</p>
-      <div class="btns"><button class="btn" id="tut-go">Start playing</button></div>`,true);
-    $('tut-go').onclick=closeSheet;
+    // No "that was practice": the three lessons scored the level 1 goal, so level 1 is complete (Alan 2026-11-16).
+    justTutored=true;score=Math.max(tutPts,goalFor(1));levelBase=0;renderAll();saveGame();levelUp();
   }
 }
 $('hint').addEventListener('click',e=>{if(e.target.id==='tut-skip'&&tut&&!busy)endTutorial(true)});
