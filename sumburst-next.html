@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- number-blast 25edfbd (PR #44) -->
+<!-- number-blast 3fc976e (PR #45) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -92,7 +92,11 @@ body.tw-bombs .tile.hasbomb{animation:bombPulse 1.4s ease-in-out infinite}
 #expert-help{margin:6px 0}#expert-help .btn{width:100%}.expert-note{color:var(--muted);font-size:.95rem;margin:4px 0 8px}
 .score{text-align:right;font-family:var(--display);font-weight:800;font-size:1.3rem;line-height:1.1;font-variant-numeric:tabular-nums}
 .score small{display:block;font-family:var(--body);font-weight:700;font-size:.85rem}
-.bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;position:relative}
+/* From level 30 a notch marks half the goal; it turns gold once the halfway coins are paid (Muse round 20). */
+.bar.half::after{content:'';position:absolute;left:calc(50% - 1px);top:0;bottom:0;width:2px;background:var(--bg)}
+.bar.half.paid::after{left:calc(50% - 2px);width:4px;background:var(--gold);box-shadow:0 0 0 1px #8a6d00}
+.lvl .half{display:inline-block}.lvl .half.bump{animation:bump .5s ease 3}
 .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:6px;transition:width .4s ease}
 .chainline{position:absolute;left:50%;bottom:-15px;transform:translateX(-50%);z-index:5;white-space:nowrap;font-weight:700;font-size:.9rem;color:var(--ok);background:var(--bg);padding:0 8px;border-radius:999px}
 .chainline:empty{display:none}
@@ -362,7 +366,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       <a class="btn plain" id="insiders" href="https://playbrightharbor.com/insiders.html" target="_blank" rel="noopener">⭐ Join Insiders: play our next games first</a>
       </div>
     </div>
-    <p class="tester" hidden>Sumburst 1.3.10 test version · ads and purchases are samples.</p>
+    <p class="tester" hidden>Sumburst 1.3.11 test version · ads and purchases are samples.</p>
     <p class="tester" hidden><small>Test page only:</small> <button type="button" class="linkbtn" id="tester-reset">Start fresh (erase this browser's Sumburst save)</button></p>
   </div>
 </template>
@@ -524,7 +528,7 @@ let mode="endless", level=1, levelBase=0, score=0, best=0, T=10, board=Array(N*N
     over=false, busy=false, erasing=false, longDealt=0, tut=null, rng=mulberry(1), lastV=0, blastsGame=0, bestRun=null, specials=0;
 const capNoted=new Set();   // tools already said to be full this level
 // Halfway reward (Alan 2026-11-14, Muse's round 12 idea): from level 30, reaching half the goal pays a few coins once.
-const HALF_FROM=30,HALF_COINS=5;let halfPaid=false;
+const HALF_FROM=30,HALF_COINS=5;let halfPaid=false,halfBump=false;   // halfBump: the 🎯 by the level line bounces once when it first shows
 let introPending=false;   // false, or the target before the ad, so the card after a reload says "New target" only when it changed (Nikola round 14)
    // the next level's card waits for the between-level ad; saved so a reload still shows it (Nikola round 13)
 const MAX_ERASERS=3, MAX_SHUFFLES=3, MAX_ROTATES=3, BLASTS_PER_SHUFFLE=8, CHAIN_MOVES=2, CHAIN_MAX=4;
@@ -1283,7 +1287,8 @@ function renderHUD(){
   $('target').textContent=T;
   const tw=twist()?.id;document.body.classList.toggle('tw-lucky7',tw==='lucky7');document.body.classList.toggle('tw-bombs',tw==='bombs');
   if(tut){$('lvl').innerHTML='Lesson '+(tut.step+1)+' of '+LESSONS.length+'<span class="sub">Learn to play</span>';$('bar').style.width=(tut.step/LESSONS.length*100)+'%'}
-  else{$('lvl').innerHTML=`Level ${level}${expertOn()?' <span title="Expert">💎</span>':''}${twist()?' <span class="tw" title="Challenge level">⚡</span>':''} · <span class="lp">${Math.min(levelPts(),goalFor(level))} of ${goalFor(level)}</span><span class="sub">${mode==='daily'?`<span class="ladder" title="Daily #${dailyNo()}">${(c=>starStr(starsFor(c))+((n=>n?` next: level ${n}`:' all 3 today!')(STAR_LEVELS.find(l=>l>c))))(hudCleared??level-1)}</span>`:twist()?`⚡ ${twist().short}`:expertOn()?'💎 Expert · points to clear':'Endless · points to clear'}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%'}
+  else{$('lvl').innerHTML=`Level ${level}${expertOn()?' <span title="Expert">💎</span>':''}${twist()?' <span class="tw" title="Challenge level">⚡</span>':''} · <span class="lp">${Math.min(levelPts(),goalFor(level))} of ${goalFor(level)}${level>=HALF_FROM&&halfPaid?` <span class="half${halfBump?' bump':''}" title="Halfway: +${HALF_COINS} coins collected" aria-label="Halfway reward collected">🎯</span>`:''}</span><span class="sub">${mode==='daily'?`<span class="ladder" title="Daily #${dailyNo()}">${(c=>starStr(starsFor(c))+((n=>n?` next: level ${n}`:' all 3 today!')(STAR_LEVELS.find(l=>l>c))))(hudCleared??level-1)}</span>`:twist()?`⚡ ${twist().short}`:expertOn()?'💎 Expert · points to clear':'Endless · points to clear'}</span>`;$('bar').style.width=Math.min(100,levelPts()/goalFor(level)*100)+'%';halfBump=false}
+  $('bar').parentNode.classList.toggle('half',!tut&&level>=HALF_FROM);$('bar').parentNode.classList.toggle('paid',!tut&&level>=HALF_FROM&&halfPaid);
   $('score').innerHTML='<small>Score</small>'+score.toLocaleString();
   $('eraserN').textContent=erasers;$('shuffleN').textContent=shuffles;
   $('eraser').classList.toggle('on',erasing);$('eraser').setAttribute('aria-pressed',erasing);
@@ -1570,7 +1575,7 @@ function blast(cascade=0){
     if(tut)return nextLesson();
     renderBoard();
     if(blast(cascade+1))return;
-    if(halfPending){halfPending=false;if(levelPts()<goalFor(level))news(`🎯 Halfway there! +${HALF_COINS} 🪙 · ${goalFor(level)-levelPts()} to go`,true,null,'top')}
+    if(halfPending){halfPending=false;if(levelPts()<goalFor(level)){halfBump=true;renderHUD()}if(levelPts()<goalFor(level))news(`🎯 Halfway there! +${HALF_COINS} 🪙 · ${goalFor(level)-levelPts()} to go`,true,null,'top')}
     finishTurn();
   },done+(extra.size?450:300));
   return true;
@@ -1584,7 +1589,7 @@ function finishTurn(){
   }
   if(!over&&levelPts()>=goalFor(level))return levelUp();
   if(!over&&level>=HALF_FROM&&!halfPaid&&levelPts()>=goalFor(level)/2){
-    halfPaid=true;addCoins(HALF_COINS);track('halfway',{level});
+    halfPaid=true;halfBump=true;addCoins(HALF_COINS);track('halfway',{level});renderHUD();
     news(`🎯 Halfway there! +${HALF_COINS} 🪙 · ${goalFor(level)-levelPts()} to go`,true,null,true);bumpEl($('coinpill'));   // next in line, one line (Nikola round 13)
   }
   // The last piece left is a lone star: save it for later and deal a new set (Alan 2026-11-09),
@@ -2347,7 +2352,7 @@ if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple
 window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
-if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('score'in o)score=o.score;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins);if('toShuffle'in o)toShuffle=o.toShuffle},overNudge:k=>overNudge(k),finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint(),giveTool:k=>giveTool(k),setLongPlaced:k=>{longPlaced=k},lesson:n=>{if(!tut)startTutorial();tut.step=n;loadLesson()},markPlayed:()=>markPlayed(),endSession:()=>endSession(),
+if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('score'in o)score=o.score;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd;if('halfPaid'in o)halfPaid=o.halfPaid},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins);if('toShuffle'in o)toShuffle=o.toShuffle},overNudge:k=>overNudge(k),finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint(),giveTool:k=>giveTool(k),setLongPlaced:k=>{longPlaced=k},lesson:n=>{if(!tut)startTutorial();tut.step=n;loadLesson()},markPlayed:()=>markPlayed(),endSession:()=>endSession(),
   twist:()=>twist(),expertOn:()=>expertOn(),goalFor:l=>goalFor(l),weekTheme:m=>weekTheme(m),weekGoals:m=>weekGoals(m),weekDays:()=>weekDays(),weekPool:()=>WEEK_GOALS,renderBoard:()=>renderBoard(),checkWeekly:e=>checkWeekly(e),
   // Bot check that challenge levels can be cleared: plays one level with greedy drops and no tools, synchronously.
   simLevel:(lv,games,exp=false,noTw=false)=>{let wins=0;simNoTwist=noTw;
