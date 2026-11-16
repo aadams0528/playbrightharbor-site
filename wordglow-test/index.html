@@ -120,7 +120,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 @keyframes glow { from { filter: brightness(1); } to { filter: brightness(1.12); } }
 /* Touching glowing words (a combo waiting to be tapped): a deeper, warmer gold and a small "x1.5" tag (Muse round 19). */
 .cell.lit.combo .tile { box-shadow: 0 0 0 4px #ffb52e, 0 0 20px 5px rgba(255, 170, 40, 0.7), inset 0 -4px 0 rgba(0,0,0,0.18); }
-.ctag { position: absolute; top: -14%; left: -10%; z-index: 3; pointer-events: none; font: 800 calc(var(--cell) * 0.26)/1 var(--font-display); font-style: normal;
+.ctag { position: absolute; top: -14%; left: -10%; z-index: 3; pointer-events: none; font: 800 max(12px, calc(var(--cell) * 0.3))/1 var(--font-display); font-style: normal;
   color: #2b1d00; background: linear-gradient(#ffe08a, #ffb52e); border-radius: 6px; padding: 2px 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
 /* Squares a glowing bomb word will blow up: a thick, slowly pulsing red ring that wins over the yellow glow,
    and the bomb itself shows the BOOM points before the tap. */
@@ -279,7 +279,7 @@ body.tut .tools { display: none; }
 .rc-h { margin-top: 8px; }
 .rc-tools { margin: 6px 0 0; font-weight: 700; font-size: 1.05rem; }
 .rc-more { margin-top: 8px; }
-.rc-more summary { cursor: pointer; color: var(--gold); font-weight: 700; font-size: 1rem; padding: 8px; min-height: 44px; display: inline-flex; align-items: center; }
+.rc-more summary { cursor: pointer; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font-weight: 700; font-size: 1rem; padding: 8px; min-height: 44px; display: inline-flex; align-items: center; }
 .earned.small { font-size: 0.95rem; }
 .twist-badge { display: inline-block; margin: 2px auto 6px; padding: 4px 12px; border-radius: 999px; font-weight: 700; background: color-mix(in srgb, var(--gold) 30%, transparent); }
 .daily-intro, .tomorrow { font-size: 1rem; line-height: 1.4; margin: 10px auto 4px; }
@@ -1749,7 +1749,7 @@ function defText(w) {
 // The first time a word is scored, its meaning shows on a card over the header and score line (never
 // over the board). With several new words, the card shows the longest; the rest are in the word book.
 // It stays until the player next touches the screen; that touch still goes through to the game.
-let defGen = 0, defWait = null;   // defWait: a meaning waiting for the celebration to end
+let defGen = 0, defWait = null, recapMark = 0;   // defWait: a meaning waiting for the celebration to end
 const celebrating = () => !!(toastNow && !toastNow.minor) || toastQ.some(q => !q.minor);   // goes up with every new game or level
 // A long meaning ends at a whole word with "…", never mid-word (Muse round 17).
 const clipWords = (t, n) => t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, "").replace(/[,;:]$/, "") + "…";
@@ -2091,6 +2091,12 @@ function setHint() {
   if (tut) h.innerHTML = (tut.phase === "place" ? LESSONS[tut.step].place : tut.phase === "tap" ? LESSONS[tut.step].tap : "Nice!") + SKIP;
   else if (rotGuide) h.innerHTML = ROT_GUIDE[rotGuide];
   else if ((toolHint = toolHintWanted())) h.innerHTML = document.getElementById("enote").innerHTML;
+  // The stuck and No refills lines come first: they already say which word to tap.
+  else if (stuckWords && lit.length) h.innerHTML = `No room! Tap ${stuckWords.map(w => `<b>${w}</b>`).join(" or ")} to make room.`;
+  else if (refillHeld) { const ws = [...new Set(scanWords(board).map(w => w.w.toUpperCase()))].slice(0, 2); h.innerHTML = `No refills: tap ${ws.length ? ws.map(w => `<b>${w}</b>`).join(" or ") : "<b>a glowing word</b>"} for new pieces.`; }
+  // The first time a word glows in real play, say to tap it, ahead of the "Your turn" line and the special/bomb
+  // intros, which used to hide it from players who finished the tutorial (Muse rounds 17 and 21).
+  else if (lit.length && !store.get("wb-tap-taught", false)) h.innerHTML = "<b>Tap</b> a glowing word to score it!";
   else if (tutorialJustDone) h.innerHTML = `Your turn! Score <b>${target()} points</b> to clear level 1.`;
   else if (!specialSeen && tray.some(p => !p.used && p.specials?.some(Boolean))) {
     h.innerHTML = "<b>2x</b> doubles a word. <b>💣</b> blasts around it.";   // one line, so it stays off the level line (Nikola round 16)
@@ -2101,13 +2107,9 @@ function setHint() {
     h.innerHTML = "💣 Tap it to blast the <b style='color:#e5484d'>red squares</b>!";
     bombSeen = true; store.set("wb-bomb-seen", true);
   }
-  else if (stuckWords && lit.length) h.innerHTML = `No room! Tap ${stuckWords.map(w => `<b>${w}</b>`).join(" or ")} to make room.`;
-  else if (refillHeld) { const ws = [...new Set(scanWords(board).map(w => w.w.toUpperCase()))].slice(0, 2); h.innerHTML = `No refills: tap ${ws.length ? ws.map(w => `<b>${w}</b>`).join(" or ") : "<b>a glowing word</b>"} for new pieces.`; }
   else if (softHint?.eraser) h.innerHTML = "Stuck? Tap the <b>Eraser</b> below, then a block, to make room.";
   else if (softHint) h.innerHTML = softHint.swap ? `New piece! It makes a word in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`
     : `Stuck? A word fits in the <b>glowing ${softHint.row != null ? "row" : "column"}</b>.`;
-  // Players who skipped the tutorial learn to tap the first time a word glows (Muse round 17).
-  else if (lit.length && !store.get("wb-tap-taught", false)) h.innerHTML = "<b>Tap</b> a glowing word to score it!";
   // Shown the first 3 times a dropped piece is still dashed (movable); counted only when it really shows (Muse round 18).
   else if ((dashShown = movable && moveHints < 3)) h.innerHTML = "Wrong spot? <b>Drag</b> the dashed piece before your next one.";
   else if (levelStartHint && level === 2) h.innerHTML = "Fresh board! Each level needs a few more points to clear.";
@@ -2571,8 +2573,14 @@ function levelUp() {
       ${toolRow ? `<p class="rc-tools">🧰 ${toolRow}</p>` : ""}
       <details class="rc-more"><summary>See how you earned it</summary><ul class="earned">${parts.map(l => `<li>${l}</li>`).join("")}</ul>
       ${lastWord.length ? `<p class="rc-h">Your last word</p><ul class="earned small">${lastWord.map(l => `<li>${l.trim()}</li>`).join("")}</ul>` : ""}</details></div>${newWordsRecap()}${nextLine}${dailyIntro ? `<p class="daily-intro">☀️ <b>Today's Daily Board</b> is ready: the same pieces for everyone, 3 levels, then share your score. Your game here stays saved.</p>` : ""}<div class="btns"><button class="btn" id="next">Next level</button>${dailyIntro ? `<button class="btn plain" id="todaydaily">☀️ Try today's Daily Board</button>` : ""}<button class="btn plain ad" id="dbl">Watch an ad: get +${earned} more 🪙</button></div>`, true);
-    // A card reopened at start-up is built before the meanings load: fill them in once they arrive (Muse round 20).
-    if (!defsLoaded && levelNewWords.length) { const at = defGen; defsReady.then(() => { const old = document.querySelector("#sheet .recap"); if (old && at === defGen) old.outerHTML = newWordsRecap(); }); }
+    // A card reopened at start-up is built before the meanings load: fill them in once they arrive, as long as this
+    // same card is still open (Muse rounds 20 and 21: a reload on a Daily card restarts the game twice, so the old
+    // defGen check dropped the refill). The card is matched by its own mark, not by defGen.
+    if (levelNewWords.length) {
+      const mark = String(++recapMark), rc = document.querySelector("#sheet .recap");
+      if (rc) rc.dataset.mark = mark;
+      defsReady.then(() => { const old = document.querySelector(`#sheet .recap[data-mark="${mark}"]`); if (old && !document.getElementById("modal").hidden) { old.outerHTML = newWordsRecap(); const n = document.querySelector("#sheet .recap"); if (n) n.dataset.mark = mark; } });
+    }
     if (dailyIntro) { store.set("wb-daily-intro", true); track("daily_intro_shown"); document.getElementById("modal").classList.add("solid"); }   // solid like the other cards (Muse path to 9)
     // After the 3rd Endless level, ask once about a daily reminder (phone apps only).
     const askRemind = mode === "endless" && level >= 3;
@@ -3131,7 +3139,7 @@ const ADS_TESTING = "beta" !== "release";
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "c08502d 2026-11-16 00:02Z";
+const BUILD_STAMP = "d392182 2026-11-16 01:42Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
