@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.17 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.18 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2724,11 +2724,14 @@ function weekGoals(mon) {
 }
 // A ?date preview (test page only) keeps its week in memory, so it never replaces the real week.
 // No build ever saves an older week over a newer one (a phone clock moved back, for example).
-const WK_PREVIEW = TEST_BUILD && !!params.get('date'); let wkMem = null;
+// ?beacon=1 (test page only) shows this week with all five goals done and the Beacon lit, kept in memory like a preview.
+const BEACON_TEST = TEST_BUILD && params.get('beacon') === '1';
+const WK_PREVIEW = TEST_BUILD && (!!params.get('date') || BEACON_TEST); let wkMem = null;
 function wkGet() {
   const mon = weekOf(realToday)[0]; let w = WK_PREVIEW ? wkMem : store.get('wk', null);
   if (WK_PREVIEW && !w) { const s = store.get('wk', null); if (s && s.w === mon) w = JSON.parse(JSON.stringify(s)); }
   if (!w || w.w !== mon) w = { w: mon, p: {}, days: [], beacon: 0, seen: w && w.seen ? 1 : 0 };
+  if (BEACON_TEST && !w.beacon) { weekGoals(mon).goals.forEach(g => w.p[g.id] = g.n); w.beacon = 1; w.gift = 1; w.seen = 1; wkMem = w; }
   return w;
 }
 function mergeWeek(a, b) {
@@ -2891,10 +2894,10 @@ function renderHome() {
     storyCard() + weekRow() +
     '<div class="sect">' + (expertOn() ? '🧠 Expert week · ' : 'This week · ') + wk.filter(d => dayDone(all[d])).length + ' of 7 days played</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : (d > realToday ? 'preview' : '')) + '</div></button>'; }).join('') + '</div>' +
-    (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="bonusline">⭐ ' + nextBonusLine() + '</div>' : '') +
+    (ds === realToday ? (!(bonusToday() && !bonusDone()) ? '<div class="bonusline">⭐ ' + nextBonusLine() + '</div>' : next !== -1 ? '<div class="bonusline">⭐ Bonus puzzle waiting: finish today\'s Daily Three to play it.</div>' : '') : '') +
     '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.17' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.18' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('help').onclick = showHelp;
@@ -3201,7 +3204,7 @@ function showDaySummary(ds) {
 function tomorrowCard(ds) {
   if (ds !== realToday) return '';
   const st = streak(); const tm = addDays(realToday, 1);
-  return '<div class="tmrw"><b>🔥 Day ' + Math.max(1, st) + ' streak!</b>' +
+  return '<div class="tmrw"><b>' + (realToday !== trueToday ? '📅 Preview day: streaks count real days only' : '🔥 Day ' + Math.max(1, st) + ' streak!') + '</b>' +
     '<div>Tomorrow: ' + TL.DAYMOOD[TL.weekday(tm)] + ' day · ' + getDay(tm).map(p => TYPEEMOJI[p.type] + ' ' + TYPENAME[p.type]).join(', ') + '</div>' +
     '<div>New puzzles in ' + untilMidnight() + '.</div>' +
     (P && P.newShield ? '<div class="tmgift">🛡️ You earned a streak shield! It saves your streak once if you miss a day. You can hold one at a time.</div>'
