@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.20.16 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.20.17 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2812,16 +2812,17 @@ const bonusGet = () => { const b = store.get('bonus', null); return b && typeof 
 // Test page only: ?bonus=1 hands out today's bonus so reviewers can see the button without playing three days first.
 const BONUS_TEST = TEST_BUILD && params.get('bonus') === '1';
 function bonusToday() {
-  const b = bonusGet(); if (BONUS_TEST && !b.got[realToday] && !b.days[realToday]) { b.got[realToday] = 1; store.set('bonus', b); }
+  const b = bonusGet(); if (BONUS_TEST && !b.got[realToday] && !b.days[realToday]) { b.got[realToday] = 'test'; store.set('bonus', b); }
   if (b.got[realToday]) return true;
   const dd = doneDays(); if (dd.indexOf(realToday) < 0) return false;
-  const given = {}; Object.keys(b.got).concat(Object.keys(b.days)).forEach(d => given[d] = 1);
-  if (Object.keys(given).length >= Math.floor(dd.length / 3)) return false;
+  if (bonusGiven(b) >= Math.floor(dd.length / 3)) return false;
   b.got[realToday] = 1; store.set('bonus', b); return true;
 }
+// Bonuses given or played; a ?bonus=1 test grant (got = 'test') never counts toward the every-3rd-day rule.
+function bonusGiven(b) { const g = new Set(); Object.keys(b.got).concat(Object.keys(b.days)).forEach(d => { if (b.got[d] !== 'test') g.add(d); }); return g.size; }
 const bonusDone = () => !!bonusGet().days[realToday];
 // "Next bonus: finish the Daily Three on 2 more days." (one bonus a day at most)
-function nextBonusLine() { const n = doneDays().length; const b = bonusGet(); const given = new Set(Object.keys(b.got).concat(Object.keys(b.days))).size - (BONUS_TEST && b.got[realToday] ? 1 : 0); const left = Math.max(1, 3 * (given + 1) - n); return 'Next bonus: finish the Daily Three on ' + left + ' more day' + (left > 1 ? 's' : '') + '.'; }
+function nextBonusLine() { const n = doneDays().length; const given = bonusGiven(bonusGet()); const left = Math.max(1, 3 * (given + 1) - n); return 'Next bonus: finish the Daily Three on ' + left + ' more day' + (left > 1 ? 's' : '') + '.'; }
 function bonusPz(ds) {
   const today = getDayM(ds, false).map(p => p.type); const rng = TL.rngFrom('ahalock-bonus|' + ds);
   const ty = rng.shuffle(TL.ROSTER.filter(t => today.indexOf(t) < 0))[0];
@@ -2893,7 +2894,7 @@ function renderHome() {
     (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="bonusline">⭐ ' + nextBonusLine() + '</div>' : '') +
     '<div class="homerows"><button class="wkrow hrow" id="help"><span class="hi">📖</span><div class="wt"><b>Help &amp; settings</b><span>How to play, Expert puzzles, holiday decorations</span></div><div class="sc-go" style="font-size:26px;color:var(--gold)">›</div></button></div>' +
     '<div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div>' +
-    '<div class="foot">Ahalock prototype v0.20.16' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
+    '<div class="foot">Ahalock prototype v0.20.17' + (TEST_BUILD ? ' · future days open for testing' : '') + '</div>');
   document.getElementById('go').onclick = () => { if (next === -1) showDaySummary(ds); else startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
   document.getElementById('help').onclick = showHelp;
@@ -3152,7 +3153,7 @@ function showSolved(ms) {
   const head = SOLVEDHEAD[pz.type];
   openSheet('<h2>' + head + '</h2><div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + P.hints + '</b><span>' + (P.hints === 1 ? 'HINT' : 'HINTS') + '</span></div></div>' +
-    '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === realToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
+    '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === trueToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   document.getElementById('nx').onclick = () => { closeSheet(); const ds = P.ds; if (allDone) showDaySummary(ds); else { const sl = results()[ds].s.findIndex(x => !x); adNext(getDay(ds)[sl].type, () => startPuzzle(ds, sl)); } };
 }
@@ -3733,7 +3734,7 @@ function renderStop(s) {
   h += '<div class="beat">' + esc(stopDone(st, s) ? S0.payoff : S0.beat) + (stopDone(st, s) ? '<button class="btn ghost small" id="rpl" style="margin-top:8px;color:var(--ink);background:var(--panel2)">▶ Watch the repair again</button>' : '') + '</div>';
   h += '<div class="objs">' + S0.objs.map((O, o) => { const d = sdone(st, s, o), lock = O.fin && !ready; return '<button class="obj' + (d ? ' done' : lock ? ' locked' : '') + (O.fin ? ' fin' : '') + '" data-o="' + o + '"><span class="oi">' + O.e + '</span><span class="ot"><b>' + esc(O.name) + '</b><small>' + (d ? '✓ Solved' + (O.ev ? ': found ' + esc(O.ev.tag) : '') : lock ? '🔒 Needs both evidence cards first' : esc(O.hint)) + '</small></span><span class="og">' + (d ? '↻' : lock ? '' : '›') + '</span></button>'; }).join('') + '</div>';
   const ev = evidenceOf(st, s);
-  h += '<div class="trayhd">Evidence tray</div><div class="etray">' + ev.map(c => '<div class="ecard' + (c.have ? '' : ' missing') + '"><div class="et">' + esc(c.tag) + '</div><div class="ex">' + (c.have ? esc(c.text) : 'Not found yet') + '</div></div>').join('') + '</div>';
+  h += '<div class="trayhd maphd">Evidence tray</div><div class="etray">' + ev.map(c => '<div class="ecard' + (c.have ? '' : ' missing') + '"><div class="et">' + esc(c.tag) + '</div><div class="ex">' + (c.have ? esc(c.text) : 'Not found yet') + '</div></div>').join('') + '</div>';
   $app.innerHTML = iconize(h);
   document.getElementById('bk').onclick = renderMap;
   const rpl = document.getElementById('rpl'); if (rpl) rpl.onclick = () => { openSheet('<h2>' + esc(S0.done) + '</h2>' + repairScene(s, getStoryPz(s, 2)) + '<div class="beat" style="margin:10px 0">' + esc(S0.payoff) + '</div><div class="col"><button class="btn" id="nx">Back to ' + esc(S0.name) + '</button></div>'); document.getElementById('nx').onclick = closeSheet; };
