@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.27.3 (round 28 fixes: Home re-picks after a story, why-this-memory line, editor tabs, Land now) -->
+<!-- Tripsake v0.27.4 (bottom pane drag follows your finger) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -511,7 +511,7 @@ label.l{font-size:calc(14px * var(--fs,1));color:var(--muted);display:block;marg
 @media (max-width:899px){.panel[data-pos="peek"]:not(.dragging){height:auto}}
 .tabs{flex:none}
 button.x{min-width:44px;min-height:44px}
-@media (max-width:899px){.grab{padding:12px 0 8px}}
+@media (max-width:899px){.grab{padding:14px 0 12px;min-height:40px;align-items:center}.grab i{width:56px;height:6px}.stats{touch-action:none}}
 .brand h1,.layersbtn{white-space:nowrap}
 @media (max-width:380px){.brand h1{font-size:calc(24px * var(--fs,1))}.layersbtn{padding:0 12px;font-size:calc(15px * var(--fs,1))}}
 </style>
@@ -1467,7 +1467,7 @@ function renderBody(){
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.27.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.27.4 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1495,15 +1495,31 @@ function rerender(){ renderStats(); renderTabs(); renderBody(); renderLayers(); 
 const SHEET_H = {peek:26, half:50, full:86};
 let sheetPos = "half";
 function setSheet(pos){ sheetPos = pos; try { renderTabs(); } catch(e){} const p = $("#panel"); p.style.setProperty("--ph", SHEET_H[pos] + "dvh"); p.dataset.pos = pos; $("#grab").setAttribute("aria-label", pos === "full" ? "Shrink the panel" : "Grow the panel"); }
+/* drag the handle (or the stats row above the list) to resize; the sheet follows the finger and lands where the drag was heading:
+   up goes to the next bigger size (most of the way on a longer pull), down to the next smaller (Alan 11-16: "it does not react consistently") */
 (function(){
-  const gr = $("#grab"), pn = $("#panel"); let y0 = null, h0 = 0, mv = 0;
-  gr.addEventListener("pointerdown", e => { gr.setPointerCapture(e.pointerId); y0 = e.clientY; h0 = pn.getBoundingClientRect().height; mv = 0; pn.classList.add("dragging"); });
-  gr.addEventListener("pointermove", e => { if (y0 === null) return; const dy = y0 - e.clientY; mv = Math.max(mv, Math.abs(dy)); const vh = innerHeight / 100; pn.style.setProperty("--ph", Math.max(18*vh, Math.min(90*vh, h0 + dy)) + "px"); });
-  const end = () => { if (y0 === null) return; y0 = null; pn.classList.remove("dragging");
+  const gr = $("#grab"), st = $("#stats"), pn = $("#panel"); let y0 = null, h0 = 0, mv = 0, last = 0, lastT = 0, vel = 0, pid = null, src = null, live = false, eatClick = false;
+  const vh = () => innerHeight / 100, ORDER = ["peek", "half", "full"];
+  const down = (e, el) => { if (!isPhone() || (e.pointerType === "mouse" && e.button !== 0)) return; y0 = last = e.clientY; lastT = performance.now(); vel = 0; h0 = pn.getBoundingClientRect().height; mv = 0; pid = e.pointerId; src = el; live = el === gr; eatClick = false;
+    if (live){ el.setPointerCapture(pid); pn.classList.add("dragging"); } };
+  const move = e => { if (y0 === null || e.pointerId !== pid) return; const dy = y0 - e.clientY; mv = Math.max(mv, Math.abs(dy));
+    if (!live){ if (Math.abs(dy) < 10) return; live = true; try { src.setPointerCapture(pid); } catch(_){} pn.classList.add("dragging"); }
+    const t = performance.now(); if (t > lastT){ vel = (last - e.clientY) / (t - lastT); } last = e.clientY; lastT = t; /* px per ms, up is positive */
+    pn.style.setProperty("--ph", Math.max(18*vh(), Math.min(90*vh(), h0 + dy)) + "px"); e.preventDefault(); };
+  const end = e => { if (y0 === null || (e && e.pointerId !== pid)) return; const wasLive = live, dy = y0 - (e ? e.clientY : y0), hv = pn.getBoundingClientRect().height / vh(); y0 = null; live = false; pn.classList.remove("dragging"); /* measure before peek's auto height comes back */
+    if (!wasLive){ return; } /* a plain tap on the stats row stays a tap */
+    if (src !== gr){ eatClick = true; setTimeout(() => { eatClick = false; }, 400); }
     if (mv < 6){ setSheet(sheetPos === "peek" ? "half" : sheetPos === "half" ? "full" : "half"); return; }
-    const hv = pn.getBoundingClientRect().height / (innerHeight / 100);
-    setSheet(Object.entries(SHEET_H).sort((a, b) => Math.abs(a[1] - hv) - Math.abs(b[1] - hv))[0][0]); };
-  gr.addEventListener("pointerup", end); gr.addEventListener("pointercancel", end);
+    const at = ORDER.indexOf(sheetPos);
+    const dir = Math.abs(vel) > .35 ? Math.sign(vel) : Math.abs(dy) >= 24 ? Math.sign(dy) : 0;
+    if (!dir){ setSheet(sheetPos); return; }
+    /* go at least one step the way the finger went; a long pull keeps going to whichever size is closest beyond that */
+    const ahead = ORDER.filter((k, i) => dir > 0 ? i > at : i < at);
+    if (!ahead.length){ setSheet(sheetPos); return; }
+    setSheet(ahead.reduce((b, k) => Math.abs(SHEET_H[k] - hv) < Math.abs(SHEET_H[b] - hv) ? k : b, ahead[0])); };
+  for (const el of [gr, st]){ el.addEventListener("pointerdown", e => down(e, el)); el.addEventListener("pointermove", move); el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end); el.addEventListener("lostpointercapture", e => { if (live && e.target === el) end(e); }); }
+  st.addEventListener("click", e => { if (eatClick){ eatClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  gr.addEventListener("click", e => e.preventDefault());
   gr.addEventListener("keydown", e => { if (e.key === "ArrowUp"){ setSheet(sheetPos === "peek" ? "half" : "full"); e.preventDefault(); } if (e.key === "ArrowDown"){ setSheet(sheetPos === "full" ? "half" : "peek"); e.preventDefault(); } });
 })();
 (function(){ const st = $("#stage"); const fit = () => { const h = st.getBoundingClientRect().height; document.body.classList.toggle("tinystage", h > 0 && h < 200); document.body.classList.toggle("shortstage", h >= 200 && h < 290); };
