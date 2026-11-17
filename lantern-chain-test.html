@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- Lantern Chain prototype v0.1 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<title>Lantern Chain (test version)</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1d2350">
+<style>
+/* Layout: one phone-width column; top bar, a short score row, the board, a coach tray, then three big buttons.
+   Night festival look, single deliberate dark theme (lanterns read best against a night sky). */
+:root {
+  color-scheme: dark;
+  --sky-top: #1b2050;
+  --sky-low: #3a2f6b;
+  --ink: #fff8ec;          /* main text on the sky */
+  --ink-soft: #d9d2f2;     /* secondary text on the sky */
+  --card: #fff6e3;         /* cream cards and buttons */
+  --card-edge: #c9a874;
+  --card-ink: #2b2140;     /* text on cards */
+  --gold: #ffc44d;         /* lit flame, primary action */
+  --gold-edge: #b36b12;
+  --rose: #e0587a;         /* shy lantern warning */
+  --font-display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html, body { height: 100%; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-low) 100%) fixed, var(--sky-top);
+  color: var(--ink); font-family: var(--font-body); font-size: 18px; line-height: 1.4;
+  -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+#app {
+  height: 100%; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 8px; box-sizing: border-box;
+}
+.screen { flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+button { font-family: var(--font-display); }
+.btn {
+  min-height: 56px; padding: 0 18px; border-radius: 18px; border: 1.5px solid var(--card-edge);
+  background: linear-gradient(180deg, #fffdf6, var(--card)); color: var(--card-ink);
+  font-size: 20px; font-weight: 800; box-shadow: 0 4px 0 var(--card-edge); cursor: pointer;
+  transition: transform .08s, box-shadow .08s; touch-action: manipulation;
+}
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--card-edge); }
+.btn.primary { background: linear-gradient(180deg, #ffe08a, var(--gold)); border-color: var(--gold-edge); box-shadow: 0 4px 0 var(--gold-edge); color: #3a2200; }
+.btn.primary:active { box-shadow: 0 1px 0 var(--gold-edge); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible, .lvl:focus-visible, .icon:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.btn.pulse { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+
+/* title */
+#title { align-items: stretch; justify-content: flex-start; overflow-y: auto; }
+#scene { width: 100%; height: 190px; display: block; }
+h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 0; text-align: center; letter-spacing: .5px;
+  color: #ffe6a8; text-shadow: 0 3px 0 #7a3d10, 0 0 18px rgba(255,196,77,.45); user-select: none; cursor: default; }
+.lede { text-align: center; color: var(--ink-soft); margin: 0 8px; font-size: 19px; text-wrap: balance; }
+#levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.lvl { min-height: 70px; border-radius: 16px; border: 1.5px solid var(--card-edge); background: linear-gradient(180deg,#fffdf6,var(--card));
+  color: var(--card-ink); box-shadow: 0 4px 0 var(--card-edge); font-size: 24px; font-weight: 800; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; cursor: pointer; padding: 4px 0; }
+.lvl:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--card-edge); }
+.lvl small { font-size: 15px; letter-spacing: 1px; color: #c47a00; }
+.lvl.locked { background: #4a4380; border-color: #2f2a5c; box-shadow: 0 4px 0 #2f2a5c; color: #c9c3ee; cursor: default; }
+.lvl.locked small { color: #c9c3ee; }
+.lvl.next { background: linear-gradient(180deg, #ffe08a, var(--gold)); border-color: var(--gold-edge); box-shadow: 0 4px 0 var(--gold-edge); }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+.testerbar { border: 2px dashed #9d93e0; border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.testerbar p { margin: 0; font-size: 16px; color: var(--ink-soft); }
+
+/* game */
+.top { display: flex; align-items: center; gap: 10px; }
+.icon { min-width: 52px; height: 52px; border-radius: 16px; font-size: 22px; padding: 0 12px; }
+.lvname { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 21px; font-weight: 800; line-height: 1.15; text-align: center; }
+.lvname span { display: block; font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+.hud { display: flex; justify-content: center; gap: 10px; }
+.chip { background: rgba(255,255,255,.12); border-radius: 999px; padding: 4px 16px; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip b { color: #ffe08a; font-size: 22px; }
+#boardWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+#board { display: block; touch-action: manipulation; }
+#tray { background: var(--card); color: var(--card-ink); border-radius: 18px; border: 1.5px solid var(--card-edge); box-shadow: 0 4px 0 var(--card-edge);
+  padding: 12px 14px; min-height: 76px; display: flex; align-items: center; gap: 12px; font-size: 19px; line-height: 1.35; }
+#tray p { margin: 0; flex: 1; min-width: 0; }
+#tray .btn { min-height: 50px; font-size: 19px; flex: none; }
+#tray.warn { background: #ffe3ea; border-color: var(--rose); box-shadow: 0 4px 0 var(--rose); }
+#tray.shake { animation: shake .35s; }
+@keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.controls { display: flex; gap: 10px; padding-bottom: 4px; }
+.controls .btn { flex: 1; }
+
+/* overlays */
+.overlay { position: fixed; inset: 0; background: rgba(14,12,40,.62); display: flex; align-items: center; justify-content: center;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); z-index: 20; }
+.sheet { background: var(--card); color: var(--card-ink); border-radius: 24px; border: 1.5px solid var(--card-edge); box-shadow: 0 6px 0 var(--card-edge);
+  width: 100%; max-width: 420px; padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; max-height: 100%; overflow-y: auto; box-sizing: border-box; }
+.sheet h2 { font-family: var(--font-display); margin: 0; font-size: 30px; text-align: center; text-wrap: balance; }
+.sheet p { margin: 0; text-align: center; font-size: 19px; }
+.stars { text-align: center; font-size: 52px; letter-spacing: 6px; line-height: 1; color: #f0a500; text-shadow: 0 3px 0 #a35f00; }
+.stars .off { color: #d8ccb4; text-shadow: 0 3px 0 #b5a688; }
+.rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; }
+#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+@media (prefers-reduced-motion: reduce) { .btn.pulse { animation: none; } #tray.shake { animation: none; } }
+</style>
+
+<div id="app">
+  <section id="title" class="screen">
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <h1 id="logo">Lantern Chain</h1>
+    <p class="lede">Light every lantern with as few matches as you can.</p>
+    <button class="btn primary" id="playBtn">Play</button>
+    <div id="levels" aria-label="Levels"></div>
+    <div class="testerbar" id="testerBar" hidden>
+      <p>Tester tools are on: every level is open.</p>
+      <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
+    </div>
+  </section>
+
+  <section id="game" class="screen" hidden>
+    <div class="top">
+      <button class="btn icon" id="homeBtn" aria-label="Back to levels">‹</button>
+      <div class="lvname" id="lvname">Level 1<span>First Light</span></div>
+      <button class="btn icon" id="testBtn" aria-label="Tester tools" hidden>T</button>
+      <button class="btn icon" id="rulesBtn" aria-label="How to play">?</button>
+    </div>
+    <div class="hud"><div class="chip">Matches <b id="matches">0</b></div><div class="chip">Par <b id="par">1</b></div></div>
+    <div id="boardWrap"><canvas id="board" aria-label="Lantern board"></canvas></div>
+    <div id="tray" role="status" aria-live="polite"><p id="trayText"></p><button class="btn primary" id="trayBtn" hidden>Next</button></div>
+    <div class="controls">
+      <button class="btn" id="undoBtn">Undo</button>
+      <button class="btn" id="restartBtn">Restart</button>
+      <button class="btn" id="hintBtn">Hint</button>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="winBox" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="winTitle">
+    <h2 id="winTitle">All lit!</h2>
+    <div class="stars" id="winStars">★★★</div>
+    <p id="winText">1 match. Par 1.</p>
+    <button class="btn primary" id="nextBtn">Next level</button>
+    <button class="btn" id="replayBtn">Play again</button>
+  </div>
+</div>
+<div class="overlay" id="rulesBox" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="rulesTitle">
+    <h2 id="rulesTitle">How to play</h2>
+    <ol class="rules" id="rulesList"></ol>
+    <button class="btn primary" id="rulesClose">Got it</button>
+  </div>
+</div>
+<div class="overlay" id="testBox" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="testTitle">
+    <h2 id="testTitle">Tester tools</h2>
+    <div id="jump" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+    <button class="btn" id="solveBtn">Play the par solution</button>
+    <button class="btn primary" id="testClose">Close</button>
+  </div>
+</div>
+<canvas id="confetti" hidden></canvas>
+
+<script>
+/* Lantern Chain rules (shared by prototype.html and check.js; no packages).
+ * Board rows use one character per cell:
+ *   .  grass (empty)            1-5  lantern with that number
+ *   z  shy lantern (keep dark)  ~    pond water
+ *   a-e  lantern floating on the pond (number 1-5)
+ *   Z  shy lantern floating on the pond
+ *   ^ v < >  wind arrow
+ * Rules:
+ *   Tap an unlit lantern (not a shy one): it lights. A lit lantern's flame hops exactly n cells
+ *   (n = its number) up, down, left and right, ignoring everything in between.
+ *   A flame that lands on an unlit lantern lights it, and that lantern hops in turn (a chain).
+ *   A flame that lands on water goes out, even when a lantern floats there.
+ *   A flame that lands on a wind arrow is blown: it hops the same n cells again in the arrow's direction.
+ *   A flame that lands on a shy lantern wakes it (it lights but never hops). Shy lanterns must stay dark.
+ *   Shy lanterns hide behind a lit friend: while a lit lantern stands right beside one (up, down, left
+ *   or right), a flame that lands on it just fizzles. (Without this, shy lanterns could never matter:
+ *   every other lantern must light and hop sooner or later, so order has to count for something.)
+ *   Win: every lantern that is not shy is lit, and every shy lantern is dark. Par = fewest taps. */
+(function (root) {
+  'use strict';
+  var DIRS = { '^': [-1, 0], 'v': [1, 0], '<': [0, -1], '>': [0, 1] };
+  var FOUR = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  var MAX_BENDS = 8;
+
+  function parse(level) {
+    var h = level.rows.length, w = level.rows[0].length, cells = [], lanterns = [], lidx = {};
+    for (var r = 0; r < h; r++) {
+      if (level.rows[r].length !== w) throw new Error('level ' + level.id + ': ragged row ' + r);
+      for (var c = 0; c < w; c++) {
+        var ch = level.rows[r][c], cell = { r: r, c: c, ch: ch, kind: 'grass', water: false, n: 0, shy: false, wind: null };
+        if (ch >= '1' && ch <= '5') { cell.kind = 'lantern'; cell.n = +ch; }
+        else if (ch >= 'a' && ch <= 'e') { cell.kind = 'lantern'; cell.n = ch.charCodeAt(0) - 96; cell.water = true; }
+        else if (ch === 'z') { cell.kind = 'lantern'; cell.shy = true; }
+        else if (ch === 'Z') { cell.kind = 'lantern'; cell.shy = true; cell.water = true; }
+        else if (ch === '~') { cell.kind = 'water'; cell.water = true; }
+        else if (DIRS[ch]) { cell.kind = 'wind'; cell.wind = DIRS[ch]; }
+        else if (ch !== '.') throw new Error('level ' + level.id + ': bad cell ' + ch);
+        if (cell.kind === 'lantern') { lidx[r * w + c] = lanterns.length; cell.li = lanterns.length; lanterns.push(r * w + c); }
+        cells.push(cell);
+      }
+    }
+    return { w: w, h: h, cells: cells, lanterns: lanterns, lidx: lidx };
+  }
+
+  // Where does one flame go? Returns { path: [cell indices, first is the source], end: idx|-1 (off board) }
+  function flight(b, from, n, d) {
+    var r = b.cells[from].r, c = b.cells[from].c, path = [from], dr = d[0], dc = d[1];
+    for (var bends = 0; bends <= MAX_BENDS; bends++) {
+      r += dr * n; c += dc * n;
+      if (r < 0 || c < 0 || r >= b.h || c >= b.w) { path.push({ r: r, c: c }); return { path: path, end: -1 }; }
+      var i = r * b.w + c; path.push(i);
+      var cell = b.cells[i];
+      if (cell.kind === 'wind') { dr = cell.wind[0]; dc = cell.wind[1]; continue; }
+      return { path: path, end: i };
+    }
+    return { path: path, end: -2 }; // blown around in circles: the flame fades (levels never rely on this)
+  }
+
+  // lit: array of booleans per lantern. Returns null if the tap is not allowed, else
+  // { lit: newLit, events: [{ depth, from, path, end, result }] } where result is
+  // 'light' | 'shy' | 'water' | 'grass' | 'lit' | 'off'
+  // Is this shy lantern hiding? It is when a lit lantern stands right beside it (up, down, left or right).
+  function hidden(b, lit, i) {
+    var c = b.cells[i];
+    for (var k = 0; k < 4; k++) {
+      var r = c.r + FOUR[k][0], cc = c.c + FOUR[k][1];
+      if (r < 0 || cc < 0 || r >= b.h || cc >= b.w) continue;
+      var n = b.cells[r * b.w + cc];
+      if (n.kind === 'lantern' && !n.shy && lit[n.li]) return true;
+    }
+    return false;
+  }
+
+  // lit: array of booleans per lantern. Returns null if the tap is not allowed, else
+  // { lit: newLit, events: [{ depth, from, path, end, result }] } where result is
+  // 'light' | 'shy' (woke a shy lantern) | 'hid' (shy lantern hid behind a lit friend) |
+  // 'water' | 'grass' | 'lit' | 'off'.
+  // The chain runs in waves: every flame of wave d lands at the same moment, judged against
+  // the lanterns that were lit when the wave set off.
+  function tap(b, lit, idx) {
+    var li = b.lidx[idx];
+    if (li == null) return null;
+    var cell = b.cells[idx];
+    if (cell.shy || lit[li]) return null;
+    var nl = lit.slice(); nl[li] = true;
+    var events = [], wave = [idx], depth = 0;
+    while (wave.length) {
+      var before = nl.slice(), next = [];
+      for (var w = 0; w < wave.length; w++) {
+        var from = wave[w], n = b.cells[from].n;
+        for (var k = 0; k < 4; k++) {
+          var f = flight(b, from, n, FOUR[k]), res;
+          if (f.end < 0) res = 'off';
+          else {
+            var t = b.cells[f.end];
+            if (t.water) res = 'water';
+            else if (t.kind !== 'lantern') res = 'grass';
+            else if (before[t.li] || nl[t.li]) res = 'lit';
+            else if (t.shy) { if (hidden(b, before, f.end)) res = 'hid'; else { res = 'shy'; nl[t.li] = true; } }
+            else { res = 'light'; nl[t.li] = true; next.push(f.end); }
+          }
+          events.push({ depth: depth, from: from, path: f.path, end: f.end, result: res });
+        }
+      }
+      wave = next; depth++;
+    }
+    return { lit: nl, events: events };
+  }
+
+  function initial(b) { return b.lanterns.map(function () { return false; }); }
+  function shyLit(b, lit) { for (var i = 0; i < b.lanterns.length; i++) if (lit[i] && b.cells[b.lanterns[i]].shy) return true; return false; }
+  function isWin(b, lit) {
+    for (var i = 0; i < b.lanterns.length; i++) { var s = b.cells[b.lanterns[i]].shy; if (s === lit[i]) return false; }
+    return true;
+  }
+  function key(lit) { var s = ''; for (var i = 0; i < lit.length; i++) s += lit[i] ? '1' : '0'; return s; }
+  function moves(b, lit) { var m = []; for (var i = 0; i < b.lanterns.length; i++) { var x = b.lanterns[i]; if (!lit[i] && !b.cells[x].shy) m.push(x); } return m; }
+
+  // Exhaustive breadth-first search over lit-sets. Returns { par, line, states, firstGood, firstAll }.
+  // A state that wakes a shy lantern is a dead end (lit lanterns never go out), so it is pruned.
+  function solve(b, from) {
+    var start = from || initial(b), seen = {}, q = [{ lit: start, line: [] }], head = 0, best = null;
+    seen[key(start)] = 1;
+    while (head < q.length) {
+      var s = q[head++];
+      if (isWin(b, s.lit)) { best = s; break; }
+      var ms = moves(b, s.lit);
+      for (var j = 0; j < ms.length; j++) {
+        var r = tap(b, s.lit, ms[j]);
+        if (shyLit(b, r.lit)) continue;
+        var k = key(r.lit); if (seen[k]) continue; seen[k] = 1;
+        q.push({ lit: r.lit, line: s.line.concat([ms[j]]) });
+      }
+    }
+    return best ? { par: best.line.length, line: best.line, states: Object.keys(seen).length } : null;
+  }
+
+  var api = { hidden: hidden, parse: parse, flight: flight, tap: tap, initial: initial, isWin: isWin, shyLit: shyLit, solve: solve, moves: moves, key: key };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.LanternLogic = api;
+})(this);
+
+</script>
+<script>
+(function () {
+'use strict';
+var L = window.LanternLogic;
+var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell up, down, left and right. It landed on the next lantern, which lit and hopped too. That's a chain!","after":true}],"par":1},{"id":2,"name":"Two Sparks","rows":["11...","1....",".....","...11","....1"],"tip":"Light every lantern. Par is the fewest matches that can do it. Match par to earn 3 stars.","par":2},{"id":3,"name":"Long Snake","rows":["111..","..1..","..111","....1","1...1"],"tip":"One match can light a whole line of lanterns.","par":2},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Tap the 2.","target":[2,2]},{"text":"One match lit all four. A 1 hops only 1 cell, so starting on a 1 would have landed on grass.","after":true}],"par":1},{"id":5,"name":"Who Goes First?","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Flames only go where the number sends them. Find the lanterns that start the longest chains.","par":3},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"The 2 would jump right onto it. But a shy lantern hides behind a lit friend. First tap the 1 just above it.","target":[1,2]},{"text":"Its friend is lit, so the shy lantern can hide. Now tap the 2.","target":[2,0]},{"text":"The flame fizzled and the shy lantern stayed dark. Well done!","after":true}],"par":2},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.","<....","....3",".3..1"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4}];
+
+/* ---------- save: one store helper, everything under one key prefix ---------- */
+var store = {
+  prefix: 'lanternchain.v1.',
+  get: function (k, d) { try { var v = localStorage.getItem(this.prefix + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem(this.prefix + k, JSON.stringify(v)); } catch (e) {} },
+  clear: function () { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(store.prefix) === 0) localStorage.removeItem(k); }); } catch (e) {} }
+};
+var progress = store.get('progress', null);
+if (!progress || typeof progress !== 'object') progress = { stars: {}, best: {} };
+progress.stars = progress.stars || {}; progress.best = progress.best || {};
+var seen = store.get('seen', {}) || {};
+var tester = /[?&]unlock=1\b/.test(location.search);
+
+var $ = function (id) { return document.getElementById(id); };
+var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- colour helpers (3D cartoon recipe) ---------- */
+function hex(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgb(a) { return 'rgb(' + (a[0] | 0) + ',' + (a[1] | 0) + ',' + (a[2] | 0) + ')'; }
+function mix(h, to, t) { var a = hex(h), b = hex(to); return rgb([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+function dark(h, t) { return mix(h, '#140c20', t); }
+function light(h, t) { return mix(h, '#ffffff', t); }
+function g3(ctx, x, y, r, base, lx, ly) { // round shading: light spot top-left, base, darker rim
+  var g = ctx.createRadialGradient(x + (lx || -0.35) * r, y + (ly || -0.4) * r, r * 0.05, x, y, r * 1.05);
+  g.addColorStop(0, light(base, 0.5)); g.addColorStop(0.45, base); g.addColorStop(1, dark(base, 0.32)); return g;
+}
+function gloss(ctx, x, y, rx, ry, a) { ctx.save(); ctx.translate(x, y); ctx.rotate(-0.5); ctx.fillStyle = 'rgba(255,255,255,' + (a || 0.55) + ')';
+  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+function contact(ctx, x, y, rx, ry) { ctx.fillStyle = 'rgba(10,6,30,.32)'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
+function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+// a gently irregular blob, so nothing looks like clip-art
+function blob(ctx, x, y, rx, ry, seed, wob) {
+  ctx.beginPath();
+  for (var i = 0; i <= 24; i++) {
+    var a = i / 24 * Math.PI * 2, k = 1 + (wob || 0.035) * (Math.sin(a * 3 + seed) + 0.6 * Math.sin(a * 5 + seed * 1.7));
+    var px = x + Math.cos(a) * rx * k, py = y + Math.sin(a) * ry * k;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+var FONT = 'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif';
+var NUMCOL = { 1: '#7d8fe0', 2: '#4fb3a9', 3: '#a878d8', 4: '#e08a5a', 5: '#d36fae' };
+var LIT = '#ffb43c', SHY = '#f2a3c3', SHYAWAKE = '#ef5a6f';
+
+/* ---------- lantern drawing ---------- */
+// o: { n, shy, lit, awake, water, t, pop (0..1 after lighting), duck (0..1), seed, face }
+function drawLantern(ctx, cx, cy, S, o) {
+  var t = o.t || 0, seed = o.seed || 0;
+  var sway = reduced ? 0 : Math.sin(t / 900 + seed) * 0.025;
+  var squash = 1, sq2 = 1;
+  if (o.pop != null && o.pop < 1) { var p = o.pop; squash = 1 + Math.sin(p * Math.PI) * 0.22 * (1 - p); sq2 = 1 - Math.sin(p * Math.PI) * 0.14 * (1 - p); }
+  if (o.duck) { squash *= 1 - 0.25 * o.duck; sq2 *= 1 + 0.12 * o.duck; }
+  if (!reduced && !o.lit && !o.duck) { var br = Math.sin(t / 700 + seed * 2) * 0.02; squash *= 1 + br; sq2 *= 1 - br; }
+  var base = o.shy ? (o.awake ? SHYAWAKE : SHY) : (o.lit ? LIT : NUMCOL[o.n] || NUMCOL[1]);
+  var rx = S * 0.34, ry = S * 0.3;
+  var by = cy + S * 0.06;               // body centre
+  if (o.water) { // lily pad under a floating lantern
+    ctx.fillStyle = '#1f5a3a'; blob(ctx, cx, cy + S * 0.3, S * 0.43, S * 0.17, seed, 0.05); ctx.fill();
+    ctx.fillStyle = g3(ctx, cx, cy + S * 0.28, S * 0.4, '#5fb35a'); blob(ctx, cx, cy + S * 0.28, S * 0.4, S * 0.15, seed, 0.05); ctx.fill();
+    ctx.fillStyle = 'rgba(30,90,60,.9)'; ctx.beginPath(); ctx.moveTo(cx + S * 0.05, cy + S * 0.28); ctx.lineTo(cx + S * 0.4, cy + S * 0.22); ctx.lineTo(cx + S * 0.38, cy + S * 0.32); ctx.closePath(); ctx.fill();
+  } else contact(ctx, cx + S * 0.05, cy + S * 0.4, S * 0.3, S * 0.07);
+  if (o.lit) { // warm glow (gradient, no blur filter)
+    var fl = reduced ? 1 : 0.9 + 0.1 * Math.sin(t / 160 + seed * 3) * Math.sin(t / 370 + seed);
+    var gr = ctx.createRadialGradient(cx, by, S * 0.1, cx, by, S * 0.78 * fl);
+    gr.addColorStop(0, 'rgba(255,214,120,.65)'); gr.addColorStop(1, 'rgba(255,170,60,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, by, S * 0.8, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.save(); ctx.translate(cx, cy + S * 0.36); ctx.rotate(sway); ctx.scale(sq2, squash); ctx.translate(-cx, -(cy + S * 0.36));
+  var ol = dark(base, 0.58), lw = Math.max(1.3, S * 0.035);
+  // string + hook
+  ctx.strokeStyle = '#3b2a1e'; ctx.lineWidth = Math.max(1.3, S * 0.025); ctx.beginPath(); ctx.moveTo(cx, by - ry - S * 0.16); ctx.lineTo(cx, by - ry - S * 0.04); ctx.stroke();
+  // caps (thickness: dark under-face first)
+  var capW = S * 0.34, capH = S * 0.08;
+  ctx.fillStyle = '#2d1d14'; rrect(ctx, cx - capW / 2 - lw, by - ry - capH * 0.6 - lw, capW + lw * 2, capH + lw * 2, capH / 2); ctx.fill();
+  ctx.fillStyle = '#2d1d14'; rrect(ctx, cx - capW / 2 - lw, by + ry - capH * 0.4 - lw, capW + lw * 2, capH + lw * 2, capH / 2); ctx.fill();
+  // body outline then fill
+  ctx.fillStyle = ol; blob(ctx, cx, by, rx + lw, ry + lw, seed); ctx.fill();
+  ctx.fillStyle = g3(ctx, cx, by, rx, base); blob(ctx, cx, by, rx, ry, seed); ctx.fill();
+  // ribs
+  ctx.strokeStyle = dark(base, 0.25); ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(1, S * 0.018);
+  [-0.55, 0.55].forEach(function (k) { ctx.beginPath(); ctx.moveTo(cx + rx * k * 0.5, by - ry * 0.92); ctx.quadraticCurveTo(cx + rx * k * 1.15, by, cx + rx * k * 0.5, by + ry * 0.92); ctx.stroke(); });
+  ctx.globalAlpha = 1;
+  // caps faces
+  var capG = ctx.createLinearGradient(0, by - ry - capH, 0, by - ry + capH);
+  capG.addColorStop(0, '#8a5a3a'); capG.addColorStop(1, '#5a3722');
+  ctx.fillStyle = capG; rrect(ctx, cx - capW / 2, by - ry - capH * 0.6, capW, capH, capH / 2); ctx.fill();
+  ctx.fillStyle = capG; rrect(ctx, cx - capW / 2, by + ry - capH * 0.4, capW, capH, capH / 2); ctx.fill();
+  gloss(ctx, cx - rx * 0.45, by - ry * 0.5, rx * 0.2, ry * 0.12, o.lit ? 0.7 : 0.5);
+  // face
+  var eyeY = o.shy ? by - ry * 0.12 : by - ry * 0.42, ex = rx * 0.34, er = Math.max(1.6, S * 0.035);
+  ctx.strokeStyle = '#2a1830'; ctx.fillStyle = '#2a1830'; ctx.lineWidth = Math.max(1.5, S * 0.028); ctx.lineCap = 'round';
+  if (o.shy && !o.awake) { // closed, shy eyes
+    [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.arc(cx + s * ex, eyeY - er * 0.4, er * 1.5, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); });
+    ctx.beginPath(); ctx.arc(cx, eyeY + ry * 0.35, er * 1.1, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+  } else if (o.shy && o.awake) { // startled
+    [-1, 1].forEach(function (s) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + s * ex, eyeY, er * 2, 0, 7); ctx.fill(); ctx.fillStyle = '#2a1830'; ctx.beginPath(); ctx.arc(cx + s * ex, eyeY, er * 1.1, 0, 7); ctx.fill(); });
+    ctx.beginPath(); ctx.ellipse(cx, eyeY + ry * 0.45, er * 1.2, er * 1.6, 0, 0, 7); ctx.fill();
+  } else if (o.lit) { // happy closed eyes
+    [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.arc(cx + s * ex, eyeY + er * 0.8, er * 1.4, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke(); });
+  } else {
+    [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.arc(cx + s * ex, eyeY, er, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + s * ex - er * 0.35, eyeY - er * 0.35, er * 0.4, 0, 7); ctx.fill(); ctx.fillStyle = '#2a1830'; });
+  }
+  ctx.fillStyle = o.shy ? 'rgba(230,60,110,.55)' : 'rgba(255,110,120,.45)';
+  [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.ellipse(cx + s * rx * 0.66, eyeY + er * 1.8, er * 1.5, er * 0.9, 0, 0, 7); ctx.fill(); });
+  if (!o.shy) { // the number: big, dark, with a white outline
+    var fs = Math.round(S * 0.36);
+    ctx.font = '900 ' + fs + 'px ' + FONT;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, fs * 0.22); ctx.strokeStyle = '#fff'; ctx.strokeText(String(o.n), cx, by + ry * 0.32);
+    ctx.fillStyle = '#2a1830'; ctx.fillText(String(o.n), cx, by + ry * 0.32);
+  }
+  ctx.restore();
+  if (o.lit && !o.shy) { // flame on top
+    var fx = cx, fy = by - ry - S * 0.17, fh = S * 0.16 * (reduced ? 1 : 0.9 + 0.12 * Math.sin(t / 120 + seed));
+    ctx.fillStyle = '#c4521a'; ctx.beginPath(); ctx.moveTo(fx, fy - fh * 1.1); ctx.quadraticCurveTo(fx + fh * 0.75, fy, fx, fy + fh * 0.5); ctx.quadraticCurveTo(fx - fh * 0.75, fy, fx, fy - fh * 1.1); ctx.fill();
+    ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.moveTo(fx, fy - fh * 0.8); ctx.quadraticCurveTo(fx + fh * 0.5, fy, fx, fy + fh * 0.35); ctx.quadraticCurveTo(fx - fh * 0.5, fy, fx, fy - fh * 0.8); ctx.fill();
+  }
+  if (o.shy && o.awake) { // "!" with white outline
+    var fz = Math.round(S * 0.3); ctx.font = '900 ' + fz + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText('!', cx + rx * 1.05, by - ry * 1.1); ctx.fillStyle = '#d02040'; ctx.fillText('!', cx + rx * 1.05, by - ry * 1.1);
+  }
+}
+
+/* ---------- title scene: a garland of lanterns, a moon with a face, puffy clouds ---------- */
+function puffs(ctx, x, y, s, t) {
+  var balls = [[0, 0, 1], [-1.1, .25, .75], [1.1, .25, .8], [-.5, -.45, .7], [.55, -.4, .75]];
+  ctx.fillStyle = '#28204f'; balls.forEach(function (b) { ctx.beginPath(); ctx.arc(x + b[0] * s, y + b[1] * s, b[2] * s + 2, 0, 7); ctx.fill(); });
+  balls.forEach(function (b) { var g = ctx.createLinearGradient(0, y - s, 0, y + s); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#a9b1d8'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + b[0] * s, y + b[1] * s, b[2] * s, 0, 7); ctx.fill(); });
+}
+function drawScene(t) {
+  var c = $('scene'), ctx = c.getContext('2d'), dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (!W) return;
+  if (c.width !== W * dpr) { c.width = W * dpr; c.height = H * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  for (var i = 0; i < 18; i++) { var sx = (i * 97.3) % W, sy = (i * 53.7) % (H * 0.6); ctx.fillStyle = 'rgba(255,250,220,' + (0.35 + 0.35 * Math.sin(t / 600 + i)) + ')'; ctx.beginPath(); ctx.arc(sx, sy, 1.6, 0, 7); ctx.fill(); }
+  // moon with a face
+  var mx = W * 0.82, my = 42, mr = 28;
+  ctx.fillStyle = 'rgba(255,240,180,.18)'; ctx.beginPath(); ctx.arc(mx, my, mr * (1.5 + 0.06 * Math.sin(t / 800)), 0, 7); ctx.fill();
+  ctx.fillStyle = dark('#fff0b0', 0.58); ctx.beginPath(); ctx.arc(mx, my, mr + 2, 0, 7); ctx.fill();
+  ctx.fillStyle = g3(ctx, mx, my, mr, '#fff0b0'); ctx.beginPath(); ctx.arc(mx, my, mr, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#6b5420'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.arc(mx + s * 9, my - 2, 4, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke(); });
+  ctx.beginPath(); ctx.arc(mx, my + 6, 6, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,130,120,.45)'; ctx.beginPath(); ctx.arc(mx - 15, my + 5, 4, 0, 7); ctx.arc(mx + 15, my + 5, 4, 0, 7); ctx.fill();
+  puffs(ctx, ((t / 60) % (W + 120)) - 60, 34, 13, t);
+  puffs(ctx, ((t / 90 + W * 0.55) % (W + 120)) - 60, 70, 10, t);
+  // garland
+  var y0 = 70, sag = 46;
+  ctx.strokeStyle = '#2b1d16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-10, y0); ctx.quadraticCurveTo(W / 2, y0 + sag * 2, W + 10, y0); ctx.stroke();
+  var S = Math.min(78, W / 5.2);
+  [1, 2, 3, 2, 1].forEach(function (n, k) {
+    var u = (k + 0.5) / 5, x = u * W, y = (1 - u) * (1 - u) * y0 + 2 * u * (1 - u) * (y0 + sag * 2) + u * u * y0;
+    drawLantern(ctx, x, y + S * 0.5, S, { n: n, lit: k !== 4, t: t, seed: k * 1.7, shy: k === 4 });
+  });
+}
+
+/* ---------- game state ---------- */
+var G = { li: 0, level: null, b: null, lit: null, disp: null, awake: {}, hist: [], matches: 0, busy: false, won: false,
+  anim: null, fx: [], pops: {}, ducks: {}, tut: null, tutStep: 0, hint: -1, lastInput: 0, S: 60, ox: 0, oy: 0 };
+
+function unlocked(i) { return tester || i === 0 || !!progress.stars[LEVELS[i - 1].id] || !!progress.stars[LEVELS[i].id]; }
+function starsFor(m, par) { return m <= par ? 3 : m <= par + 1 ? 2 : 1; }
+function nextIndex() { for (var i = 0; i < LEVELS.length; i++) if (!progress.stars[LEVELS[i].id]) return i; return LEVELS.length - 1; }
+
+function show(id) { ['title', 'game'].forEach(function (s) { $(s).hidden = s !== id; }); if (id === 'title') buildLevels(); wake(); }
+
+function buildLevels() {
+  var box = $('levels'); box.innerHTML = '';
+  var nx = nextIndex();
+  LEVELS.forEach(function (lv, i) {
+    var b = document.createElement('button'), st = progress.stars[lv.id] || 0, open = unlocked(i);
+    b.className = 'lvl' + (open ? '' : ' locked') + (open && i === nx && !st ? ' next' : '');
+    b.innerHTML = (i + 1) + '<small>' + (st ? '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) : open ? 'play' : 'locked') + '</small>';
+    b.setAttribute('aria-label', 'Level ' + (i + 1) + ', ' + lv.name + (st ? ', ' + st + ' stars' : open ? '' : ', locked'));
+    if (open) b.onclick = function () { startLevel(i); }; else b.disabled = true;
+    box.appendChild(b);
+  });
+  $('testerBar').hidden = !tester;
+  $('playBtn').textContent = Object.keys(progress.stars).length ? 'Continue: level ' + (nx + 1) : 'Play';
+}
+
+function startLevel(i) {
+  G.li = i; G.level = LEVELS[i]; G.b = L.parse(G.level);
+  G.lit = L.initial(G.b); G.disp = G.lit.slice(); G.awake = {}; G.hist = []; G.matches = 0; G.busy = false; G.won = false;
+  G.anim = null; G.fx = []; G.pops = {}; G.ducks = {}; G.hint = -1;
+  G.tut = G.level.tut && !(seen[G.level.intro] && progress.stars[G.level.id]) ? G.level.tut : null; G.tutStep = 0;
+  $('lvname').innerHTML = 'Level ' + (i + 1) + '<span></span>'; $('lvname').querySelector('span').textContent = G.level.name;
+  $('par').textContent = G.level.par; $('testBtn').hidden = !tester;
+  $('winBox').hidden = true;
+  show('game'); layout(); refresh();
+  if (G.tut) showTut(); else tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.');
+}
+
+function refresh() { $('matches').textContent = G.matches; $('undoBtn').disabled = !G.hist.length || !!G.tut; $('restartBtn').disabled = !!G.tut; $('hintBtn').disabled = !!G.tut; $('undoBtn').classList.remove('pulse'); }
+
+function tray(text, opts) {
+  opts = opts || {};
+  $('trayText').textContent = text;
+  $('tray').classList.toggle('warn', !!opts.warn);
+  var b = $('trayBtn'); b.hidden = !opts.button; if (opts.button) { b.textContent = opts.button; b.onclick = opts.onButton; }
+}
+function nudge() { var t = $('tray'); t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); }
+
+/* ---------- tutorial ---------- */
+function tutCur() { return G.tut && G.tut[G.tutStep]; }
+function showTut() {
+  var s = tutCur(); if (!s) { G.tut = null; refresh(); afterMove(); return; }
+  if (s.target) tray(s.text);
+  else tray(s.text, { button: s.after ? (G.tutStep === G.tut.length - 1 ? 'Got it' : 'Next') : 'Next', onButton: function () { G.tutStep++; if (!tutCur()) { seen[G.level.intro] = true; store.set('seen', seen); } showTut(); } });
+  refresh(); wake();
+}
+
+/* ---------- layout ---------- */
+function layout() {
+  if (!G.b) return;
+  var wrap = $('boardWrap'), c = $('board'), W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  var pad = 14, side = 8;
+  var S = Math.floor(Math.min((W - pad * 2) / G.b.w, (H - pad * 2 - side) / G.b.h, 92));
+  G.S = S; var bw = S * G.b.w + pad * 2, bh = S * G.b.h + pad * 2 + side;
+  var dpr = window.devicePixelRatio || 1;
+  c.style.width = bw + 'px'; c.style.height = bh + 'px'; c.width = Math.round(bw * dpr); c.height = Math.round(bh * dpr);
+  G.ox = pad; G.oy = pad; G.bw = bw; G.bh = bh; G.dpr = dpr; G.pad = pad; G.side = side;
+  draw(performance.now());
+}
+window.addEventListener('resize', function () { layout(); drawScene(performance.now()); });
+
+function cellXY(i) { var c = typeof i === 'number' ? G.b.cells[i] : i; return [G.ox + (c.c + 0.5) * G.S, G.oy + (c.r + 0.5) * G.S]; }
+
+/* ---------- drawing the board ---------- */
+function drawBoard(ctx, t) {
+  var b = G.b, S = G.S, x0 = G.ox, y0 = G.oy, W = b.w * S, H = b.h * S, fr = G.pad - 4;
+  // raised hedge frame: side face then top face
+  ctx.fillStyle = '#1e3b2a'; rrect(ctx, x0 - fr, y0 - fr + G.side, W + fr * 2, H + fr * 2, 18); ctx.fill();
+  var fg = ctx.createLinearGradient(0, y0 - fr, 0, y0 + H + fr); fg.addColorStop(0, '#5c9a58'); fg.addColorStop(1, '#3d7442');
+  ctx.fillStyle = fg; rrect(ctx, x0 - fr, y0 - fr, W + fr * 2, H + fr * 2, 18); ctx.fill();
+  ctx.strokeStyle = '#1e3b2a'; ctx.lineWidth = 2; rrect(ctx, x0 - fr, y0 - fr, W + fr * 2, H + fr * 2, 18); ctx.stroke();
+  for (var i = 0; i < b.cells.length; i++) {
+    var cl = b.cells[i], x = x0 + cl.c * S, y = y0 + cl.r * S;
+    var base = (cl.r + cl.c) % 2 ? '#8fc47a' : '#99cc82';
+    if (cl.water) base = (cl.r + cl.c) % 2 ? '#4f95d6' : '#58a0de';
+    if (cl.kind === 'wind') base = '#e9dcb4';
+    ctx.fillStyle = base; ctx.fillRect(x, y, S, S);
+    // pillowed edges
+    ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(x, y, S, 2); ctx.fillRect(x, y, 2, S);
+    ctx.fillStyle = 'rgba(20,40,30,.22)'; ctx.fillRect(x, y + S - 2, S, 2); ctx.fillRect(x + S - 2, y, 2, S);
+    if (cl.water) { // ripples
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = Math.max(1.3, S * 0.025);
+      var ph = reduced ? 0 : Math.sin(t / 900 + i) * S * 0.04;
+      ctx.beginPath(); ctx.arc(x + S * 0.3 + ph, y + S * 0.3, S * 0.12, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x + S * 0.7 - ph, y + S * 0.72, S * 0.1, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
+    } else if (cl.kind === 'grass') { // tufts
+      ctx.strokeStyle = 'rgba(40,90,40,.35)'; ctx.lineWidth = 1.5;
+      var tx = x + S * (0.25 + ((i * 37) % 50) / 100), ty = y + S * (0.3 + ((i * 53) % 45) / 100);
+      ctx.beginPath(); ctx.moveTo(tx - 3, ty); ctx.lineTo(tx - 5, ty - 6); ctx.moveTo(tx, ty); ctx.lineTo(tx, ty - 8); ctx.moveTo(tx + 3, ty); ctx.lineTo(tx + 5, ty - 6); ctx.stroke();
+    }
+    if (cl.kind === 'wind') drawWind(ctx, x + S / 2, y + S / 2, S, cl.wind, t, i);
+  }
+}
+function drawWind(ctx, cx, cy, S, d, t, seed) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(d[0], d[1]));
+  var wob = reduced ? 0 : Math.sin(t / 400 + seed) * S * 0.03;
+  // swirl lines
+  ctx.strokeStyle = 'rgba(120,150,190,.6)'; ctx.lineWidth = Math.max(1.5, S * 0.03); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-S * 0.38, -S * 0.24 + wob); ctx.quadraticCurveTo(-S * 0.1, -S * 0.34, S * 0.1, -S * 0.24); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-S * 0.38, S * 0.26 - wob); ctx.quadraticCurveTo(-S * 0.1, S * 0.36, S * 0.1, S * 0.26); ctx.stroke();
+  // big arrow: outline then face
+  var arrow = function (k) {
+    ctx.beginPath(); ctx.moveTo(-S * 0.3 - k, -S * 0.08 - k); ctx.lineTo(S * 0.05, -S * 0.08 - k); ctx.lineTo(S * 0.05, -S * 0.2 - k * 1.6);
+    ctx.lineTo(S * 0.36 + k * 1.6, 0); ctx.lineTo(S * 0.05, S * 0.2 + k * 1.6); ctx.lineTo(S * 0.05, S * 0.08 + k); ctx.lineTo(-S * 0.3 - k, S * 0.08 + k); ctx.closePath();
+  };
+  var lw = Math.max(1.5, S * 0.035);
+  ctx.translate(wob, 0);
+  ctx.fillStyle = 'rgba(10,6,30,.25)'; ctx.save(); ctx.translate(S * 0.03, S * 0.05); arrow(0); ctx.fill(); ctx.restore();
+  ctx.fillStyle = dark('#7fc8f0', 0.58); arrow(lw); ctx.fill();
+  var g = ctx.createLinearGradient(0, -S * 0.2, 0, S * 0.2); g.addColorStop(0, '#d6f1ff'); g.addColorStop(1, '#5fb0e0');
+  ctx.fillStyle = g; arrow(0); ctx.fill();
+  ctx.restore();
+}
+
+function draw(t) {
+  var c = $('board'); if (!G.b || !c.width) return;
+  var ctx = c.getContext('2d'); ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0); ctx.clearRect(0, 0, G.bw, G.bh);
+  drawBoard(ctx, t);
+  var S = G.S, b = G.b;
+  // target / focus / hint ring
+  var ring = -1, s = tutCur();
+  if (s && (s.target || s.focus)) { var rc = s.target || s.focus; ring = rc[0] * b.w + rc[1]; }
+  else if (G.hint >= 0) ring = G.hint;
+  if (ring >= 0 && !G.busy) {
+    var xy = cellXY(ring), pr = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t / 220);
+    ctx.strokeStyle = 'rgba(255,220,90,' + (0.55 + 0.45 * pr) + ')'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(xy[0], xy[1] + S * 0.04, S * (0.47 + 0.03 * pr), 0, 7); ctx.stroke();
+  }
+  for (var k = 0; k < b.lanterns.length; k++) {
+    var idx = b.lanterns[k], cl = b.cells[idx], p = cellXY(idx);
+    var pop = G.pops[k] != null ? Math.min(1, (t - G.pops[k]) / 450) : null;
+    var duck = G.ducks[k] != null ? Math.max(0, 1 - Math.abs((t - G.ducks[k]) / 350 - 1)) : 0;
+    drawLantern(ctx, p[0], p[1] - S * 0.04, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, seed: idx * 1.37 });
+  }
+  if (ring >= 0 && !G.busy && s && s.target) { // bouncing pointer above the target
+    var q = cellXY(ring), bob = reduced ? 0 : Math.sin(t / 200) * 4;
+    ctx.fillStyle = '#7a3d10'; ctx.beginPath(); ctx.moveTo(q[0], q[1] - S * 0.52 + bob + 2); ctx.lineTo(q[0] - 11, q[1] - S * 0.52 - 16 + bob); ctx.lineTo(q[0] + 11, q[1] - S * 0.52 - 16 + bob); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.moveTo(q[0], q[1] - S * 0.52 + bob - 2); ctx.lineTo(q[0] - 8, q[1] - S * 0.52 - 14 + bob); ctx.lineTo(q[0] + 8, q[1] - S * 0.52 - 14 + bob); ctx.closePath(); ctx.fill();
+  }
+  drawFlames(ctx, t);
+  drawFx(ctx, t);
+}
+
+/* ---------- flame flights ---------- */
+var SEG = 330;
+function ptXY(p) { return typeof p === 'number' ? cellXY(p) : cellXY(p); }
+function buildAnim(res, t0) {
+  var flights = [], waveStart = [t0], landings = [];
+  var maxDepth = 0; res.events.forEach(function (e) { maxDepth = Math.max(maxDepth, e.depth); });
+  var T = t0 + 120;
+  for (var d = 0; d <= maxDepth; d++) {
+    var end = T;
+    res.events.forEach(function (e) {
+      if (e.depth !== d) return;
+      var segs = e.path.length - 1, dur = segs * SEG;
+      flights.push({ e: e, t0: T, t1: T + dur });
+      landings.push({ t: T + dur, e: e });
+      if (e.result === 'light') end = Math.max(end, T + dur);
+    });
+    T = end + 60;
+  }
+  var last = 0; flights.forEach(function (f) { last = Math.max(last, f.t1); });
+  return { flights: flights, landings: landings.sort(function (a, b) { return a.t - b.t; }), done: last + 500 };
+}
+function drawFlames(ctx, t) {
+  if (!G.anim) return;
+  var S = G.S;
+  G.anim.flights.forEach(function (f) {
+    if (t < f.t0 || t > f.t1) return;
+    var segs = f.e.path.length - 1, u = (t - f.t0) / (f.t1 - f.t0) * segs, si = Math.min(segs - 1, Math.floor(u)), v = u - si;
+    var a = ptXY(f.e.path[si]), b = ptXY(f.e.path[si + 1]);
+    var dist = Math.hypot(b[0] - a[0], b[1] - a[1]), hgt = Math.min(S * 0.9, dist * 0.35);
+    var alpha = f.e.result === 'off' && si === segs - 1 ? 1 - v * 0.8 : 1;
+    for (var k = 3; k >= 0; k--) { // little trail
+      var vv = Math.max(0, v - k * 0.06), x = a[0] + (b[0] - a[0]) * vv, y = a[1] + (b[1] - a[1]) * vv - Math.sin(vv * Math.PI) * hgt - S * 0.1;
+      var r = S * (k ? 0.08 - k * 0.012 : 0.13);
+      ctx.globalAlpha = alpha * (k ? 0.5 : 1);
+      if (!k) { ctx.fillStyle = '#b8420e'; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, 7); ctx.fill(); }
+      ctx.fillStyle = k ? '#ffcf5a' : g3(ctx, x, y, r, '#ffa630'); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      if (!k) gloss(ctx, x - r * 0.35, y - r * 0.4, r * 0.3, r * 0.18, 0.8);
+    }
+    ctx.globalAlpha = 1;
+  });
+}
+function addFx(type, at, t) { G.fx.push({ type: type, x: at[0], y: at[1], t0: t }); }
+function drawFx(ctx, t) {
+  var S = G.S;
+  G.fx = G.fx.filter(function (f) { return t - f.t0 < 900; });
+  G.fx.forEach(function (f) {
+    var u = (t - f.t0) / 900; if (u < 0) return;
+    if (f.type === 'spark') {
+      for (var k = 0; k < 6; k++) { var a = k / 6 * Math.PI * 2 + 0.3, r = S * (0.25 + 0.4 * u), x = f.x + Math.cos(a) * r, y = f.y - S * 0.1 + Math.sin(a) * r;
+        ctx.globalAlpha = 1 - u; star(ctx, x, y, S * 0.07 * (1 - u * 0.5)); }
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'steam' || f.type === 'puff') {
+      for (var j = 0; j < 3; j++) { var px = f.x + (j - 1) * S * 0.14, py = f.y - S * 0.1 - u * S * (f.type === 'steam' ? 0.55 : 0.25) - j % 2 * S * 0.06;
+        ctx.globalAlpha = (1 - u) * 0.85; ctx.fillStyle = f.type === 'steam' ? '#ffffff' : '#d9d2c8';
+        ctx.beginPath(); ctx.arc(px, py, S * (0.08 + 0.08 * u), 0, 7); ctx.fill(); }
+      if (f.type === 'steam') { ctx.globalAlpha = 1 - u; ctx.strokeStyle = '#e8f6ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(f.x, f.y + S * 0.2, S * (0.15 + 0.3 * u), S * (0.05 + 0.1 * u), 0, 0, 7); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+  });
+}
+function star(ctx, x, y, r) {
+  ctx.beginPath(); for (var i = 0; i < 10; i++) { var a = i / 10 * Math.PI * 2 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath();
+  ctx.fillStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#ffd34d'; ctx.fill();
+}
+
+/* ---------- main loop (pauses after 8 quiet seconds) ---------- */
+var raf = 0;
+function wake() { G.lastInput = performance.now(); if (!raf) raf = requestAnimationFrame(loop); }
+function loop(t) {
+  raf = 0;
+  if (G.anim) stepAnim(t);
+  if (!$('game').hidden) draw(t); else drawScene(t);
+  if (G.anim || G.fx.length || t - G.lastInput < 8000) raf = requestAnimationFrame(loop);
+}
+function stepAnim(t) {
+  var A = G.anim;
+  while (A.landings.length && A.landings[0].t <= t) land(A.landings.shift(), t);
+  if (t >= A.done) finishAnim();
+}
+function land(l, t) {
+  var e = l.e, b = G.b;
+  if (e.end < 0) return;
+  var at = cellXY(e.end), li = b.lidx[e.end];
+  if (e.result === 'light') { G.disp[li] = true; G.pops[li] = t; addFx('spark', at, t); }
+  else if (e.result === 'water') addFx('steam', at, t);
+  else if (e.result === 'grass') addFx('puff', at, t);
+  else if (e.result === 'hid') { G.ducks[li] = t; addFx('puff', at, t); }
+  else if (e.result === 'shy') { G.disp[li] = true; G.pops[li] = t; }
+}
+function finishAnim() {
+  if (!G.anim) return;
+  var t = performance.now();
+  while (G.anim.landings.length) land(G.anim.landings.shift(), t);
+  G.anim = null; G.disp = G.lit.slice(); G.busy = false;
+  if (G.tut) { G.tutStep++; showTut(); return; }
+  afterMove();
+}
+
+/* ---------- moves ---------- */
+function afterMove() {
+  refresh();
+  if (L.shyLit(G.b, G.lit)) {
+    tray('Oh no, a shy lantern woke up! Tap Undo to take that match back.', { warn: true });
+    $('undoBtn').classList.add('pulse'); return;
+  }
+  if (L.isWin(G.b, G.lit)) { win(); return; }
+  if (G.matches > 0 && !G.tut) tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.');
+}
+function doTap(idx, t) {
+  var res = L.tap(G.b, G.lit, idx);
+  if (!res) return false;
+  G.hist.push({ lit: G.lit, matches: G.matches });
+  G.matches++; G.lit = res.lit; G.hint = -1;
+  var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t;
+  G.anim = buildAnim(res, t); G.busy = true; refresh(); wake();
+  return true;
+}
+$('board').addEventListener('pointerdown', function (ev) {
+  ev.preventDefault(); wake();
+  if (!G.b || G.won) return;
+  if (G.busy) { finishAnim(); return; } // tap during a chain: skip to the end
+  var r = $('board').getBoundingClientRect(), x = ev.clientX - r.left - G.ox, y = ev.clientY - r.top - G.oy;
+  var c = Math.floor(x / G.S), rr = Math.floor(y / G.S);
+  if (c < 0 || rr < 0 || c >= G.b.w || rr >= G.b.h) return;
+  var idx = rr * G.b.w + c, cell = G.b.cells[idx], s = tutCur();
+  if (s) {
+    if (!s.target) { nudge(); return; }
+    if (s.target[0] !== rr || s.target[1] !== c) { nudge(); return; }
+  }
+  if (L.shyLit(G.b, G.lit)) { nudge(); $('undoBtn').classList.add('pulse'); return; }
+  if (cell.kind !== 'lantern') return;
+  if (cell.shy) { tray('That one is shy. It must stay dark, so it can\'t be lit with a match.'); nudge(); return; }
+  if (G.lit[cell.li]) { tray('That lantern is already lit. Pick a dark one.'); return; }
+  doTap(idx, performance.now());
+});
+
+function undo() { if (G.busy) finishAnim(); var h = G.hist.pop(); if (!h) return; G.lit = h.lit; G.matches = h.matches; G.disp = G.lit.slice(); G.hint = -1; refresh(); tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.'); wake(); }
+function restart() { startLevel(G.li); }
+function hint() {
+  if (G.busy) finishAnim();
+  if (L.shyLit(G.b, G.lit)) { tray('A shy lantern is awake. Tap Undo first.', { warn: true }); $('undoBtn').classList.add('pulse'); return; }
+  var s = L.solve(G.b, G.lit);
+  if (!s || !s.line.length) return;
+  G.hint = s.line[0];
+  tray(G.matches + s.par > G.level.par ? 'Try the glowing lantern. Restart if you want to match par.' : 'Try the glowing lantern.');
+  wake();
+}
+$('undoBtn').onclick = undo; $('restartBtn').onclick = restart; $('hintBtn').onclick = hint;
+
+/* ---------- win ---------- */
+function win() {
+  G.won = true;
+  var lv = G.level, st = starsFor(G.matches, lv.par);
+  var first = !progress.stars[lv.id];
+  progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st);
+  progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches);
+  store.set('progress', progress);
+  if (lv.intro && !seen[lv.intro]) { seen[lv.intro] = true; store.set('seen', seen); }
+  var last = G.li === LEVELS.length - 1;
+  $('winTitle').textContent = last ? 'The festival is lit!' : st === 3 ? 'All lit!' : 'All lit! Can you match par?';
+  $('winStars').innerHTML = '★'.repeat(st) + '<span class="off">' + '★'.repeat(3 - st) + '</span>';
+  $('winStars').setAttribute('aria-label', st + ' of 3 stars');
+  $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '.' + (st < 3 ? ' Try again for 3 stars.' : '');
+  $('nextBtn').textContent = last ? 'Back to levels' : 'Next level';
+  setTimeout(function () { $('winBox').hidden = false; confetti(); $('nextBtn').focus({ preventScroll: true }); }, 350);
+}
+$('nextBtn').onclick = function () { $('winBox').hidden = true; if (G.li < LEVELS.length - 1) startLevel(G.li + 1); else show('title'); };
+$('replayBtn').onclick = function () { $('winBox').hidden = true; startLevel(G.li); };
+
+function confetti() {
+  if (reduced) return;
+  var c = $('confetti'), ctx = c.getContext('2d'), W = innerWidth, H = innerHeight, dpr = window.devicePixelRatio || 1;
+  c.hidden = false; c.width = W * dpr; c.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  var cols = ['#ffd34d', '#ff8fa3', '#8fd3ff', '#b8f28a', '#ffffff'], ps = [];
+  for (var i = 0; i < 60; i++) ps.push({ x: Math.random() * W, y: -20 - Math.random() * H * 0.4, vy: 2 + Math.random() * 2.5, vx: -1 + Math.random() * 2, r: Math.random() * 6, c: cols[i % 5], s: 5 + Math.random() * 5 });
+  var t0 = performance.now();
+  (function f(t) {
+    ctx.clearRect(0, 0, W, H);
+    ps.forEach(function (p) { p.x += p.vx + Math.sin((t + p.r * 100) / 300); p.y += p.vy; p.r += 0.08;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.strokeStyle = 'rgba(40,20,60,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); });
+    if (t - t0 < 2600) requestAnimationFrame(f); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
+  })(t0);
+}
+
+/* ---------- rules sheet ---------- */
+var RULES = [
+  [0, 'Tap a dark lantern to light it with a match.'],
+  [0, 'A lit lantern\'s flame hops exactly as many cells as its number: up, down, left and right. It jumps over whatever is in between.'],
+  [0, 'A flame that lands on a dark lantern lights it, and that lantern hops too. That\'s a chain.'],
+  [0, 'Light every lantern. Match par (the fewest matches) for 3 stars. Undo and Restart are always free.'],
+  [5, 'Shy lanterns have their eyes shut. Keep them dark. A shy lantern hides when a lit lantern stands right beside it, so flames landing on it fizzle.'],
+  [7, 'A flame that lands on the pond goes out, even on a floating lantern. Floating lanterns need their own match.'],
+  [9, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.']
+];
+$('rulesBtn').onclick = function () {
+  var ol = $('rulesList'); ol.innerHTML = '';
+  RULES.forEach(function (r) { if (G.li >= r[0]) { var li = document.createElement('li'); li.textContent = r[1]; ol.appendChild(li); } });
+  $('rulesBox').hidden = false;
+};
+$('rulesClose').onclick = function () { $('rulesBox').hidden = true; };
+
+/* ---------- tester tools (5 taps on the title, or ?unlock=1) ---------- */
+var titleTaps = 0, titleTimer = null;
+$('logo').addEventListener('click', function () {
+  titleTaps++; clearTimeout(titleTimer); titleTimer = setTimeout(function () { titleTaps = 0; }, 1500);
+  if (titleTaps >= 5) { titleTaps = 0; tester = true; buildLevels(); }
+});
+$('testerOff').onclick = function () { tester = false; buildLevels(); };
+$('resetBtn').onclick = function () { store.clear(); progress = { stars: {}, best: {} }; seen = {}; buildLevels(); };
+$('testBtn').onclick = function () {
+  var j = $('jump'); j.innerHTML = '';
+  LEVELS.forEach(function (lv, i) { var b = document.createElement('button'); b.className = 'btn'; b.textContent = i + 1; b.setAttribute('aria-label', 'Jump to level ' + (i + 1));
+    b.onclick = function () { $('testBox').hidden = true; startLevel(i); }; j.appendChild(b); });
+  $('testBox').hidden = false;
+};
+$('testClose').onclick = function () { $('testBox').hidden = true; };
+$('solveBtn').onclick = function () {
+  $('testBox').hidden = true;
+  var li = G.li; startLevel(li); G.tut = null; refresh();
+  var line = L.solve(G.b, G.lit).line.slice();
+  tray('Playing the par solution (' + line.length + (line.length === 1 ? ' match' : ' matches') + ').');
+  (function next() { if (!line.length || G.li !== li || $('game').hidden) return; if (G.busy) { setTimeout(next, 200); return; } doTap(line.shift(), performance.now()); setTimeout(next, 300); })();
+};
+
+/* ---------- start ---------- */
+$('playBtn').onclick = function () { startLevel(nextIndex()); };
+$('homeBtn').onclick = function () { if (G.busy) finishAnim(); show('title'); };
+window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(function () { return { screen: $('game').hidden ? 'title' : 'game', li: G.li }; });
+function boot(data) { buildLevels(); if (data && data.screen === 'game' && LEVELS[data.li]) startLevel(data.li); else show('title'); drawScene(performance.now()); }
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
+window.__lc = { G: G, L: L, LEVELS: LEVELS, store: store }; // for automated tests
+})();
+</script>
+
+</html>
