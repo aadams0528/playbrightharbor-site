@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.1 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.2 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -74,6 +74,10 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .row > * { flex: 1; }
 .testerbar { border: 2px dashed #9d93e0; border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .testerbar p { margin: 0; font-size: 16px; color: var(--ink-soft); }
+.done { background: var(--card); color: var(--card-ink); border-radius: 18px; border: 1.5px solid var(--gold-edge); box-shadow: 0 4px 0 var(--gold-edge); padding: 12px 14px; text-align: center; }
+.done b { display: block; font-family: var(--font-display); font-size: 24px; }
+.done p { margin: 2px 0 0; font-size: 18px; }
+.ver { text-align: center; margin: 4px 0 0; font-size: 15px; color: var(--ink-soft); opacity: .8; }
 
 /* game */
 .top { display: flex; align-items: center; gap: 10px; }
@@ -85,14 +89,16 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .chip b { color: #ffe08a; font-size: 22px; }
 #boardWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 #board { display: block; touch-action: manipulation; }
+/* fixed height so the board never jumps when the text changes (e2e checks every text fits) */
 #tray { background: var(--card); color: var(--card-ink); border-radius: 18px; border: 1.5px solid var(--card-edge); box-shadow: 0 4px 0 var(--card-edge);
-  padding: 12px 14px; min-height: 76px; display: flex; align-items: center; gap: 12px; font-size: 19px; line-height: 1.35; }
+  padding: 10px 14px; height: 128px; box-sizing: border-box; overflow: hidden; flex: none; display: flex; align-items: center; gap: 12px; font-size: 19px; line-height: 1.32; }
 #tray p { margin: 0; flex: 1; min-width: 0; }
-#tray .btn { min-height: 50px; font-size: 19px; flex: none; }
+#trayBtn { flex: 1; }
 #tray.warn { background: #ffe3ea; border-color: var(--rose); box-shadow: 0 4px 0 var(--rose); }
 #tray.shake { animation: shake .35s; }
 @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-.controls { display: flex; gap: 10px; padding-bottom: 4px; }
+.controls { display: flex; gap: 10px; padding-bottom: 4px; flex: none; }
+.controls.tut #undoBtn, .controls.tut #restartBtn, .controls.tut #hintBtn { display: none; }
 .controls .btn { flex: 1; }
 
 /* overlays */
@@ -104,6 +110,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .sheet p { margin: 0; text-align: center; font-size: 19px; }
 .stars { text-align: center; font-size: 52px; letter-spacing: 6px; line-height: 1; color: #f0a500; text-shadow: 0 3px 0 #a35f00; }
 .stars .off { color: #d8ccb4; text-shadow: 0 3px 0 #b5a688; }
+.sheet .stick { position: sticky; bottom: -22px; margin-bottom: -22px; padding-bottom: 22px; background: var(--card); }
 .rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; }
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 @media (prefers-reduced-motion: reduce) { .btn.pulse { animation: none; } #tray.shake { animation: none; } }
@@ -114,12 +121,14 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
     <canvas id="scene" aria-hidden="true"></canvas>
     <h1 id="logo">Lantern Chain</h1>
     <p class="lede">Light every lantern with as few matches as you can.</p>
+    <div class="done" id="doneBanner" role="status" hidden><b id="doneTitle">The festival is lit!</b><p id="doneText"></p></div>
     <button class="btn primary" id="playBtn">Play</button>
     <div id="levels" aria-label="Levels"></div>
     <div class="testerbar" id="testerBar" hidden>
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
+    <p class="ver" id="ver">v0.2</p>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -131,8 +140,9 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
     </div>
     <div class="hud"><div class="chip">Matches <b id="matches">0</b></div><div class="chip">Par <b id="par">1</b></div></div>
     <div id="boardWrap"><canvas id="board" aria-label="Lantern board"></canvas></div>
-    <div id="tray" role="status" aria-live="polite"><p id="trayText"></p><button class="btn primary" id="trayBtn" hidden>Next</button></div>
-    <div class="controls">
+    <div id="tray" role="status" aria-live="polite"><p id="trayText"></p></div>
+    <div class="controls" id="controls">
+      <button class="btn primary" id="trayBtn" hidden>Next</button>
       <button class="btn" id="undoBtn">Undo</button>
       <button class="btn" id="restartBtn">Restart</button>
       <button class="btn" id="hintBtn">Hint</button>
@@ -153,7 +163,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
   <div class="sheet" role="dialog" aria-labelledby="rulesTitle">
     <h2 id="rulesTitle">How to play</h2>
     <ol class="rules" id="rulesList"></ol>
-    <button class="btn primary" id="rulesClose">Got it</button>
+    <div class="stick"><button class="btn primary" id="rulesClose" style="width:100%">Got it</button></div>
   </div>
 </div>
 <div class="overlay" id="testBox" hidden>
@@ -313,7 +323,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 (function () {
 'use strict';
 var L = window.LanternLogic;
-var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell up, down, left and right. It landed on the next lantern, which lit and hopped too. That's a chain!","after":true}],"par":1},{"id":2,"name":"Two Sparks","rows":["11...","1....",".....","...11","....1"],"tip":"Light every lantern. Par is the fewest matches that can do it. Match par to earn 3 stars.","par":2},{"id":3,"name":"Long Snake","rows":["111..","..1..","..111","....1","1...1"],"tip":"One match can light a whole line of lanterns.","par":2},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Tap the 2.","target":[2,2]},{"text":"One match lit all four. A 1 hops only 1 cell, so starting on a 1 would have landed on grass.","after":true}],"par":1},{"id":5,"name":"Who Goes First?","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Flames only go where the number sends them. Find the lanterns that start the longest chains.","par":3},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"The 2 would jump right onto it. But a shy lantern hides behind a lit friend. First tap the 1 just above it.","target":[1,2]},{"text":"Its friend is lit, so the shy lantern can hide. Now tap the 2.","target":[2,0]},{"text":"The flame fizzled and the shy lantern stayed dark. Well done!","after":true}],"par":2},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.","<....","....3",".3..1"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4}];
+var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell in all four directions: up, down, left and right. It lit the next lantern, which hopped too. A chain!","after":true}],"par":1},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Your turn: light all five lanterns with just one match. Which one can do it?","free":true,"retry":"Not all lit. A 1 only hops 1 cell. Tap Undo and try another start."},{"text":"The 2 jumped over the grass and lit all four. A 1 only hops 1 cell, so it lands on grass.","after":true}],"par":1},{"id":13,"name":"Spark Snakes","rows":[".....","..11.","1211.","1....","....1"],"tip":"Some starts light more lanterns than others. Remember: a 2 jumps over its neighbours.","par":2},{"id":5,"name":"Chain Starters","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Flames only go where the number sends them. Find the lanterns that start the longest chains.","par":3},{"id":14,"name":"Leap Frog","rows":["...21","..2..",".....",".12.3","....3","322.."],"tip":"Big numbers leap far, and flames can't hop back. Follow a few chains before you strike a match.","par":2},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"A shy lantern pulls its shade down when a lantern right next to it is lit. Flames can't wake it then.","focus":[1,2]},{"text":"The 2 would jump onto the shy one. Light the 1 right next to it first.","target":[1,2],"offScript":"Not yet! The 2's flame would wake the shy lantern. Tap the glowing 1 first."},{"text":"See the shade come down? Now tap the 2.","target":[2,0]},{"text":"The flame fizzled on the shade. Even the 1's own flame couldn't wake it. Well done!","after":true}],"par":2},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2},{"id":15,"name":"Shady Corner","rows":[".32.2",".1...","..z31","....."],"tip":"Order matters here. Pull the shy lantern's shade down before a flame can reach it.","par":2},{"id":16,"name":"Two Shy Ones","rows":["2.z1.",".....","2..3z","2..3.","....2"],"tip":"Two shy lanterns. Which one needs its shade first?","par":3},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.",".v...","....3",".3..2"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4}];
 
 /* ---------- save: one store helper, everything under one key prefix ---------- */
 var store = {
@@ -362,7 +372,7 @@ var LIT = '#ffb43c', SHY = '#f2a3c3', SHYAWAKE = '#ef5a6f';
 /* ---------- lantern drawing ---------- */
 // o: { n, shy, lit, awake, water, t, pop (0..1 after lighting), duck (0..1), seed, face }
 function drawLantern(ctx, cx, cy, S, o) {
-  var t = o.t || 0, seed = o.seed || 0;
+  var t = o.t || 0, seed = o.seed || 0, capH = S * 0.08;
   var sway = reduced ? 0 : Math.sin(t / 900 + seed) * 0.025;
   var squash = 1, sq2 = 1;
   if (o.pop != null && o.pop < 1) { var p = o.pop; squash = 1 + Math.sin(p * Math.PI) * 0.22 * (1 - p); sq2 = 1 - Math.sin(p * Math.PI) * 0.14 * (1 - p); }
@@ -387,7 +397,7 @@ function drawLantern(ctx, cx, cy, S, o) {
   // string + hook
   ctx.strokeStyle = '#3b2a1e'; ctx.lineWidth = Math.max(1.3, S * 0.025); ctx.beginPath(); ctx.moveTo(cx, by - ry - S * 0.16); ctx.lineTo(cx, by - ry - S * 0.04); ctx.stroke();
   // caps (thickness: dark under-face first)
-  var capW = S * 0.34, capH = S * 0.08;
+  var capW = S * 0.34;
   ctx.fillStyle = '#2d1d14'; rrect(ctx, cx - capW / 2 - lw, by - ry - capH * 0.6 - lw, capW + lw * 2, capH + lw * 2, capH / 2); ctx.fill();
   ctx.fillStyle = '#2d1d14'; rrect(ctx, cx - capW / 2 - lw, by + ry - capH * 0.4 - lw, capW + lw * 2, capH + lw * 2, capH / 2); ctx.fill();
   // body outline then fill
@@ -419,6 +429,7 @@ function drawLantern(ctx, cx, cy, S, o) {
   }
   ctx.fillStyle = o.shy ? 'rgba(230,60,110,.55)' : 'rgba(255,110,120,.45)';
   [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.ellipse(cx + s * rx * 0.66, eyeY + er * 1.8, er * 1.5, er * 0.9, 0, 0, 7); ctx.fill(); });
+  if (o.shy && o.shade > 0 && !o.awake) drawShade(ctx, cx, by, rx, ry, S, o.shade, capH);
   if (!o.shy) { // the number: big, dark, with a white outline
     var fs = Math.round(S * 0.36);
     ctx.font = '900 ' + fs + 'px ' + FONT;
@@ -436,6 +447,24 @@ function drawLantern(ctx, cx, cy, S, o) {
     var fz = Math.round(S * 0.3); ctx.font = '900 ' + fz + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText('!', cx + rx * 1.05, by - ry * 1.1); ctx.fillStyle = '#d02040'; ctx.fillText('!', cx + rx * 1.05, by - ry * 1.1);
   }
+}
+
+// The shade a shy lantern pulls down while a lit lantern stands right next to it (logic.js hidden()).
+// A slatted blind with a wooden rail and a pull ring, so it reads as a shape, not just a colour. k: 0..1 how far down.
+function drawShade(ctx, cx, by, rx, ry, S, k, capH) {
+  var e = k >= 1 ? 1 : 1 - Math.pow(1 - k, 3);
+  var top = by - ry - capH * 0.25, h = (ry * 1.5 + capH * 0.25) * e, w = rx * 1.62, x = cx - w / 2, lw = Math.max(1.3, S * 0.03);
+  ctx.fillStyle = '#1c1840'; rrect(ctx, x - lw, top - lw, w + lw * 2, h + lw * 2, S * 0.05); ctx.fill();
+  var g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#4b4696'); g.addColorStop(0.45, '#8580d0'); g.addColorStop(1, '#3d3884');
+  ctx.fillStyle = g; rrect(ctx, x, top, w, h, S * 0.04); ctx.fill();
+  ctx.strokeStyle = 'rgba(24,20,60,.6)'; ctx.lineWidth = Math.max(1, S * 0.018);
+  for (var yy = top + S * 0.08; yy < top + h - S * 0.03; yy += S * 0.08) { ctx.beginPath(); ctx.moveTo(x + S * 0.03, yy); ctx.lineTo(x + w - S * 0.03, yy); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(x + w * 0.14, top + S * 0.02, w * 0.1, Math.max(0, h - S * 0.05));
+  var rail = top + h;
+  ctx.fillStyle = '#2d1d14'; rrect(ctx, x - lw * 1.8, rail - S * 0.05, w + lw * 3.6, S * 0.08, S * 0.035); ctx.fill();
+  ctx.fillStyle = '#9a6a42'; rrect(ctx, x - lw * 0.8, rail - S * 0.04, w + lw * 1.6, S * 0.05, S * 0.022); ctx.fill();
+  ctx.strokeStyle = '#2d1d14'; ctx.lineWidth = Math.max(1.3, S * 0.022); ctx.beginPath(); ctx.moveTo(cx, rail + S * 0.03); ctx.lineTo(cx, rail + S * 0.09); ctx.stroke();
+  ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(cx, rail + S * 0.115, S * 0.035, 0, 7); ctx.fill(); ctx.stroke();
 }
 
 /* ---------- title scene: a garland of lanterns, a moon with a face, puffy clouds ---------- */
@@ -473,13 +502,20 @@ function drawScene(t) {
 
 /* ---------- game state ---------- */
 var G = { li: 0, level: null, b: null, lit: null, disp: null, awake: {}, hist: [], matches: 0, busy: false, won: false,
-  anim: null, fx: [], pops: {}, ducks: {}, tut: null, tutStep: 0, hint: -1, lastInput: 0, S: 60, ox: 0, oy: 0 };
+  anim: null, fx: [], pops: {}, ducks: {}, shades: {}, tut: null, tutStep: 0, hint: -1, hintStage: 0, winTimer: 0, lastInput: 0, S: 60, ox: 0, oy: 0 };
+var INTRO = {}; LEVELS.forEach(function (lv, i) { if (lv.intro && INTRO[lv.intro] == null) INTRO[lv.intro] = i; });
+var FIRST_SHY = LEVELS.findIndex(function (lv) { return /[zZ]/.test(lv.rows.join('')); });
+function hasShy() { return /[zZ]/.test(G.level.rows.join('')); }
+function defaultTip() { return G.level.tip || (FIRST_SHY >= 0 && G.li >= FIRST_SHY ? 'Light every lantern. Keep shy lanterns dark.' : 'Light every lantern.'); }
+function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; $('winBox').hidden = true; stopConfetti(); }
 
 function unlocked(i) { return tester || i === 0 || !!progress.stars[LEVELS[i - 1].id] || !!progress.stars[LEVELS[i].id]; }
 function starsFor(m, par) { return m <= par ? 3 : m <= par + 1 ? 2 : 1; }
 function nextIndex() { for (var i = 0; i < LEVELS.length; i++) if (!progress.stars[LEVELS[i].id]) return i; return LEVELS.length - 1; }
+function allDone() { return LEVELS.every(function (lv) { return !!progress.stars[lv.id]; }); }
+function starTotal() { var n = 0; LEVELS.forEach(function (lv) { n += progress.stars[lv.id] || 0; }); return n; } // only current levels count
 
-function show(id) { ['title', 'game'].forEach(function (s) { $(s).hidden = s !== id; }); if (id === 'title') buildLevels(); wake(); }
+function show(id) { if (id === 'title') clearWin(); ['title', 'game'].forEach(function (s) { $(s).hidden = s !== id; }); if (id === 'title') buildLevels(); wake(); }
 
 function buildLevels() {
   var box = $('levels'); box.innerHTML = '';
@@ -493,28 +529,36 @@ function buildLevels() {
     box.appendChild(b);
   });
   $('testerBar').hidden = !tester;
-  $('playBtn').textContent = Object.keys(progress.stars).length ? 'Continue: level ' + (nx + 1) : 'Play';
+  var done = allDone(), st3 = LEVELS.findIndex(function (lv) { return (progress.stars[lv.id] || 0) < 3; });
+  $('doneBanner').hidden = !done;
+  if (done) $('doneText').textContent = LEVELS.length + '/' + LEVELS.length + ' levels, stars ' + starTotal() + '/' + LEVELS.length * 3 + '. Tap any level below to play it again.';
+  $('playBtn').textContent = done ? (st3 >= 0 ? 'Go for 3 stars: level ' + (st3 + 1) : 'Replay level 1')
+    : LEVELS.some(function (lv) { return progress.stars[lv.id]; }) ? 'Continue: level ' + (nx + 1) : 'Play';
+  $('playBtn').onclick = function () { startLevel(done ? Math.max(0, st3) : nextIndex()); };
 }
 
 function startLevel(i) {
   G.li = i; G.level = LEVELS[i]; G.b = L.parse(G.level);
   G.lit = L.initial(G.b); G.disp = G.lit.slice(); G.awake = {}; G.hist = []; G.matches = 0; G.busy = false; G.won = false;
-  G.anim = null; G.fx = []; G.pops = {}; G.ducks = {}; G.hint = -1;
+  G.anim = null; G.fx = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.hint = -1; G.hintStage = 0;
+  clearWin();
   G.tut = G.level.tut && !(seen[G.level.intro] && progress.stars[G.level.id]) ? G.level.tut : null; G.tutStep = 0;
   $('lvname').innerHTML = 'Level ' + (i + 1) + '<span></span>'; $('lvname').querySelector('span').textContent = G.level.name;
   $('par').textContent = G.level.par; $('testBtn').hidden = !tester;
-  $('winBox').hidden = true;
   show('game'); layout(); refresh();
-  if (G.tut) showTut(); else tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.');
+  if (G.tut) showTut(); else tray(defaultTip());
 }
 
-function refresh() { $('matches').textContent = G.matches; $('undoBtn').disabled = !G.hist.length || !!G.tut; $('restartBtn').disabled = !!G.tut; $('hintBtn').disabled = !!G.tut; $('undoBtn').classList.remove('pulse'); }
+function scripted() { var s = tutCur(); return !!(s && !s.free); }
+function refresh() { $('matches').textContent = G.matches; $('undoBtn').disabled = !G.hist.length || scripted(); $('restartBtn').disabled = scripted(); $('hintBtn').disabled = !!G.tut; $('undoBtn').classList.remove('pulse'); }
 
 function tray(text, opts) {
   opts = opts || {};
   $('trayText').textContent = text;
   $('tray').classList.toggle('warn', !!opts.warn);
-  var b = $('trayBtn'); b.hidden = !opts.button; if (opts.button) { b.textContent = opts.button; b.onclick = opts.onButton; }
+  // a tutorial "Next" takes the place of Undo/Restart/Hint (same height), so the tray text gets the full width
+  var b = $('trayBtn'); b.hidden = !opts.button; $('controls').classList.toggle('tut', !!opts.button); b.classList.remove('pulse');
+  if (opts.button) { b.textContent = opts.button; b.onclick = opts.onButton; }
 }
 function nudge() { var t = $('tray'); t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); }
 
@@ -522,7 +566,7 @@ function nudge() { var t = $('tray'); t.classList.remove('shake'); void t.offset
 function tutCur() { return G.tut && G.tut[G.tutStep]; }
 function showTut() {
   var s = tutCur(); if (!s) { G.tut = null; refresh(); afterMove(); return; }
-  if (s.target) tray(s.text);
+  if (s.target || s.free) tray(s.text);
   else tray(s.text, { button: s.after ? (G.tutStep === G.tut.length - 1 ? 'Got it' : 'Next') : 'Next', onButton: function () { G.tutStep++; if (!tutCur()) { seen[G.level.intro] = true; store.set('seen', seen); } showTut(); } });
   refresh(); wake();
 }
@@ -613,7 +657,13 @@ function draw(t) {
     var idx = b.lanterns[k], cl = b.cells[idx], p = cellXY(idx);
     var pop = G.pops[k] != null ? Math.min(1, (t - G.pops[k]) / 450) : null;
     var duck = G.ducks[k] != null ? Math.max(0, 1 - Math.abs((t - G.ducks[k]) / 350 - 1)) : 0;
-    drawLantern(ctx, p[0], p[1] - S * 0.04, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, seed: idx * 1.37 });
+    var shade = 0;
+    if (cl.shy) { // pull the shade down the moment a neighbour lights (as shown on the board), lift it on Undo
+      var hid = !G.disp[k] && L.hidden(b, G.disp, idx), sh = G.shades[k];
+      if (!sh || sh.on !== hid) sh = G.shades[k] = { on: hid, t: sh ? t : -1e9 };
+      shade = sh.on ? (reduced ? 1 : Math.min(1, (t - sh.t) / 300)) : (reduced ? 0 : Math.max(0, 1 - (t - sh.t) / 220));
+    }
+    drawLantern(ctx, p[0], p[1] - S * 0.04, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, shade: shade, seed: idx * 1.37 });
   }
   if (ring >= 0 && !G.busy && s && s.target) { // bouncing pointer above the target
     var q = cellXY(ring), bob = reduced ? 0 : Math.sin(t / 200) * 4;
@@ -625,7 +675,8 @@ function draw(t) {
 }
 
 /* ---------- flame flights ---------- */
-var SEG = 330;
+var SEG = 330, SEG_MIN = 220; // hop time per wave: later waves of a long chain fly faster
+function segFor(d) { return Math.max(SEG_MIN, SEG - 30 * d); }
 function ptXY(p) { return typeof p === 'number' ? cellXY(p) : cellXY(p); }
 function buildAnim(res, t0) {
   var flights = [], waveStart = [t0], landings = [];
@@ -635,7 +686,7 @@ function buildAnim(res, t0) {
     var end = T;
     res.events.forEach(function (e) {
       if (e.depth !== d) return;
-      var segs = e.path.length - 1, dur = segs * SEG;
+      var segs = e.path.length - 1, dur = segs * segFor(d);
       flights.push({ e: e, t0: T, t1: T + dur });
       landings.push({ t: T + dur, e: e });
       if (e.result === 'light') end = Math.max(end, T + dur);
@@ -681,6 +732,14 @@ function drawFx(ctx, t) {
         ctx.beginPath(); ctx.arc(px, py, S * (0.08 + 0.08 * u), 0, 7); ctx.fill(); }
       if (f.type === 'steam') { ctx.globalAlpha = 1 - u; ctx.strokeStyle = '#e8f6ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(f.x, f.y + S * 0.2, S * (0.15 + 0.3 * u), S * (0.05 + 0.1 * u), 0, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
+    } else if (f.type === 'fizzle') { // the flame dies on the shade: grey smoke curls up, dead embers drop
+      for (var q = 0; q < 5; q++) { var qx = f.x + (q - 2) * S * 0.11 + Math.sin(u * 6 + q) * S * 0.03, qy = f.y - S * 0.12 - u * S * 0.5 - (q % 2) * S * 0.1;
+        ctx.globalAlpha = (1 - u) * 0.95; ctx.fillStyle = '#4e4962'; ctx.beginPath(); ctx.arc(qx, qy, S * (0.08 + 0.08 * u), 0, 7); ctx.fill();
+        ctx.fillStyle = '#c3bdd3'; ctx.beginPath(); ctx.arc(qx - S * 0.02, qy - S * 0.02, S * (0.045 + 0.05 * u), 0, 7); ctx.fill(); }
+      for (var m = 0; m < 5; m++) { var ea = -Math.PI / 2 + (m - 2) * 0.6, er2 = S * (0.12 + 0.28 * u);
+        ctx.globalAlpha = 1 - u; ctx.fillStyle = m % 2 ? '#7a3d10' : '#c4521a';
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(ea) * er2 * 1.3, f.y - S * 0.15 + Math.sin(ea) * er2 * 0.6 + u * u * S * 0.5, S * 0.04 * (1 - u * 0.5), 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
     }
   });
 }
@@ -710,7 +769,7 @@ function land(l, t) {
   if (e.result === 'light') { G.disp[li] = true; G.pops[li] = t; addFx('spark', at, t); }
   else if (e.result === 'water') addFx('steam', at, t);
   else if (e.result === 'grass') addFx('puff', at, t);
-  else if (e.result === 'hid') { G.ducks[li] = t; addFx('puff', at, t); }
+  else if (e.result === 'hid') { G.ducks[li] = t; addFx('fizzle', at, t); }
   else if (e.result === 'shy') { G.disp[li] = true; G.pops[li] = t; }
 }
 function finishAnim() {
@@ -718,6 +777,12 @@ function finishAnim() {
   var t = performance.now();
   while (G.anim.landings.length) land(G.anim.landings.shift(), t);
   G.anim = null; G.disp = G.lit.slice(); G.busy = false;
+  var s = tutCur();
+  if (s && s.free) { // the player chose the tap: move on only once the board is solved
+    if (L.isWin(G.b, G.lit)) { G.tutStep++; showTut(); }
+    else { refresh(); tray(s.retry || 'Not quite. Tap Undo and try another lantern.'); $('undoBtn').classList.add('pulse'); }
+    return;
+  }
   if (G.tut) { G.tutStep++; showTut(); return; }
   afterMove();
 }
@@ -730,13 +795,13 @@ function afterMove() {
     $('undoBtn').classList.add('pulse'); return;
   }
   if (L.isWin(G.b, G.lit)) { win(); return; }
-  if (G.matches > 0 && !G.tut) tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.');
+  if (G.matches > 0 && !G.tut) tray(defaultTip());
 }
 function doTap(idx, t) {
   var res = L.tap(G.b, G.lit, idx);
   if (!res) return false;
   G.hist.push({ lit: G.lit, matches: G.matches });
-  G.matches++; G.lit = res.lit; G.hint = -1;
+  G.matches++; G.lit = res.lit; G.hint = -1; G.hintStage = 0;
   var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t;
   G.anim = buildAnim(res, t); G.busy = true; refresh(); wake();
   return true;
@@ -744,14 +809,16 @@ function doTap(idx, t) {
 $('board').addEventListener('pointerdown', function (ev) {
   ev.preventDefault(); wake();
   if (!G.b || G.won) return;
-  if (G.busy) { finishAnim(); return; } // tap during a chain: skip to the end
+  if (G.busy) { finishAnim(); if (G.won || !G.b) return; } // tap during a chain: finish it at once, then apply the tap
   var r = $('board').getBoundingClientRect(), x = ev.clientX - r.left - G.ox, y = ev.clientY - r.top - G.oy;
   var c = Math.floor(x / G.S), rr = Math.floor(y / G.S);
   if (c < 0 || rr < 0 || c >= G.b.w || rr >= G.b.h) return;
   var idx = rr * G.b.w + c, cell = G.b.cells[idx], s = tutCur();
-  if (s) {
-    if (!s.target) { nudge(); return; }
-    if (s.target[0] !== rr || s.target[1] !== c) { nudge(); return; }
+  if (s && !s.free) { // guided step: never ignore a tap silently
+    if (!s.target) { nudge(); $('trayBtn').classList.add('pulse'); return; }
+    if (s.target[0] !== rr || s.target[1] !== c) {
+      tray(cell.kind === 'lantern' && s.offScript ? s.offScript : 'Not that one yet. Tap the glowing lantern with the arrow over it.'); nudge(); return;
+    }
   }
   if (L.shyLit(G.b, G.lit)) { nudge(); $('undoBtn').classList.add('pulse'); return; }
   if (cell.kind !== 'lantern') return;
@@ -760,13 +827,23 @@ $('board').addEventListener('pointerdown', function (ev) {
   doTap(idx, performance.now());
 });
 
-function undo() { if (G.busy) finishAnim(); var h = G.hist.pop(); if (!h) return; G.lit = h.lit; G.matches = h.matches; G.disp = G.lit.slice(); G.hint = -1; refresh(); tray(G.level.tip || 'Light every lantern. Keep shy lanterns dark.'); wake(); }
+function undo() {
+  if (G.busy) finishAnim();
+  clearWin(); G.won = false;
+  var h = G.hist.pop(); if (!h) return; G.lit = h.lit; G.matches = h.matches; G.disp = G.lit.slice(); G.hint = -1; G.hintStage = 0; refresh();
+  var s = tutCur(); tray(s && s.free ? s.text : defaultTip()); wake();
+}
 function restart() { startLevel(G.li); }
 function hint() {
   if (G.busy) finishAnim();
   if (L.shyLit(G.b, G.lit)) { tray('A shy lantern is awake. Tap Undo first.', { warn: true }); $('undoBtn').classList.add('pulse'); return; }
   var s = L.solve(G.b, G.lit);
   if (!s || !s.line.length) return;
+  if (!G.hintStage) { // first press: a nudge to reason with; second press: show the lantern
+    G.hintStage = 1; G.hint = -1;
+    tray((hasShy() ? 'Which lantern could shelter the shy one? Light it before any flame lands there.' : 'Which lantern can no flame reach? It will need a match of its own.') + ' Press Hint again to see one.');
+    wake(); return;
+  }
   G.hint = s.line[0];
   tray(G.matches + s.par > G.level.par ? 'Try the glowing lantern. Restart if you want to match par.' : 'Try the glowing lantern.');
   wake();
@@ -788,13 +865,23 @@ function win() {
   $('winStars').setAttribute('aria-label', st + ' of 3 stars');
   $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '.' + (st < 3 ? ' Try again for 3 stars.' : '');
   $('nextBtn').textContent = last ? 'Back to levels' : 'Next level';
-  setTimeout(function () { $('winBox').hidden = false; confetti(); $('nextBtn').focus({ preventScroll: true }); }, 350);
+  tray(''); // clear the tutorial bubble / tip before the win card
+  var li = G.li;
+  if (G.winTimer) clearTimeout(G.winTimer);
+  G.winTimer = setTimeout(function () { // cleared by startLevel, show and undo; re-check state in case
+    G.winTimer = 0;
+    if (!G.won || G.li !== li || $('game').hidden) return;
+    $('winBox').hidden = false; confetti(); $('nextBtn').focus({ preventScroll: true });
+  }, 350);
 }
 $('nextBtn').onclick = function () { $('winBox').hidden = true; if (G.li < LEVELS.length - 1) startLevel(G.li + 1); else show('title'); };
 $('replayBtn').onclick = function () { $('winBox').hidden = true; startLevel(G.li); };
 
+var confettiGen = 0;
+function stopConfetti() { confettiGen++; var c = $('confetti'); if (!c.hidden) { c.getContext('2d').clearRect(0, 0, c.width, c.height); c.hidden = true; } }
 function confetti() {
   if (reduced) return;
+  var gen = ++confettiGen;
   var c = $('confetti'), ctx = c.getContext('2d'), W = innerWidth, H = innerHeight, dpr = window.devicePixelRatio || 1;
   c.hidden = false; c.width = W * dpr; c.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   var cols = ['#ffd34d', '#ff8fa3', '#8fd3ff', '#b8f28a', '#ffffff'], ps = [];
@@ -805,19 +892,23 @@ function confetti() {
     ps.forEach(function (p) { p.x += p.vx + Math.sin((t + p.r * 100) / 300); p.y += p.vy; p.r += 0.08;
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.strokeStyle = 'rgba(40,20,60,.5)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); });
+    if (gen !== confettiGen) return; // a new board started: stopConfetti already cleared it
     if (t - t0 < 2600) requestAnimationFrame(f); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
   })(t0);
 }
 
 /* ---------- rules sheet ---------- */
+var SHY_AT = INTRO.shy != null ? INTRO.shy : 99, WATER_AT = INTRO.water != null ? INTRO.water : 99, WIND_AT = INTRO.wind != null ? INTRO.wind : 99;
 var RULES = [
   [0, 'Tap a dark lantern to light it with a match.'],
-  [0, 'A lit lantern\'s flame hops exactly as many cells as its number: up, down, left and right. It jumps over whatever is in between.'],
+  [0, 'A lit lantern\'s flame hops exactly as many cells as its number, in all four directions: up, down, left and right. It jumps over whatever is in between.'],
   [0, 'A flame that lands on a dark lantern lights it, and that lantern hops too. That\'s a chain.'],
-  [0, 'Light every lantern. Match par (the fewest matches) for 3 stars. Undo and Restart are always free.'],
-  [5, 'Shy lanterns have their eyes shut. Keep them dark. A shy lantern hides when a lit lantern stands right beside it, so flames landing on it fizzle.'],
-  [7, 'A flame that lands on the pond goes out, even on a floating lantern. Floating lanterns need their own match.'],
-  [9, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.']
+  [0, 'Light every lantern. Match par (the fewest matches) for 3 stars. Undo, Restart and Hint are always free.'],
+  [SHY_AT, 'Shy lanterns have their eyes shut. Keep them dark: a flame that lands on one wakes it.'],
+  [SHY_AT, 'A shy lantern pulls its shade down when a lantern right next to it is lit. Flames can\'t wake it then.'],
+  [SHY_AT, 'The check happens as each wave of flames sets off. Lanterns lit by the same wave don\'t shelter yet.'],
+  [WATER_AT, 'A flame that lands on the pond goes out, even on a floating lantern. Floating lanterns need their own match.'],
+  [WIND_AT, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.']
 ];
 $('rulesBtn').onclick = function () {
   var ol = $('rulesList'); ol.innerHTML = '';
@@ -850,7 +941,6 @@ $('solveBtn').onclick = function () {
 };
 
 /* ---------- start ---------- */
-$('playBtn').onclick = function () { startLevel(nextIndex()); };
 $('homeBtn').onclick = function () { if (G.busy) finishAnim(); show('title'); };
 window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(function () { return { screen: $('game').hidden ? 'title' : 'game', li: G.li }; });
 function boot(data) { buildLevels(); if (data && data.screen === 'game' && LEVELS[data.li]) startLevel(data.li); else show('title'); drawScene(performance.now()); }
