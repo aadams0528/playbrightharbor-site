@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.2 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.3 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -128,7 +128,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver" id="ver">v0.2</p>
+    <p class="ver" id="ver">v0.3</p>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -403,6 +403,12 @@ function drawLantern(ctx, cx, cy, S, o) {
   // body outline then fill
   ctx.fillStyle = ol; blob(ctx, cx, by, rx + lw, ry + lw, seed); ctx.fill();
   ctx.fillStyle = g3(ctx, cx, by, rx, base); blob(ctx, cx, by, rx, ry, seed); ctx.fill();
+  if (o.lit && !o.shy) { // glowing from inside: a warm core that breathes with the flame
+    var core = reduced ? 1 : 0.85 + 0.15 * Math.sin(t / 260 + seed);
+    var ig = ctx.createRadialGradient(cx, by + ry * 0.1, ry * 0.05, cx, by + ry * 0.1, rx * 0.95);
+    ig.addColorStop(0, 'rgba(255,250,215,' + (0.75 * core) + ')'); ig.addColorStop(0.6, 'rgba(255,214,120,' + (0.25 * core) + ')'); ig.addColorStop(1, 'rgba(255,190,90,0)');
+    ctx.fillStyle = ig; blob(ctx, cx, by, rx, ry, seed); ctx.fill();
+  }
   // ribs
   ctx.strokeStyle = dark(base, 0.25); ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(1, S * 0.018);
   [-0.55, 0.55].forEach(function (k) { ctx.beginPath(); ctx.moveTo(cx + rx * k * 0.5, by - ry * 0.92); ctx.quadraticCurveTo(cx + rx * k * 1.15, by, cx + rx * k * 0.5, by + ry * 0.92); ctx.stroke(); });
@@ -438,15 +444,55 @@ function drawLantern(ctx, cx, cy, S, o) {
     ctx.fillStyle = '#2a1830'; ctx.fillText(String(o.n), cx, by + ry * 0.32);
   }
   ctx.restore();
-  if (o.lit && !o.shy) { // flame on top
-    var fx = cx, fy = by - ry - S * 0.17, fh = S * 0.16 * (reduced ? 1 : 0.9 + 0.12 * Math.sin(t / 120 + seed));
-    ctx.fillStyle = '#c4521a'; ctx.beginPath(); ctx.moveTo(fx, fy - fh * 1.1); ctx.quadraticCurveTo(fx + fh * 0.75, fy, fx, fy + fh * 0.5); ctx.quadraticCurveTo(fx - fh * 0.75, fy, fx, fy - fh * 1.1); ctx.fill();
-    ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.moveTo(fx, fy - fh * 0.8); ctx.quadraticCurveTo(fx + fh * 0.5, fy, fx, fy + fh * 0.35); ctx.quadraticCurveTo(fx - fh * 0.5, fy, fx, fy - fh * 0.8); ctx.fill();
+  if (o.lit && !o.shy) { // flame on top: four flickering layers, a soft halo and a few calm rising sparks
+    var fx = cx + (reduced ? 0 : Math.sin(t / 900 + seed) * S * 0.01), fy = by - ry - S * 0.15;
+    var fh = S * 0.2 * (reduced ? 1 : 0.92 + 0.1 * Math.sin(t / 110 + seed) + 0.05 * Math.sin(t / 47 + seed * 2));
+    var lean = reduced ? 0 : Math.sin(t / 380 + seed) * 0.18;
+    var halo = ctx.createRadialGradient(fx, fy - fh * 0.3, 1, fx, fy - fh * 0.3, fh * 1.6);
+    halo.addColorStop(0, 'rgba(255,230,140,.55)'); halo.addColorStop(1, 'rgba(255,160,60,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(fx, fy - fh * 0.3, fh * 1.6, 0, 7); ctx.fill();
+    flameShape(ctx, fx, fy, fh * 1.12, lean, '#8a2a0c');
+    flameShape(ctx, fx, fy, fh, lean, '#ff6a1f');
+    flameShape(ctx, fx, fy + fh * 0.05, fh * 0.72, lean * 1.2, '#ffc23d');
+    flameShape(ctx, fx, fy + fh * 0.12, fh * 0.4, lean * 1.4, '#fff6c8');
+    if (!reduced) for (var sp = 0; sp < 2; sp++) { // embers drift up and fade, then start again
+      var cyc = ((t / 1500 + seed * 0.37 + sp * 0.5) % 1), ex2 = fx + Math.sin(cyc * 6 + seed + sp * 3) * S * 0.06, ey2 = fy - fh - cyc * S * 0.45;
+      ctx.globalAlpha = (1 - cyc) * 0.9; ctx.fillStyle = sp ? '#ffd34d' : '#ff9a3c';
+      ctx.beginPath(); ctx.arc(ex2, ey2, Math.max(1, S * 0.022 * (1 - cyc * 0.6)), 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
   if (o.shy && o.awake) { // "!" with white outline
     var fz = Math.round(S * 0.3); ctx.font = '900 ' + fz + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText('!', cx + rx * 1.05, by - ry * 1.1); ctx.fillStyle = '#d02040'; ctx.fillText('!', cx + rx * 1.05, by - ry * 1.1);
   }
+}
+
+// A teardrop flame, base at (x, y), height h, leaning by `lean` (radians-ish), with a wavy tip.
+function flameShape(ctx, x, y, h, lean, col) {
+  var w = h * 0.48, tx = x + Math.sin(lean) * h, ty = y - h;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(tx, ty);
+  ctx.bezierCurveTo(x + w * 0.55 + lean * h * 0.3, y - h * 0.55, x + w, y - h * 0.1, x, y + h * 0.18);
+  ctx.bezierCurveTo(x - w, y - h * 0.1, x - w * 0.55 + lean * h * 0.3, y - h * 0.55, tx, ty);
+  ctx.fill();
+}
+// A flying flame: a fireball with a tail pointing back along its path. ang = direction of travel.
+function flyingFlame(ctx, x, y, r, ang, t) {
+  var halo = ctx.createRadialGradient(x, y, 1, x, y, r * 3);
+  halo.addColorStop(0, 'rgba(255,220,120,.6)'); halo.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 3, 0, 7); ctx.fill();
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang - Math.PI / 2);
+  var fl = reduced ? 1 : 1 + 0.12 * Math.sin(t / 40);
+  [['#8a2a0c', 1.18], ['#ff6a1f', 1], ['#ffc23d', 0.72], ['#fff6c8', 0.42]].forEach(function (L2) {
+    var k = L2[1];
+    ctx.fillStyle = L2[0]; ctx.beginPath();
+    ctx.moveTo(0, -r * 2.6 * k * fl);
+    ctx.bezierCurveTo(r * 0.7 * k, -r * 1.3 * k, r * 1.05 * k, -r * 0.1 * k, 0, r * k);
+    ctx.bezierCurveTo(-r * 1.05 * k, -r * 0.1 * k, -r * 0.7 * k, -r * 1.3 * k, 0, -r * 2.6 * k * fl);
+    ctx.fill();
+  });
+  ctx.restore();
+  gloss(ctx, x - r * 0.3, y - r * 0.35, r * 0.28, r * 0.16, 0.85);
 }
 
 // The shade a shy lantern pulls down while a lit lantern stands right next to it (logic.js hidden()).
@@ -498,11 +544,12 @@ function drawScene(t) {
     var u = (k + 0.5) / 5, x = u * W, y = (1 - u) * (1 - u) * y0 + 2 * u * (1 - u) * (y0 + sag * 2) + u * u * y0;
     drawLantern(ctx, x, y + S * 0.5, S, { n: n, lit: k !== 4, t: t, seed: k * 1.7, shy: k === 4 });
   });
+  fireflies(ctx, 0, H * 0.35, W, H * 0.6, 60, t, 6);
 }
 
 /* ---------- game state ---------- */
 var G = { li: 0, level: null, b: null, lit: null, disp: null, awake: {}, hist: [], matches: 0, busy: false, won: false,
-  anim: null, fx: [], pops: {}, ducks: {}, shades: {}, tut: null, tutStep: 0, hint: -1, hintStage: 0, winTimer: 0, lastInput: 0, S: 60, ox: 0, oy: 0 };
+  anim: null, fx: [], embers: [], flies: [], pops: {}, ducks: {}, shades: {}, tut: null, tutStep: 0, hint: -1, hintStage: 0, winTimer: 0, lastInput: 0, S: 60, ox: 0, oy: 0 };
 var INTRO = {}; LEVELS.forEach(function (lv, i) { if (lv.intro && INTRO[lv.intro] == null) INTRO[lv.intro] = i; });
 var FIRST_SHY = LEVELS.findIndex(function (lv) { return /[zZ]/.test(lv.rows.join('')); });
 function hasShy() { return /[zZ]/.test(G.level.rows.join('')); }
@@ -540,7 +587,7 @@ function buildLevels() {
 function startLevel(i) {
   G.li = i; G.level = LEVELS[i]; G.b = L.parse(G.level);
   G.lit = L.initial(G.b); G.disp = G.lit.slice(); G.awake = {}; G.hist = []; G.matches = 0; G.busy = false; G.won = false;
-  G.anim = null; G.fx = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.hint = -1; G.hintStage = 0;
+  G.anim = null; G.fx = []; G.embers = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.hint = -1; G.hintStage = 0;
   clearWin();
   G.tut = G.level.tut && !(seen[G.level.intro] && progress.stars[G.level.id]) ? G.level.tut : null; G.tutStep = 0;
   $('lvname').innerHTML = 'Level ' + (i + 1) + '<span></span>'; $('lvname').querySelector('span').textContent = G.level.name;
@@ -576,7 +623,7 @@ function layout() {
   if (!G.b) return;
   var wrap = $('boardWrap'), c = $('board'), W = wrap.clientWidth, H = wrap.clientHeight;
   if (!W || !H) return;
-  var pad = 14, side = 8;
+  var pad = 16, side = 14;
   var S = Math.floor(Math.min((W - pad * 2) / G.b.w, (H - pad * 2 - side) / G.b.h, 92));
   G.S = S; var bw = S * G.b.w + pad * 2, bh = S * G.b.h + pad * 2 + side;
   var dpr = window.devicePixelRatio || 1;
@@ -590,33 +637,87 @@ function cellXY(i) { var c = typeof i === 'number' ? G.b.cells[i] : i; return [G
 
 /* ---------- drawing the board ---------- */
 function drawBoard(ctx, t) {
-  var b = G.b, S = G.S, x0 = G.ox, y0 = G.oy, W = b.w * S, H = b.h * S, fr = G.pad - 4;
-  // raised hedge frame: side face then top face
-  ctx.fillStyle = '#1e3b2a'; rrect(ctx, x0 - fr, y0 - fr + G.side, W + fr * 2, H + fr * 2, 18); ctx.fill();
-  var fg = ctx.createLinearGradient(0, y0 - fr, 0, y0 + H + fr); fg.addColorStop(0, '#5c9a58'); fg.addColorStop(1, '#3d7442');
-  ctx.fillStyle = fg; rrect(ctx, x0 - fr, y0 - fr, W + fr * 2, H + fr * 2, 18); ctx.fill();
-  ctx.strokeStyle = '#1e3b2a'; ctx.lineWidth = 2; rrect(ctx, x0 - fr, y0 - fr, W + fr * 2, H + fr * 2, 18); ctx.stroke();
+  // 3D cartoon board: a raised hedge plinth (outline, side face, top face), a sunken well, raised grass tiles
+  // with their own side faces, a sunken pond, warm light from lit lanterns, and grass that sways a little.
+  var b = G.b, S = G.S, x0 = G.ox, y0 = G.oy, W = b.w * S, H = b.h * S, fr = G.pad - 3, sd = G.side, R = 20;
+  // soft drop shadow on the night sky
+  ctx.fillStyle = 'rgba(6,4,24,.38)'; rrect(ctx, x0 - fr + 5, y0 - fr + sd + 5, W + fr * 2, H + fr * 2, R); ctx.fill();
+  // outline, then side face, then top face
+  ctx.fillStyle = '#0f2418'; rrect(ctx, x0 - fr - 2, y0 - fr - 2, W + fr * 2 + 4, H + fr * 2 + sd + 4, R + 2); ctx.fill();
+  var sg = ctx.createLinearGradient(0, y0 + H, 0, y0 + H + fr + sd); sg.addColorStop(0, '#2f6a3a'); sg.addColorStop(1, '#173a22');
+  ctx.fillStyle = sg; rrect(ctx, x0 - fr, y0 - fr + sd, W + fr * 2, H + fr * 2, R); ctx.fill();
+  var fg = ctx.createLinearGradient(x0 - fr, y0 - fr, x0 + W * 0.6, y0 + H + fr); fg.addColorStop(0, '#86c873'); fg.addColorStop(0.5, '#5ea457'); fg.addColorStop(1, '#3f7f45');
+  ctx.fillStyle = fg; rrect(ctx, x0 - fr, y0 - fr, W + fr * 2, H + fr * 2, R); ctx.fill();
+  // leafy hedge texture on the rim (fixed positions, so it never flickers)
+  for (var q = 0; q < 2 * (b.w + b.h) * 2; q++) {
+    var per = 2 * (W + H), d = (q + 0.5) / (4 * (b.w + b.h)) * per, lx, ly;
+    if (d < W) { lx = x0 + d; ly = y0 - fr * 0.5; } else if (d < W + H) { lx = x0 + W + fr * 0.5; ly = y0 + d - W; }
+    else if (d < 2 * W + H) { lx = x0 + W - (d - W - H); ly = y0 + H + fr * 0.5; } else { lx = x0 - fr * 0.5; ly = y0 + H - (d - 2 * W - H); }
+    ctx.fillStyle = q % 3 ? 'rgba(30,80,40,.28)' : 'rgba(200,255,170,.28)';
+    ctx.beginPath(); ctx.ellipse(lx + ((q * 7) % 5 - 2), ly + ((q * 11) % 5 - 2), fr * 0.3, fr * 0.18, q, 0, 7); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,230,.35)'; ctx.lineWidth = 2; rrect(ctx, x0 - fr + 2, y0 - fr + 2, W + fr * 2 - 4, H + fr * 2 - 4, R - 2); ctx.stroke();
+  // sunken well the tiles sit in
+  ctx.fillStyle = '#1b3a24'; rrect(ctx, x0 - 3, y0 - 3, W + 6, H + 6, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; rrect(ctx, x0 - 3, y0 - 3, W + 6, 6, 4); ctx.fill();
+  var gap = Math.max(1.5, S * 0.035), th = Math.max(3, Math.round(S * 0.08)), tr = S * 0.16;
   for (var i = 0; i < b.cells.length; i++) {
     var cl = b.cells[i], x = x0 + cl.c * S, y = y0 + cl.r * S;
-    var base = (cl.r + cl.c) % 2 ? '#8fc47a' : '#99cc82';
-    if (cl.water) base = (cl.r + cl.c) % 2 ? '#4f95d6' : '#58a0de';
-    if (cl.kind === 'wind') base = '#e9dcb4';
-    ctx.fillStyle = base; ctx.fillRect(x, y, S, S);
-    // pillowed edges
-    ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(x, y, S, 2); ctx.fillRect(x, y, 2, S);
-    ctx.fillStyle = 'rgba(20,40,30,.22)'; ctx.fillRect(x, y + S - 2, S, 2); ctx.fillRect(x + S - 2, y, 2, S);
-    if (cl.water) { // ripples
-      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = Math.max(1.3, S * 0.025);
-      var ph = reduced ? 0 : Math.sin(t / 900 + i) * S * 0.04;
-      ctx.beginPath(); ctx.arc(x + S * 0.3 + ph, y + S * 0.3, S * 0.12, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x + S * 0.7 - ph, y + S * 0.72, S * 0.1, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
-    } else if (cl.kind === 'grass') { // tufts
-      ctx.strokeStyle = 'rgba(40,90,40,.35)'; ctx.lineWidth = 1.5;
-      var tx = x + S * (0.25 + ((i * 37) % 50) / 100), ty = y + S * (0.3 + ((i * 53) % 45) / 100);
-      ctx.beginPath(); ctx.moveTo(tx - 3, ty); ctx.lineTo(tx - 5, ty - 6); ctx.moveTo(tx, ty); ctx.lineTo(tx, ty - 8); ctx.moveTo(tx + 3, ty); ctx.lineTo(tx + 5, ty - 6); ctx.stroke();
+    if (cl.water) { // the pond is sunk below the tiles: water fills the cell, with a shadow under any edge that meets grass
+      var wb = '#4389cc';
+      var wg = ctx.createLinearGradient(x, y, x, y + S); wg.addColorStop(0, dark(wb, 0.25)); wg.addColorStop(0.35, wb); wg.addColorStop(1, light(wb, 0.12));
+      var up = cl.r > 0 && b.cells[i - b.w].water, lf = cl.c > 0 && b.cells[i - 1].water,
+          dn = cl.r < b.h - 1 && b.cells[i + b.w].water, rt = cl.c < b.w - 1 && b.cells[i + 1].water, ins = gap * 0.6;
+      // rounded pond with a dark bank; joins smoothly to neighbouring water cells
+      var px0 = x + (lf ? 0 : ins), py0 = y + (up ? 0 : ins), px1 = x + S - (rt ? 0 : ins), py1 = y + S - (dn ? 0 : ins);
+      ctx.fillStyle = '#16324f'; rrect(ctx, px0, py0, px1 - px0, py1 - py0, (lf || up || dn || rt) ? tr * 0.5 : tr); ctx.fill();
+      ctx.fillStyle = wg; rrect(ctx, px0 + (lf ? 0 : 2), py0 + (up ? 0 : 2), px1 - px0 - (lf ? 0 : 2) - (rt ? 0 : 2), py1 - py0 - (up ? 0 : 2) - (dn ? 0 : 2), (lf || up || dn || rt) ? tr * 0.4 : tr * 0.9); ctx.fill();
+      ctx.fillStyle = 'rgba(8,20,50,.35)'; // the bank's shadow falls on the water from the top and left
+      if (!up) ctx.fillRect(px0 + 2, py0 + 2, px1 - px0 - 4, S * 0.1);
+      if (!lf) ctx.fillRect(px0 + 2, py0 + 2, S * 0.07, py1 - py0 - 4);
+      // shimmer: soft light bands drift slowly across the water
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = Math.max(1.3, S * 0.025); ctx.lineCap = 'round';
+      var ph = reduced ? 0 : Math.sin(t / 1100 + i) * S * 0.06, ph2 = reduced ? 0 : Math.cos(t / 1300 + i * 1.7) * S * 0.05;
+      ctx.beginPath(); ctx.arc(x + S * 0.3 + ph, y + S * 0.34, S * 0.12, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x + S * 0.7 + ph2, y + S * 0.74, S * 0.1, 1.1 * Math.PI, 1.9 * Math.PI); ctx.stroke();
+      if (!reduced) { var tw = 0.5 + 0.5 * Math.sin(t / 700 + i * 2.3); ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * tw) + ')'; ctx.beginPath(); ctx.arc(x + S * (0.2 + ((i * 29) % 60) / 100), y + S * 0.55, S * 0.025, 0, 7); ctx.fill(); }
+      continue;
     }
-    if (cl.kind === 'wind') drawWind(ctx, x + S / 2, y + S / 2, S, cl.wind, t, i);
+    var base = cl.kind === 'wind' ? '#ead9a8' : (cl.r + cl.c) % 2 ? '#8fc87a' : '#9bd185';
+    var tx0 = x + gap, ty0 = y + gap, tw0 = S - gap * 2, th0 = S - gap * 2 - th;
+    // side face (thickness), outline, then the top face lit from the top-left
+    ctx.fillStyle = dark(base, 0.55); rrect(ctx, tx0 - 1, ty0 - 1, tw0 + 2, th0 + th + 2, tr + 1); ctx.fill();
+    ctx.fillStyle = dark(base, 0.3); rrect(ctx, tx0, ty0 + th, tw0, th0, tr); ctx.fill();
+    var tg = ctx.createLinearGradient(tx0, ty0, tx0 + tw0 * 0.7, ty0 + th0); tg.addColorStop(0, light(base, 0.32)); tg.addColorStop(0.55, base); tg.addColorStop(1, dark(base, 0.1));
+    ctx.fillStyle = tg; rrect(ctx, tx0, ty0, tw0, th0, tr); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.3)'; rrect(ctx, tx0 + tr * 0.6, ty0 + 2, tw0 - tr * 1.2, Math.max(2, S * 0.04), 2); ctx.fill();
+    if (cl.kind === 'grass') { // tufts sway gently; a few tiles get a little flower
+      var sway = reduced ? 0 : Math.sin(t / 1300 + i * 0.9) * S * 0.025;
+      var gx = tx0 + tw0 * (0.25 + ((i * 37) % 50) / 100), gy = ty0 + th0 * (0.35 + ((i * 53) % 45) / 100);
+      ctx.strokeStyle = 'rgba(40,100,40,.5)'; ctx.lineWidth = Math.max(1.4, S * 0.022); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(gx - S * 0.04, gy); ctx.quadraticCurveTo(gx - S * 0.05, gy - S * 0.05, gx - S * 0.07 + sway, gy - S * 0.09);
+      ctx.moveTo(gx, gy); ctx.quadraticCurveTo(gx, gy - S * 0.07, gx + sway, gy - S * 0.12);
+      ctx.moveTo(gx + S * 0.04, gy); ctx.quadraticCurveTo(gx + S * 0.05, gy - S * 0.05, gx + S * 0.07 + sway, gy - S * 0.09); ctx.stroke();
+      if (i % 5 === 2) {
+        var fx2 = tx0 + tw0 * (0.7 - ((i * 13) % 30) / 100) + sway * 0.6, fy2 = ty0 + th0 * 0.3, pr2 = Math.max(2, S * 0.035);
+        var pc = ['#ffffff', '#ffd1e0', '#fff1a8'][i % 3];
+        ctx.fillStyle = dark(pc, 0.55); for (var pk = 0; pk < 5; pk++) { var pa = pk / 5 * Math.PI * 2; ctx.beginPath(); ctx.arc(fx2 + Math.cos(pa) * pr2, fy2 + Math.sin(pa) * pr2, pr2 * 0.8, 0, 7); ctx.fill(); }
+        ctx.fillStyle = pc; for (pk = 0; pk < 5; pk++) { pa = pk / 5 * Math.PI * 2; ctx.beginPath(); ctx.arc(fx2 + Math.cos(pa) * pr2, fy2 + Math.sin(pa) * pr2, pr2 * 0.6, 0, 7); ctx.fill(); }
+        ctx.fillStyle = '#f2a51e'; ctx.beginPath(); ctx.arc(fx2, fy2, pr2 * 0.55, 0, 7); ctx.fill();
+      }
+    }
+    if (cl.kind === 'wind') drawWind(ctx, x + S / 2, y + S / 2 - th * 0.5, S, cl.wind, t, i);
   }
+  // warm light pools from every lit lantern (additive, so the board brightens as the festival lights up)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (var k = 0; k < b.lanterns.length; k++) {
+    if (!G.disp[k] || b.cells[b.lanterns[k]].shy) continue;
+    var p = cellXY(b.lanterns[k]), pul = reduced ? 1 : 0.9 + 0.1 * Math.sin(t / 500 + k);
+    var lg = ctx.createRadialGradient(p[0], p[1], S * 0.1, p[0], p[1], S * 1.25 * pul);
+    lg.addColorStop(0, 'rgba(255,170,60,.32)'); lg.addColorStop(1, 'rgba(255,140,40,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(p[0], p[1], S * 1.3, 0, 7); ctx.fill();
+  }
+  ctx.restore();
 }
 function drawWind(ctx, cx, cy, S, d, t, seed) {
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(d[0], d[1]));
@@ -663,8 +764,10 @@ function draw(t) {
       if (!sh || sh.on !== hid) sh = G.shades[k] = { on: hid, t: sh ? t : -1e9 };
       shade = sh.on ? (reduced ? 1 : Math.min(1, (t - sh.t) / 300)) : (reduced ? 0 : Math.max(0, 1 - (t - sh.t) / 220));
     }
-    drawLantern(ctx, p[0], p[1] - S * 0.04, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, shade: shade, seed: idx * 1.37 });
+    var bob = cl.water && !reduced ? Math.sin(t / 1100 + idx) * S * 0.03 : 0; // floating lanterns bob on the pond
+    drawLantern(ctx, p[0], p[1] - S * 0.04 + bob, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, shade: shade, seed: idx * 1.37 });
   }
+  fireflies(ctx, G.ox, G.oy, b.w * S, b.h * S, S, t, Math.max(4, Math.round(b.cells.length / 6)));
   if (ring >= 0 && !G.busy && s && s.target) { // bouncing pointer above the target
     var q = cellXY(ring), bob = reduced ? 0 : Math.sin(t / 200) * 4;
     ctx.fillStyle = '#7a3d10'; ctx.beginPath(); ctx.moveTo(q[0], q[1] - S * 0.52 + bob + 2); ctx.lineTo(q[0] - 11, q[1] - S * 0.52 - 16 + bob); ctx.lineTo(q[0] + 11, q[1] - S * 0.52 - 16 + bob); ctx.closePath(); ctx.fill();
@@ -672,6 +775,20 @@ function draw(t) {
   }
   drawFlames(ctx, t);
   drawFx(ctx, t);
+}
+
+// Fireflies drift slowly over a rectangle and blink softly (computed from the clock, so they need no state).
+function fireflies(ctx, x0, y0, W, H, S, t, n) {
+  if (reduced) return;
+  for (var j = 0; j < n; j++) {
+    var sp = 1 + j * 0.17, x = x0 + W * (0.5 + 0.47 * Math.sin(t / (9000 * sp) + j * 2.1) * Math.cos(t / (13000 * sp) + j)),
+        y = y0 + H * (0.5 + 0.47 * Math.cos(t / (11000 * sp) + j * 1.3)), a = Math.max(0, Math.sin(t / (1400 + j * 170) + j * 1.9));
+    if (a < 0.05) continue;
+    var r = Math.max(2, S * 0.035), g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+    g.addColorStop(0, 'rgba(240,255,150,' + (0.55 * a) + ')'); g.addColorStop(1, 'rgba(200,255,120,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,210,' + a + ')'; ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, 7); ctx.fill();
+  }
 }
 
 /* ---------- flame flights ---------- */
@@ -705,26 +822,39 @@ function drawFlames(ctx, t) {
     var a = ptXY(f.e.path[si]), b = ptXY(f.e.path[si + 1]);
     var dist = Math.hypot(b[0] - a[0], b[1] - a[1]), hgt = Math.min(S * 0.9, dist * 0.35);
     var alpha = f.e.result === 'off' && si === segs - 1 ? 1 - v * 0.8 : 1;
-    for (var k = 3; k >= 0; k--) { // little trail
-      var vv = Math.max(0, v - k * 0.06), x = a[0] + (b[0] - a[0]) * vv, y = a[1] + (b[1] - a[1]) * vv - Math.sin(vv * Math.PI) * hgt - S * 0.1;
-      var r = S * (k ? 0.08 - k * 0.012 : 0.13);
-      ctx.globalAlpha = alpha * (k ? 0.5 : 1);
-      if (!k) { ctx.fillStyle = '#b8420e'; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, 7); ctx.fill(); }
-      ctx.fillStyle = k ? '#ffcf5a' : g3(ctx, x, y, r, '#ffa630'); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-      if (!k) gloss(ctx, x - r * 0.35, y - r * 0.4, r * 0.3, r * 0.18, 0.8);
+    var pos = function (vv) { return [a[0] + (b[0] - a[0]) * vv, a[1] + (b[1] - a[1]) * vv - Math.sin(vv * Math.PI) * hgt - S * 0.1]; };
+    var P = pos(v), P2 = pos(Math.min(1, v + 0.02)), P0 = pos(Math.max(0, v - 0.02));
+    var ang = Math.atan2(P2[1] - P0[1], P2[0] - P0[0]);
+    for (var k = 4; k >= 1; k--) { // glowing trail
+      var Q = pos(Math.max(0, v - k * 0.055)); ctx.globalAlpha = alpha * (0.55 - k * 0.1);
+      ctx.fillStyle = k % 2 ? '#ffcf5a' : '#ff8a2a'; ctx.beginPath(); ctx.arc(Q[0], Q[1], S * (0.085 - k * 0.012), 0, 7); ctx.fill();
     }
+    ctx.globalAlpha = alpha; flyingFlame(ctx, P[0], P[1], S * 0.11, ang, t);
+    if (!reduced && G.embers.length < 140 && Math.random() < 0.7) // shed embers that float up and fade
+      G.embers.push({ x: P[0] + (Math.random() - 0.5) * S * 0.12, y: P[1], vx: (Math.random() - 0.5) * S * 0.0006, vy: -S * (0.0004 + Math.random() * 0.0006), t0: t, life: 420 + Math.random() * 300, c: Math.random() < 0.5 ? '#ffd34d' : '#ff8a2a' });
     ctx.globalAlpha = 1;
   });
 }
 function addFx(type, at, t) { G.fx.push({ type: type, x: at[0], y: at[1], t0: t }); }
 function drawFx(ctx, t) {
   var S = G.S;
+  G.embers = G.embers.filter(function (e) { return t - e.t0 < e.life; });
+  G.embers.forEach(function (e) { var u = (t - e.t0) / e.life, dt = t - e.t0;
+    ctx.globalAlpha = 1 - u; ctx.fillStyle = e.c; ctx.beginPath(); ctx.arc(e.x + e.vx * dt + Math.sin(dt / 90) * S * 0.01, e.y + e.vy * dt, Math.max(0.8, S * 0.028 * (1 - u)), 0, 7); ctx.fill(); });
+  ctx.globalAlpha = 1;
   G.fx = G.fx.filter(function (f) { return t - f.t0 < 900; });
   G.fx.forEach(function (f) {
     var u = (t - f.t0) / 900; if (u < 0) return;
-    if (f.type === 'spark') {
-      for (var k = 0; k < 6; k++) { var a = k / 6 * Math.PI * 2 + 0.3, r = S * (0.25 + 0.4 * u), x = f.x + Math.cos(a) * r, y = f.y - S * 0.1 + Math.sin(a) * r;
-        ctx.globalAlpha = 1 - u; star(ctx, x, y, S * 0.07 * (1 - u * 0.5)); }
+    if (f.type === 'spark' || f.type === 'burst') { // a lantern catches: flash, a gold ring, then stars fly out with a little gravity
+      var e1 = 1 - Math.pow(1 - u, 3), big = f.type === 'burst' ? 1.25 : 1;
+      if (u < 0.35) { var fl2 = ctx.createRadialGradient(f.x, f.y - S * 0.1, 1, f.x, f.y - S * 0.1, S * 0.8 * big);
+        fl2.addColorStop(0, 'rgba(255,250,220,' + (0.85 * (1 - u / 0.35)) + ')'); fl2.addColorStop(1, 'rgba(255,200,90,0)');
+        ctx.fillStyle = fl2; ctx.beginPath(); ctx.arc(f.x, f.y - S * 0.1, S * 0.8 * big, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = Math.max(0, 1 - u * 1.4); ctx.lineWidth = Math.max(2, S * 0.06 * (1 - u)); ctx.strokeStyle = '#fff';
+      ctx.beginPath(); ctx.arc(f.x, f.y - S * 0.08, S * (0.25 + 0.55 * e1) * big, 0, 7); ctx.stroke();
+      ctx.lineWidth = Math.max(1.2, S * 0.035 * (1 - u)); ctx.strokeStyle = '#ffc23d'; ctx.stroke();
+      for (var k = 0; k < 8; k++) { var a = k / 8 * Math.PI * 2 + 0.3 + (f.x % 1), r = S * (0.22 + 0.5 * e1) * big, x = f.x + Math.cos(a) * r, y = f.y - S * 0.1 + Math.sin(a) * r + u * u * S * 0.25;
+        ctx.globalAlpha = 1 - u; star(ctx, x, y, S * (k % 2 ? 0.05 : 0.075) * (1 - u * 0.5)); }
       ctx.globalAlpha = 1;
     } else if (f.type === 'steam' || f.type === 'puff') {
       for (var j = 0; j < 3; j++) { var px = f.x + (j - 1) * S * 0.14, py = f.y - S * 0.1 - u * S * (f.type === 'steam' ? 0.55 : 0.25) - j % 2 * S * 0.06;
@@ -749,13 +879,15 @@ function star(ctx, x, y, r) {
 }
 
 /* ---------- main loop (pauses after 8 quiet seconds) ---------- */
-var raf = 0;
-function wake() { G.lastInput = performance.now(); if (!raf) raf = requestAnimationFrame(loop); }
+var raf = 0, idleT = 0;
+function wake() { G.lastInput = performance.now(); if (idleT) { clearTimeout(idleT); idleT = 0; } if (!raf) raf = requestAnimationFrame(loop); }
 function loop(t) {
   raf = 0;
   if (G.anim) stepAnim(t);
   if (!$('game').hidden) draw(t); else drawScene(t);
-  if (G.anim || G.fx.length || t - G.lastInput < 8000) raf = requestAnimationFrame(loop);
+  if (G.anim || G.fx.length || G.embers.length || t - G.lastInput < 8000) raf = requestAnimationFrame(loop);
+  // calm idle motion keeps going after 8 quiet seconds, at about 15 frames a second to spare old phones' batteries
+  else if (!reduced) idleT = setTimeout(function () { idleT = 0; if (!raf) raf = requestAnimationFrame(loop); }, 66);
 }
 function stepAnim(t) {
   var A = G.anim;
@@ -802,7 +934,7 @@ function doTap(idx, t) {
   if (!res) return false;
   G.hist.push({ lit: G.lit, matches: G.matches });
   G.matches++; G.lit = res.lit; G.hint = -1; G.hintStage = 0;
-  var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t;
+  var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t; addFx('burst', cellXY(idx), t);
   G.anim = buildAnim(res, t); G.busy = true; refresh(); wake();
   return true;
 }
