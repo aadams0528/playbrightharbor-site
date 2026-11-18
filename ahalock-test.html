@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.24.0 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.25.0 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -748,6 +748,15 @@ html.big .status3 .third span{font-size:16px}
 .quiet2 .linkbtn{font-size:17px;font-weight:800;color:var(--ink);text-decoration:underline;padding:10px 4px}
 .gear{width:auto;padding:0 12px 0 9px;border-radius:22px;gap:5px;color:#fff;font-family:var(--disp);font-size:20px}
 .gear span{font-size:16px;font-weight:700}
+.idea{display:inline-block;font-size:13px;font-weight:800;color:#ffe08a;background:rgba(255,224,138,.12);border:1px solid rgba(255,224,138,.35);border-radius:999px;padding:0 8px;line-height:20px;white-space:nowrap}
+.sheet .idea{color:#7a5300;background:#fff3cf;border-color:#f0d27a}
+.ideal{display:flex;flex-direction:column;align-items:center;gap:4px;margin:-2px 0 8px;font-size:15px;color:var(--ink2,#4a5368);text-align:center}
+.pz-top .idea{font-size:12px;line-height:18px;padding:0 6px}
+@media (max-width:430px){.pz-top .ofn{display:none}}
+.idea.big{font-size:15px;line-height:24px;padding:0 10px}
+.learned{background:#fff8e6;border:1px solid #f0d27a;border-radius:14px;padding:10px 12px;margin:10px 0;font-size:16px;text-align:left}
+.learned b{display:block;margin-bottom:4px}.learned .ideas{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.how .hn{display:flex;flex-direction:column;align-items:flex-start;text-align:left;line-height:1.15}.how .hn small{font-size:13px;font-weight:700;opacity:.75}.how .hn{flex:1;min-width:0}.how .clb{font-style:normal;font-size:13px;font-weight:800;margin-left:2px;white-space:nowrap}
 .harbor{display:block;width:100%;height:auto;aspect-ratio:360/113;border-radius:14px;box-shadow:0 3px 0 rgba(0,0,0,.22)}
 .today .harbor{max-height:104px;margin:4px 0 10px}
 .harbor.insheet{margin:2px 0 8px}
@@ -2688,6 +2697,18 @@ const TIERDOTS = { E: 1, M: 2, T: 3, X: 4 };
 const TYPENAME = { lock: 'Code Lock', cards: 'Truth Cards', lineup: 'Line-Up', houses: 'Who Lives Where', chests: 'Treasure Chests', balance: 'Balance Scales', knights: 'Knights Island', switches: 'Switches & Lamps', wheels: 'Number Wheels', trail: 'Number Trail', letters: 'Letter Trail', pyramid: 'Number Pyramid' };
 const TYPEEMOJI = { lock: '🔐', cards: '🃏', lineup: '🏁', houses: '🏠', chests: '💎', balance: '⚖️', knights: '🏝️', switches: '🔌', wheels: '🎡', trail: '🔢', letters: '🔤', pyramid: '🔺' };
 const SOLVEDHEAD = { lock: 'Unlocked! 🔓', cards: 'You got it! 🃏', lineup: 'Spot on! 🏁', houses: 'Moved in! 🏠', chests: 'Treasure! 💎', balance: 'Balanced! ⚖️', knights: 'Unmasked! 🏝️', switches: 'Lights on! 🔌', wheels: 'Rule cracked! 🎡', trail: 'On the trail! 🔢', letters: 'Spelled out! 🔤', pyramid: 'Built it! 🔺' };
+// Update C2 (mastery, not just streaks): each puzzle kind teaches one thinking idea. The tag shows under the
+// puzzle title and on the solved card, This week lists the ideas you used, and How to play shows clean solves.
+const IDEAS = {
+  out: { n: 'Rule out', d: 'Cross off what can\'t be, until only one choice is left.' },
+  lies: { n: 'If one lies…', d: 'Ask "what if this one is lying?" and follow it until something breaks.' },
+  onetrue: { n: 'Only one is true', d: 'Try each sign as the true one. Only one choice keeps the rest false.' },
+  order: { n: 'Put in order', d: 'Link the clues into a chain from first to last.' },
+  pattern: { n: 'Find the pattern', d: 'Spot the rule in the ones you can see, then use it on the gap.' },
+  back: { n: 'Work backwards', d: 'Start from what you know and undo the steps to find what\'s missing.' }
+};
+const IDEAOF = { lock: 'out', houses: 'out', switches: 'out', cards: 'lies', knights: 'lies', chests: 'onetrue', lineup: 'order', balance: 'order', wheels: 'pattern', trail: 'pattern', letters: 'pattern', pyramid: 'back' };
+const ideaTag = (type, cls) => IDEAOF[type] ? '<span class="idea' + (cls ? ' ' + cls : '') + '">💡 ' + IDEAS[IDEAOF[type]].n + '</span>' : '';
 // Expert (Options): the Daily Three one difficulty step up, from the same generators (every puzzle still
 // has exactly one answer you can reach without guessing). Expert days keep their own results (xres, xarch)
 // so the normal daily stays the same for everyone; the streak counts a day done in either.
@@ -2840,12 +2861,13 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.24.0' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.25.0' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
+  const cl = cleanByKind();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
   openSheet('<h2>Help &amp; settings</h2>' + optionsHtml() +
     '<div class="hgrp"><b>How to play</b><span>Tap a puzzle type for a short lesson. On a puzzle, ? opens its lesson too.</span></div><div class="howgrid">' +
-    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
+    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' <span class="hn">' + TYPENAME[t] + '<small>' + IDEAS[IDEAOF[t]].n + '</small></span>' + (cl[t] ? '<em class="clb" aria-label="' + cl[t] + ' solved clean">✅' + cl[t] + '</em>' : '') + '</button>').join('') + '</div>' +
     '<div class="hgrp"><b>Reminder, ads and cloud save</b></div><div id="remRow"></div><div id="adsRow"></div><div id="cloudRow"></div><div id="appRow"></div>' +
     promoHelp() + '<div class="foot">' + VERSION_LINE + '</div>' +
     '<div class="pindone"><button class="btn wide" id="oDone">Done</button></div>');
@@ -2965,8 +2987,9 @@ function weekRow() {
 }
 // All puzzle types, one tap away from home: each opens its short lesson.
 function showHowTo() {
+  const cl = cleanByKind();
   openSheet('<h2>How to play</h2><div class="sub">Tap a puzzle type for a short lesson.</div><div class="howgrid">' +
-    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' ' + TYPENAME[t] + '</button>').join('') + '</div>' +
+    TL.ROSTER.map(t => '<button class="btn ghost small how" data-t="' + t + '">' + typeIcon(t, 24) + ' <span class="hn">' + TYPENAME[t] + '<small>' + IDEAS[IDEAOF[t]].n + '</small></span>' + (cl[t] ? '<em class="clb" aria-label="' + cl[t] + ' solved clean">✅' + cl[t] + '</em>' : '') + '</button>').join('') + '</div>' +
     '<div class="sub" style="font-size:16px;margin-top:10px">More puzzle types join the library over time.</div>');
   document.querySelectorAll('.sheet .how').forEach(b => b.onclick = () => { closeSheet(); startTutorial(b.dataset.t); });
 }
@@ -3051,11 +3074,28 @@ function weekPill(wk, all) {
   return '<button class="wkpill third" id="wkp" aria-label="This week: ' + n + ' of 7 days played. Tap for the week, the countdown and tomorrow\'s puzzles."><div class="hico">🗓️</div><b>' + (expertOn() ? 'Expert week' : 'This week') + '</b><span>' + n + ' of 7 days</span></button>';
 }
 // The This week sheet: pick a day to play or replay, see the countdown, tomorrow's puzzles and the next bonus.
+// "You learned…" in This week: the ideas behind the puzzles you solved this week (daily, any mark), most used first.
+function learnedNote(wk, all) {
+  const c = {}; wk.forEach(d => { const r = all[d]; if (!r) return; const day = getDay(d); r.s.forEach((x, i) => { if (x && day[i]) { const k = IDEAOF[day[i].type]; if (k) c[k] = (c[k] || 0) + 1; } }); });
+  const ks = Object.keys(c).sort((a, b) => c[b] - c[a]);
+  if (!ks.length) return '<div class="learned"><b>You learned…</b><div>Solve a puzzle to see the ideas you use this week.</div></div>';
+  return '<div class="learned"><b>You learned this week</b><div class="ideas">' + ks.map(k => '<span class="idea">💡 ' + IDEAS[k].n + (c[k] > 1 ? ' ×' + c[k] : '') + '</span>').join('') + '</div><div>' + esc(IDEAS[ks[0]].n) + ': ' + esc(IDEAS[ks[0]].d) + '</div></div>';
+}
+// Clean solves per kind (no miss, no hint), daily puzzles in normal and Expert, played and archived days.
+function cleanByKind() {
+  const c = {}; const seen = {};
+  [false, true].forEach(x => [store.get(RK(x), {}), store.get(AK(x), {})].forEach(all => Object.keys(all).forEach(d => {
+    const r = all[d]; if (!r || !r.s || seen[x + d]) return; seen[x + d] = 1; let day = null;
+    r.s.forEach((v, i) => { if (v && !v.miss && !v.hints) { day = day || getDayM(d, x); const t = day && day[i] && day[i].type; if (t) c[t] = (c[t] || 0) + 1; } });
+  })));
+  return c;
+}
 function showWeek() {
   const all = results(), wk = weekOf(realToday), ds = S.date;
   const e = all[realToday]; const next = e ? e.s.findIndex(x => !x) : 0;
   openSheet('<h2>' + (expertOn() ? '🧠 Expert week' : 'This week') + '</h2><div class="sub">' + wk.filter(d => dayDone(all[d])).length + ' of 7 days played. Tap a day to play it.</div>' +
     '<div class="week">' + wk.map(d => { const r = all[d]; const n = r ? r.s.filter(Boolean).length : 0; return '<button class="wd' + (d === ds ? ' sel' : '') + (d === realToday ? ' today' : '') + (n === 3 ? ' full' : '') + '" data-d="' + d + '">' + TL.DAYNAME[TL.weekday(d)] + '<b>' + Number(d.slice(8)) + '</b><div class="m">' + (n === 3 ? '✓' : n ? n + '/3' : '') + '</div></button>'; }).join('') + '</div>' +
+    learnedNote(wk, all) +
     '<div class="wkinfo"><div id="wkcd">⏳ New puzzles in ' + untilMidnight() + '</div><div>' + esc(teaser()) + '</div>' +
     (!(bonusToday() && !bonusDone()) ? '<div>⭐ ' + nextBonusLine() + '</div>' : next !== -1 ? '<div>⭐ Bonus puzzle waiting: finish today\'s Daily Three to play it.</div>' : '') + '</div>' +
     '<button class="btn wide" id="wkok">Done</button>');
@@ -3231,7 +3271,7 @@ function renderPuzzle() {
   const pz = P.pz;
   const res = results()[P.ds];
   const SO = P.story ? STORY[P.story.s].objs[P.story.o] : null;
-  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? STORY[P.story.s].name + (SO.fin ? ' · final lock' : ' · ' + TYPENAME[pz.type]) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : (P.slot + 1) + ' of 3') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '')) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? STORY[P.story.s].name + (SO.fin ? ' · final lock' : ' · ' + TYPENAME[pz.type]) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + (P.slot + 1) + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz.type)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
     (P.tutorial || SO || P.bonus ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
@@ -3474,7 +3514,7 @@ function showSolved(ms) {
   if (allDone) SFX.done();
   const head = SOLVEDHEAD[pz.type];
   const lit = P.replay || P.bonus || P.story || !res ? 0 : res.s.filter(Boolean).length;
-  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' +
+  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' + (P.story ? '' : '<div class="ideal">' + ideaTag(pz.type, 'big') + '<span>' + esc(IDEAS[IDEAOF[pz.type]].d) + '</span></div>') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + P.hints + '</b><span>' + (P.hints === 1 ? 'HINT' : 'HINTS') + '</span></div></div>' +
     '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === trueToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
