@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.6.1 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.7 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -125,6 +125,11 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; }
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 /* today's lantern: a second big button under Play, with the streak and the string count */
+.worldbar { display: flex; align-items: center; gap: 10px; }
+.worldbar .wname { flex: 1; text-align: center; display: flex; flex-direction: column; line-height: 1.15; }
+#title.compact .worldbar .wname { flex-direction: row; justify-content: center; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.worldbar .wname b { font-size: 21px; color: #fff3cf; } .worldbar .wname small { font-size: 16px; color: var(--ink-soft); font-weight: 700; }
+.worldbar .btn.icon:disabled { opacity: .35; }
 .dailyBtn { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 16px; min-height: 64px; }
 .dailyBtn .dl-icon { font-size: 30px; line-height: 1; }
 .dailyBtn .dl-txt { flex: 1; display: flex; flex-direction: column; }
@@ -133,6 +138,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .dailyBtn small { font-size: 16px; font-weight: 700; color: #7a4d00; font-family: var(--font-body, inherit); }
 .dailyBtn.done { background: linear-gradient(180deg, #e9f7df, #cdeab8); border-color: #6aa84f; box-shadow: 0 4px 0 #6aa84f; }
 #title.compact #scene { height: min(150px, 17vh); }
+@media (max-height: 700px) { #title.compact { gap: 6px; } #title.compact #scene { height: 12vh; } #title.compact .lvl { min-height: 52px; } #title.compact #levels { gap: 6px; } }
 /* short phones (SE, small Androids, browser bars showing): everything around the board gets slimmer so the board stays big */
 @media (max-height: 700px) {
   #game.screen { gap: 6px; }
@@ -152,12 +158,13 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
     <div class="done" id="doneBanner" role="status" hidden><b id="doneTitle">The festival is lit!</b><p id="doneText"></p></div>
     <button class="btn primary" id="playBtn">Play</button>
     <button class="btn dailyBtn" id="dailyBtn" hidden><span class="dl-icon" aria-hidden="true">🏮</span><span class="dl-txt"><b id="dailyTitle">Today's lantern</b><small id="dailySub"></small></span></button>
+    <div class="worldbar" id="worldBar"><button class="btn icon" id="wPrev" aria-label="Previous world">‹</button><div class="wname"><b id="wName">Lantern Lane</b><small id="wSub"></small></div><button class="btn icon" id="wNext" aria-label="Next world">›</button></div>
     <div id="levels" aria-label="Levels"></div>
     <div class="testerbar" id="testerBar" hidden>
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleRules">How to play</button> · <span id="ver">v0.6.1</span></p>
+    <p class="ver"><button class="linkbtn" id="titleRules">How to play</button> · <span id="ver">v0.7</span></p>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -185,6 +192,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
     <div class="stars" id="winStars">★★★</div>
     <p id="winText">1 match. Par 1.</p>
     <button class="btn primary" id="nextBtn">Next level</button>
+    <button class="btn" id="shareBtn" hidden>Share my lantern</button>
     <button class="btn" id="replayBtn">Play again</button>
   </div>
 </div>
@@ -213,17 +221,21 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
  *   a-e  lantern floating on the pond (number 1-5)
  *   Z  shy lantern floating on the pond
  *   ^ v < >  wind arrow
+ *   O Q  portal pairs (each letter appears exactly twice)
+ * Level options: marks: [[r, c], ...] flags the lanterns that must be lit (beacon levels); the rest may stay dark.
  * Rules:
  *   Tap an unlit lantern (not a shy one): it lights. A lit lantern's flame hops exactly n cells
  *   (n = its number) up, down, left and right, ignoring everything in between.
  *   A flame that lands on an unlit lantern lights it, and that lantern hops in turn (a chain).
  *   A flame that lands on water goes out, even when a lantern floats there.
  *   A flame that lands on a wind arrow is blown: it hops the same n cells again in the arrow's direction.
+ *   A flame that lands on a portal comes out of its twin and hops the same n cells again, the same way.
  *   A flame that lands on a shy lantern wakes it (it lights but never hops). Shy lanterns must stay dark.
  *   Shy lanterns hide behind a lit friend: while a lit lantern stands right beside one (up, down, left
  *   or right), a flame that lands on it just fizzles. (Without this, shy lanterns could never matter:
  *   every other lantern must light and hop sooner or later, so order has to count for something.)
- *   Win: every lantern that is not shy is lit, and every shy lantern is dark. Par = fewest taps. */
+ *   Win: every lantern that is not shy is lit, and every shy lantern is dark. On a beacon level (marks), every
+ *   flagged lantern is lit and every shy lantern is dark; unflagged lanterns may stay dark. Par = fewest taps. */
 (function (root) {
   'use strict';
   var DIRS = { '^': [-1, 0], 'v': [1, 0], '<': [0, -1], '>': [0, 1] };
@@ -231,7 +243,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
   var MAX_BENDS = 8;
 
   function parse(level) {
-    var h = level.rows.length, w = level.rows[0].length, cells = [], lanterns = [], lidx = {};
+    var h = level.rows.length, w = level.rows[0].length, cells = [], lanterns = [], lidx = {}, ports = {};
     for (var r = 0; r < h; r++) {
       if (level.rows[r].length !== w) throw new Error('level ' + level.id + ': ragged row ' + r);
       for (var c = 0; c < w; c++) {
@@ -242,26 +254,37 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
         else if (ch === 'Z') { cell.kind = 'lantern'; cell.shy = true; cell.water = true; }
         else if (ch === '~') { cell.kind = 'water'; cell.water = true; }
         else if (DIRS[ch]) { cell.kind = 'wind'; cell.wind = DIRS[ch]; }
+        else if (ch === 'O' || ch === 'Q') { cell.kind = 'portal'; (ports[ch] = ports[ch] || []).push(r * w + c); }
         else if (ch !== '.') throw new Error('level ' + level.id + ': bad cell ' + ch);
         if (cell.kind === 'lantern') { lidx[r * w + c] = lanterns.length; cell.li = lanterns.length; lanterns.push(r * w + c); }
         cells.push(cell);
       }
     }
-    return { w: w, h: h, cells: cells, lanterns: lanterns, lidx: lidx };
+    var twin = {};
+    Object.keys(ports).forEach(function (ch) {
+      if (ports[ch].length !== 2) throw new Error('level ' + level.id + ': portal ' + ch + ' needs exactly 2 cells');
+      twin[ports[ch][0]] = ports[ch][1]; twin[ports[ch][1]] = ports[ch][0];
+    });
+    var marked = 0;
+    (level.marks || []).forEach(function (m) { var i = m[0] * w + m[1], cell = cells[i];
+      if (!cell || cell.kind !== 'lantern' || cell.shy) throw new Error('level ' + level.id + ': mark ' + m + ' is not a plain lantern');
+      cell.mark = true; marked++; });
+    return { w: w, h: h, cells: cells, lanterns: lanterns, lidx: lidx, twin: twin, marked: marked };
   }
 
   // Where does one flame go? Returns { path: [cell indices, first is the source], end: idx|-1 (off board) }
   function flight(b, from, n, d) {
-    var r = b.cells[from].r, c = b.cells[from].c, path = [from], dr = d[0], dc = d[1];
+    var r = b.cells[from].r, c = b.cells[from].c, path = [from], warps = [], dr = d[0], dc = d[1];
     for (var bends = 0; bends <= MAX_BENDS; bends++) {
       r += dr * n; c += dc * n;
-      if (r < 0 || c < 0 || r >= b.h || c >= b.w) { path.push({ r: r, c: c }); return { path: path, end: -1 }; }
+      if (r < 0 || c < 0 || r >= b.h || c >= b.w) { path.push({ r: r, c: c }); return { path: path, end: -1, warps: warps }; }
       var i = r * b.w + c; path.push(i);
       var cell = b.cells[i];
       if (cell.kind === 'wind') { dr = cell.wind[0]; dc = cell.wind[1]; continue; }
-      return { path: path, end: i };
+      if (cell.kind === 'portal') { var tw = b.twin[i]; warps.push(path.length - 1); path.push(tw); r = b.cells[tw].r; c = b.cells[tw].c; continue; } // segment path[k] -> path[k+1] is a warp
+      return { path: path, end: i, warps: warps };
     }
-    return { path: path, end: -2 }; // blown around in circles: the flame fades (levels never rely on this)
+    return { path: path, end: -2, warps: warps }; // blown around in circles: the flame fades (levels never rely on this)
   }
 
   // lit: array of booleans per lantern. Returns null if the tap is not allowed, else
@@ -307,7 +330,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
             else if (t.shy) res = 'pending';
             else { res = 'light'; nl[t.li] = true; next.push(f.end); }
           }
-          var ev = { depth: depth, from: from, path: f.path, end: f.end, result: res };
+          var ev = { depth: depth, from: from, path: f.path, warps: f.warps, end: f.end, result: res };
           events.push(ev); if (res === 'pending') shyEv.push(ev);
         }
       }
@@ -321,7 +344,8 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
   function initial(b) { return b.lanterns.map(function () { return false; }); }
   function shyLit(b, lit) { for (var i = 0; i < b.lanterns.length; i++) if (lit[i] && b.cells[b.lanterns[i]].shy) return true; return false; }
   function isWin(b, lit) {
-    for (var i = 0; i < b.lanterns.length; i++) { var s = b.cells[b.lanterns[i]].shy; if (s === lit[i]) return false; }
+    for (var i = 0; i < b.lanterns.length; i++) { var cl = b.cells[b.lanterns[i]];
+      if (cl.shy ? lit[i] : !lit[i] && (!b.marked || cl.mark)) return false; }
     return true;
   }
   function key(lit) { var s = ''; for (var i = 0; i < lit.length; i++) s += lit[i] ? '1' : '0'; return s; }
@@ -355,7 +379,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 (function () {
 'use strict';
 var L = window.LanternLogic;
-var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell in all four directions: up, down, left and right. It lit the next lantern, which hopped too. A chain!","after":true}],"par":1},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Your turn: light all five lanterns with just one match. Which one can do it?","free":true,"retry":"Not all lit. A 1 only hops 1 cell. Tap Undo and try another start."},{"text":"The 2 jumped over the grass and lit all four. A 1 only hops 1 cell, so it lands on grass.","after":true}],"par":1},{"id":13,"name":"Spark Snakes","rows":[".....","..11.","1211.","1....","....1"],"tip":"Some starts light more lanterns than others. Remember: a 2 jumps over its neighbours.","par":2},{"id":5,"name":"Chain Starters","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Meet the 3: its flame hops exactly 3 cells. Find the lanterns that start the longest chains.","par":3},{"id":14,"name":"Leap Frog","rows":["...21","..2..",".....",".12.3","....3","322.."],"tip":"Big numbers leap far, and flames can't hop back. Follow a few chains before you strike a match.","par":2},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"A glass dome drops over a shy lantern when a lantern right next to it is lit. Flames can't wake it then.","focus":[1,2]},{"text":"The 2 would jump onto the shy one. Light the 1 right next to it first.","target":[1,2],"offScript":"Not yet! The 2's flame would wake the shy lantern. Tap the glowing 1 first."},{"text":"See the glass dome drop over it? Now tap the 2.","target":[2,0]},{"text":"The flame fizzled on the glass. Even the 1's own flame couldn't wake it. Well done!","after":true}],"par":2},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2},{"id":15,"name":"Shady Corner","rows":["..1..","3..12","1.1.2","..3.z"],"tip":"Light every lantern and keep the shy one asleep. Undo is always there if it wakes.","par":2},{"id":16,"name":"Two Shy Ones","rows":["2.z1.",".....","2..3z","2..3.","....2"],"tip":"Two shy lanterns. Which one needs its dome first?","par":3},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.",".v...","....3",".3..2"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4}];
+var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell in all four directions: up, down, left and right. It lit the next lantern, which hopped too. A chain!","after":true}],"par":1,"world":0},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Your turn: light all five lanterns with just one match. Which one can do it?","free":true,"retry":"Not all lit. A 1 only hops 1 cell. Tap Undo and try another start."},{"text":"The 2 jumped over the grass and lit all four. A 1 only hops 1 cell, so it lands on grass.","after":true}],"par":1,"world":0},{"id":13,"name":"Spark Snakes","rows":[".....","..11.","1211.","1....","....1"],"tip":"Some starts light more lanterns than others. Remember: a 2 jumps over its neighbours.","par":2,"world":0},{"id":5,"name":"Chain Starters","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Meet the 3: its flame hops exactly 3 cells. Find the lanterns that start the longest chains.","par":3,"world":0},{"id":14,"name":"Leap Frog","rows":["...21","..2..",".....",".12.3","....3","322.."],"tip":"Big numbers leap far, and flames can't hop back. Follow a few chains before you strike a match.","par":2,"world":0},{"id":17,"name":"Ember Path","rows":["..1..","..2.1",".1...",".12.2","....."],"world":0,"par":2},{"id":18,"name":"Two Sparks","rows":["1..21",".....","1.232",".....","....."],"world":0,"par":2},{"id":19,"name":"Wick and Wax","rows":["....3","..3..",".2.12",".....","..3.1"],"world":0,"par":2},{"id":20,"name":"Long Street","rows":["...2.","3.2.3","...2.","....3","...12","....2"],"world":0,"par":3},{"id":21,"name":"Festival Flags","intro":"marks","rows":["1.1..",".....","..2..",".....","..1.."],"marks":[[0,2],[4,2]],"tut":[{"text":"Gold flags mark the lanterns you must light. Lanterns without a flag can stay dark.","focus":[0,2]},{"text":"Light both flagged lanterns with just one match. Which lantern reaches them both?","free":true,"retry":"Not both flags yet. Tap Undo and find a lantern whose flames reach both of them."},{"text":"The 2 lit both flags. The lantern in the corner has no flag, so it can stay dark.","after":true}],"world":0,"par":1},{"id":22,"name":"Flag Day","rows":["...3.","1..3.","..1.3","3.23.",".2.3."],"marks":[[4,3],[4,1],[3,2],[1,3]],"tip":"Only the flagged lanterns need lighting. Use the others as stepping stones.","world":0,"par":2},{"id":23,"name":"Stepping Stones","rows":["....3",".2..1",".11..","....1","33..."],"marks":[[1,1],[2,1],[4,0]],"world":0,"par":2},{"id":62,"name":"Bunting","rows":["..123","..3..","...33","....2","..1.."],"marks":[[2,4],[4,2],[0,3]],"world":0,"par":2},{"id":24,"name":"Parade Route","rows":["..1.2","...13","3..3.","2...3",".2...","..2.."],"marks":[[2,3],[4,1],[3,4],[1,4]],"world":0,"par":3},{"id":25,"name":"Lane's End","rows":[".3..3.","1.....",".3.2..","1...2.","....12","2..322"],"world":0,"par":4},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"A glass dome drops over a shy lantern when a lantern right next to it is lit. Flames can't wake it then.","focus":[1,2]},{"text":"The 2 would jump onto the shy one. Light the 1 right next to it first.","target":[1,2],"offScript":"Not yet! The 2's flame would wake the shy lantern. Tap the glowing 1 first."},{"text":"See the glass dome drop over it? Now tap the 2.","target":[2,0]},{"text":"The flame fizzled on the glass. Even the 1's own flame couldn't wake it. Well done!","after":true}],"par":2,"world":1},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2,"world":1},{"id":15,"name":"Shady Corner","rows":["..1..","3..12","1.1.2","..3.z"],"tip":"Light every lantern and keep the shy one asleep. Undo is always there if it wakes.","par":2,"world":1},{"id":26,"name":"Just in Time","rows":[".....","13..1","231.z","21...","....."],"tip":"A lantern lit by the same wave of flames still drops the dome in time.","world":1,"par":2},{"id":16,"name":"Two Shy Ones","rows":["2.z1.",".....","2..3z","2..3.","....2"],"tip":"Two shy lanterns. Which one needs its dome first?","par":3,"world":1},{"id":27,"name":"Sleepy Row","rows":["z11..",".z..1",".....","2.12.","13..3"],"world":1,"par":2},{"id":28,"name":"Quiet Please","rows":["...2.","...11","2.z11","..z..",".12.2"],"world":1,"par":3},{"id":29,"name":"Tiptoe","rows":["..1.1","....2","..2.2",".....","3z.13"],"world":1,"par":2},{"id":30,"name":"Garden Flags","rows":[".3...","...3.","1....",".z121",".....","2..12"],"marks":[[2,0],[5,4],[5,3],[0,1]],"tip":"Flags and shy lanterns together: light the flags, keep the shy ones asleep.","world":1,"par":3},{"id":31,"name":"Nap Time","rows":["...z.","....2","..3.3","z1..2",".2..2",".23.z"],"world":1,"par":4},{"id":32,"name":"Hush Hour","rows":["...2z",".13..","z.3..","..313","....2","....."],"marks":[[1,1],[1,2],[3,3],[2,2]],"world":1,"par":4},{"id":33,"name":"Moonflowers","rows":["..3.2","..1.z",".213.","12..3",".z...",".32.."],"world":1,"par":4},{"id":34,"name":"Night Bloom","rows":["....1","3z..3",".3..3",".12..",".....",".3.3z"],"marks":[[1,0],[5,1],[3,2]],"world":1,"par":3},{"id":35,"name":"Dreamers","rows":["..2..",".2...","z.2..","332..","..z..","3..3."],"world":1,"par":4},{"id":36,"name":"Garden Gate","rows":["..31..","....12","...31.","z2....","z..1..","2..3.."],"world":1,"par":4},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1,"world":2},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3,"world":2},{"id":37,"name":"Lily Pads","rows":[".2.~.",".1~..","b11..",".....",".3.~3"],"world":2,"par":2},{"id":38,"name":"Ripples","rows":[".c.~2",".11..","1~2..","....~","..2~."],"world":2,"par":2},{"id":39,"name":"Frog Song","rows":["...13","c2.1.","...~.","22.3.","~~.3.","3z.3."],"world":2,"par":4},{"id":40,"name":"Reed Bed","rows":["11...",".c~.1","....~","....2","1~2~.","..z.2"],"world":2,"par":4},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1,"world":2},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.",".v...","....3",".3..2"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2,"world":2},{"id":41,"name":"Kite Tails","rows":[".~>.3","..12.","..2..","....3","~2.2."],"world":2,"par":2},{"id":42,"name":"Weather Vane","rows":[".3...",".^.11","~1.2.","12...",".3..3"],"world":2,"par":2},{"id":43,"name":"Paper Boats","rows":["..~..","3..1.","12~.1","1~..1","c.31^"],"world":2,"par":2},{"id":44,"name":"Rain Dance","rows":["..212","1.~..","1.z11","..32.",".>3..",".1..~"],"world":2,"par":4},{"id":45,"name":"Storm Lanterns","rows":["32.1.","..~..",".2z..",".1.>2",".~.1.",".331."],"world":2,"par":4},{"id":46,"name":"Misty Bank","rows":[".~.23",".3..3",".v2.3",".z.11",".2...",".2~.."],"world":2,"par":4},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4,"world":2},{"id":47,"name":"Portals","intro":"portal","rows":["...O1",".....","1O...",".....","....."],"tut":[{"text":"This swirl is a portal. A flame that lands on one comes out of its twin and keeps hopping the same way.","focus":[2,1]},{"text":"Tap the 1 and follow its flame.","target":[2,0]},{"text":"In one portal, out of the other, and on to the far lantern!","after":true}],"world":3,"par":1},{"id":48,"name":"Doorways","rows":["....2","O...1","...1O","2..13","....."],"world":3,"par":2},{"id":49,"name":"Twin Swirls","rows":[".....","..O.3","2..12",".....","2.O.1"],"world":3,"par":2},{"id":50,"name":"Shortcut","rows":["....2","..13.","....2","2.O2.","O.11."],"world":3,"par":2},{"id":51,"name":"Peekaboo","rows":[".1O.3","1....","1z..2",".....","..3..","O3..."],"world":3,"par":3},{"id":52,"name":"Gate Flags","rows":["2O..3","..33.","23...",".....","O3...","32..."],"marks":[[0,0],[4,1],[2,1],[1,2]],"world":3,"par":3},{"id":53,"name":"Fireworks","rows":[".....","11O.2","O.2.z",".1..1",".1...","..2.2"],"world":3,"par":4},{"id":54,"name":"Lantern Post","rows":["3..O3","O1.1.",".....","..3..",".333.","2...."],"marks":[[0,4],[4,2],[1,3],[0,0]],"world":3,"par":3},{"id":55,"name":"Music Stage","rows":[".z~..3",".1.2..",".21..3","......","1O.O1.",".....3"],"world":3,"par":4},{"id":56,"name":"Midnight","rows":["1..2z","3z2O.","....2",".3O2.","..2.2","....."],"world":3,"par":4},{"id":57,"name":"Dragon Dance","rows":["1.21~.",".2.3O.","..22..",".O..2.","..33.z",".3...3"],"world":3,"par":4},{"id":58,"name":"Sky Lanterns","rows":[".3O.3","1O1.3",".....","..2..","..2..","33..3"],"marks":[[1,2],[0,1],[1,0],[1,4]],"world":3,"par":3},{"id":59,"name":"Grand Parade","rows":["1OO1~.","12....","..z...",".32..3","~.2.23","...1.1"],"world":3,"par":4},{"id":60,"name":"Last Wish","rows":[".2....","..321O","O..332","11..~.",".~2...","...z1."],"world":3,"par":4},{"id":61,"name":"Festival of Lights","rows":["2..2~.","11...O","z.2O..",".....2",".2~...",".2.22<"],"world":3,"par":5}];
 var DAILY = [[{"rows":[".....",".....","21...","31..2","2.2.."],"par":2},{"rows":["11..z","3.2z.",".2...",".....",".12.."],"par":2},{"rows":["~.b..","~....",".2z12","1.31.",".1.1."],"par":3},{"rows":["~.~..","232.z",".~.^1",">b23.",".2..3"],"par":4}],[{"rows":[".2...",".11.1",".3...","....2","....."],"par":2},{"rows":["..31.",".1..3","1.z32","...31","....."],"par":3},{"rows":[".33b2","11~..",".~2..","~.1..","....."],"par":2},{"rows":["..~1.","23<1.",".2a3.","z2.3<","...~."],"par":3}],[{"rows":[".31.2",".3..1",".11..","...3.","....."],"par":2},{"rows":[".....","21.13",".1...","3.zz1","....."],"par":2},{"rows":["a3~.2","..~..",".2z22","...3.",".~..."],"par":3},{"rows":["~..2.","~13..","1..32","3b...","~2z<1"],"par":4}],[{"rows":[".3..3",".....",".....",".23.1","..1.."],"par":2},{"rows":[".....",".....","..312",".3.11","z313."],"par":2},{"rows":["1.2.~","~2a33","~....",".....","....3"],"par":2},{"rows":[".....",".~2.b",".1~~.",".2<v1","1z~13"],"par":3}],[{"rows":["3..2.",".....","..2..","2....","..2.1"],"par":2},{"rows":["...1.","z321.","1.2.3","3...1","....."],"par":4},{"rows":["..321","~.12~",".~.b2","..2.z","....3"],"par":3},{"rows":["32az.","..~.3","..3.~","..1..","3>>3."],"par":4}],[{"rows":[".1...",".3...","3..3.","...11","....."],"par":2},{"rows":["3...z","...3.","2.2.1",".3.3.",".1z1."],"par":3},{"rows":["3z2.~","3..2.",".2~..","~12~b",".2..."],"par":4},{"rows":[".3.~1",".~3..","....3","13.~^","3.cz1"],"par":3}],[{"rows":["...3.",".3..3","...2.",".....","3..2."],"par":2},{"rows":[".....","2.z32",".2213","3.1z.","....."],"par":2},{"rows":["1z.3.","....3","12...",".~.1b","..~.1"],"par":3},{"rows":[".v...","3.11.",".2.>3","~3a~.","3.~.."],"par":2}],[{"rows":["....2","....1","...2.","1.2.2","....."],"par":2},{"rows":["...13","...2.",".1.31","31.z2","...z."],"par":3},{"rows":[".2..3",".z12.","..2b3",".213~","~...."],"par":4},{"rows":["2.^..","c~21.","3..z.",".~1^.","3~.~."],"par":2}],[{"rows":[".....","...21","1....","2..22","2.2.."],"par":2},{"rows":[".2.2.","3..3.","3zz..",".....","11..."],"par":3},{"rows":["..1..",".31.1","...~2","2.2~3",".b..."],"par":2},{"rows":[".~~..",".~.1.","1211c","..~v.","z223<"],"par":3}],[{"rows":["...3.",".33.3",".....","...3.",".131."],"par":2},{"rows":[".1..3","...31","...2.","..3..","...z3"],"par":3},{"rows":[".2.~.","2~2.3","a2...",".1.12","....z"],"par":3},{"rows":[".~123",".23.3",".1.1^","..b..","<.z~2"],"par":3}],[{"rows":[".2.1.","..113",".2...","....1","....."],"par":2},{"rows":[".2.3.","..z32",".....","....2",".31.."],"par":4},{"rows":["2....",".22~2","3~...","z.2c.","..1.."],"par":4},{"rows":[".v.1.",".~1.3",".b..z","1~^.2",".2.12"],"par":4}],[{"rows":["12.2.",".....","21...","3..3.","3.1.."],"par":2},{"rows":[".....","1....","2z.3.","...2.","3..z2"],"par":3},{"rows":["3...3","32.22","..3..","2.z~.","1.b.~"],"par":4},{"rows":[".23.<","~..b3",".z2~.","<..~3","~..31"],"par":3}],[{"rows":[".....","3.32.",".11..",".2...","2.3.."],"par":2},{"rows":["3..3.","2...z","....2","z313.","...11"],"par":3},{"rows":["..a.~","z12.1","....1","..12.","~13.."],"par":3},{"rows":[".<3z.",".3.2~","1a.2.","21~..","22.^."],"par":4}],[{"rows":[".2...","..2.2","....2","3..31","....2"],"par":2},{"rows":["z1.3.","11.1.","...z.",".....",".2.2."],"par":3},{"rows":["2...~","~.~13","21a..","3..11","....z"],"par":3},{"rows":["v3.31","~.~v.","~.2..","z.1a~","1.133"],"par":3}],[{"rows":[".....","..2.2","2.2..",".....","..133"],"par":2},{"rows":["13.3.","..z31",".....","1z...","...3."],"par":3},{"rows":["....3","~..31",".z121","..3~.","1.c.3"],"par":4},{"rows":["~z>..",">1.~2","112.a","~3..3","23.~."],"par":3}],[{"rows":[".11..","..3..",".....","..1.2",".31.2"],"par":2},{"rows":["...1.",".....","3..z2","..2.1","2...."],"par":3},{"rows":[".33~.",".1...","....2","2az..",".3.1~"],"par":4},{"rows":["..z1~","..~..","1c~21",">13.2","3v1.."],"par":4}],[{"rows":[".....","1...1","1...1","..2.1","....."],"par":2},{"rows":["3.2..",".231.",".1...",".....",".3z.."],"par":3},{"rows":["cz~.3","..2.1","...~.","....1","~1..3"],"par":2},{"rows":[".z~.<","1a...",".~^1.","..~33","..3.1"],"par":4}],[{"rows":["..2.3","..13.",".....",".2.2.","....."],"par":2},{"rows":["...22","...1.","z...2","..12.","...3z"],"par":3},{"rows":["~....","z...~","1~.~3","2.3.1","a1.21"],"par":3},{"rows":["~z2~1","~.1.v","12<3.",".2a.2","....~"],"par":3}],[{"rows":["1....","1...3","3..31",".1...",".1..3"],"par":2},{"rows":[".....","2...1",".1z..",".....","3.212"],"par":3},{"rows":[".1..3","z12c2","..13.","~....","~..~."],"par":3},{"rows":["v..a.","...2.","2.~1.","^1~12",".z~21"],"par":3}],[{"rows":[".3..3",".11..",".....","....1","2...."],"par":2},{"rows":["....2","3133.",".....",".2.11",".2.z."],"par":3},{"rows":["3.3..",".c..~","..2~.","3..12",".~211"],"par":2},{"rows":["3.2.~","z.2.~",".31.1",">3b.2","1...<"],"par":3}],[{"rows":["..11.","...3.","13.33",".....","....."],"par":2},{"rows":["2....","z.13.","..2.3","1..3.","2.1.."],"par":3},{"rows":["3..1.","~..11","..3..","3...~","..2.b"],"par":2},{"rows":[".~2.z","..1.1",".31~.","v.1~2","2<a.3"],"par":3}],[{"rows":["1....","1....","33.2.",".....","....3"],"par":2},{"rows":["...1.","11.3.","z..3.","...1.",".332."],"par":3},{"rows":[".2.~.","~.2~.",".3..z","c..32",".3313"],"par":4},{"rows":["z121.","v32~3","....v","3..~.","1~c3."],"par":4}],[{"rows":["21.22",".1...","...2.",".....","....."],"par":2},{"rows":[".2.z.","...2.",".2...","...3.","11..."],"par":2},{"rows":["21c..","3z.~.","2.3.2",".21.~","..3.."],"par":4},{"rows":["c..3.","3...2",".~~..","2.~..","2~>2z"],"par":3}],[{"rows":["1.1..","1.2..","1..2.",".....","...2."],"par":2},{"rows":["..2..",".2.11","..z22","...1.","..1.1"],"par":4},{"rows":[".z~21","2333.","....~","..~..","..2c."],"par":3},{"rows":["3..~3",".^1v.","2.bz.","122.~","3..2."],"par":3}],[{"rows":["..1.3",".1.1.","212.2",".....","....."],"par":2},{"rows":["2.3..",".2z.3",".....","..2..","..32."],"par":4},{"rows":[".....","..2.3","3.11~","~..3.","...cz"],"par":2},{"rows":["1~1~.","11.<.","....a","^22z.",".1~~."],"par":4}],[{"rows":[".....","2.12.",".2.2.",".....",".1..."],"par":2},{"rows":["..2.3","1.2.z","..1z.",".....","..2.."],"par":2},{"rows":["...a.","23.2z",".....",".13~2","11~.3"],"par":4},{"rows":["3.~z.","...13","2v1.<","~3~~1","a.3.2"],"par":3}],[{"rows":["...3.",".1...","2.2..",".2.3.","....."],"par":2},{"rows":["...2.","3....","..2.1","312.z","....."],"par":4},{"rows":[".....","~113.","..223","1~.a.","1.2~."],"par":2},{"rows":["^.2..","3~112","..z>3","b..~2","1~2~."],"par":2}],[{"rows":["..1..",".31.1",".....",".....","33..."],"par":2},{"rows":["23...",".3.23","..311",".2zz.","....."],"par":3},{"rows":["13...",".~..b","1.2~.","3.232",".~2.."],"par":2},{"rows":["11..3",".z.23",".1..v","~2~<.",".1.a3"],"par":4}],[{"rows":[".....","11.2.","122.2",".....","....."],"par":2},{"rows":["33.23","..3..","1....","11.2z","....."],"par":3},{"rows":[".za.~","....2","2211.",".~1.3","1~.~3"],"par":3},{"rows":[".3v1z",".2222","~b.~.",".3..^","...~~"],"par":2}],[{"rows":[".....","2.11.","1....",".1...","2.2.."],"par":2},{"rows":[".....","2...2",".....","z3.33","....1"],"par":4},{"rows":["..2.1","31~2.","z22..",".b...",".1~3."],"par":3},{"rows":["3.<..","..2.~","~.2.^","~a2~z",".1331"],"par":3}],[{"rows":["..3..","1....",".....","2.2..","3.2.2"],"par":2},{"rows":["...1.","2.12.","..z2.","..32.",".12.."],"par":4},{"rows":[".3.~.",".....",".22.3","z2.31","1.2b~"],"par":3},{"rows":["~..3.",".....",".~z3.","<1vc.","2.2.2"],"par":3}],[{"rows":["12...","..231","2....","..2..","...3."],"par":2},{"rows":["3z..3","..1..",".11.2",".z.2.","...21"],"par":3},{"rows":["31..1","~~..~","...2.",".z.13","c3~3."],"par":4},{"rows":["..3~<","21z~.","32.1~","..b.1","..~1<"],"par":4}],[{"rows":["....2","2..3.","....2","3312.","....."],"par":2},{"rows":["3....","..312",".....","2.3z.","z12.."],"par":3},{"rows":["...21",".3z.1","~.12~","~32..","~.c.."],"par":4},{"rows":["2~.>.",".z>~1",".1c.2",".2233","..1.~"],"par":4}],[{"rows":["2.2..",".....",".223.","..1..",".2..."],"par":2},{"rows":["1..z.",".2.3.","2.3..",".....","23z.."],"par":2},{"rows":[".a~.1",".3z..","1~...","....3",".23.2"],"par":4},{"rows":["..~c.","1>11~","<1.2.","31~z.","~.3.."],"par":3}],[{"rows":[".....",".....","3.13.",".1...","2.2.3"],"par":2},{"rows":["...32",".2..3","....1","23.1z",".1z.."],"par":4},{"rows":["~z..b",".313.",".2..2","...~3","12~.."],"par":4},{"rows":["3..1~","3.1~~",".~2az",">....",">112."],"par":4}],[{"rows":["..1..",".....","2.21.","..21.","31..."],"par":2},{"rows":["..2..","2.2..","3.2.3","..z3.",".12.."],"par":3},{"rows":["3..2.","~bz..","~.~..","1.2..","..1.2"],"par":3},{"rows":["..22.","..^1.","..1.1","a.1~.","2~z^."],"par":3}],[{"rows":["3..2.","..3..",".....","..2.2","..2.."],"par":2},{"rows":[".....","z2...",".....","2.22.","z.21."],"par":3},{"rows":["231.a","..1..","2.1..","....~","~..~."],"par":2},{"rows":[".3231",".1~..",".a2..",".>3.z",".~..2"],"par":2}],[{"rows":[".....","31.1.",".....","...12","...1."],"par":2},{"rows":[".23..",".z.2.","...21","..22.",".3.1."],"par":4},{"rows":[".1..~","2a..2",".13~.","z....","2...."],"par":3},{"rows":["~3~.3","..~.2",".zav.","2~.33","12.1v"],"par":3}],[{"rows":[".....","....1","1...2","..11.","2..3."],"par":2},{"rows":["..2.3","3...3",".....","23..z",".1..1"],"par":4},{"rows":[".~3..",".z..~",".12..","12.~.","..3~a"],"par":3},{"rows":["3.2..","~13~1","..2.3",".....","13.c^"],"par":2}],[{"rows":["...2.",".2...","1122.","..1..","..1.2"],"par":2},{"rows":["..2.1","1.2..","..3..","z.21.","2.2.."],"par":3},{"rows":["3~...","2.23z",".~.b.","3.1..",".~323"],"par":3},{"rows":["~21..","2.1.2",".v2.z","~a...","~231."],"par":3}],[{"rows":["...11",".3..3",".....","....2",".23.2"],"par":2},{"rows":["..1.2","2.1..","...31","2.z..","..13."],"par":3},{"rows":[".~1.~",".za2.",".1...","3~.2.",".3.21"],"par":4},{"rows":["~21v3","2a33.",".z.~3","~....","...3."],"par":4}],[{"rows":["32...",".3..2",".2...","1....",".3..."],"par":2},{"rows":["2...1","2.z3.",".....",".....","33322"],"par":4},{"rows":[".1~2.",".1..~","a2.1~",".32.1",".z..~"],"par":4},{"rows":["2~>.2","^2~3~","21...","3z..c","2.2~."],"par":3}],[{"rows":["...1.","...3.",".11..",".3..2","....."],"par":2},{"rows":["..z.2",".z2.3",".....","...1.","..31."],"par":2},{"rows":["..~1~","..~1.","1..a.","...1.","31.z."],"par":3},{"rows":["~1.2~",">....","2z3^3","~.2..","13.b2"],"par":3}],[{"rows":[".....","....1","..3..",".113.","....3"],"par":2},{"rows":["1.2.1",".1...","z.2..","3..3.","....."],"par":3},{"rows":[".33~~","3...1","..2..","3.22b","3..z."],"par":4},{"rows":["~.~1.","a1...",">23z.","~..1.","..21~"],"par":3}],[{"rows":[".....","2....","...2.","231.3","....."],"par":2},{"rows":[".....",".z.2.",".21.z",".2...",".1.2."],"par":3},{"rows":["21~..","...1.","...a3",".3..3",".~~.."],"par":2},{"rows":[".133.","a^z1.","...~.","2..31","~~3>2"],"par":3}],[{"rows":[".2...","3....",".1...",".1...","3..1."],"par":2},{"rows":["z1...",".2..2","..12.","3.2..",".z.11"],"par":3},{"rows":["...2~","..132","...2.","~az.2",".1~3."],"par":3},{"rows":["2.1..","z.2.~",".....","3..~.","^.b32"],"par":3}],[{"rows":[".3..2",".....","3...1",".3..1","2...."],"par":2},{"rows":["3....","..3..","1.1..","1....","3..z2"],"par":3},{"rows":["~.a12","11...","22..3",".....","2~3.."],"par":2},{"rows":["232.~","2...~","..b.2","~3.~z","1^..^"],"par":3}],[{"rows":["..31.","..3..","..12.","21...",".1..."],"par":2},{"rows":[".12..","1.z3.","1.z2.",".3...","...12"],"par":3},{"rows":["..~..",".1.2.","1..z.","a21.2","31.2~"],"par":3},{"rows":["3.zc^","~..21",".12.2","21.<.","3~.~."],"par":3}],[{"rows":[".....","2.2..",".....","...21","..221"],"par":2},{"rows":[".1...",".3.2z","3..2.",".....","..31."],"par":3},{"rows":["..2c.","2z33.",".~..1",".1~.1",".3..2"],"par":4},{"rows":["....~","...z1","11~..",">2.22",".c.21"],"par":2}],[{"rows":[".3.2.",".....","...3.","..13.","3..3."],"par":2},{"rows":["132..",".23..",".....",".z3..","....."],"par":3},{"rows":["31c.3",".~.~.","....2","z~3..","2...."],"par":3},{"rows":["..21.","...1c","3.>.z",".~.1.","~~.3."],"par":3}],[{"rows":["3.2.3","..11.",".....","....2",".212."],"par":2},{"rows":["...2.","2...1",".z322","...3.","....."],"par":3},{"rows":["1.21~","....2","31.~.","z..3a","3.~.."],"par":4},{"rows":["...v.",".z31v","~~322",".3~..","13.2a"],"par":4}],[{"rows":[".....",".113.","....3","2....","1..3."],"par":2},{"rows":[".2.12","..z2.","...2.","...1.",".13.1"],"par":3},{"rows":["..~.2","~2.3.","3z..3","21~.a","~...2"],"par":4},{"rows":[".3~.3",".....","...3.",".~.21",".2a^3"],"par":2}],[{"rows":["3.2.2",".13..",".....",".2.1.","..2.."],"par":2},{"rows":["...1.","2.232","..111","z3...","....."],"par":3},{"rows":["21...","~1..1","...~1","1.b~2","3..2~"],"par":2},{"rows":["v....",".3~b3",".v111","~2.z.",".1..."],"par":2}],[{"rows":[".....","..21.","2..3.","11...",".3.3."],"par":2},{"rows":["2.2z.","33133",".....",".1.2.","...z."],"par":2},{"rows":["...1~","2a33.","~~~21",".1z.2","..1.."],"par":3},{"rows":["...2~","22.z.",".a22~","1....",">3.~2"],"par":3}],[{"rows":[".....","....2","..2.3","312.1","..2.3"],"par":2},{"rows":["2.1..","1.2.z",".2.12","2....","....."],"par":2},{"rows":["b3.13",".~21.","2.z.~",".2~.2","....1"],"par":3},{"rows":["..2~~","c1.^1","..v..","32.22","..2~z"],"par":4}],[{"rows":["..3.2","...1.",".1.12",".21..","....."],"par":2},{"rows":[".....","..2.2","..231",".1...",".1z22"],"par":3},{"rows":["3.z2c",".~.~.",".12~1","~.1.2","..3.."],"par":3},{"rows":["~~.2.",".2<z.","1^2.~","23.b2",".~2.."],"par":3}],[{"rows":[".2311","...3.",".22..",".....","....."],"par":2},{"rows":[".1...",".2...","...3.","33.1z","1.z.."],"par":2},{"rows":["...z.","31~a.","3..3.","2..31",".31.~"],"par":3},{"rows":["~.13.","..3..","1>2..",".b~z2",">23~~"],"par":4}],[{"rows":[".....","....1","...23","..1..",".312."],"par":2},{"rows":[".....",".3..2",".1...","...2z",".3.3."],"par":3},{"rows":[".231b","..1.~","~.1~2",".....",".~11z"],"par":3},{"rows":[".~~z3","3....",".21..","21<3.","3..a2"],"par":3}],[{"rows":[".....","..1..",".....","1.2.2","21..."],"par":2},{"rows":["3....","z.2.2",".1.2.","1..z.","13..1"],"par":3},{"rows":[".1.z3","....~","13...",".~13.",".a2.3"],"par":4},{"rows":["1.2..",">12a~",".32..","..~..",".2z.>"],"par":3}],[{"rows":["...11",".....","...2.",".11..","3..3."],"par":2},{"rows":[".23zz",".1...","11..1","11..1","....."],"par":3},{"rows":["...21","213~.","....2","b3~..","~3z.2"],"par":3},{"rows":[".~3..","~v~~c","2.2.z","1.1.v","31..."],"par":2}],[{"rows":["1..2.",".31..",".....","3..3.",".2..."],"par":2},{"rows":["..1.2","311.z",".....",".3..2","..3.."],"par":3},{"rows":["23.32","1....","12.za","...~.","~3~.."],"par":2},{"rows":["....c","1v113","1222.","~~.~.","~.>.."],"par":2}],[{"rows":["....2",".3..1",".....",".2.2.","1...."],"par":2},{"rows":["2.3..",".....","z.131","3....","...1."],"par":4},{"rows":[".1.~2","1....","~.a2.","z~2.3","3..~1"],"par":4},{"rows":["b.1~2","21^..","2.z^2",".~2~.","....2"],"par":4}],[{"rows":["..31.",".3.1.",".31..","..1..","..3.."],"par":2},{"rows":["...3.",".3...","....2","33.3z","11..3"],"par":2},{"rows":["1c212","z~.31","....3","~3.2.",".~~.."],"par":4},{"rows":[">c.23",".~...","..1z.","3.3..","3..~."],"par":4}],[{"rows":[".....","....2","12.2.","1..32",".1..."],"par":2},{"rows":["2....","3.23z","....2","1.2.2","....."],"par":3},{"rows":["z.1c.","3.2~.","1..2.","3....","2..1~"],"par":3},{"rows":["~...~",".321z",".2v1.","~~3a.","<...."],"par":3}],[{"rows":["...2.","...11","....2","..2..","..1.."],"par":2},{"rows":["2....",".22..","z13..","32z..","....."],"par":3},{"rows":["111..","~.b1.","..21.","....~","..2~."],"par":2},{"rows":["..~.~","2~..v","3.2.b","33.z1","1.33<"],"par":3}],[{"rows":["2....",".....","32...","....1","22211"],"par":2},{"rows":[".z3..",".1...","12.31",".....","....2"],"par":3},{"rows":[".~2.z","21.31","..2.~",".b..3","~1..3"],"par":4},{"rows":["..>21","..112","..21~",".~.<.","2az.1"],"par":3}],[{"rows":["1....","..11.",".2.1.",".11..",".32.."],"par":2},{"rows":[".....","1.23.","....3",".3.2z",".13.."],"par":3},{"rows":["3.~..","a32~.","1.1..","2~...","3z~.."],"par":3},{"rows":[".va21","~.212",".3v~.",".3z~.",".~.31"],"par":4}],[{"rows":[".2.1.","..132",".2...","...21",".1..."],"par":2},{"rows":[".3...",".1z..",".....","2.2..","3.1.."],"par":3},{"rows":["3~1~.",".z1.2","2~b.1",".2.2~","....."],"par":2},{"rows":[".1a3.","z22.v",".v3..",".3~.3","~~3.~"],"par":3}],[{"rows":["2....","1....",".....","1311.","11.2."],"par":2},{"rows":["..1..","..122","..2..","z2.32",".3..."],"par":3},{"rows":["2..z.","3..3.",".~12.","1~2.1","c~.~."],"par":3},{"rows":["3..~.","a.z3.","..v.2","~.2~3",".21~2"],"par":3}],[{"rows":[".....","12...","32..1","2..31","....."],"par":2},{"rows":[".33z.",".....",".....","23z23","..31."],"par":3},{"rows":["..~.3","1...c","32z.2","1..~1","3~..~"],"par":4},{"rows":["~....","..213","..~2<","a.321","z^21."],"par":2}],[{"rows":["..1..",".....",".....","3..12","11..."],"par":2},{"rows":[".z3..","...1.",".2...","z.1..","12..."],"par":3},{"rows":["..3z2",".~...","~2.2.","~....","1.13b"],"par":3},{"rows":[".b22~","2z<.<","..11.",".12~1",".1..."],"par":3}],[{"rows":["3..3.","212..",".....","..1..",".3..1"],"par":2},{"rows":[".z322","1....","..z..","...3.","..1.."],"par":4},{"rows":["3.3z.",".~...","2....","3.~..","~.1a2"],"par":3},{"rows":["3..a2","22>z.","1^.~.","2.1~.",".~..."],"par":3}],[{"rows":["...2.",".21..","...2.","312..","..13."],"par":2},{"rows":["2..z.",".22z.","..1..","3..13",".3..1"],"par":3},{"rows":["~..a.","~.12.","~.2~1","3z.2.","3...."],"par":4},{"rows":[".3..3","~v1.3","<2~2.",".~1.z","a1~.2"],"par":4}],[{"rows":[".....","...21","12...","12.2.","....3"],"par":2},{"rows":["...z.","...2.",".32..","3..3.",".211."],"par":2},{"rows":["...~3","..1~.",".21b3",".~3.1","3z..2"],"par":4},{"rows":["2.v.3","z.~3.",".v1~~","3b~3.","1..3."],"par":3}],[{"rows":["2....","...13","2..2.",".....","3...1"],"par":2},{"rows":[".....","21..z","....1","...12","31.1."],"par":3},{"rows":[".~2~.",".b.~.","1122.",".....","...2."],"par":2},{"rows":["..1~3","..~za","2....","^311^","1~.3~"],"par":3}],[{"rows":[".2...",".....",".2.31",".1..1","....3"],"par":2},{"rows":[".....","2..33",".....","...2.",".23z."],"par":4},{"rows":[".~1..","231..",".z~2.","2..2.","b2.1."],"par":3},{"rows":["z32~3","1....","1~a>3","~.3.1",".~>.1"],"par":2}],[{"rows":[".....",".13..","21...","...3.","..1.."],"par":2},{"rows":["..12.",".....",".11..","z.2.3","2...."],"par":3},{"rows":["33z.2","..31~","3..a2","1.~~3","....~"],"par":4},{"rows":["~3121","2..v2",".bz~3",".1^..","....."],"par":4}],[{"rows":["1....","...2.","2..1.","...2.",".2.2."],"par":2},{"rows":["z.3..","2...1","z....","3.2.2","..2.."],"par":3},{"rows":["..3~2","2...3","12.a1","..3..","~z3.."],"par":4},{"rows":[".~...",".v1.~",".z.2.","3cv11","..~1."],"par":3}],[{"rows":[".13..",".1...",".....","..13.","....3"],"par":2},{"rows":["....1","2.1..","1z112","z....",".2..."],"par":2},{"rows":[".2...","b.3.2","12...",".~~~2","2.2.."],"par":2},{"rows":[".~312","a>z.2",".~211",">1...",".2.~."],"par":3}],[{"rows":[".3..3","1..3.",".1...",".....",".2.2."],"par":2},{"rows":[".222.","1....","...2.",".z1.3","...11"],"par":4},{"rows":["z~..3","3~..1","2233.","....~","c1..."],"par":3},{"rows":[".3.~z","1.~.3","~~...",".^^.c","3.2.2"],"par":2}],[{"rows":[".2...","31...",".2.3.","...1.","1..1."],"par":2},{"rows":["z...1","....3","..2.2","...13","z32.2"],"par":2},{"rows":["1.b.3","13...","21.13","3~...","z.~.."],"par":3},{"rows":[".1.2.","...1~",".~.12","....b","z1<12"],"par":3}],[{"rows":["221..",".1...","2.3..",".....","1...."],"par":2},{"rows":["31z..","2....","21222",".....","1...."],"par":3},{"rows":["bz.2.","~.121","...21","..23.","~..~."],"par":3},{"rows":[".~2.b","221v.",".2~~.","..3z.","....~"],"par":4}],[{"rows":[".2..3","33.2.",".....",".1..3","21..."],"par":2},{"rows":["..z..","..1.3","....2","..3.2","31.32"],"par":3},{"rows":["c..2.","...~.","..31.","1~..1","...21"],"par":2},{"rows":["2~31.","z.21b","2~^<.",".2...",".~..~"],"par":4}],[{"rows":["2.2..","23...",".....","12.3.",".2.3."],"par":2},{"rows":["223.1",".z3.3","..1..","..1..","..z.."],"par":3},{"rows":["a3z~.","3....",".1..1",".13~~","..1.."],"par":3},{"rows":["~v2..",".1~1.",".2vz.","a11~.",".~2.1"],"par":4}],[{"rows":["...1.",".1.12",".....",".21.1","..2.."],"par":2},{"rows":["..2..","112.1",".....","..z1.","..z3."],"par":3},{"rows":["...3.","3~a11",".....","~.3z.","2...3"],"par":4},{"rows":[".1...","2..3.","c~.3.","zv1.3",".3>~1"],"par":4}],[{"rows":[".2.2.","..3..",".....","..2.2",".3231"],"par":2},{"rows":[".3...",".....","3..1.",".z22.","1...."],"par":4},{"rows":["~.~..",".1c3.","..22z",".....","..2.3"],"par":4},{"rows":[".2.<~","2....",".1~32","31>z~","c1..3"],"par":4}],[{"rows":["3.32.",".....",".12..",".1...",".3..."],"par":2},{"rows":[".2..2",".....",".3..2",".323z","..12."],"par":3},{"rows":["2z...","13...","~2~2~","a...1","..~.."],"par":4},{"rows":["13~~.",".b~.<","3....","12v1.",".1z.."],"par":4}],[{"rows":["....1","..321","..2..",".....","3.23."],"par":2},{"rows":[".z...",".3..z",".3..2",".2.1.","3..12"],"par":3},{"rows":["..a3.",".3z.2","2.~..","3.~3~","1.2.3"],"par":4},{"rows":["2<2..","~a.z.","...3.","...1^","32~3."],"par":3}],[{"rows":[".1...","....1",".2..1",".2...","3123."],"par":2},{"rows":["1....","2...3",".....","331z.",".2..2"],"par":4},{"rows":["...~1",".112~","..21.","~~...","1az.."],"par":3},{"rows":[".3.31","..z.2",".12<~","2.~..",".2~b."],"par":3}],[{"rows":["..11.",".....",".1..3",".1...","..3.2"],"par":2},{"rows":[".1.z1",".12..","11.2.",".....","..12."],"par":2},{"rows":["....~","312.1","..~..",".1..3","zb..~"],"par":3},{"rows":["1....",".b.~~","21131","32.z<",".~.1."],"par":4}]]; // 90 days x 4 tiers of solver-checked boards (gen-daily.js)
 
 /* ---------- save: one store helper, everything under one key prefix ---------- */
@@ -644,7 +668,7 @@ var G = { li: 0, level: null, b: null, lit: null, disp: null, awake: {}, hist: [
 var INTRO = {}; LEVELS.forEach(function (lv, i) { if (lv.intro && INTRO[lv.intro] == null) INTRO[lv.intro] = i; });
 var FIRST_SHY = LEVELS.findIndex(function (lv) { return /[zZ]/.test(lv.rows.join('')); });
 function hasShy() { return /[zZ]/.test(G.level.rows.join('')); }
-function defaultTip() { return G.level.tip || (FIRST_SHY >= 0 && G.li >= FIRST_SHY ? 'Light every lantern. Keep shy lanterns dark.' : 'Light every lantern.'); }
+function defaultTip() { return G.level.tip || (G.b && G.b.marked ? 'Light every flagged lantern. The others can stay dark.' : FIRST_SHY >= 0 && G.li >= FIRST_SHY ? 'Light every lantern. Keep shy lanterns dark.' : 'Light every lantern.'); }
 function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; $('winBox').hidden = true; stopConfetti(); }
 
 function unlocked(i) { if (tester || i === 0 || progress.stars[LEVELS[i - 1].id]) return true; for (var j = i; j < LEVELS.length; j++) if (progress.stars[LEVELS[j].id]) return true; return false; }
@@ -687,15 +711,27 @@ function starTotal() { var n = 0; LEVELS.forEach(function (lv) { n += progress.s
 
 function show(id) { if (id === 'title') clearWin(); ['title', 'game'].forEach(function (s) { $(s).hidden = s !== id; }); if (id === 'title') buildLevels(); wake(); }
 
+var WORLDS = ['Lantern Lane', 'Shy Garden', 'Lily Pond', 'Festival'], viewWorld = null; // null: follow the player's next level
+function worldOf(i) { return LEVELS[i].world || 0; }
+function worldLevels(w) { var a = []; LEVELS.forEach(function (lv, i) { if (worldOf(i) === w) a.push(i); }); return a; }
+function lastOfWorld(i) { return i === LEVELS.length - 1 || worldOf(i + 1) !== worldOf(i); }
 function buildLevels() {
   var box = $('levels'); box.innerHTML = '';
-  var nx = nextIndex();
+  var nx = nextIndex(), nW = WORLDS.length;
+  var vw = viewWorld != null ? viewWorld : allDone() ? Math.max(0, worldOf(Math.max(0, LEVELS.findIndex(function (lv) { return (progress.stars[lv.id] || 0) < 3; })))) : worldOf(nx);
+  var wl = worldLevels(vw), wStars = 0; wl.forEach(function (i) { wStars += progress.stars[LEVELS[i].id] || 0; });
+  var wOpen = unlocked(wl[0]);
+  $('wName').textContent = WORLDS[vw]; $('wSub').textContent = wOpen ? '★ ' + wStars + ' of ' + wl.length * 3 : '🔒 locked';
+  $('wPrev').disabled = vw === 0; $('wNext').disabled = vw === nW - 1;
+  $('wPrev').onclick = function () { viewWorld = Math.max(0, vw - 1); buildLevels(); };
+  $('wNext').onclick = function () { viewWorld = Math.min(nW - 1, vw + 1); buildLevels(); };
   LEVELS.forEach(function (lv, i) {
+    if (worldOf(i) !== vw) return;
     var b = document.createElement('button'), st = progress.stars[lv.id] || 0, open = unlocked(i);
     b.className = 'lvl' + (open ? '' : ' locked') + (open && i === nx && !st ? ' next' : '');
     b.innerHTML = (i + 1) + '<small>' + (st ? '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) : open ? 'play' : 'locked') + '</small>';
     b.setAttribute('aria-label', 'Level ' + (i + 1) + ', ' + lv.name + (st ? ', ' + st + ' stars' : open ? '' : ', locked'));
-    if (open) b.onclick = function () { startLevel(i); }; else b.disabled = true;
+    if (open) b.onclick = function () { viewWorld = null; startLevel(i); }; else b.disabled = true;
     box.appendChild(b);
   });
   $('testerBar').hidden = !tester;
@@ -704,7 +740,7 @@ function buildLevels() {
   if (done) $('doneText').textContent = 'All ' + LEVELS.length + ' levels done, ' + starTotal() + ' of ' + LEVELS.length * 3 + ' stars.';
   $('playBtn').textContent = done ? (st3 >= 0 ? 'Go for 3 stars: level ' + (st3 + 1) : 'Replay level 1')
     : LEVELS.some(function (lv) { return progress.stars[lv.id]; }) ? 'Continue: level ' + (nx + 1) : 'Play';
-  $('playBtn').onclick = function () { startLevel(done ? Math.max(0, st3) : nextIndex()); };
+  $('playBtn').onclick = function () { viewWorld = null; startLevel(done ? Math.max(0, st3) : nextIndex()); };
   var open = dailyOpen(), db = $('dailyBtn'); db.hidden = !open; $('title').classList.toggle('compact', open || done); // one screen, no scroll
   if (open) {
     var dst = daily.done[today()] || 0, sk = dailyStreak(), slot = daily.string >= 7 && !dst ? 1 : daily.string + (dst ? 0 : 1);
@@ -825,7 +861,7 @@ function drawBoard(ctx, t) {
       if (!reduced) { var tw = 0.5 + 0.5 * Math.sin(t / 700 + i * 2.3); ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * tw) + ')'; ctx.beginPath(); ctx.arc(x + S * (0.2 + ((i * 29) % 60) / 100), y + S * 0.55, S * 0.025, 0, 7); ctx.fill(); }
       continue;
     }
-    var base = cl.kind === 'wind' ? '#ead9a8' : (cl.r + cl.c) % 2 ? '#8fc87a' : '#9bd185';
+    var base = cl.kind === 'wind' ? '#ead9a8' : cl.kind === 'portal' ? '#ddd3f2' : (cl.r + cl.c) % 2 ? '#8fc87a' : '#9bd185';
     var tx0 = x + gap, ty0 = y + gap, tw0 = S - gap * 2, th0 = S - gap * 2 - th;
     // side face (thickness), outline, then the top face lit from the top-left
     ctx.fillStyle = dark(base, 0.55); rrect(ctx, tx0 - 1, ty0 - 1, tw0 + 2, th0 + th + 2, tr + 1); ctx.fill();
@@ -849,6 +885,7 @@ function drawBoard(ctx, t) {
       }
     }
     if (cl.kind === 'wind') drawWind(ctx, x + S / 2, y + S / 2 - th * 0.5, S, cl.wind, t, i);
+    if (cl.kind === 'portal') drawPortal(ctx, x + S / 2, y + S / 2 - th * 0.5, S, cl.ch === 'O' ? PORTAL_O : PORTAL_Q, t);
   }
   // warm light pools from every lit lantern (additive, so the board brightens as the festival lights up)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -859,6 +896,29 @@ function drawBoard(ctx, t) {
     lg.addColorStop(0, 'rgba(255,170,60,.32)'); lg.addColorStop(1, 'rgba(255,140,40,0)');
     ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(p[0], p[1], S * 1.3, 0, 7); ctx.fill();
   }
+  ctx.restore();
+}
+var PORTAL_O = ['#8a4fe0', '#c9a6ff'], PORTAL_Q = ['#14998a', '#7fe6d6']; // two pairs, two colours
+// A portal: a swirl that turns slowly; its twin has the same colour.
+function drawPortal(ctx, cx, cy, S, col, t) {
+  var rot = reduced ? 0 : t / 900;
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.fillStyle = dark(col[0], 0.45); ctx.beginPath(); ctx.ellipse(0, S * 0.03, S * 0.36, S * 0.3, 0, 0, 7); ctx.fill();
+  var g = ctx.createRadialGradient(0, 0, S * 0.02, 0, 0, S * 0.34); g.addColorStop(0, '#fff'); g.addColorStop(0.35, col[1]); g.addColorStop(1, col[0]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.34, S * 0.28, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = Math.max(1.6, S * 0.035); ctx.lineCap = 'round';
+  for (var k = 0; k < 3; k++) { var a0 = rot + k * 2.094; ctx.beginPath();
+    for (var u = 0; u <= 1.001; u += 0.1) { var a = a0 + u * 2.4, rr = S * (0.04 + 0.25 * u); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr * 0.82); } ctx.stroke(); }
+  ctx.restore();
+}
+// A festival flag on a lantern that must be lit (beacon levels).
+function drawFlag(ctx, x, y, S, lit, t) {
+  var wv = reduced ? 0 : Math.sin(t / 300 + x) * S * 0.03;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = '#5a3a12'; ctx.lineWidth = Math.max(2, S * 0.04); ctx.beginPath(); ctx.moveTo(x, y + S * 0.34); ctx.lineTo(x, y - S * 0.1); ctx.stroke();
+  ctx.fillStyle = '#5a3a12'; ctx.beginPath(); ctx.moveTo(x, y - S * 0.11); ctx.quadraticCurveTo(x + S * 0.14, y - S * 0.06 + wv, x + S * 0.27, y - S * 0.02 + wv); ctx.lineTo(x, y + S * 0.08); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = lit ? '#ffd34d' : '#f2a51e'; ctx.beginPath(); ctx.moveTo(x + 1.5, y - S * 0.09); ctx.quadraticCurveTo(x + S * 0.13, y - S * 0.05 + wv, x + S * 0.23, y - S * 0.02 + wv); ctx.lineTo(x + 1.5, y + S * 0.055); ctx.closePath(); ctx.fill();
+  if (lit) { ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(S * 0.12) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', x + S * 0.09, y - S * 0.015 + wv * 0.5); }
   ctx.restore();
 }
 function drawWind(ctx, cx, cy, S, d, t, seed) {
@@ -907,7 +967,9 @@ function draw(t) {
       shade = sh.on ? (reduced ? 1 : Math.min(1, (t - sh.t) / 300)) : (reduced ? 0 : Math.max(0, 1 - (t - sh.t) / 220));
     }
     var bob = cl.water && !reduced ? Math.sin(t / 1100 + idx) * S * 0.03 : 0; // floating lanterns bob on the pond
+    if (cl.mark) { ctx.strokeStyle = G.disp[k] ? '#ffe27a' : '#f2a51e'; ctx.lineWidth = Math.max(3, S * 0.06); ctx.beginPath(); ctx.ellipse(p[0], p[1] + S * 0.3, S * 0.36, S * 0.12, 0, 0, 7); ctx.stroke(); }
     drawLantern(ctx, p[0], p[1] - S * 0.04 + bob, S, { n: cl.n, shy: cl.shy, lit: G.disp[k], awake: cl.shy && G.disp[k], water: cl.water, t: t, pop: pop, duck: duck, shield: shade, seed: idx * 1.37 });
+    if (cl.mark) drawFlag(ctx, p[0] + S * 0.3, p[1] - S * 0.26 + bob, S * 1.4, G.disp[k], t);
   }
   fireflies(ctx, G.ox, G.oy, b.w * S, b.h * S, S, t, Math.max(4, Math.round(b.cells.length / 6)));
   if (ring >= 0 && !G.busy && s && s.target) { // bouncing pointer above the target
@@ -929,6 +991,7 @@ function drawFail(ctx, t, under) {
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   // the trail follows the flame's own arcs, high over the lanterns it jumped
   var trail = function () { ctx.beginPath(); for (var i = 1; i < F.path.length; i++) { var a = cellXY(F.path[i - 1]), q = cellXY(F.path[i]);
+    if (F.warps && F.warps.indexOf(i - 1) >= 0) { ctx.moveTo(q[0], q[1] - S * 0.45); continue; } // portal hop: the trail jumps
     var dx = q[0] - a[0], dy = q[1] - a[1], len = Math.hypot(dx, dy) || 1, h = Math.min(S * 0.9, len * 0.35) * 2;
     var nx = dy / len, ny = -dx / len; // bow upward on rows; on columns bow sideways, toward the middle of the board
     if (Math.abs(dx) < 1) { nx = a[0] > G.ox + G.b.w * S / 2 ? -1 : 1; ny = 0; } else if (ny > 0) { nx = -nx; ny = -ny; }
@@ -991,6 +1054,11 @@ function drawFlames(ctx, t) {
     if (t < f.t0 || t > f.t1) return;
     var segs = f.e.path.length - 1, u = (t - f.t0) / (f.t1 - f.t0) * segs, si = Math.min(segs - 1, Math.floor(u)), v = u - si;
     var a = ptXY(f.e.path[si]), b = ptXY(f.e.path[si + 1]);
+    if (f.e.warps && f.e.warps.indexOf(si) >= 0) { // through a portal: no arc across the board
+      var inn = v < 0.5, W0 = inn ? a : b, sc = inn ? 1 - v * 2 : v * 2 - 1;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.8 * (1 - sc)) + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(W0[0], W0[1], S * (0.2 + 0.25 * (1 - sc)), 0, 7); ctx.stroke();
+      flyingFlame(ctx, W0[0], W0[1] - S * 0.1, S * 0.11 * Math.max(0.15, sc), -Math.PI / 2, t); return;
+    }
     var dist = Math.hypot(b[0] - a[0], b[1] - a[1]), hgt = Math.min(S * 0.9, dist * 0.35);
     var alpha = f.e.result === 'off' && si === segs - 1 ? 1 - v * 0.8 : 1;
     var pos = function (vv) { return [a[0] + (b[0] - a[0]) * vv, a[1] + (b[1] - a[1]) * vv - Math.sin(vv * Math.PI) * hgt - S * 0.1]; };
@@ -1119,7 +1187,7 @@ function whyFail(res) {
     var r = c.r + D[k][0], cc = c.c + D[k][1]; if (r < 0 || cc < 0 || r >= b.h || cc >= b.w) continue;
     var n = b.cells[r * b.w + cc]; if (n.kind === 'lantern' && !n.shy && res.lit[n.li]) { late = r * b.w + cc; break; }
   }
-  return { path: e.path, shy: e.end, late: late };
+  return { path: e.path, warps: e.warps, shy: e.end, late: late };
 }
 function doTap(idx, t) {
   var res = L.tap(G.b, G.lit, idx);
@@ -1185,7 +1253,7 @@ function hint() {
   if (!s || !s.line.length) return;
   if (!G.hintStage) { // first press: a nudge to reason with; second press: show the lantern
     G.hintStage = 1; G.hint = -1;
-    tray((hasShy() ? 'Which lantern could shelter the shy one? Light it before any flame lands there.'
+    tray((G.b.marked ? 'Which lantern reaches the most flags? It can be one without a flag.' : hasShy() ? 'Which lantern could shelter the shy one? Light it before any flame lands there.'
       : unreachable() ? 'Which lantern can no flame reach? It will need a match of its own.'
       : 'Which lantern starts the longest chain?') + ' Press Hint again to see one.');
     wake(); return;
@@ -1209,12 +1277,13 @@ function win() {
   }
   if (lv.intro && !seen[lv.intro]) { seen[lv.intro] = true; store.set('seen', seen); }
   var last = G.li === LEVELS.length - 1;
-  $('winTitle').textContent = last ? 'The festival is lit!' : st === 3 ? 'All lit!' : 'All lit! Can you match par?';
+  var wEnd = !isDaily && lastOfWorld(G.li);
+  $('winTitle').textContent = last ? 'The festival is lit!' : wEnd ? WORLDS[worldOf(G.li)] + ' is lit!' : st === 3 ? 'All lit!' : 'All lit! Can you match par?';
   $('winStars').innerHTML = '★'.repeat(st) + '<span class="off">' + '★'.repeat(3 - st) + '</span>';
   $('winStars').setAttribute('aria-label', st + ' of 3 stars');
   $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '.' + (st < 3 ? ' Try again for 3 stars.' : '');
   if (G.winNote) $('winText').textContent = G.winNote + ' ' + $('winText').textContent;
-  $('nextBtn').textContent = last ? 'Back to levels' : 'Next level';
+  $('nextBtn').textContent = last ? 'Back to levels' : wEnd ? 'On to ' + WORLDS[worldOf(G.li + 1)] : 'Next level';
   if (isDaily) { // the see-you-tomorrow card
     $('winTitle').textContent = dw.full ? 'Your string is full!' : 'Today\'s lantern is lit!';
     $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '. ' +
@@ -1222,7 +1291,8 @@ function win() {
       (dw.first && !dw.gold ? 'Come back tomorrow for a gold one.' : 'Come back tomorrow for a new one.');
     $('nextBtn').textContent = 'See you tomorrow';
   }
-  tray('Every lantern lit!'); // replaces the tutorial bubble / tip, never a blank card
+  $('shareBtn').hidden = !isDaily; G.shareText = isDaily ? shareText(st) : '';
+  tray(G.b.marked ? 'Every flag is lit!' : 'Every lantern lit!'); // replaces the tutorial bubble / tip, never a blank card
   var li = G.li;
   if (G.winTimer) clearTimeout(G.winTimer);
   G.winTimer = setTimeout(function () { // cleared by startLevel, show and undo; re-check state in case
@@ -1232,6 +1302,21 @@ function win() {
   }, 250);
 }
 $('nextBtn').onclick = function () { $('winBox').hidden = true; if (G.li < LEVELS.length - 1) startLevel(G.li + 1); else show('title'); };
+// Today's lantern share card: no spoilers, just the result and the string (Wordle style).
+function shareText(st) {
+  var d = new Date(G.level.date + 'T12:00'), str = '';
+  for (var i = 0; i < 7; i++) str += i < daily.string ? (daily.gold.indexOf(i) >= 0 ? '🌟' : '🏮') : '▫️';
+  var sk = dailyStreak();
+  return 'Lantern Chain · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + '\n' +
+    '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) + ' ' + G.matches + (G.matches === 1 ? ' match' : ' matches') + ' (par ' + G.level.par + ')\n' +
+    str + (sk > 1 ? ' ' + sk + '-day streak' : '');
+}
+$('shareBtn').onclick = function () {
+  var txt = G.shareText, b = $('shareBtn');
+  var done = function () { b.textContent = 'Copied! Paste it anywhere'; setTimeout(function () { b.textContent = 'Share my lantern'; }, 2200); };
+  try { if (navigator.share) { navigator.share({ text: txt }).catch(function () {}); return; } } catch (e) {}
+  try { navigator.clipboard.writeText(txt).then(done, function () { b.textContent = 'Could not copy'; }); } catch (e) { b.textContent = 'Could not copy'; }
+};
 $('replayBtn').onclick = function () { $('winBox').hidden = true; startLevel(G.li); };
 
 var confettiGen = 0;
@@ -1255,17 +1340,19 @@ function confetti() {
 }
 
 /* ---------- rules sheet ---------- */
-var SHY_AT = INTRO.shy != null ? INTRO.shy : 99, WATER_AT = INTRO.water != null ? INTRO.water : 99, WIND_AT = INTRO.wind != null ? INTRO.wind : 99;
+var MARKS_AT = INTRO.marks != null ? INTRO.marks : 99, PORTAL_AT = INTRO.portal != null ? INTRO.portal : 99, SHY_AT = INTRO.shy != null ? INTRO.shy : 99, WATER_AT = INTRO.water != null ? INTRO.water : 99, WIND_AT = INTRO.wind != null ? INTRO.wind : 99;
 var RULES = [
   [0, 'Tap a dark lantern to light it with a match.'],
   [0, 'A lit lantern\'s flame hops exactly as many cells as its number, in all four directions: up, down, left and right. It jumps over whatever is in between.'],
   [0, 'A flame that lands on a dark lantern lights it, and that lantern hops too. That\'s a chain.'],
   [0, 'Light every lantern. Match par (the fewest matches) for 3 stars. Undo, Restart and Hint are always free.'],
+  [MARKS_AT, 'Flag levels: light every lantern with a gold flag. Lanterns without a flag can stay dark.'],
   [SHY_AT, 'Shy lanterns have their eyes shut. Keep them dark: a flame that lands on one wakes it.'],
   [SHY_AT, 'A glass dome drops over a shy lantern when a lantern right next to it is lit. Flames can\'t wake it then.'],
   [SHY_AT, 'Timing is kind: a lantern lit by the same wave of flames still drops the dome in time.'],
   [WATER_AT, 'A flame that lands on the pond goes out, even on a floating lantern. Floating lanterns need their own match.'],
-  [WIND_AT, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.']
+  [WIND_AT, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.'],
+  [PORTAL_AT, 'A flame that lands on a portal comes out of its twin (same colour) and hops the same distance again, the same way.']
 ];
 function showRules(fromTitle) {
   var ol = $('rulesList'); ol.innerHTML = '';
@@ -1305,7 +1392,7 @@ $('homeBtn').onclick = function () { if (G.busy) finishAnim(); show('title'); };
 window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(function () { return { screen: $('game').hidden ? 'title' : 'game', li: G.li }; });
 function boot(data) { buildLevels(); if (data && data.screen === 'game' && LEVELS[data.li]) startLevel(data.li); else show('title'); drawScene(performance.now()); }
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh }; // for automated tests
+window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh, startLevel: startLevel }; // for automated tests
 })();
 </script>
 
