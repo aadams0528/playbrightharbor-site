@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.5 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.6 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -62,7 +62,7 @@ button { font-family: var(--font-display); }
 /* everything done: the banner replaces the tagline and the level grid packs into 3 rows, so the whole screen fits without scrolling */
 #title.alldone .lede { display: none; }
 #title.alldone #levels { grid-template-columns: repeat(5, 1fr); gap: 8px; }
-#title.alldone .lvl { min-height: 64px; font-size: 22px; }
+#title.alldone .lvl { min-height: 56px; font-size: 22px; padding: 2px 0; }
 #title.alldone .lvl small { font-size: 13px; letter-spacing: 0; }
 h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 0; text-align: center; letter-spacing: .5px;
   color: #ffe6a8; text-shadow: 0 3px 0 #7a3d10, 0 0 18px rgba(255,196,77,.45); user-select: none; cursor: default; }
@@ -119,6 +119,15 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .sheet .stick { position: sticky; bottom: -22px; margin-bottom: -22px; padding-bottom: 22px; background: var(--card); }
 .rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; }
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+/* today's lantern: a second big button under Play, with the streak and the string count */
+.dailyBtn { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 16px; min-height: 64px; }
+.dailyBtn .dl-icon { font-size: 30px; line-height: 1; }
+.dailyBtn .dl-txt { flex: 1; display: flex; flex-direction: column; }
+.dailyBtn b { font-size: 21px; line-height: 1.15; }
+.dailyBtn small { line-height: 1.2; }
+.dailyBtn small { font-size: 16px; font-weight: 700; color: #7a4d00; font-family: var(--font-body, inherit); }
+.dailyBtn.done { background: linear-gradient(180deg, #e9f7df, #cdeab8); border-color: #6aa84f; box-shadow: 0 4px 0 #6aa84f; }
+#title.alldone #scene { height: min(150px, 19vh); }
 /* short phones (SE, small Androids, browser bars showing): everything around the board gets slimmer so the board stays big */
 @media (max-height: 700px) {
   #game.screen { gap: 6px; }
@@ -137,12 +146,13 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
     <p class="lede">Light every lantern with as few matches as you can.</p>
     <div class="done" id="doneBanner" role="status" hidden><b id="doneTitle">The festival is lit!</b><p id="doneText"></p></div>
     <button class="btn primary" id="playBtn">Play</button>
+    <button class="btn dailyBtn" id="dailyBtn" hidden><span class="dl-icon" aria-hidden="true">🏮</span><span class="dl-txt"><b id="dailyTitle">Today's lantern</b><small id="dailySub"></small></span></button>
     <div id="levels" aria-label="Levels"></div>
     <div class="testerbar" id="testerBar" hidden>
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver" id="ver">v0.5</p>
+    <p class="ver" id="ver">v0.6</p>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -341,6 +351,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 'use strict';
 var L = window.LanternLogic;
 var LEVELS = [{"id":1,"name":"First Light","intro":"tap","rows":[".....",".....",".111.",".....","....."],"tut":[{"text":"This lantern has a 1 on it. Tap it to light it with a match.","target":[2,1]},{"text":"Its flame hopped 1 cell in all four directions: up, down, left and right. It lit the next lantern, which hopped too. A chain!","after":true}],"par":1},{"id":4,"name":"Big Jump","intro":"numbers","rows":["..1..",".....","1.2.1",".....","..1.."],"tut":[{"text":"This lantern says 2. Its flame jumps exactly 2 cells, right over whatever is in between.","focus":[2,2]},{"text":"Your turn: light all five lanterns with just one match. Which one can do it?","free":true,"retry":"Not all lit. A 1 only hops 1 cell. Tap Undo and try another start."},{"text":"The 2 jumped over the grass and lit all four. A 1 only hops 1 cell, so it lands on grass.","after":true}],"par":1},{"id":13,"name":"Spark Snakes","rows":[".....","..11.","1211.","1....","....1"],"tip":"Some starts light more lanterns than others. Remember: a 2 jumps over its neighbours.","par":2},{"id":5,"name":"Chain Starters","rows":["...3.","...12",".3.3.","....1",".21..","....3"],"tip":"Meet the 3: its flame hops exactly 3 cells. Find the lanterns that start the longest chains.","par":3},{"id":14,"name":"Leap Frog","rows":["...21","..2..",".....",".12.3","....3","322.."],"tip":"Big numbers leap far, and flames can't hop back. Follow a few chains before you strike a match.","par":2},{"id":6,"name":"Shy Lantern","intro":"shy","rows":["1....","..1..","2.z..",".....","....."],"tut":[{"text":"This lantern has its eyes shut. It's shy, so it must stay dark!","focus":[2,2]},{"text":"A glass dome drops over a shy lantern when a lantern right next to it is lit. Flames can't wake it then.","focus":[1,2]},{"text":"The 2 would jump onto the shy one. Light the 1 right next to it first.","target":[1,2],"offScript":"Not yet! The 2's flame would wake the shy lantern. Tap the glowing 1 first."},{"text":"See the glass dome drop over it? Now tap the 2.","target":[2,0]},{"text":"The flame fizzled on the glass. Even the 1's own flame couldn't wake it. Well done!","after":true}],"par":2},{"id":7,"name":"Hide and Seek","rows":["12...",".....",".2.2.",".z...",".1...","221.."],"tip":"If a shy lantern wakes up, tap Undo. Nothing is lost.","par":2},{"id":15,"name":"Shady Corner","rows":["..1..","3..12","1.1.2","..3.z"],"tip":"Order matters here. Get a glass dome over the shy lantern before a flame can reach it.","par":2},{"id":16,"name":"Two Shy Ones","rows":["2.z1.",".....","2..3z","2..3.","....2"],"tip":"Two shy lanterns. Which one needs its dome first?","par":3},{"id":8,"name":"Lily Pond","intro":"water","rows":["..1..","..~..","1~b~1","..~..","..1.."],"tut":[{"text":"Blue cells are the pond. A flame that lands on water goes out.","focus":[1,2]},{"text":"This lantern floats on a lily pad. A flame can't light it, but a match can. Tap it.","target":[2,2]},{"text":"Its flame jumped 2 cells to all four. Their flames landed in the pond and went out.","after":true}],"par":1},{"id":9,"name":"Puddles","rows":[".z2~b","..1..",".b...","..2~2","~21..","....2"],"tip":"Floating lanterns always need a match of their own.","par":3},{"id":10,"name":"Breeze","intro":"wind","rows":["..2..",".....","..>.1",".....","....."],"tut":[{"text":"This is a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points.","focus":[2,2]},{"text":"Tap the 2 and watch the wind bend its flame.","target":[0,2]},{"text":"The wind turned the hop around the corner.","after":true}],"par":1},{"id":11,"name":"Gusty Lane","rows":["1v...",".2...","2..3.",".v...","....3",".3..2"],"tip":"Follow each flame. Wind can send it somewhere new.","par":2},{"id":12,"name":"Festival Night","rows":["..2z1b",".3.~2.",".....<","...21.","....>3","21~.3."],"tip":"Everything you've learned, on one board.","par":4}];
+var DAILY = [[{"rows":[".....",".....","21...","31..2","2.2.."],"par":2},{"rows":["11..z","3.2z.",".2...",".....",".12.."],"par":2},{"rows":["~.b..","~....",".2z12","1.31.",".1.1."],"par":3},{"rows":["~.~..","232.z",".~.^1",">b23.",".2..3"],"par":4}],[{"rows":[".2...",".11.1",".3...","....2","....."],"par":2},{"rows":["..31.",".1..3","1.z32","...31","....."],"par":3},{"rows":[".33b2","11~..",".~2..","~.1..","....."],"par":2},{"rows":["..~1.","23<1.",".2a3.","z2.3<","...~."],"par":3}],[{"rows":[".31.2",".3..1",".11..","...3.","....."],"par":2},{"rows":[".....","21.13",".1...","3.zz1","....."],"par":2},{"rows":["a3~.2","..~..",".2z22","...3.",".~..."],"par":3},{"rows":["~..2.","~13..","1..32","3b...","~2z<1"],"par":4}],[{"rows":[".3..3",".....",".....",".23.1","..1.."],"par":2},{"rows":[".....",".....","..312",".3.11","z313."],"par":2},{"rows":["1.2.~","~2a33","~....",".....","....3"],"par":2},{"rows":[".....",".~2.b",".1~~.",".2<v1","1z~13"],"par":3}],[{"rows":["3..2.",".....","..2..","2....","..2.1"],"par":2},{"rows":["...1.","z321.","1.2.3","3...1","....."],"par":4},{"rows":["..321","~.12~",".~.b2","..2.z","....3"],"par":3},{"rows":["32az.","..~.3","..3.~","..1..","3>>3."],"par":4}],[{"rows":[".1...",".3...","3..3.","...11","....."],"par":2},{"rows":["3...z","...3.","2.2.1",".3.3.",".1z1."],"par":3},{"rows":["3z2.~","3..2.",".2~..","~12~b",".2..."],"par":4},{"rows":[".3.~1",".~3..","....3","13.~^","3.cz1"],"par":3}],[{"rows":["...3.",".3..3","...2.",".....","3..2."],"par":2},{"rows":[".....","2.z32",".2213","3.1z.","....."],"par":2},{"rows":["1z.3.","....3","12...",".~.1b","..~.1"],"par":3},{"rows":[".v...","3.11.",".2.>3","~3a~.","3.~.."],"par":2}],[{"rows":["....2","....1","...2.","1.2.2","....."],"par":2},{"rows":["...13","...2.",".1.31","31.z2","...z."],"par":3},{"rows":[".2..3",".z12.","..2b3",".213~","~...."],"par":4},{"rows":["2.^..","c~21.","3..z.",".~1^.","3~.~."],"par":2}],[{"rows":[".....","...21","1....","2..22","2.2.."],"par":2},{"rows":[".2.2.","3..3.","3zz..",".....","11..."],"par":3},{"rows":["..1..",".31.1","...~2","2.2~3",".b..."],"par":2},{"rows":[".~~..",".~.1.","1211c","..~v.","z223<"],"par":3}],[{"rows":["...3.",".33.3",".....","...3.",".131."],"par":2},{"rows":[".1..3","...31","...2.","..3..","...z3"],"par":3},{"rows":[".2.~.","2~2.3","a2...",".1.12","....z"],"par":3},{"rows":[".~123",".23.3",".1.1^","..b..","<.z~2"],"par":3}],[{"rows":[".2.1.","..113",".2...","....1","....."],"par":2},{"rows":[".2.3.","..z32",".....","....2",".31.."],"par":4},{"rows":["2....",".22~2","3~...","z.2c.","..1.."],"par":4},{"rows":[".v.1.",".~1.3",".b..z","1~^.2",".2.12"],"par":4}],[{"rows":["12.2.",".....","21...","3..3.","3.1.."],"par":2},{"rows":[".....","1....","2z.3.","...2.","3..z2"],"par":3},{"rows":["3...3","32.22","..3..","2.z~.","1.b.~"],"par":4},{"rows":[".23.<","~..b3",".z2~.","<..~3","~..31"],"par":3}],[{"rows":[".....","3.32.",".11..",".2...","2.3.."],"par":2},{"rows":["3..3.","2...z","....2","z313.","...11"],"par":3},{"rows":["..a.~","z12.1","....1","..12.","~13.."],"par":3},{"rows":[".<3z.",".3.2~","1a.2.","21~..","22.^."],"par":4}],[{"rows":[".2...","..2.2","....2","3..31","....2"],"par":2},{"rows":["z1.3.","11.1.","...z.",".....",".2.2."],"par":3},{"rows":["2...~","~.~13","21a..","3..11","....z"],"par":3},{"rows":["v3.31","~.~v.","~.2..","z.1a~","1.133"],"par":3}],[{"rows":[".....","..2.2","2.2..",".....","..133"],"par":2},{"rows":["13.3.","..z31",".....","1z...","...3."],"par":3},{"rows":["....3","~..31",".z121","..3~.","1.c.3"],"par":4},{"rows":["~z>..",">1.~2","112.a","~3..3","23.~."],"par":3}],[{"rows":[".11..","..3..",".....","..1.2",".31.2"],"par":2},{"rows":["...1.",".....","3..z2","..2.1","2...."],"par":3},{"rows":[".33~.",".1...","....2","2az..",".3.1~"],"par":4},{"rows":["..z1~","..~..","1c~21",">13.2","3v1.."],"par":4}],[{"rows":[".....","1...1","1...1","..2.1","....."],"par":2},{"rows":["3.2..",".231.",".1...",".....",".3z.."],"par":3},{"rows":["cz~.3","..2.1","...~.","....1","~1..3"],"par":2},{"rows":[".z~.<","1a...",".~^1.","..~33","..3.1"],"par":4}],[{"rows":["..2.3","..13.",".....",".2.2.","....."],"par":2},{"rows":["...22","...1.","z...2","..12.","...3z"],"par":3},{"rows":["~....","z...~","1~.~3","2.3.1","a1.21"],"par":3},{"rows":["~z2~1","~.1.v","12<3.",".2a.2","....~"],"par":3}],[{"rows":["1....","1...3","3..31",".1...",".1..3"],"par":2},{"rows":[".....","2...1",".1z..",".....","3.212"],"par":3},{"rows":[".1..3","z12c2","..13.","~....","~..~."],"par":3},{"rows":["v..a.","...2.","2.~1.","^1~12",".z~21"],"par":3}],[{"rows":[".3..3",".11..",".....","....1","2...."],"par":2},{"rows":["....2","3133.",".....",".2.11",".2.z."],"par":3},{"rows":["3.3..",".c..~","..2~.","3..12",".~211"],"par":2},{"rows":["3.2.~","z.2.~",".31.1",">3b.2","1...<"],"par":3}],[{"rows":["..11.","...3.","13.33",".....","....."],"par":2},{"rows":["2....","z.13.","..2.3","1..3.","2.1.."],"par":3},{"rows":["3..1.","~..11","..3..","3...~","..2.b"],"par":2},{"rows":[".~2.z","..1.1",".31~.","v.1~2","2<a.3"],"par":3}],[{"rows":["1....","1....","33.2.",".....","....3"],"par":2},{"rows":["...1.","11.3.","z..3.","...1.",".332."],"par":3},{"rows":[".2.~.","~.2~.",".3..z","c..32",".3313"],"par":4},{"rows":["z121.","v32~3","....v","3..~.","1~c3."],"par":4}],[{"rows":["21.22",".1...","...2.",".....","....."],"par":2},{"rows":[".2.z.","...2.",".2...","...3.","11..."],"par":2},{"rows":["21c..","3z.~.","2.3.2",".21.~","..3.."],"par":4},{"rows":["c..3.","3...2",".~~..","2.~..","2~>2z"],"par":3}],[{"rows":["1.1..","1.2..","1..2.",".....","...2."],"par":2},{"rows":["..2..",".2.11","..z22","...1.","..1.1"],"par":4},{"rows":[".z~21","2333.","....~","..~..","..2c."],"par":3},{"rows":["3..~3",".^1v.","2.bz.","122.~","3..2."],"par":3}],[{"rows":["..1.3",".1.1.","212.2",".....","....."],"par":2},{"rows":["2.3..",".2z.3",".....","..2..","..32."],"par":4},{"rows":[".....","..2.3","3.11~","~..3.","...cz"],"par":2},{"rows":["1~1~.","11.<.","....a","^22z.",".1~~."],"par":4}],[{"rows":[".....","2.12.",".2.2.",".....",".1..."],"par":2},{"rows":["..2.3","1.2.z","..1z.",".....","..2.."],"par":2},{"rows":["...a.","23.2z",".....",".13~2","11~.3"],"par":4},{"rows":["3.~z.","...13","2v1.<","~3~~1","a.3.2"],"par":3}],[{"rows":["...3.",".1...","2.2..",".2.3.","....."],"par":2},{"rows":["...2.","3....","..2.1","312.z","....."],"par":4},{"rows":[".....","~113.","..223","1~.a.","1.2~."],"par":2},{"rows":["^.2..","3~112","..z>3","b..~2","1~2~."],"par":2}],[{"rows":["..1..",".31.1",".....",".....","33..."],"par":2},{"rows":["23...",".3.23","..311",".2zz.","....."],"par":3},{"rows":["13...",".~..b","1.2~.","3.232",".~2.."],"par":2},{"rows":["11..3",".z.23",".1..v","~2~<.",".1.a3"],"par":4}],[{"rows":[".....","11.2.","122.2",".....","....."],"par":2},{"rows":["33.23","..3..","1....","11.2z","....."],"par":3},{"rows":[".za.~","....2","2211.",".~1.3","1~.~3"],"par":3},{"rows":[".3v1z",".2222","~b.~.",".3..^","...~~"],"par":2}],[{"rows":[".....","2.11.","1....",".1...","2.2.."],"par":2},{"rows":[".....","2...2",".....","z3.33","....1"],"par":4},{"rows":["..2.1","31~2.","z22..",".b...",".1~3."],"par":3},{"rows":["3.<..","..2.~","~.2.^","~a2~z",".1331"],"par":3}],[{"rows":["..3..","1....",".....","2.2..","3.2.2"],"par":2},{"rows":["...1.","2.12.","..z2.","..32.",".12.."],"par":4},{"rows":[".3.~.",".....",".22.3","z2.31","1.2b~"],"par":3},{"rows":["~..3.",".....",".~z3.","<1vc.","2.2.2"],"par":3}],[{"rows":["12...","..231","2....","..2..","...3."],"par":2},{"rows":["3z..3","..1..",".11.2",".z.2.","...21"],"par":3},{"rows":["31..1","~~..~","...2.",".z.13","c3~3."],"par":4},{"rows":["..3~<","21z~.","32.1~","..b.1","..~1<"],"par":4}],[{"rows":["....2","2..3.","....2","3312.","....."],"par":2},{"rows":["3....","..312",".....","2.3z.","z12.."],"par":3},{"rows":["...21",".3z.1","~.12~","~32..","~.c.."],"par":4},{"rows":["2~.>.",".z>~1",".1c.2",".2233","..1.~"],"par":4}],[{"rows":["2.2..",".....",".223.","..1..",".2..."],"par":2},{"rows":["1..z.",".2.3.","2.3..",".....","23z.."],"par":2},{"rows":[".a~.1",".3z..","1~...","....3",".23.2"],"par":4},{"rows":["..~c.","1>11~","<1.2.","31~z.","~.3.."],"par":3}],[{"rows":[".....",".....","3.13.",".1...","2.2.3"],"par":2},{"rows":["...32",".2..3","....1","23.1z",".1z.."],"par":4},{"rows":["~z..b",".313.",".2..2","...~3","12~.."],"par":4},{"rows":["3..1~","3.1~~",".~2az",">....",">112."],"par":4}],[{"rows":["..1..",".....","2.21.","..21.","31..."],"par":2},{"rows":["..2..","2.2..","3.2.3","..z3.",".12.."],"par":3},{"rows":["3..2.","~bz..","~.~..","1.2..","..1.2"],"par":3},{"rows":["..22.","..^1.","..1.1","a.1~.","2~z^."],"par":3}],[{"rows":["3..2.","..3..",".....","..2.2","..2.."],"par":2},{"rows":[".....","z2...",".....","2.22.","z.21."],"par":3},{"rows":["231.a","..1..","2.1..","....~","~..~."],"par":2},{"rows":[".3231",".1~..",".a2..",".>3.z",".~..2"],"par":2}],[{"rows":[".....","31.1.",".....","...12","...1."],"par":2},{"rows":[".23..",".z.2.","...21","..22.",".3.1."],"par":4},{"rows":[".1..~","2a..2",".13~.","z....","2...."],"par":3},{"rows":["~3~.3","..~.2",".zav.","2~.33","12.1v"],"par":3}],[{"rows":[".....","....1","1...2","..11.","2..3."],"par":2},{"rows":["..2.3","3...3",".....","23..z",".1..1"],"par":4},{"rows":[".~3..",".z..~",".12..","12.~.","..3~a"],"par":3},{"rows":["3.2..","~13~1","..2.3",".....","13.c^"],"par":2}],[{"rows":["...2.",".2...","1122.","..1..","..1.2"],"par":2},{"rows":["..2.1","1.2..","..3..","z.21.","2.2.."],"par":3},{"rows":["3~...","2.23z",".~.b.","3.1..",".~323"],"par":3},{"rows":["~21..","2.1.2",".v2.z","~a...","~231."],"par":3}],[{"rows":["...11",".3..3",".....","....2",".23.2"],"par":2},{"rows":["..1.2","2.1..","...31","2.z..","..13."],"par":3},{"rows":[".~1.~",".za2.",".1...","3~.2.",".3.21"],"par":4},{"rows":["~21v3","2a33.",".z.~3","~....","...3."],"par":4}],[{"rows":["32...",".3..2",".2...","1....",".3..."],"par":2},{"rows":["2...1","2.z3.",".....",".....","33322"],"par":4},{"rows":[".1~2.",".1..~","a2.1~",".32.1",".z..~"],"par":4},{"rows":["2~>.2","^2~3~","21...","3z..c","2.2~."],"par":3}],[{"rows":["...1.","...3.",".11..",".3..2","....."],"par":2},{"rows":["..z.2",".z2.3",".....","...1.","..31."],"par":2},{"rows":["..~1~","..~1.","1..a.","...1.","31.z."],"par":3},{"rows":["~1.2~",">....","2z3^3","~.2..","13.b2"],"par":3}],[{"rows":[".....","....1","..3..",".113.","....3"],"par":2},{"rows":["1.2.1",".1...","z.2..","3..3.","....."],"par":3},{"rows":[".33~~","3...1","..2..","3.22b","3..z."],"par":4},{"rows":["~.~1.","a1...",">23z.","~..1.","..21~"],"par":3}],[{"rows":[".....","2....","...2.","231.3","....."],"par":2},{"rows":[".....",".z.2.",".21.z",".2...",".1.2."],"par":3},{"rows":["21~..","...1.","...a3",".3..3",".~~.."],"par":2},{"rows":[".133.","a^z1.","...~.","2..31","~~3>2"],"par":3}],[{"rows":[".2...","3....",".1...",".1...","3..1."],"par":2},{"rows":["z1...",".2..2","..12.","3.2..",".z.11"],"par":3},{"rows":["...2~","..132","...2.","~az.2",".1~3."],"par":3},{"rows":["2.1..","z.2.~",".....","3..~.","^.b32"],"par":3}],[{"rows":[".3..2",".....","3...1",".3..1","2...."],"par":2},{"rows":["3....","..3..","1.1..","1....","3..z2"],"par":3},{"rows":["~.a12","11...","22..3",".....","2~3.."],"par":2},{"rows":["232.~","2...~","..b.2","~3.~z","1^..^"],"par":3}],[{"rows":["..31.","..3..","..12.","21...",".1..."],"par":2},{"rows":[".12..","1.z3.","1.z2.",".3...","...12"],"par":3},{"rows":["..~..",".1.2.","1..z.","a21.2","31.2~"],"par":3},{"rows":["3.zc^","~..21",".12.2","21.<.","3~.~."],"par":3}],[{"rows":[".....","2.2..",".....","...21","..221"],"par":2},{"rows":[".1...",".3.2z","3..2.",".....","..31."],"par":3},{"rows":["..2c.","2z33.",".~..1",".1~.1",".3..2"],"par":4},{"rows":["....~","...z1","11~..",">2.22",".c.21"],"par":2}],[{"rows":[".3.2.",".....","...3.","..13.","3..3."],"par":2},{"rows":["132..",".23..",".....",".z3..","....."],"par":3},{"rows":["31c.3",".~.~.","....2","z~3..","2...."],"par":3},{"rows":["..21.","...1c","3.>.z",".~.1.","~~.3."],"par":3}],[{"rows":["3.2.3","..11.",".....","....2",".212."],"par":2},{"rows":["...2.","2...1",".z322","...3.","....."],"par":3},{"rows":["1.21~","....2","31.~.","z..3a","3.~.."],"par":4},{"rows":["...v.",".z31v","~~322",".3~..","13.2a"],"par":4}],[{"rows":[".....",".113.","....3","2....","1..3."],"par":2},{"rows":[".2.12","..z2.","...2.","...1.",".13.1"],"par":3},{"rows":["..~.2","~2.3.","3z..3","21~.a","~...2"],"par":4},{"rows":[".3~.3",".....","...3.",".~.21",".2a^3"],"par":2}],[{"rows":["3.2.2",".13..",".....",".2.1.","..2.."],"par":2},{"rows":["...1.","2.232","..111","z3...","....."],"par":3},{"rows":["21...","~1..1","...~1","1.b~2","3..2~"],"par":2},{"rows":["v....",".3~b3",".v111","~2.z.",".1..."],"par":2}],[{"rows":[".....","..21.","2..3.","11...",".3.3."],"par":2},{"rows":["2.2z.","33133",".....",".1.2.","...z."],"par":2},{"rows":["...1~","2a33.","~~~21",".1z.2","..1.."],"par":3},{"rows":["...2~","22.z.",".a22~","1....",">3.~2"],"par":3}],[{"rows":[".....","....2","..2.3","312.1","..2.3"],"par":2},{"rows":["2.1..","1.2.z",".2.12","2....","....."],"par":2},{"rows":["b3.13",".~21.","2.z.~",".2~.2","....1"],"par":3},{"rows":["..2~~","c1.^1","..v..","32.22","..2~z"],"par":4}],[{"rows":["..3.2","...1.",".1.12",".21..","....."],"par":2},{"rows":[".....","..2.2","..231",".1...",".1z22"],"par":3},{"rows":["3.z2c",".~.~.",".12~1","~.1.2","..3.."],"par":3},{"rows":["~~.2.",".2<z.","1^2.~","23.b2",".~2.."],"par":3}],[{"rows":[".2311","...3.",".22..",".....","....."],"par":2},{"rows":[".1...",".2...","...3.","33.1z","1.z.."],"par":2},{"rows":["...z.","31~a.","3..3.","2..31",".31.~"],"par":3},{"rows":["~.13.","..3..","1>2..",".b~z2",">23~~"],"par":4}],[{"rows":[".....","....1","...23","..1..",".312."],"par":2},{"rows":[".....",".3..2",".1...","...2z",".3.3."],"par":3},{"rows":[".231b","..1.~","~.1~2",".....",".~11z"],"par":3},{"rows":[".~~z3","3....",".21..","21<3.","3..a2"],"par":3}],[{"rows":[".....","..1..",".....","1.2.2","21..."],"par":2},{"rows":["3....","z.2.2",".1.2.","1..z.","13..1"],"par":3},{"rows":[".1.z3","....~","13...",".~13.",".a2.3"],"par":4},{"rows":["1.2..",">12a~",".32..","..~..",".2z.>"],"par":3}],[{"rows":["...11",".....","...2.",".11..","3..3."],"par":2},{"rows":[".23zz",".1...","11..1","11..1","....."],"par":3},{"rows":["...21","213~.","....2","b3~..","~3z.2"],"par":3},{"rows":[".~3..","~v~~c","2.2.z","1.1.v","31..."],"par":2}],[{"rows":["1..2.",".31..",".....","3..3.",".2..."],"par":2},{"rows":["..1.2","311.z",".....",".3..2","..3.."],"par":3},{"rows":["23.32","1....","12.za","...~.","~3~.."],"par":2},{"rows":["....c","1v113","1222.","~~.~.","~.>.."],"par":2}],[{"rows":["....2",".3..1",".....",".2.2.","1...."],"par":2},{"rows":["2.3..",".....","z.131","3....","...1."],"par":4},{"rows":[".1.~2","1....","~.a2.","z~2.3","3..~1"],"par":4},{"rows":["b.1~2","21^..","2.z^2",".~2~.","....2"],"par":4}],[{"rows":["..31.",".3.1.",".31..","..1..","..3.."],"par":2},{"rows":["...3.",".3...","....2","33.3z","11..3"],"par":2},{"rows":["1c212","z~.31","....3","~3.2.",".~~.."],"par":4},{"rows":[">c.23",".~...","..1z.","3.3..","3..~."],"par":4}],[{"rows":[".....","....2","12.2.","1..32",".1..."],"par":2},{"rows":["2....","3.23z","....2","1.2.2","....."],"par":3},{"rows":["z.1c.","3.2~.","1..2.","3....","2..1~"],"par":3},{"rows":["~...~",".321z",".2v1.","~~3a.","<...."],"par":3}],[{"rows":["...2.","...11","....2","..2..","..1.."],"par":2},{"rows":["2....",".22..","z13..","32z..","....."],"par":3},{"rows":["111..","~.b1.","..21.","....~","..2~."],"par":2},{"rows":["..~.~","2~..v","3.2.b","33.z1","1.33<"],"par":3}],[{"rows":["2....",".....","32...","....1","22211"],"par":2},{"rows":[".z3..",".1...","12.31",".....","....2"],"par":3},{"rows":[".~2.z","21.31","..2.~",".b..3","~1..3"],"par":4},{"rows":["..>21","..112","..21~",".~.<.","2az.1"],"par":3}],[{"rows":["1....","..11.",".2.1.",".11..",".32.."],"par":2},{"rows":[".....","1.23.","....3",".3.2z",".13.."],"par":3},{"rows":["3.~..","a32~.","1.1..","2~...","3z~.."],"par":3},{"rows":[".va21","~.212",".3v~.",".3z~.",".~.31"],"par":4}],[{"rows":[".2.1.","..132",".2...","...21",".1..."],"par":2},{"rows":[".3...",".1z..",".....","2.2..","3.1.."],"par":3},{"rows":["3~1~.",".z1.2","2~b.1",".2.2~","....."],"par":2},{"rows":[".1a3.","z22.v",".v3..",".3~.3","~~3.~"],"par":3}],[{"rows":["2....","1....",".....","1311.","11.2."],"par":2},{"rows":["..1..","..122","..2..","z2.32",".3..."],"par":3},{"rows":["2..z.","3..3.",".~12.","1~2.1","c~.~."],"par":3},{"rows":["3..~.","a.z3.","..v.2","~.2~3",".21~2"],"par":3}],[{"rows":[".....","12...","32..1","2..31","....."],"par":2},{"rows":[".33z.",".....",".....","23z23","..31."],"par":3},{"rows":["..~.3","1...c","32z.2","1..~1","3~..~"],"par":4},{"rows":["~....","..213","..~2<","a.321","z^21."],"par":2}],[{"rows":["..1..",".....",".....","3..12","11..."],"par":2},{"rows":[".z3..","...1.",".2...","z.1..","12..."],"par":3},{"rows":["..3z2",".~...","~2.2.","~....","1.13b"],"par":3},{"rows":[".b22~","2z<.<","..11.",".12~1",".1..."],"par":3}],[{"rows":["3..3.","212..",".....","..1..",".3..1"],"par":2},{"rows":[".z322","1....","..z..","...3.","..1.."],"par":4},{"rows":["3.3z.",".~...","2....","3.~..","~.1a2"],"par":3},{"rows":["3..a2","22>z.","1^.~.","2.1~.",".~..."],"par":3}],[{"rows":["...2.",".21..","...2.","312..","..13."],"par":2},{"rows":["2..z.",".22z.","..1..","3..13",".3..1"],"par":3},{"rows":["~..a.","~.12.","~.2~1","3z.2.","3...."],"par":4},{"rows":[".3..3","~v1.3","<2~2.",".~1.z","a1~.2"],"par":4}],[{"rows":[".....","...21","12...","12.2.","....3"],"par":2},{"rows":["...z.","...2.",".32..","3..3.",".211."],"par":2},{"rows":["...~3","..1~.",".21b3",".~3.1","3z..2"],"par":4},{"rows":["2.v.3","z.~3.",".v1~~","3b~3.","1..3."],"par":3}],[{"rows":["2....","...13","2..2.",".....","3...1"],"par":2},{"rows":[".....","21..z","....1","...12","31.1."],"par":3},{"rows":[".~2~.",".b.~.","1122.",".....","...2."],"par":2},{"rows":["..1~3","..~za","2....","^311^","1~.3~"],"par":3}],[{"rows":[".2...",".....",".2.31",".1..1","....3"],"par":2},{"rows":[".....","2..33",".....","...2.",".23z."],"par":4},{"rows":[".~1..","231..",".z~2.","2..2.","b2.1."],"par":3},{"rows":["z32~3","1....","1~a>3","~.3.1",".~>.1"],"par":2}],[{"rows":[".....",".13..","21...","...3.","..1.."],"par":2},{"rows":["..12.",".....",".11..","z.2.3","2...."],"par":3},{"rows":["33z.2","..31~","3..a2","1.~~3","....~"],"par":4},{"rows":["~3121","2..v2",".bz~3",".1^..","....."],"par":4}],[{"rows":["1....","...2.","2..1.","...2.",".2.2."],"par":2},{"rows":["z.3..","2...1","z....","3.2.2","..2.."],"par":3},{"rows":["..3~2","2...3","12.a1","..3..","~z3.."],"par":4},{"rows":[".~...",".v1.~",".z.2.","3cv11","..~1."],"par":3}],[{"rows":[".13..",".1...",".....","..13.","....3"],"par":2},{"rows":["....1","2.1..","1z112","z....",".2..."],"par":2},{"rows":[".2...","b.3.2","12...",".~~~2","2.2.."],"par":2},{"rows":[".~312","a>z.2",".~211",">1...",".2.~."],"par":3}],[{"rows":[".3..3","1..3.",".1...",".....",".2.2."],"par":2},{"rows":[".222.","1....","...2.",".z1.3","...11"],"par":4},{"rows":["z~..3","3~..1","2233.","....~","c1..."],"par":3},{"rows":[".3.~z","1.~.3","~~...",".^^.c","3.2.2"],"par":2}],[{"rows":[".2...","31...",".2.3.","...1.","1..1."],"par":2},{"rows":["z...1","....3","..2.2","...13","z32.2"],"par":2},{"rows":["1.b.3","13...","21.13","3~...","z.~.."],"par":3},{"rows":[".1.2.","...1~",".~.12","....b","z1<12"],"par":3}],[{"rows":["221..",".1...","2.3..",".....","1...."],"par":2},{"rows":["31z..","2....","21222",".....","1...."],"par":3},{"rows":["bz.2.","~.121","...21","..23.","~..~."],"par":3},{"rows":[".~2.b","221v.",".2~~.","..3z.","....~"],"par":4}],[{"rows":[".2..3","33.2.",".....",".1..3","21..."],"par":2},{"rows":["..z..","..1.3","....2","..3.2","31.32"],"par":3},{"rows":["c..2.","...~.","..31.","1~..1","...21"],"par":2},{"rows":["2~31.","z.21b","2~^<.",".2...",".~..~"],"par":4}],[{"rows":["2.2..","23...",".....","12.3.",".2.3."],"par":2},{"rows":["223.1",".z3.3","..1..","..1..","..z.."],"par":3},{"rows":["a3z~.","3....",".1..1",".13~~","..1.."],"par":3},{"rows":["~v2..",".1~1.",".2vz.","a11~.",".~2.1"],"par":4}],[{"rows":["...1.",".1.12",".....",".21.1","..2.."],"par":2},{"rows":["..2..","112.1",".....","..z1.","..z3."],"par":3},{"rows":["...3.","3~a11",".....","~.3z.","2...3"],"par":4},{"rows":[".1...","2..3.","c~.3.","zv1.3",".3>~1"],"par":4}],[{"rows":[".2.2.","..3..",".....","..2.2",".3231"],"par":2},{"rows":[".3...",".....","3..1.",".z22.","1...."],"par":4},{"rows":["~.~..",".1c3.","..22z",".....","..2.3"],"par":4},{"rows":[".2.<~","2....",".1~32","31>z~","c1..3"],"par":4}],[{"rows":["3.32.",".....",".12..",".1...",".3..."],"par":2},{"rows":[".2..2",".....",".3..2",".323z","..12."],"par":3},{"rows":["2z...","13...","~2~2~","a...1","..~.."],"par":4},{"rows":["13~~.",".b~.<","3....","12v1.",".1z.."],"par":4}],[{"rows":["....1","..321","..2..",".....","3.23."],"par":2},{"rows":[".z...",".3..z",".3..2",".2.1.","3..12"],"par":3},{"rows":["..a3.",".3z.2","2.~..","3.~3~","1.2.3"],"par":4},{"rows":["2<2..","~a.z.","...3.","...1^","32~3."],"par":3}],[{"rows":[".1...","....1",".2..1",".2...","3123."],"par":2},{"rows":["1....","2...3",".....","331z.",".2..2"],"par":4},{"rows":["...~1",".112~","..21.","~~...","1az.."],"par":3},{"rows":[".3.31","..z.2",".12<~","2.~..",".2~b."],"par":3}],[{"rows":["..11.",".....",".1..3",".1...","..3.2"],"par":2},{"rows":[".1.z1",".12..","11.2.",".....","..12."],"par":2},{"rows":["....~","312.1","..~..",".1..3","zb..~"],"par":3},{"rows":["1....",".b.~~","21131","32.z<",".~.1."],"par":4}]]; // 90 days x 4 tiers of solver-checked boards (gen-daily.js)
 
 /* ---------- save: one store helper, everything under one key prefix ---------- */
 var store = {
@@ -353,7 +364,13 @@ var progress = store.get('progress', null);
 if (!progress || typeof progress !== 'object') progress = { stars: {}, best: {} };
 progress.stars = progress.stars || {}; progress.best = progress.best || {};
 var seen = store.get('seen', {}) || {};
+// today's lantern: done = { 'YYYY-MM-DD': stars }, streak, last (date of the last daily finished), string (lanterns on the
+// current string of 7), strings (full strings so far), gold (which string slots are gold: finished on a come-back day)
+var daily = store.get('daily', null);
+if (!daily || typeof daily !== 'object') daily = {};
+daily.done = daily.done || {}; daily.streak = daily.streak || 0; daily.string = daily.string || 0; daily.strings = daily.strings || 0; daily.gold = daily.gold || [];
 var tester = /[?&]unlock=1\b/.test(location.search);
+var testDay = tester && (location.search.match(/[?&]day=(\d{4}-\d\d-\d\d)\b/) || [])[1]; // tester only: pretend today is this date
 
 var $ = function (id) { return document.getElementById(id); };
 var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -392,7 +409,10 @@ var LIT = '#ffb43c', SHY = '#f2a3c3', SHYAWAKE = '#ef5a6f';
 // from the candle inside (brightest in the middle, ribs showing as dark lines). The number is painted on a cream
 // paper label. Shy lanterns are pink with a sleepy painted face and no number.
 // o: { n, shy, lit, awake, water, t, pop (0..1 after lighting), duck (0..1), shield (0..1), seed }
-function drawLantern(ctx, cx, cy, S, o) {
+function drawLantern(ctx, cx, cy, S, o) { // o.dim: an empty slot on the festival string, drawn faint
+  if (o.dim) { ctx.save(); ctx.globalAlpha = 0.38; drawLantern0(ctx, cx, cy, S, o); ctx.restore(); } else drawLantern0(ctx, cx, cy, S, o);
+}
+function drawLantern0(ctx, cx, cy, S, o) {
   var t = o.t || 0, seed = o.seed || 0;
   var sway = reduced ? 0 : Math.sin(t / 900 + seed) * 0.03;
   var squash = 1, sq2 = 1;
@@ -437,7 +457,9 @@ function drawLantern(ctx, cx, cy, S, o) {
   var pg;
   if (o.lit && !o.shy) { // candlelight through paper: white-gold core, warm amber, the paper's own colour at the rim
     pg = ctx.createRadialGradient(cx - rx * 0.1, by + ry * 0.05, ry * 0.05, cx, by, rx * 1.05);
-    pg.addColorStop(0, 'rgba(255,253,230,1)'); pg.addColorStop(0.35 * fl, '#ffe08a'); pg.addColorStop(0.75, '#ffab3a'); pg.addColorStop(1, mix(paper, '#d0601c', 0.55));
+    pg.addColorStop(0, 'rgba(255,253,230,1)'); pg.addColorStop(0.35 * fl, '#ffe08a');
+    if (o.gold) { pg.addColorStop(0.75, '#ffd23a'); pg.addColorStop(1, '#c98a00'); } // a gold lantern (lit on a come-back day)
+    else { pg.addColorStop(0.75, '#ffab3a'); pg.addColorStop(1, mix(paper, '#d0601c', 0.55)); }
   } else if (o.awake) {
     pg = ctx.createRadialGradient(cx, by, ry * 0.05, cx, by, rx * 1.05);
     pg.addColorStop(0, '#fff0f0'); pg.addColorStop(0.5, '#ff9aa8'); pg.addColorStop(1, dark(SHYAWAKE, 0.2));
@@ -486,7 +508,7 @@ function drawLantern(ctx, cx, cy, S, o) {
       ctx.beginPath(); ctx.ellipse(cx, eyeY + ry * 0.45, er * 1.2, er * 1.6, 0, 0, 7); ctx.fill();
     }
     ctx.fillStyle = 'rgba(230,60,110,.45)'; [-1, 1].forEach(function (s) { ctx.beginPath(); ctx.ellipse(cx + s * rx * 0.66, eyeY + er * 1.9, er * 1.5, er * 0.9, 0, 0, 7); ctx.fill(); });
-  } else { // the number, painted on a round cream paper label
+  } else if (!o.noLabel) { // the number, painted on a round cream paper label
     var lr = S * 0.17, lyc = by + ry * 0.05;
     ctx.fillStyle = o.lit ? 'rgba(120,60,10,.45)' : 'rgba(30,20,40,.45)'; ctx.beginPath(); ctx.arc(cx, lyc, lr + lw * 0.8, 0, 7); ctx.fill();
     var lg2 = ctx.createRadialGradient(cx - lr * 0.3, lyc - lr * 0.35, 1, cx, lyc, lr); lg2.addColorStop(0, '#fffdf4'); lg2.addColorStop(1, o.lit ? '#ffe9b0' : '#efe3c8');
@@ -597,11 +619,17 @@ function drawScene(t) {
   // garland
   var y0 = 70, sag = 46;
   ctx.strokeStyle = '#2b1d16'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-10, y0); ctx.quadraticCurveTo(W / 2, y0 + sag * 2, W + 10, y0); ctx.stroke();
-  var S = Math.min(78, W / 5.2);
-  [1, 2, 3, 2, 1].forEach(function (n, k) {
-    var u = (k + 0.5) / 5, x = u * W, y = (1 - u) * (1 - u) * y0 + 2 * u * (1 - u) * (y0 + sag * 2) + u * u * y0;
-    drawLantern(ctx, x, y + S * 0.5, S, { n: n, lit: k !== 4, t: t, seed: k * 1.7, shy: k === 4 });
-  });
+  var hang = function (n, k, cnt, S, o) { var u = (k + 0.5) / cnt, x = u * W, y = (1 - u) * (1 - u) * y0 + 2 * u * (1 - u) * (y0 + sag * 2) + u * u * y0;
+    o.t = t; o.seed = k * 1.7; o.n = n; drawLantern(ctx, x, y + S * 0.5, S, o); return [x, y + S * 0.5]; };
+  if (dailyOpen()) { // the festival string: one lantern per daily finished, 7 to a string; gold ones were lit on a come-back day
+    var S7 = Math.min(64, W / 7.4), have = daily.string;
+    for (var k = 0; k < 7; k++) { var on = k < have, gold = on && daily.gold.indexOf(k) >= 0;
+      var at = hang(k % 3 + 1, k, 7, S7, { lit: on, dim: !on, gold: gold, noLabel: true });
+      if (gold && !reduced) star(ctx, at[0] + S7 * 0.3, at[1] - S7 * 0.3 + Math.sin(t / 400 + k) * 2, S7 * 0.09); }
+  } else {
+    var S = Math.min(78, W / 5.2);
+    [1, 2, 3, 2, 1].forEach(function (n, k) { hang(n, k, 5, S, { lit: k !== 4, shy: k === 4 }); });
+  }
   fireflies(ctx, 0, H * 0.35, W, H * 0.6, 60, t, 6);
 }
 
@@ -615,6 +643,36 @@ function defaultTip() { return G.level.tip || (FIRST_SHY >= 0 && G.li >= FIRST_S
 function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; $('winBox').hidden = true; stopConfetti(); }
 
 function unlocked(i) { if (tester || i === 0 || progress.stars[LEVELS[i - 1].id]) return true; for (var j = i; j < LEVELS.length; j++) if (progress.stars[LEVELS[j].id]) return true; return false; }
+/* ---------- today's lantern ---------- */
+var DAILY_LI = LEVELS.length, DAILY_EPOCH = new Date(2026, 10, 18);
+function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function today() { return testDay || ymd(new Date()); }
+function dayAfter(key, n) { var p = key.split('-'); return ymd(new Date(+p[0], +p[1] - 1, +p[2] + n)); }
+function dayIndex(key) { var p = key.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]); var n = Math.round((d - DAILY_EPOCH) / 864e5); return ((n % DAILY.length) + DAILY.length) % DAILY.length; }
+function byId(id) { for (var i = 0; i < LEVELS.length; i++) if (LEVELS[i].id === id) return i; return -1; }
+function dailyOpen() { return tester || !!progress.stars[13] || LEVELS.slice(2).some(function (lv) { return progress.stars[lv.id]; }); } // after level 3
+function dailyTier() { // only rules the player has met: 0 numbers, 1 shy, 2 pond, 3 wind
+  var done = function (k) { return INTRO[k] != null && !!progress.stars[LEVELS[INTRO[k]].id]; };
+  return done('wind') ? 3 : done('water') ? 2 : done('shy') ? 1 : 0;
+}
+function dailyStreak() { var t = today(); return daily.last === t || daily.last === dayAfter(t, -1) ? daily.streak : 0; }
+function dailyLevel() {
+  var key = today(), tier = dailyTier(), bd = DAILY[dayIndex(key)][tier];
+  var tips = ['Find the lanterns that start the longest chains.', 'Shelter the shy lantern before a flame can reach it.', 'Watch the pond: flames that land on water go out.', 'Follow each flame. Wind can send it somewhere new.'];
+  return { id: 'daily', name: key, rows: bd.rows, par: bd.par, tip: tips[tier], tier: tier, date: key };
+}
+function dailyWin(st) { // record today's lantern; returns what changed for the win card
+  var key = today(), first = !daily.done[key], back = daily.last === dayAfter(key, -1), out = { first: first, gold: false, full: false };
+  daily.done[key] = Math.max(daily.done[key] || 0, st);
+  if (first) {
+    daily.streak = back ? daily.streak + 1 : 1; daily.last = key;
+    if (daily.string >= 7) { daily.string = 0; daily.gold = []; }
+    out.gold = daily.streak >= 2; if (out.gold) daily.gold.push(daily.string);
+    daily.string++; out.slot = daily.string;
+    if (daily.string === 7) { daily.strings++; out.full = true; }
+  }
+  store.set('daily', daily); return out;
+}
 function starsFor(m, par) { return m <= par ? 3 : m <= par + 1 ? 2 : 1; }
 function nextIndex() { for (var i = 0; i < LEVELS.length; i++) if (!progress.stars[LEVELS[i].id]) return i; return LEVELS.length - 1; }
 function allDone() { return LEVELS.every(function (lv) { return !!progress.stars[lv.id]; }); }
@@ -640,15 +698,25 @@ function buildLevels() {
   $('playBtn').textContent = done ? (st3 >= 0 ? 'Go for 3 stars: level ' + (st3 + 1) : 'Replay level 1')
     : LEVELS.some(function (lv) { return progress.stars[lv.id]; }) ? 'Continue: level ' + (nx + 1) : 'Play';
   $('playBtn').onclick = function () { startLevel(done ? Math.max(0, st3) : nextIndex()); };
+  var open = dailyOpen(), db = $('dailyBtn'); db.hidden = !open;
+  if (open) {
+    var dst = daily.done[today()] || 0, sk = dailyStreak(), slot = daily.string >= 7 && !dst ? 1 : daily.string + (dst ? 0 : 1);
+    db.classList.toggle('done', !!dst);
+    $('dailyTitle').textContent = dst ? 'Lit today ' + '★★★'.slice(0, dst) + '☆☆☆'.slice(0, 3 - dst) : 'Today\'s lantern';
+    $('dailySub').textContent = (dst ? 'New one tomorrow' : 'Lantern ' + slot + ' of 7 for your string') + (sk > 1 ? ' · ' + sk + '-day streak' : '');
+    db.setAttribute('aria-label', $('dailyTitle').textContent + '. ' + $('dailySub').textContent);
+    db.onclick = function () { startLevel(DAILY_LI); };
+  }
 }
 
 function startLevel(i) {
-  G.li = i; G.level = LEVELS[i]; G.b = L.parse(G.level);
+  G.li = i; G.level = i === DAILY_LI ? dailyLevel() : LEVELS[i]; G.b = L.parse(G.level);
   G.lit = L.initial(G.b); G.disp = G.lit.slice(); G.awake = {}; G.hist = []; G.matches = 0; G.busy = false; G.won = false;
   G.anim = null; G.fx = []; G.embers = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.fail = null; G.queued = null; G.hint = -1; G.hintStage = 0;
   clearWin();
   G.tut = G.level.tut && !(seen[G.level.intro] && progress.stars[G.level.id]) ? G.level.tut : null; G.tutStep = 0;
-  $('lvname').innerHTML = 'Level ' + (i + 1) + '<span></span>'; $('lvname').querySelector('span').textContent = G.level.name;
+  $('lvname').innerHTML = (i === DAILY_LI ? 'Today\'s lantern' : 'Level ' + (i + 1)) + '<span></span>';
+  $('lvname').querySelector('span').textContent = i === DAILY_LI ? new Date(G.level.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) : G.level.name;
   $('par').textContent = G.level.par; $('testBtn').hidden = !tester;
   show('game'); layout(); refresh();
   if (G.tut) showTut(); else tray(defaultTip());
@@ -1111,10 +1179,13 @@ $('undoBtn').onclick = undo; $('restartBtn').onclick = restart; $('hintBtn').onc
 function win() {
   G.won = true;
   var lv = G.level, st = starsFor(G.matches, lv.par);
-  var first = !progress.stars[lv.id];
-  progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st);
-  progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches);
-  store.set('progress', progress);
+  var isDaily = G.li === DAILY_LI, dw = null;
+  if (isDaily) dw = dailyWin(st);
+  else {
+    progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st);
+    progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches);
+    store.set('progress', progress);
+  }
   if (lv.intro && !seen[lv.intro]) { seen[lv.intro] = true; store.set('seen', seen); }
   var last = G.li === LEVELS.length - 1;
   $('winTitle').textContent = last ? 'The festival is lit!' : st === 3 ? 'All lit!' : 'All lit! Can you match par?';
@@ -1122,6 +1193,13 @@ function win() {
   $('winStars').setAttribute('aria-label', st + ' of 3 stars');
   $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '.' + (st < 3 ? ' Try again for 3 stars.' : '');
   $('nextBtn').textContent = last ? 'Back to levels' : 'Next level';
+  if (isDaily) { // the see-you-tomorrow card
+    $('winTitle').textContent = dw.full ? 'Your string is full!' : 'Today\'s lantern is lit!';
+    $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '. ' +
+      (dw.first ? (dw.gold ? 'A gold lantern for coming back! ' : '') + (dw.full ? 'All 7 lanterns glow. ' : 'Lantern ' + dw.slot + ' of 7 is on your string. ') : '') +
+      'Come back tomorrow for a new one.';
+    $('nextBtn').textContent = 'See you tomorrow';
+  }
   tray(''); // clear the tutorial bubble / tip before the win card
   var li = G.li;
   if (G.winTimer) clearTimeout(G.winTimer);
@@ -1169,7 +1247,7 @@ var RULES = [
 ];
 $('rulesBtn').onclick = function () {
   var ol = $('rulesList'); ol.innerHTML = '';
-  var met = G.li; LEVELS.forEach(function (lv, i) { if (progress.stars[lv.id]) met = Math.max(met, i); });
+  var met = G.li === DAILY_LI ? [2, INTRO.shy, INTRO.water, INTRO.wind][G.level.tier] : G.li; LEVELS.forEach(function (lv, i) { if (progress.stars[lv.id]) met = Math.max(met, i); });
   RULES.forEach(function (r) { if (met >= r[0]) { var li = document.createElement('li'); li.textContent = r[1]; ol.appendChild(li); } });
   $('rulesBox').hidden = false;
 };
@@ -1203,7 +1281,7 @@ $('homeBtn').onclick = function () { if (G.busy) finishAnim(); show('title'); };
 window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(function () { return { screen: $('game').hidden ? 'title' : 'game', li: G.li }; });
 function boot(data) { buildLevels(); if (data && data.screen === 'game' && LEVELS[data.li]) startLevel(data.li); else show('title'); drawScene(performance.now()); }
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-window.__lc = { G: G, L: L, LEVELS: LEVELS, store: store, unlocked: unlocked }; // for automated tests
+window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell }; // for automated tests
 })();
 </script>
 
