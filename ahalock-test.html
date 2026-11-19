@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.7 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.8 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -472,7 +472,7 @@ html,body{overflow-anchor:none}
 .sharecard .row{font-size:30px;letter-spacing:4px;margin:8px 0}
 .sharecard .s{font-size:16px;color:#c6d0e6}
 .col{display:flex;flex-direction:column;gap:10px}
-.toast{position:fixed;left:50%;bottom:calc(var(--sab) + 24px);transform:translateX(-50%);background:#fff;color:var(--ink);padding:10px 16px;border-radius:12px;font-weight:800;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast{position:fixed;left:50%;top:calc(var(--sat) + 58px);transform:translateX(-50%);background:#fff;color:var(--ink);padding:10px 16px;border-radius:12px;font-weight:800;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 
 /* tutorial coach */
 .coach{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:center;padding:0 12px calc(var(--sab) + 12px);pointer-events:none}
@@ -1079,7 +1079,10 @@ html.big .status3 .third span{font-size:16px}
       const A = steps[k - 1], B = steps[k];
       if (A.kind === 'clue' && B.kind === 'clue' && A.clues.length === 1 && B.clues.length === 1 && A.clues[0] === B.clues[0]) {
         const at = B.text.indexOf('. So ');
-        if (at > 0) { const rest = B.text.slice(at + 5); B.text = 'Clue ' + (B.clues[0] + 1) + ' again, with what we just found: ' + rest.charAt(0).toLowerCase() + rest.slice(1); }
+        // Cooper R30: say what was just found, and keep the clue's own count ("needs two, and only 9 and 2 remain").
+        if (at > 0) { const rest = B.text.slice(at + 5); const ao = A.text.lastIndexOf('So '); const af = ao >= 0 ? A.text.slice(ao + 3) : A.text.slice(Math.max(A.text.lastIndexOf(': ') + 2, 0)); const found = af.split('. ')[0].replace(/\.$/, '');
+          const need = (B.text.slice(0, at).match(/clue \d+ needs [^.;]*/) || [])[0];
+          B.text = 'Clue ' + (B.clues[0] + 1) + ' again' + (found ? ', now that ' + found : ', with what we just found') + ': ' + (need ? need + '. So ' + rest.charAt(0).toLowerCase() + rest.slice(1) : rest.charAt(0).toLowerCase() + rest.slice(1)); }
       }
     }
     return { steps, level, solved: solved(), answer: dom.map(s => [...s][0]) };
@@ -2991,7 +2994,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.7' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.8' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3244,7 +3247,7 @@ function showFree() {
 }
 function showFreePick(tier) {
   const pick = []; const c = kindStats();
-  openSheet('<h2>✋ Pick puzzles</h2><div class="sub">Tap one kind, or up to three.</div><div class="fpgrid">' +
+  openSheet('<h2>✋ Pick puzzles</h2><div class="sub">Tap one kind, or up to three. Tap a picked kind again to take it out.</div><div class="fpgrid">' +
     TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><small class="fpm">' + (((c[t] || [0, 0])[1]) >= MASTER_N ? '🏅 Mastered' : ((c[t] || [0, 0])[1]) === MASTER_N - 1 ? 'One to master!' : ((c[t] || [0, 0])[1]) ? Math.min((c[t] || [0, 0])[1], MASTER_N) + ' of ' + MASTER_N : '') + '</small><i class="fpn"></i></button>').join('') +
     '</div><div class="col"><button class="btn wide" id="fpgo" disabled>Pick a kind</button><button class="linkbtn" id="fpbk">‹ Back</button></div>');
   const go = document.getElementById('fpgo');
@@ -3309,7 +3312,9 @@ function keyText(ex, pz) {
   const last = x => (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x;
   // A clue that states the placement outright ("Owl finished 3rd") is not a turning point; skip it when another pin exists.
   const plain = z => { const q = z.text.match(/^Clue \d+ says “([^”]*)” So ([^.]*)\.$/); return !!q && q[1].includes(q[2].split(' ').pop()); };
-  const isPin = s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }; const k = pins.find(z => isPin(z) && !plain(z)) || pins.find(isPin) || pins[0];
+  const isPin = s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }; const real = z => !/^(hidden|fix|all)$/.test(z.kind);
+  // Muse R30: prefer a step that uses a clue (a "No other pet can be house 4" mop-up is not the turning point).
+  const k = pins.find(z => isPin(z) && real(z) && !plain(z)) || pins.find(z => isPin(z) && !plain(z)) || pins.find(isPin) || pins[0];
   if (!k) return '';
   let x = k.text; const rest = st.indexOf(k) < st.length - 2 ? ' The rest follows from there.' : '';
   // Muse R29: when the pin leans on an earlier elimination, say it ("clue 2 already ruled out 4th").
@@ -3323,9 +3328,15 @@ function keyText(ex, pz) {
         const why = prev.map(z => { const w = cl(z).replace(/\.$/, ''); return w.charAt(0).toLowerCase() + w.slice(1); }).join(' and ');
         const at = x.lastIndexOf(' So '); elim = (refs.length === prev.length ? (refs.length > 1 ? 'clues ' + refs.join(' and ') : 'clue ' + refs[0]) + ' already showed ' : 'we already know ') + why;
         if (at > 0) x = x.slice(0, at) + ' ' + elim.charAt(0).toUpperCase() + elim.slice(1) + '.' + x.slice(at); } } }
-  if (x.length > 150) { const m = x.match(/^(Clues? [\d, and]+?)(?: says| \(|:| together)/); const f = last(x).replace(/^(So|Either way,) /, '');
-    const kn = (x.match(/[Ww]e already know ([^.]*)\./) || [])[1]; const head = m && m[1] + (/^Clues/.test(m[1]) ? ' are' : ' is') + ' the turning point: ';
-    if (m && f) return head + (kn && (head + kn + f).length < 230 ? 'we already know ' + kn + ', so ' : elim ? elim.charAt(0).toLowerCase() + elim.slice(1) + ', so ' : '') + f + '.' + rest; }
+  // Muse R30: the "we already know" premise names the clue(s) it came from.
+  { const km = x.match(/[Ww]e already know ([^.]*)\./); if (km) { const P = km[1], before = st.slice(0, st.indexOf(k)), refs = [];
+      before.forEach(z => { const f = last(z.text).replace(/^(So|No other [^,]*, so) /, ''); const sj = (f.match(/^(.+?) (?:must|is|lives|works|can’t|can't)\b/) || [])[1];
+        const r = (z.text.match(/^Clues? ([\d, and]+?)(?= says| \(|:| together)/) || [])[1]; if (sj && r && P.includes(sj)) r.split(/, | and /).forEach(n => { if (refs.indexOf(n) < 0) refs.push(n); }); });
+      const own = (x.match(/^Clues? ([\d, and]+?)(?= says| \(|:| together)/) || [])[1] || ''; const ext = refs.filter(n => own.split(/, | and /).indexOf(n) < 0).slice(0, 3);
+      if (ext.length) { const tag = ' (from clue' + (ext.length > 1 ? 's ' + ext.slice(0, -1).join(', ') + ' and ' + ext[ext.length - 1] : ' ' + ext[0]) + ')'; x = x.replace(km[0], km[0].slice(0, -1) + tag + '.'); } } }
+  if (x.length > 150 || /^Clues? [\d, and]+?(?: together:| \()/.test(x)) { const m = x.match(/^(Clues? [\d, and]+?)(?: says| \(|:| together)/); const f = last(x).replace(/^(So|Either way,) /, '');
+    let kn = (x.match(/[Ww]e already know ([^.]*)\./) || [])[1]; if (kn && kn.length > 140 && kn.includes('; ')) { const sg = kn.split('; '); kn = sg[0] + '; ' + sg[sg.length - 1]; } const head = m && 'Turning point: ' + m[1] + (/^Clues/.test(m[1]) ? ' settle it. ' : ' settles it. ');
+    if (m && f) { const pre = kn && (head + kn + f).length < 250 ? 'We already know ' + kn + ', so ' : elim ? elim.charAt(0).toUpperCase() + elim.slice(1) + ', so ' : ''; const ff = pre ? f : f.charAt(0).toUpperCase() + f.slice(1); return head + pre + ff + '.' + rest; } }
   if (x.length > 200 && /^Suppose /.test(x)) { const so = x.lastIndexOf(' So '); if (so > 0 && /[.”]/.test(x[so - 1])) {
     const m = x.match(/(card \d’s words “[^”]*” would be (?:true|false)), but (the \w+ always [a-z ]+)/);
     const mid = m ? 'Then ' + m[1] + ', but ' + m[2] + (/ If /.test(x) ? ' (the other order fails too).' : '.') : ((x.match(/But then [^“.]*(?:“[^”]*”|\.)/) || ['That breaks a rule.'])[0]);
@@ -3808,7 +3819,7 @@ function whyList(ex, extraCls) {
   const body = ex.steps.filter(s => s.kind !== 'done'), pins = body.filter(s => pinStep(s.text)).slice(0, 3), done = ex.steps.filter(s => s.kind === 'done');
   if (body.length < 4 || !pins.length || pins.length === body.length) return all;
   return '<div class="whykey"><div class="whyhd">The deciding steps</div><ol class="why">' + pins.concat(done).map(li).join('') + '</ol>' +
-    '<button class="linkbtn whyall">Show all ' + ex.steps.length + ' steps</button></div><div class="whyfull hidden">' + all + '</div>';
+    '<button class="linkbtn whyall">Show the full walk-through</button></div><div class="whyfull hidden">' + all + '</div>';
 }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.whyall'); if (!b) return; const k = b.closest('.whykey'); k.nextElementSibling.classList.remove('hidden'); k.remove(); });
 // The next unsolved puzzle of that day, or the day's results once all three are done.
@@ -4667,20 +4678,20 @@ function storySolved() {
   const st = sget(); const wasDone = sdone(st, s, o); if (!wasDone) track('story_stop_done', { stop: s + 1, step: o + 1 }); st.done[s + '-' + o] = 1; sset(st); store.set('sdraft', null);
   const ex = P.ex;
   if (!O.fin) {
-    openSheet(iconize('<h2>' + esc(O.name) + ' solved! ' + O.e + '</h2>') + '<div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' + iconize(takeaway(ex, P.pz)) +
+    openSheet(iconize('<h2>' + esc(O.name) + ' solved! ' + O.e + '</h2>') + '<div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' + iconize(takeaway(ex, P.pz)) + '<div class="col"><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(ex) + '</div></div>' +
       iconize('<div class="ecard big"><div class="et">You found: ' + esc(O.ev.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(s, 2), O.ev.clue)) + '</div>' + (O.ev.how ? '<div class="en">' + esc(O.ev.how) + '</div>' : '') + '</div>') +
       (O.log ? iconize('<div class="klog">📜 ' + esc(O.log) + '</div>') : '') +
-      '<div class="col"><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(ex) + '</div></div><div class="sfoot"><button class="btn" id="nx">Back to ' + esc(STORY[s].name) + '</button></div>');
+      '<div class="sfoot"><button class="btn" id="nx">Back to ' + esc(STORY[s].name) + '</button></div>');
     document.getElementById('why').onclick = whyToggle;
     document.getElementById('nx').onclick = () => adNext(null, () => { scenePop = wasDone ? null : s + '-' + o; renderStop(s); scenePop = null; });
     return;
   }
   const last = lastOf(s);
-  openSheet('<h2>' + esc(STORY[s].done) + '</h2><div class="sub">' + iconize(esc(TL.answerText(P.pz, P.pz.sol))) + '</div>' +
+  openSheet('<h2>' + esc(STORY[s].done) + '</h2><div class="sub">' + iconize(esc(TL.answerText(P.pz, P.pz.sol))) + '</div>' + iconize(takeaway(ex, P.pz)) + '<div class="col"><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + iconize(whyList(ex)) + '</div></div>' +
     '<div id="rpbox">' + repairScene(s, P.pz) + '</div><div style="text-align:center"><button class="btn ghost small" id="rpl2" style="color:var(--ink);background:var(--panel2);margin:0 auto 4px">▶ Watch it again</button></div>' +
     '<div class="beat" style="margin:10px 0">' + esc(STORY[s].payoff) + (last && wasDone ? '<br><br>' + esc(CHAP[chOf(s)].end) : '') + '</div>' +
     (STORY[s].note && !wasDone ? '<div class="ecard big"><div class="et">New: ' + esc(STORY[s].note.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(s - s % 3 + 2, 2), STORY[s].note.clue)) + '</div><div class="en">Saved on the map for ' + esc(STORY[s - s % 3 + 2].name.replace(/^The /, 'the ')) + '. You can read it there any time.</div></div>' : '') +
-    '<div class="col"><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + iconize(whyList(ex)) + '</div></div><div class="sfoot"><button class="btn" id="nx">' + (last ? 'Continue' : 'Back to the map') + '</button></div>');
+    '<div class="sfoot"><button class="btn" id="nx">' + (last ? 'Continue' : 'Back to the map') + '</button></div>');
   if (STORY[s].sum) { const wb = document.getElementById('whybox'); wb.insertAdjacentHTML('afterbegin', '<div class="wsum">' + esc(STORY[s].sum) + '</div>'); }
   document.getElementById('why').onclick = whyToggle;
   const fpz = P.pz;
