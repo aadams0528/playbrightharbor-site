@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.5 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.6 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1788,6 +1788,20 @@ html.big .status3 .third span{font-size:16px}
     const b = bad[0];
     return 'If the treasure were in the ' + nm + ' chest, the ' + CHESTS[b][0] + ' chest’s sign would be ' + (tv[b] ? 'true' : 'false') + '. But ' + (b === t ? 'the treasure chest must tell the truth.' : 'empty chests always lie.');
   }
+  // Round 28: the solved card's key names the deciding test, not the answer: why each other chest fails.
+  function chestKey(pz) {
+    const sol = pz.sol, W = ['no', 'one', 'two', 'three', 'four'];
+    const others = pz.signs.map((s, t) => t).filter(t => t !== sol);
+    if (pz.rule === 'tre') {
+      const why = others.map(t => { const tv = pz.signs.map((s, i) => signTrue(s, i, t)); const b = tv.findIndex((v, i) => v !== (i === t));
+        return CHESTS[t][0] + ' fails (' + (b === t ? 'its own sign would be false' : 'the ' + CHESTS[b][0] + ' sign would be true') + ')'; });
+      return 'Test each chest: ' + listWords(why) + '. Only ' + CHESTS[sol][0] + ' makes its own sign true and every empty chest’s sign false.';
+    }
+    const lie = pz.rule === 'lie';
+    const cnt = t => pz.signs.filter((s, i) => signTrue(s, i, t) !== lie).length;
+    const parts = others.map((t, j) => { const c = cnt(t); return j === 0 ? CHESTS[t][0] + ' would leave ' + W[c] + ' ' + (lie ? (c === 1 ? 'lie' : 'lies') : (c === 1 ? 'true sign' : 'true signs')) : CHESTS[t][0] + ' ' + (c ? W[c] : 'none'); });
+    return listWords(parts) + '. Only ' + CHESTS[sol][0] + ' leaves exactly one ' + (lie ? 'lie' : 'true sign') + '.';
+  }
   function explainChests(pz) {
     const sol = chestSolutions(pz)[0];
     const steps = [];
@@ -1876,7 +1890,7 @@ html.big .status3 .third span{font-size:16px}
     return pz.type + '-' + (h >>> 0).toString(36);
   }
   Object.assign(TL, { pid, KIND, clueText, evalClue, gridSolutions, explainGrid, genGrid, checkGrid, answerText,
-    CHESTS, CRULE, signText, signTrue, chestSolutions, explainChests, genChests, checkChests, chestWhy,
+    CHESTS, CRULE, signText, signTrue, chestSolutions, explainChests, genChests, checkChests, chestWhy, chestKey,
     ROSTER, genAny, dailyTypes, daily: daily2 });
 })(typeof window !== 'undefined' ? window : this);
 
@@ -2976,7 +2990,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.5' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.6' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3275,7 +3289,35 @@ document.addEventListener('click', ev => {
 function freeNext() { const F = P.free; if (!F || !P.solved) return; const i = P.slot + 1; if (i >= F.q.length) return;
   if (F.going === i && Date.now() - F.goingAt < 1200) return; F.going = i; F.goingAt = Date.now(); adNext(F.q[i], () => playFree(F, i)); }
 // Cooper R27: the one-sentence takeaway (the last step of the walk-through) on every solved card, no Why tap needed.
-function takeaway(ex) { const d = ex && ex.steps && ex.steps.filter(s => s.kind === 'done').pop(); return d ? '<div class="takeaway">🔑 ' + esc(d.text) + '</div>' : ''; }
+// Round 28 (Cooper + Muse): the key names the deciding step, never just the answer again.
+// Chests: why the other chests fail. Number and letter kinds: the rule. Logic kinds: the first step that pins something down.
+function keyText(ex, pz) {
+  if (!ex || !ex.steps || !pz) return '';
+  const st = ex.steps, t = pz.type, d = st.filter(s => s.kind === 'done').pop(); if (!d) return '';
+  const lf = x => x.charAt(0).toLowerCase() + x.slice(1);
+  if (t === 'chests' && pz.sol !== undefined) return TL.chestKey(pz);
+  if (t === 'trail' || t === 'letters' || t === 'wheels') {
+    let x = d.text; const cut = [', so ', '. Next', '. The next gap', '. Wheel '].map(k => x.indexOf(k)).filter(i => i > 0);
+    if (cut.length && !/^(So the next|Next is|Next first|The next one)/.test(x)) x = x.slice(0, Math.min(...cut));
+    else { const p = st.filter(s => s.kind !== 'done').pop(); if (!p) return ''; x = p.text; const c = x.indexOf(': '); x = c > 0 && /^[\d−-]/.test(x.slice(c + 2)) ? x.slice(0, c) : x.split('. ')[0]; }
+    x = x.replace(/^So the rule is: /, '').replace(/\.$/, '');
+    return 'Spot the rule: ' + lf(x) + '.' + (t === 'letters' ? ' (Turn letters into alphabet numbers first.)' : '');
+  }
+  if (t === 'pyramid') { const sub = st.find(s => / − /.test(s.text)); return sub ? 'The key brick: ' + lf(sub.text) : 'Spot the rule: each brick is the two bricks under it added together. Work up from the bottom.'; }
+  const pins = st.filter(s => s.kind !== 'done' && s.kind !== 'wrongplace');
+  const last = x => (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x;
+  const k = pins.find(s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }) || pins[0];
+  if (!k) return '';
+  let x = k.text; const rest = st.indexOf(k) < st.length - 2 ? ' The rest follows from there.' : '';
+  if (x.length > 150) { const m = x.match(/^(Clues? [\d, and]+?)(?: says| \(|:| together)/); const f = last(x).replace(/^(So|Either way,) /, '');
+    if (m && f) return m[1] + (/^Clues/.test(m[1]) ? ' are' : ' is') + ' the turning point: ' + f + '.' + rest; }
+  if (x.length > 200 && /^Suppose /.test(x)) { const so = x.lastIndexOf(' So '); if (so > 0 && /[.”]/.test(x[so - 1])) {
+    const m = x.match(/(card \d’s words “[^”]*” would be (?:true|false)), but (the \w+ always [a-z ]+)/);
+    const mid = m ? 'Then ' + m[1] + ', but ' + m[2] + (/ If /.test(x) ? ' (the other order fails too).' : '.') : ((x.match(/But then [^“.]*(?:“[^”]*”|\.)/) || ['That breaks a rule.'])[0]);
+    x = x.split('. ')[0] + '. ' + mid + x.slice(so); } }
+  return 'Turning point: ' + x + rest;
+}
+function takeaway(ex, pz) { const k = keyText(ex, pz || P.pz); return k ? '<div class="takeaway">🔑 ' + esc(k) + '</div>' : ''; }
 function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : F.how === 'expert' ? '🧠 Expert try' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (P.slot + 1) + ' of ' + F.q.length : ''); }
 function freeSolved(ms) {
   const F = P.free; const t = P.pz.type; const clean = !P.miss && !P.hints;
@@ -3285,7 +3327,7 @@ function freeSolved(ms) {
   const fi = P.slot; F.ms[fi] = ms; if (clean) F.clean++;
   track('free_done', { type: t, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
   const more = fi + 1 < F.q.length; const end = !more && F.q.length > 1;
-  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div>' + takeaway(P.ex) + '<div class="fpnote">' + (F.q.length > 1 ? (fi + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
+  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div>' + takeaway(P.ex, P.pz) + '<div class="fpnote">' + (F.q.length > 1 ? (fi + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + (clean ? '✅' : '👍') + '</b><span>' + (clean ? 'CLEAN' : 'SOLVED') + '</span></div></div>' +
     (end ? '<div class="sub" style="font-size:16px">All ' + F.q.length + ' solved · ' + F.clean + ' clean · ' + fmtT(F.ms.reduce((a, x) => a + (x || 0), 0)) + '</div>' : '') +
     '<div class="col">' + (more ? '<button class="btn" id="fnx">Next puzzle</button>' : '<button class="btn" id="fag">' + (F.how === 'expert' ? '🧠 Turn on Expert' : F.how === 'practice' ? '🎯 One more ' + TYPENAME[t] : '🔀 Shuffle 3 more') + '</button>') +
@@ -3303,8 +3345,11 @@ function freeSolved(ms) {
 // Muse R26: Expert was only a checkbox in Help; the results card offers it once the day is done.
 function showExpertOffer() {
   track('expert_offer', {});
-  openSheet('<h2>🧠 Expert puzzles</h2><div class="sub">The same kinds of puzzles, one step harder, with trickier clues. Every puzzle still has exactly one answer and needs no guessing.</div><div class="sub">Turn it on and today\'s Expert three are ready to play now. Your normal results stay saved, and you can switch back any time in Help.</div>' +
-    '<div class="col"><button class="btn" id="xTry">Try one Expert puzzle</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="xOn">Turn on Expert</button><button class="linkbtn" id="xNo">Not now</button></div>');
+  // Round 28 (Cooper): lead with the one-puzzle try, and say plainly that it does not switch Expert on.
+  openSheet('<h2>🧠 Try one Expert puzzle</h2><div class="sub">The same kinds of puzzles, one step harder, with trickier clues. Every puzzle still has exactly one answer and needs no guessing.</div>' +
+    '<div class="col"><button class="btn" id="xTry">Try one puzzle</button><div class="fpnote" id="xNote">Just one puzzle. This does not turn Expert on.</div>' +
+    '<div class="sub" style="font-size:16px">Like it? Turn Expert on and today\'s Expert three are ready to play. Your normal results stay saved, and you can switch back any time in Help.</div>' +
+    '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="xOn">Turn on Expert</button><button class="linkbtn" id="xNo">Not now</button></div>');
   document.getElementById('xTry').onclick = () => { const ty = getDayM(realToday, true)[0].type; track('expert_try', { type: ty }); startFree([ty], 'X', 'expert'); };
   document.getElementById('xOn').onclick = () => { store.set('expert', true); track('option', { expert: true, from: 'results' }); closeSheet(); toast('🧠 Expert on: harder clues from today.'); renderHome(); };
   document.getElementById('xNo').onclick = () => { closeSheet(); renderHome(); };
@@ -3749,18 +3794,19 @@ function replaySolved(ms) {
   const R = P.replay; R.ms[P.slot] = ms; const e = results()[P.ds]; const first = e && e.s[P.slot] ? e.s[P.slot].ms : null;
   const more = R.all && P.slot < 2;
   if (more) {
-    openSheet('<h2>' + solvedHead(P.pz.type) + '</h2><div class="sub">Solved again in ' + fmtT(ms) + (first != null ? ' · first time ' + fmtT(first) : '') + '</div>' +
-      '<div class="col"><button class="btn" id="nx">Next puzzle</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button></div>');
+    openSheet('<h2>' + solvedHead(P.pz.type) + '</h2><div class="sub">Solved again in ' + fmtT(ms) + (first != null ? ' · first time ' + fmtT(first) : '') + '</div>' + takeaway(P.ex, P.pz) +
+      '<div class="col"><button class="btn" id="nx">Next puzzle</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="home">‹ Back to home</button>' + '<button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div>' + '</div>');
   } else {
     const now = R.all ? R.ms.reduce((a, x) => a + (x || 0), 0) : ms;
     const was = R.all ? (e ? e.s.reduce((a, x) => a + (x ? x.ms : 0), 0) : null) : first;
     const beat = was != null && now < was;
-    openSheet('<h2>' + (beat ? 'You beat your time! 🎉' : 'Nicely done!') + '</h2>' +
+    openSheet('<h2>' + (beat ? 'You beat your time! 🎉' : 'Nicely done!') + '</h2>' + takeaway(P.ex, P.pz) +
       '<div class="statrow"><div class="stat"><b>' + fmtT(now) + '</b><span>THIS TIME</span></div>' + (was != null ? '<div class="stat"><b>' + fmtT(was) + '</b><span>FIRST TIME</span></div>' : '') + '</div>' +
       '<div class="sub" style="font-size:16px">Just for fun: your first result, streak and goals stay as they were.</div>' +
-      '<div class="col"><button class="btn" id="home">‹ Back to home</button>' + (R.all ? '' : '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="nx">Play it again</button>') + '</div>' + (R.all ? promoOver() : ''));
+      '<div class="col"><button class="btn" id="home">‹ Back to home</button>' + (R.all ? '' : '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="nx">Play it again</button>') + '<button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div>' + '</div>' + (R.all ? promoOver() : ''));
     promoWire('over');
   }
+  document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
   const nx = document.getElementById('nx'); if (nx) nx.onclick = () => { closeSheet(); more ? startPuzzle(P.ds, P.slot + 1, R) : startReplay(P.ds, P.slot, false); };
   document.getElementById('home').onclick = () => { closeSheet(); S.date = realToday; renderHome(); };
 }
@@ -3778,7 +3824,7 @@ function showSolved(ms) {
   const lit = P.replay || P.bonus || P.story || !res ? 0 : res.s.filter(Boolean).length;
   // Muse R25: a kind mastered in the Daily (its 5th clean solve in any mode) is celebrated here too.
   const mast = !P.replay && !P.story && !P.miss && !P.hints && (kindStats()[pz.type] || [0, 0])[1] === MASTER_N;
-  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' + takeaway(P.ex) + (mast ? '<div class="fpnote mastnote">🏅 You mastered ' + TYPENAME[pz.type] + ' today</div>' : '') + (P.story ? '' : '<div class="ideal">' + ideaTag(pz, 'big') + '<span>' + esc(IDEAS[ideaKey(pz)].d) + '</span></div>') +
+  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' + takeaway(P.ex, pz) + (mast ? '<div class="fpnote mastnote">🏅 You mastered ' + TYPENAME[pz.type] + ' today</div>' : '') + (P.story ? '' : '<div class="ideal">' + ideaTag(pz, 'big') + '<span>' + esc(IDEAS[ideaKey(pz)].d) + '</span></div>') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + P.hints + '</b><span>' + (P.hints === 1 ? 'HINT' : 'HINTS') + '</span></div></div>' +
     '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === trueToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
@@ -4926,7 +4972,7 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs, showFree, showFreePick, startFree, freeGet, weakestKind, kindStats };
+window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs, showFree, showFreePick, startFree, freeGet, weakestKind, kindStats, keyText, get CHEST_NAMES() { return TL.CHESTS.map(c => c[0]); } };
 window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
