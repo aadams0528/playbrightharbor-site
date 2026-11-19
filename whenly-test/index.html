@@ -210,7 +210,7 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 .tl .tlpair{position:absolute;top:34px;height:7px;border-radius:4px;background:var(--accent)}
 .tl button.on{outline:3px solid var(--accent);outline-offset:2px}
 .tl button.h{--cat:#3f5ea8}.tl button.i{--cat:#a86a00}.tl button.f{--cat:#b2405e}.tl button.s{--cat:#2f7a92}.tl button.p{--cat:#3d8a38}
-.tl span{position:absolute;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap}
+.tl span{position:absolute;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap}
 .tl button span{top:24px}.tl button.up span{top:-22px}
 .storynav{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:15px;color:var(--muted)}
 .storynav .btn{padding:8px 14px;font-size:15px}
@@ -402,7 +402,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 58</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 59</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1667,11 +1667,12 @@ function nearMiss(){
   const ties=g.map((v,i)=>v===min&&!said(i)?i:-1).filter(i=>i>=0);if(!ties.length)return "";
   const swapped=G.finalOrder&&ties.some(i=>G.finalOrder.indexOf(t[i])>G.finalOrder.indexOf(t[i+1]));
   const N=i=>`<b>${shortName(t[i])}</b>`,yrs=min===1?"1 year":min+" years",list=a=>a.length===2?a.join(" and "):a.slice(0,-1).join(", ")+" and "+a[a.length-1];
-  const today=G.kind==="daily"?" today":"";let line;
+  const today="";let line;
   if(ties.length===1){
     const A=N(ties[0]),B=N(ties[0]+1);
     // Two wordings by day (Muse, round 24).
-    line=(G.n||0)%2&&G.kind!=="practice"?`Closest call ${G.kind==="daily"?"today":"on this line"}: ${min<=10?"only ":""}${yrs} between ${A} and ${B}.`:`${G.kind==="daily"?"Closest pair today":"Closest pair"}: ${A} and ${B}, ${min<=10?"just ":""}${yrs} apart.`;
+    // One label everywhere (Muse, round 29); the sentence after it still takes two forms.
+    line=(G.n||0)%2&&G.kind!=="practice"?`Closest pair: ${min<=10?"only ":""}${yrs} between ${A} and ${B}.`:`Closest pair: ${A} and ${B}, ${min<=10?"just ":""}${yrs} apart.`;
   }else if(ties[ties.length-1]-ties[0]===ties.length-1){
     // Tied pairs in a row (Cooper, round 25): name the run.
     const run=[];for(let i=ties[0];i<=ties[ties.length-1]+1;i++)run.push(N(i));
@@ -1685,10 +1686,11 @@ function nearMiss(){
 // labels alternate above and below, so every dot stays tappable.
 function timeline(){
   const t=sortIds(G.ids),y=t.map(yr),lo=y[0],span=Math.max(1,y[y.length-1]-lo),x=y.map(v=>(v-lo)/span*100);
-  for(let i=1;i<x.length;i++)x[i]=Math.max(x[i],x[i-1]+11);
-  const over=x[x.length-1]-100;if(over>0)for(let i=x.length-1;i>=0;i--){x[i]-=over;if(i<x.length-1)x[i]=Math.min(x[i],x[i+1]-11)}
+  for(let i=1;i<x.length;i++)x[i]=Math.max(x[i],x[i-1]+15); // wide-span days keep clustered years apart (Muse, round 29)
+  // Pull an overflow back from the right end only as far as needed, so the left years keep their true spacing (Muse, round 29).
+  if(x[x.length-1]>100){x[x.length-1]=100;for(let i=x.length-2;i>=0;i--)x[i]=Math.min(x[i],x[i+1]-15)}
   {const a=Math.min(...x),z=Math.max(...x)-a||1;for(let i=0;i<x.length;i++)x[i]=(x[i]-a)/z*100} // spreading can push the first dot below 0; bring all back to 0-100 (Muse, round 19)
-  for(let i=0;i<x.length;i++)x[i]=9+x[i]*.82; // keep the end dots and their years well inside the card
+  for(let i=0;i<x.length;i++)x[i]=10+x[i]*.8; // keep the end dots and their years well inside the card
   let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
   return `<p class="tlhint">👆 Tap a year or a card for its story</p><div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
 }
@@ -1704,12 +1706,12 @@ function surpriseCard(){ // the card you had furthest from its spot (or the olde
 // lands its last year bigger, and only a Flawless 100 gets the full-screen confetti.
 // Every dot is drawn, faint, in the same frame as the result and the first one lands at once, so the line is never bare (Muse, round 22).
 function landYears(r){
-  const tl=r.querySelector(".tl");if(!tl)return;const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
+  const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,step=still?0:380;
   if(!still){tl.classList.add("landing");bs.forEach((b,i)=>b.style.animationDelay=(i*step/1000)+"s");if(perfect)bs[bs.length-1].classList.add("big")}
   bs.forEach((b,i)=>setTimeout(()=>sfx("land",i),i*step));
   const end=bs.length*step;
-  setTimeout(()=>{tl.classList.remove("landing");if(perfect)sfx("solve");if(G.score>=100&&!G.gaveUp)fireworks()},end+(perfect&&!still?250:0));
+  setTimeout(()=>{tl.classList.remove("landing");if(perfect)sfx("solve");if(G.score>=100&&!G.gaveUp&&run===fxRun&&r.isConnected&&!r.hidden)fireworks()},end+(perfect&&!still?250:0));
 }
 // "Wait, really?" (elite plan, item 1): one line on how today's five connect, worked out from the
 // verified years only, so it can never state something the deck doesn't.
@@ -1874,7 +1876,7 @@ function showResult(){
     ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
     ${chalResult()}
     <div class="row">
-      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
+      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="bReplay">🔁 Replay for fun</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
     ${answerList()}
     ${G.kind==="practice"||authored()||!nearMiss()?"":`<p class="connect">${nearMiss()}</p>`}
@@ -1890,7 +1892,7 @@ function showResult(){
     ${dorA||G.kind==="practice"?`<p class="crowd" id="crowd" hidden></p>`:""}
     ${daily&&S.streak%7===0?`<button class="btn ghost" id="bWeek" style="width:100%">📖 Your week in history: 7 days of stories</button>`:""}
     <p class="howhead">How scoring works</p>${G.rows&&G.rows.length?`<p>Each row of squares is one try, and each square is two neighboring cards as they sat: 🟩 in order, 🟥 out of order.</p>`:`<p>Each square is a pair of neighbors in the answer: 🟩 side by side in order · 🟨 in order, apart · 🟥 swapped.</p>`}<p>Your order earns up to 90: pairs in the right order (60%), how close each card was to its spot (30%) and your longest correct run (10%). Try 2 keeps 85% of that and try 3 keeps 70%. Finishing with no help adds the ⭐ and 10 points. History points are your score times the day's difficulty (Easy ×1, Medium ×1.15, Tricky ×1.3, Hard ×1.5), rounded to the nearest point. Archive, Practice and Expert earn at half rate, and Practice and Expert each earn points for your first 3 games a day.</p>
-      ${G.kind==="archive"?`<div class="row"><button class="btn ghost" id="bReplay">Replay for fun</button></div><p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
+      ${G.kind==="archive"?`<p class="next">Past puzzles don't change your streak or daily stats. A replay keeps your saved score.</p>`:""}
       ${dorA&&!(daily&&S.streak%7===0)?`<button class="linkbtn" id="bWeek">📖 This week's stories</button>`:""}
     </details>
     ${promoCard()}
@@ -1992,8 +1994,13 @@ function showFact(id,box){
 }
 // Replay a finished past puzzle from the start. Nothing is saved, so the original score stays.
 function replayPuzzle(){
-  const n=G.n,orig=G.kind==="replay"?G.orig:G.score,d=dealFor(n);
-  G=fresh("replay",d.ids,d.order);G.n=n;G.wd=d.wd;G.orig=orig;
+  stopFx();const n=G.n,orig=G.kind==="replay"?G.orig:G.score,d=dealFor(n);
+  // A save from an earlier card set replays those same cards, not today's version of the day (Muse, round 29).
+  let ids=d.ids,order=d.order;const old=savedIds(n);
+  if(earlierSet(n)&&old.length===d.ids.length&&old.every(i=>EVENTS[i])){ids=old.slice();const r=rng(n*31+7);order=ids.slice();
+    for(let i=order.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[order[i],order[j]]=[order[j],order[i]]}
+    if(order.join()===sortIds(ids).join())order.reverse()}
+  G=fresh("replay",ids,order);G.n=n;G.wd=d.wd;G.orig=orig;
   track("puzzle_start",{mode:"replay",puzzle:n});render();scrollTo(0,0);
 }
 // Every card story from the dailies you finished in the last 7 days.
@@ -2047,6 +2054,7 @@ function render(){
 // keep the order the player locked in, for the near-miss line and reloads
 const _finish=finish;finish=function(){G.finalOrder=G.order.slice();_finish()};
 function setMode(m){
+  stopFx(); // no confetti or holiday shower follows you to another screen (Cooper and Muse, round 29)
   $("#sr").textContent=""; // a move or check line from the last puzzle must not carry over
   ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",m===t.toLowerCase()));
   const game=m==="daily"||m==="practice";
@@ -2360,13 +2368,15 @@ function sfx(kind,i=0){if(S.sound===false)return;try{
   else if(kind==="solve")[523,659,784,1047].forEach((f,k)=>tone(f,k*.09,.32,.055,"triangle"));
 }catch(e){}}
 function buzz(ms){try{if(NATIVE)PLUG.Haptics?.impact({style:ms<=10?"LIGHT":ms<=20?"MEDIUM":"HEAVY"});else navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+// Leaving a result clears its celebration at once (Cooper and Muse, round 29).
+let fxRun=0;function stopFx(){fxRun++;const c=$("#fx");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height);$("#decoFall")?.remove()}
 function fireworks(){
   if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  const c=$("#fx"),x=c.getContext("2d"),W=c.width=innerWidth*devicePixelRatio,H=c.height=innerHeight*devicePixelRatio,P=[];
+  const run=++fxRun,c=$("#fx"),x=c.getContext("2d"),W=c.width=innerWidth*devicePixelRatio,H=c.height=innerHeight*devicePixelRatio,P=[];
   const cols=["#e8a21a","#2e9a58","#5a9fb5","#d9708a","#7d93c9"];
   // A little bigger and longer, so a Flawless 100 is hard to miss (Muse, round 22).
-  for(let b=0;b<4;b++){const cx=W*(.2+.2*b),cy=H*(.22+.1*(b%2));for(let i=0;i<60;i++){const a=Math.random()*6.28,s=(2+Math.random()*5)*devicePixelRatio;P.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:90+Math.random()*50,c:cols[i%5],d:b*10})}}
-  let f=0;(function step(){x.clearRect(0,0,W,H);let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx;p.y+=p.vy;p.vy+=.08*devicePixelRatio;p.vx*=.98;p.l--;x.globalAlpha=Math.min(1,p.l/30);x.fillStyle=p.c;x.fillRect(p.x,p.y,6*devicePixelRatio,6*devicePixelRatio)}f++;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
+  for(let b=0;b<4;b++){const cx=W*(.2+.2*b),cy=H*(.22+.1*(b%2));for(let i=0;i<60;i++){const a=Math.random()*6.28,s=(2+Math.random()*5)*devicePixelRatio;P.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:65+Math.random()*35,c:cols[i%5],d:b*10})}}
+  let f=0;(function step(){x.clearRect(0,0,W,H);if(run!==fxRun)return;let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx;p.y+=p.vy;p.vy+=.08*devicePixelRatio;p.vx*=.98;p.l--;x.globalAlpha=Math.min(1,p.l/30);x.fillStyle=p.c;x.fillRect(p.x,p.y,6*devicePixelRatio,6*devicePixelRatio)}f++;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
 }
 // Hidden tester tools: tap the footer 5 times. Test builds only; `npm run build:release` turns them off.
 let footTaps=0;function testerTap(){if(!ADS_TESTING||++footTaps<5)return;footTaps=0;document.querySelectorAll(".sheet").forEach(x=>x.remove());
@@ -2650,8 +2660,9 @@ function applyDeco(){
   const bits=[...h.fall.match(/\p{Extended_Pictographic}️?/gu)];
   for(let i=0;i<7;i++){const s=document.createElement("span");s.textContent=bits[i%bits.length];
     s.style.left=(6+i*14+Math.random()*6)+"%";s.style.animationDuration=(11+Math.random()*7)+"s";s.style.animationDelay=(-Math.random()*16)+"s";f.appendChild(s)}
-  document.body.appendChild(f);
-  setTimeout(()=>{f.style.transition="opacity 2s";f.style.opacity="0";setTimeout(()=>f.remove(),2100)},30000); // a short shower, not forever
+  // A short shower once a day, gone after 8 seconds or as soon as you change screen (Muse, round 29: it felt endless).
+  if(S.decoFallDay!==dayNum()){S.decoFallDay=dayNum();save();document.body.appendChild(f);
+    setTimeout(()=>{f.style.transition="opacity 2s";f.style.opacity="0";setTimeout(()=>f.remove(),2100)},8000)}
   if(h.days===0&&S.decoGreet!==dayNum()&&S.tutorialDone){S.decoGreet=dayNum();save();setTimeout(()=>toast(`${h.garland.split(" ")[1]} ${h.name}!`),1500)}
   return h;
 }
