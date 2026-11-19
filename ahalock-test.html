@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.13 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.14 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -187,7 +187,7 @@ button.tile{font:inherit;color:inherit;cursor:pointer;width:100%;display:block}
 .slots.vert .gslot{flex-direction:row;max-width:none;width:200px;gap:10px}
 .slots.vert .gslot .box{width:64px;flex:none;font-size:30px}
 .slots.vert .gslot .lab{min-height:0;text-align:left}
-.slots.vert .gslot .box{height:46px;width:56px;min-height:0}.slots.vert{gap:4px}.oneln{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slots.vert .gslot .box{height:46px;width:56px;min-height:0}.slots.vert{gap:4px}.oneln{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px;letter-spacing:-.1px}
 .vwrap{display:flex;gap:14px;align-items:center;justify-content:center}.vwrap .slots.vert .gslot{width:auto}.vwrap .slots.vert .gslot .lab{width:58px}.tray.vtray{flex-direction:column;flex-wrap:nowrap;margin-top:8px;align-items:stretch}.tray.vtray .chip{justify-content:flex-start}
 .compact .slots:not(.vert) .gslot .box{max-height:62px}
 .compact .tray.few{flex-wrap:nowrap}.compact .tools{margin-top:8px}.compact .tools .tool{height:38px}.compact .tray.few .chip{flex:1 1 0;min-width:0;justify-content:center;padding:4px 6px}
@@ -484,6 +484,7 @@ html,body{overflow-anchor:none}
 .sharecard .row{font-size:30px;letter-spacing:4px;margin:8px 0}
 .sharecard .s{font-size:16px;color:#c6d0e6}
 .col{display:flex;flex-direction:column;gap:10px}
+body:has(#ov) .toast{top:auto;bottom:calc(var(--sab) + 18px)}
 .toast{position:fixed;left:50%;top:calc(var(--sat) + 58px);transform:translateX(-50%);background:#fff;color:var(--ink);padding:10px 16px;border-radius:12px;font-weight:800;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 
 /* tutorial coach */
@@ -775,7 +776,7 @@ html.big .status3 .third span{font-size:16px}
 .sheet .tnote{text-align:left;font-size:15px;margin:0 0 4px 34px}
 .sfoot.more::before,.pindone.more::before{content:"↓ Scroll down for the rest";display:block;align-self:center;text-align:center;font-size:14px;font-weight:800;color:#7a5a00;margin:-2px auto 6px;padding:4px 14px;border-radius:999px;background:#ffe08a;border:2px solid var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.18)}
 .sfoot.more,.pindone.more{background:var(--panel)}
-.shmore{position:sticky;bottom:0;height:0;display:flex;justify-content:center;pointer-events:none}.shmore.more{height:auto;padding-top:6px}.shmore.more::before{content:"↓ Scroll down for the rest";font-size:14px;font-weight:800;color:#7a5a00;padding:4px 14px;border-radius:999px;background:#ffe08a;border:2px solid var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.shmore{position:sticky;bottom:0;height:0;display:flex;justify-content:center;pointer-events:none}.shmore.more::before{content:"↓ Scroll down for the rest";position:absolute;bottom:4px;white-space:nowrap;font-size:14px;font-weight:800;color:#7a5a00;padding:4px 14px;border-radius:999px;background:#ffe08a;border:2px solid var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.18)}
 .pindone{position:sticky;bottom:-20px;margin:10px -18px -20px;padding:10px 18px calc(14px + var(--sab));background:linear-gradient(rgba(251,244,228,0),var(--panel) 30%)}
 .quiet2{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:2px}
 .quiet2 .linkbtn{font-size:17px;font-weight:800;color:var(--ink);text-decoration:underline;padding:10px 4px}
@@ -963,7 +964,10 @@ html.big .status3 .third span{font-size:16px}
           const pinnedIn = newIn.filter(d => spotsOf(d).length === 1);
           const outD = []; for (let d = 0; d <= 9; d++) if (!ins.has(d) && dom.some(x => x.has(d)) && spotsOf(d).length === 0) outD.push(d);
           let keepR = null, keepIn = null;
-          if (pinnedIn.length) { const d = pinnedIn[0], sp = spotsOf(d)[0]; keepIn = [d]; keepR = removals.filter(([i, dd]) => dd === d || i === sp); }
+          // Cooper R36: say the clue's own consequence first ("6 is out"); a number the clue never shows is pinned on the next step.
+          const inCl = d => idxs.some(i => p.clues[i].g.indexOf(d) >= 0);
+          if (pinnedIn.length && !inCl(pinnedIn[0]) && outD.some(inCl)) { const od = outD.filter(inCl); keepIn = []; keepR = removals.filter(([i, dd]) => od.indexOf(dd) >= 0); }
+          else if (pinnedIn.length) { const d = pinnedIn[0], sp = spotsOf(d)[0]; keepIn = [d]; keepR = removals.filter(([i, dd]) => dd === d || i === sp); }
           else if (newIn.length) { keepIn = newIn.slice(); keepR = removals.filter(([i, dd]) => newIn.indexOf(dd) >= 0); }
           else if (outD.length) { keepIn = []; keepR = removals.filter(([i, dd]) => outD.indexOf(dd) >= 0); }
           if (keepR) { removals.splice(0, removals.length, ...keepR); newIn.splice(0, newIn.length, ...keepIn); }
@@ -985,9 +989,58 @@ html.big .status3 .third span{font-size:16px}
             fillText = (inList.length ? listWords(inList) + (inList.length > 1 ? ' are' : ' is') + ' in the code, and c' : 'C') + 'lue ' + (idxs[0] + 1) + ' needs ' + (['', 'one', 'two', 'three'][needMore] + ' more') + ' of its numbers (' + listWords(live.map(String), 'or') + '). That fills all ' + n + ' spots, so ' + listWords(goneD.map(String)) + (goneD.length > 1 ? ' are' : ' is') + ' not in the code.';
           }
         }
+        // Cooper R36: a pair that fills every spot says so before ruling the rest out.
+        if (!fillText && !newIn.length && idxs.length === 2 && removals.length) {
+          const [c1, c2] = idxs.map(i => p.clues[i]), goneD = [...new Set(removals.map(r => r[1]))].sort((x, y) => x - y);
+          const shared = c1.g.some(d => c2.g.indexOf(d) >= 0), sum = c1.a + c1.b + c2.a + c2.b;
+          if (!shared && sum === n && goneD.every(d => !mentionedD.has(d)) && [...ins].every(d => mentionedD.has(d)))
+            fillText = 'Clue ' + (idxs[0] + 1) + ' needs ' + (NUM[c1.a + c1.b] || '').toLowerCase() + ' of ' + listWords(c1.g.map(String)) + ', and clue ' + (idxs[1] + 1) + ' needs ' + (NUM[c2.a + c2.b] || '').toLowerCase() + ' of ' + listWords(c2.g.map(String)) + '. They share no numbers, so that fills all ' + n + ' spots, and ' + listWords(goneD.map(String)) + (goneD.length > 1 ? ' are' : ' is') + ' not in the code.';
+        }
         // Cooper R35: a pair step that puts a number in the code says the counting reason first.
         let pairWhy = '';
-        if (idxs.length === 2 && newIn.length === 1) {
+        // Cooper R36: a number in none of the cited clues is forced in by counting what those clues can supply.
+        if (newIn.length === 1 && idxs.every(i => p.clues[i].g.indexOf(newIn[0]) < 0)) {
+          const d = newIn[0], live = (x) => ins.has(x) || dom.some(s2 => s2.has(x)), inAny = x => idxs.some(i => p.clues[i].g.indexOf(x) >= 0);
+          const needs = idxs.map(i => p.clues[i].a + p.clues[i].b), sum = needs.reduce((a, b) => a + b, 0);
+          const outside = []; for (let x = 0; x <= 9; x++) if (!inAny(x) && live(x)) outside.push(x);
+          if (sum < n && outside.length === n - sum && outside.indexOf(d) >= 0) {
+            const cl = idxs.map((i, j) => 'clue ' + (i + 1) + ' has ' + (NUM[needs[j]] || String(needs[j])).toLowerCase() + ' of ' + listWords(p.clues[i].g.map(String)));
+            const deadOut = []; for (let x = 0; x <= 9; x++) if (!inAny(x) && !live(x)) deadOut.push(x);
+            pairWhy = (w => w.charAt(0).toUpperCase() + w.slice(1))(listWords(cl)) + ', so ' + (idxs.length > 1 ? 'together they give' : 'it gives') + ' at most ' + (NUM[sum] || String(sum)).toLowerCase() + ' of the ' + (NUM[n] || String(n)).toLowerCase() + ' numbers. ' + (n - sum === 1 ? 'The last one must be a number in ' + (idxs.length > 1 ? 'neither clue' : 'no clue here') : 'The other ' + (n - sum) + ' must be numbers ' + (idxs.length > 1 ? 'in neither clue' : 'outside this clue')) + (deadOut.length ? ', and ' + listWords(deadOut.map(String)) + (deadOut.length > 1 ? ' are' : ' is') + ' out' : '') + '. ';
+          }
+        }
+        // Nikola R36: a single clue that forces a number in says how: what else could still fill its count.
+        if (!pairWhy && idxs.length === 1 && newIn.length === 1) {
+          const c = p.clues[idxs[0]], d = newIn[0], need = c.a + c.b, ci = idxs[0] + 1;
+          const at = x => c.g.indexOf(x), live = x => ins.has(x) || dom.some(s2 => s2.has(x));
+          const others = c.g.filter(x => x !== d);
+          if (c.a > 0 && c.b === 0) { // right-spot clue: a number only counts in its own spot
+            const ok = others.filter(x => dom[at(x)].has(x)), no = others.filter(x => !dom[at(x)].has(x));
+            if (ok.length < c.a) pairWhy = 'Clue ' + ci + ' needs ' + NUM[c.a].toLowerCase() + ' of its numbers in their own spots. ' + listWords(no.map(x => x + (live(x) ? ' can\u2019t be in spot ' + (at(x) + 1) : ' is out'))) + ', so ' + d + ' must be one of them, in spot ' + (at(d) + 1) + '. ';
+          } else {
+            const okF = x => c.a === 0 ? dom.some((s2, i) => i !== at(x) && s2.has(x)) : live(x);
+            const ok = others.filter(okF), no = others.filter(x => !okF(x));
+            if (ok.length < need && no.length) pairWhy = 'Clue ' + ci + ' needs ' + NUM[need].toLowerCase() + ' of its numbers in the code. ' + listWords(no.map(x => x + (live(x) ? (c.a === 0 ? ' can only sit where the clue has it, which it says is wrong' : ' can\u2019t fit') : ' is out'))) + ', so ' + d + ' must be ' + (need > 1 ? 'one of them' : 'it') + '. ';
+          }
+        }
+        // Nikola R36: otherwise, if only one set of the clue's other numbers could stand in for D, show why that set can't.
+        if (!pairWhy && idxs.length === 1 && newIn.length === 1) {
+          const c = p.clues[idxs[0]], d = newIn[0], need = c.a + c.b, ci = idxs[0] + 1, live = x => ins.has(x) || dom.some(s2 => s2.has(x));
+          const others = c.g.filter(x => x !== d && live(x)), mustIn = others.filter(x => ins.has(x));
+          const combos = []; const rec = (k, cur) => { if (cur.length === need) { if (mustIn.every(x => cur.indexOf(x) >= 0)) combos.push(cur.slice()); return; } for (let j = k; j < others.length; j++) { cur.push(others[j]); rec(j + 1, cur); cur.pop(); } }; rec(0, []);
+          if (combos.length === 1) {
+            const cb = combos[0], outIn = [...ins].filter(x => x !== d && c.g.indexOf(x) < 0), all = cb.concat(outIn);
+            const spots = x => { const o = []; dom.forEach((s2, i) => { if (s2.has(x)) o.push(i + 1); }); return o; };
+            if (all.length > n) pairWhy = 'Without ' + d + ', clue ' + ci + ' would need ' + listWords(cb.map(String)) + (outIn.length ? ', and ' + listWords(outIn.map(String)) + (outIn.length > 1 ? ' are' : ' is') + ' already in the code' : '') + ': that is ' + all.length + ' numbers for ' + n + ' spots. ';
+            else { const u = new Set(); all.forEach(x => spots(x).forEach(q => u.add(q)));
+              if (u.size < all.length) pairWhy = 'Without ' + d + ', clue ' + ci + ' would need ' + listWords(cb.map(String)) + (outIn.length ? ' as well as ' + listWords(outIn.map(String)) : '') + ' in the code, but ' + listWords(all.map(x => x + ' could only go in spot ' + listWords(spots(x).map(String), 'or'))) + ': not enough spots. ';
+              else { // try every placement: distinct spots, and exactly c.a of the clue's numbers where the clue shows them
+                let ok = false; const used = new Set(); const pl = (k, right) => { if (ok) return; if (k === all.length) { if (right === c.a) ok = true; return; } const x = all[k], cg = c.g.indexOf(x);
+                  for (const q of spots(x)) { if (used.has(q)) continue; used.add(q); pl(k + 1, right + (cg >= 0 && cg === q - 1 ? 1 : 0)); used.delete(q); } }; pl(0, 0);
+                if (!ok) pairWhy = 'Without ' + d + ', clue ' + ci + ' would need ' + listWords(cb.map(String)) + (c.a && c.b ? ', ' + NUM[c.a].toLowerCase() + ' in the spot the clue shows and ' + NUM[c.b].toLowerCase() + ' in another' : c.a ? ' in the spots the clue shows' : ' away from the spots the clue shows') + '. But ' + listWords(all.map(x => x + ' could only go in spot ' + listWords(spots(x).map(String), 'or'))) + (outIn.length ? ' (' + listWords(outIn.map(String)) + (outIn.length > 1 ? ' are' : ' is') + ' already in the code)' : '') + ', so that can\u2019t work. '; } }
+          }
+        }
+        if (idxs.length === 2 && newIn.length === 1 && !pairWhy) {
           const d = newIn[0];
           const live = (x) => ins.has(x) || dom.some(s2 => s2.has(x));
           const info = idxs.map(i => { const c = p.clues[i]; return { i, need: c.a + c.b, has: c.g.indexOf(d) >= 0, poss: c.g.filter(x => x !== d && live(x)) }; });
@@ -997,6 +1050,30 @@ html.big .status3 .third span{font-size:16px}
             const u = new Set(); info.forEach(o => o.poss.forEach(x => u.add(x))); ins.forEach(x => u.add(x));
             if (u.size > n) pairWhy = 'Without ' + d + ', clue ' + (info[0].i + 1) + ' would need ' + listWords(info[0].poss.map(String)) + ' and clue ' + (info[1].i + 1) + ' would need ' + listWords(info[1].poss.map(String)) + (ins.size && [...ins].some(x => !info.some(o => o.poss.indexOf(x) >= 0)) ? ', on top of ' + listWords([...ins].filter(x => !info.some(o => o.poss.indexOf(x) >= 0)).sort((x, y) => x - y).map(String)) : '') + ': that is ' + u.size + ' different numbers for ' + n + ' spots. ';
           }
+          // Nikola R36: the general count. Without D the two clues still need at least this many different numbers.
+          if (!pairWhy) {
+            const [A, B] = info, both = A.poss.filter(x => B.poss.indexOf(x) >= 0);
+            const lb = Math.max(A.need, B.need, A.need + B.need - both.length), extra = [...ins].filter(x => x !== d && A.poss.indexOf(x) < 0 && B.poss.indexOf(x) < 0);
+            if (lb + extra.length > n) pairWhy = 'Without ' + d + ', clue ' + (A.i + 1) + ' needs ' + (NUM[A.need] || A.need).toString().toLowerCase() + ' of ' + listWords(A.poss.map(String)) + ' and clue ' + (B.i + 1) + ' needs ' + (NUM[B.need] || B.need).toString().toLowerCase() + ' of ' + listWords(B.poss.map(String)) +
+              (both.length ? '. They share only ' + listWords(both.map(String)) : '. They share none of those') + ', so that is at least ' + lb + ' different numbers' + (extra.length ? ', plus ' + listWords(extra.sort((x, y) => x - y).map(String)) + ' already in the code' : '') + ', for ' + n + ' spots. ';
+          }
+        }
+        // Nikola R36: a pair with only one way to fill both counts without D says why that way fails.
+        if (!pairWhy && idxs.length === 2 && newIn.length === 1) {
+          const d = newIn[0], C2 = idxs.map(i => p.clues[i]), live = x => ins.has(x) || dom.some(s2 => s2.has(x));
+          const U = [...new Set(C2.flatMap(c => c.g))].filter(x => x !== d && live(x)), outIn = [...ins].filter(x => x !== d && U.indexOf(x) < 0);
+          const spots = x => { const o = []; dom.forEach((s2, i) => { if (s2.has(x)) o.push(i + 1); }); return o; };
+          const cands = []; for (let m = 0; m < (1 << U.length); m++) { const S = U.filter((x, j) => m & (1 << j)); if (S.some(x => false)) continue;
+            if ([...ins].some(x => x !== d && U.indexOf(x) >= 0 && S.indexOf(x) < 0)) continue;
+            if (C2.every(c => c.g.filter(x => S.indexOf(x) >= 0).length === c.a + c.b)) cands.push(S); }
+          if (cands.length === 1) { const cb = cands[0], all = cb.concat(outIn);
+            let why = '';
+            if (all.length > n) why = ': that is ' + all.length + ' numbers for ' + n + ' spots';
+            else { let ok = false; const used = new Set(), at = {}; const pl = k => { if (ok) return; if (k === all.length) { if (C2.every(c => c.g.filter((x, i) => at[x] === i + 1).length === c.a)) ok = true; return; } const x = all[k];
+                for (const q of spots(x)) { if (used.has(q)) continue; used.add(q); at[x] = q; pl(k + 1); used.delete(q); delete at[x]; } }; pl(0);
+              if (!ok) why = ', but ' + listWords(all.map(x => x + ' could only go in spot ' + listWords(spots(x).map(String), 'or'))) + ', and no way of placing them gives each clue its right-spot count'; }
+            if (why) pairWhy = 'Without ' + d + ', the only numbers that give clue ' + (idxs[0] + 1) + ' its ' + (NUM[C2[0].a + C2[0].b] || '').toLowerCase() + ' and clue ' + (idxs[1] + 1) + ' its ' + (NUM[C2[1].a + C2[1].b] || '').toLowerCase() + ' are ' + listWords(cb.map(String)) + (outIn.length ? ', with ' + listWords(outIn.map(String)) + ' already in the code' : '') + why + '. '; }
+          else if (!cands.length) pairWhy = 'Without ' + d + ', no set of the other numbers gives clue ' + (idxs[0] + 1) + ' its ' + (NUM[C2[0].a + C2[0].b] || '').toLowerCase() + ' and clue ' + (idxs[1] + 1) + ' its ' + (NUM[C2[1].a + C2[1].b] || '').toLowerCase() + ' at the same time. ';
         }
         // apply
         for (const [i, d] of removals) dom[i].delete(d);
@@ -1080,6 +1157,12 @@ html.big .status3 .third span{font-size:16px}
           const still = cl.g.filter(d => ins.has(d) || newIn.indexOf(d) >= 0 || dom.some(x => x.has(d)));
           if (still.length === cl.a + cl.b) ctx = (ctx || []).concat(['clue ' + (idxs[0] + 1) + ' needs ' + NUM[cl.a + cl.b].toLowerCase() + ' of its numbers in the code, and only ' + listWords(still.map(String)) + (still.length > 1 ? ' are' : ' is') + ' still possible']);
         }
+        // Cooper R36: a clue whose count is already met by known numbers rules its other numbers out, and says so.
+        let full = '';
+        if (idxs.length === 1 && out.length && !newIn.length && cl.a + cl.b > 0 && out.every(d => cl.g.indexOf(d) >= 0)) {
+          const have = cl.g.filter(d => ins.has(d));
+          if (have.length === cl.a + cl.b) full = 'Clue ' + (idxs[0] + 1) + ' has ' + NUM[cl.a + cl.b].toLowerCase() + ' number' + (cl.a + cl.b > 1 ? 's' : '') + ' in the code, and ' + listWords(have.map(String)) + (have.length > 1 ? ' already make ' + NUM[have.length].toLowerCase() : ' is already one') + '. ';
+        }
         // Cooper R35: a right-spot clue that pins its number says why it is that one.
         let rpos = '';
         if (idxs.length === 1 && cl.a > 0) {
@@ -1091,9 +1174,13 @@ html.big .status3 .third span{font-size:16px}
           }
         }
         if (rpos && ctx && ctx.length && /^clue \d+ needs /.test(ctx[ctx.length - 1])) ctx = ctx.slice(0, -1);
-        const tl = (pairWhy || '') + rpos + (tailNote ? tailNote.charAt(0).toUpperCase() + tailNote.slice(1) + '. ' : '');
+        // one reason per step: the right-spot note or the clue's own count wins over a longer trial
+        if (idxs.length === 1 && (rpos || (ctx || []).some(c => / needs .* still possible$/.test(c)))) pairWhy = '';
+        if (pairWhy && ctx) ctx = ctx.filter(c => !/^the only numbers still possible/.test(c));
+        if (full) pairWhy = '';
+        const tl = (pairWhy || '') + full + rpos + (tailNote ? tailNote.charAt(0).toUpperCase() + tailNote.slice(1) + '. ' : '');
         if (ctx && ctx.length) return head + ': ' + rp + (rp ? 'We' : 'we') + ' already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '. ' + tl + 'So ' + body + '.';
-        return head + ': ' + rp + (tl || rp ? tl + 'So ' + body : body) + '.';
+        return head + ': ' + rp + (tl || rp ? (rp ? tl : tl.replace(/^(Clues?|Without)/, w => w.toLowerCase())) + 'So ' + body : body) + '.';
       };
       let done = false;
       for (const i of order) { const c0 = p.clues[i]; if (c0.a + c0.b === 0 && c0.g.every(d => dom.every(s2 => !s2.has(d)))) continue; if (tryClues([i], 1)) { done = true; break; } }
@@ -1126,7 +1213,7 @@ html.big .status3 .third span{font-size:16px}
       if (A.kind === 'clue' && B.kind === 'clue' && A.clues.length === 1 && B.clues.length === 1 && A.clues[0] === B.clues[0]) {
         const at = B.text.indexOf('. So ');
         // Cooper R30: say what was just found, and keep the clue's own count ("needs two, and only 9 and 2 remain").
-        if (at > 0) { const rest = B.text.slice(at + 5); const ao = A.text.lastIndexOf('So '); const af = ao >= 0 ? A.text.slice(ao + 3) : A.text.slice(Math.max(A.text.lastIndexOf(': ') + 2, 0)); const found = af.split('. ')[0].replace(/\.$/, '');
+        if (at > 0) { const rest = B.text.slice(at + 5); const ao = A.text.lastIndexOf('So '); const ac = A.text.lastIndexOf(': '), sm = A.text.match(/, so (.*)$/), af = ao >= 0 ? A.text.slice(ao + 3) : sm ? sm[1] : ac >= 0 ? A.text.slice(ac + 2) : ''; const found = af.split('. ')[0].replace(/\.$/, '');
           const need = (B.text.slice(0, at).match(/clue \d+ needs [^.;]*/) || [])[0];
           B.text = 'Clue ' + (B.clues[0] + 1) + ' again' + (found ? ', now that ' + found : ', with what we just found') + ': ' + (need ? need + '. So ' + rest.charAt(0).toLowerCase() + rest.slice(1) : rest.charAt(0).toLowerCase() + rest.slice(1)); }
       }
@@ -1587,8 +1674,8 @@ html.big .status3 .third span{font-size:16px}
     steps.push({ kind: 'done', clues: [], text: answerText(pz, Object.fromEntries(placed.map((id, i) => [id, i]))) });
     return { steps, level: 1, solved: true };
   }
-  function explainGrid(pz) { return pz.kind === 'balance' ? explainBalance(pz) : explainGridGeneric(pz); }
-  function explainGridGeneric(pz) {
+  function explainGrid(pz, disp) { return pz.kind === 'balance' ? explainBalance(pz) : explainGridGeneric(pz, disp); }
+  function explainGridGeneric(pz, disp) {
     const K = KIND[pz.kind], N = pz.N;
     const dom = fullDom(pz);
     const L = (id) => K.lab(pz.items[id]);
@@ -1650,6 +1737,7 @@ html.big .status3 .third span{font-size:16px}
             if (!r.any) { // name the blocker: which spot the clue would need, and who already has it
               for (const m of r.ms.slice().sort((x, y) => fixed.has(x) - fixed.has(y))) { if (m === id) continue;
                 if (fixed.has(m)) { const st = r.ms.filter(o => o !== m && o !== id).map(o => L(o) + ' ' + (d2[o].size === 1 ? phIs(pz, o, [...d2[o]][0]) : phOnly(pz, o, [...d2[o]].sort())));
+                  if (!st.length && chain.length) st.push(L(m) + ' ' + phIs(pz, m, [...d2[m]][0]) + ' and ' + L(id) + ' ' + phIs(pz, id, p)); // Cooper R36
                   if (!st.length || !chain.length) return ''; chain.push('clue ' + (i + 1) + ' can\u2019t be true, since ' + listWords(st)); return chain.length > 3 ? '' : ifW(id, p) + chain.join(', then ') + '. '; }
                 const d3 = Object.assign({}, d2); d3[m] = new Set([...Array(N).keys()]); const r3 = localFit(c, d3); if (!r3.any) continue;
                 const need = [...r3.al[r3.ms.indexOf(m)]].sort(), tk = need.map(q => catOf(m).find(o => o !== m && d2[o].size === 1 && d2[o].has(q))).filter(Boolean);
@@ -1668,30 +1756,24 @@ html.big .status3 .third span{font-size:16px}
           if (!ch) break; }
         return '';
       };
-      const tryClues = (idxs, lvl, strongOnly, mentOnly) => {
-        const S = gridEnum(pz, dom, idxs.map(i => pz.clues[i]));
+      // local = only the cited clues' items keep what we know about them; everything else is free. A step built that way
+      // proves its fact from exactly what it prints (Cooper R36). Display Whys try local first; puzzle generation never does.
+      const tryClues = (idxs, lvl, strongOnly, mentOnly, local) => {
+        const ment0 = new Set(); idxs.forEach(i => { const c = pz.clues[i]; [c.a, c.b, c.c].forEach(x => x && ment0.add(x)); });
+        let dE = dom; if (local) { dE = {}; Object.keys(dom).forEach(k => dE[k] = ment0.has(k) ? dom[k] : new Set([...Array(N).keys()])); }
+        const S = gridEnum(pz, dE, idxs.map(i => pz.clues[i]));
         if (!S.length) return false;
         const rem = {};
         let any = false, strong = false;
-        const ment0 = new Set(); idxs.forEach(i => { const c = pz.clues[i]; [c.a, c.b, c.c].forEach(x => x && ment0.add(x)); });
         for (const id of Object.keys(dom)) {
-          if (mentOnly && !ment0.has(id)) continue;
+          if ((mentOnly || local) && !ment0.has(id)) continue;
           const sup = new Set(S.map(a => a[id]));
           const r = [...dom[id]].filter(p => !sup.has(p));
           if (r.length) { rem[id] = r; any = true; if (dom[id].size - r.length === 1) strong = true; }
         }
         if (!any) return false;
         if (strongOnly && !strong) return false;
-        const mentioned = new Set(); idxs.forEach(i => { const c = pz.clues[i]; [c.a, c.b, c.c].forEach(x => x && mentioned.add(x)); });
-        // what we already knew about the clue's items (the "because")
-        const ctx = [];
-        const selfClue = idxs.length === 1 && ['is', 'not', 'end', 'notend'].indexOf(pz.clues[idxs[0]].t) >= 0;
-        const pre = [];
-        if (!selfClue) for (const id of mentioned) {
-          const d = [...dom[id]].sort();
-          if (d.length === 1) ctx.push(L(id) + ' ' + phIs(pz, id, d[0]));
-          else if (d.length < N) { ctx.push(L(id) + ' ' + phOnly(pz, id, d)); if (shown[id] !== d.join()) { const rl = rangeLine(id); if (rl) pre.push(rl); shown[id] = d.join(); } }
-        }
+        const mentioned = ment0;
         // ONE conclusion per step: prefer an item that gets pinned, mentioned items first
         const cand = Object.keys(rem).sort((x, y) => {
           const px = dom[x].size - rem[x].length === 1 ? 1 : 0, py = dom[y].size - rem[y].length === 1 ? 1 : 0;
@@ -1701,6 +1783,20 @@ html.big .status3 .third span{font-size:16px}
           return rem[y].length - rem[x].length;
         });
         const id = cand[0];
+        let trialWhy = '';
+        { const gone = rem[id].slice().sort(), hid = gone.filter(q => (disp && idxs.length > 1) || !localShows(idxs, id, q)).slice(0, 2); // Cooper R36: a two-clue step always walks its trial
+          const bw = hid.map(q => blockWhy(idxs, id, q)); if (hid.length && bw.every(Boolean)) trialWhy = ' ' + bw.join('').trim(); }
+        // A display step that leans on facts it doesn't print, with no short trial to show them, is skipped.
+        if (disp && !local && !trialWhy) return false;
+        // what we already knew about the clue's items (the "because")
+        const ctx = [];
+        const selfClue = idxs.length === 1 && ['is', 'not', 'end', 'notend'].indexOf(pz.clues[idxs[0]].t) >= 0;
+        const pre = [];
+        if (!selfClue) for (const id of mentioned) {
+          const d = [...dom[id]].sort();
+          if (d.length === 1) ctx.push(L(id) + ' ' + phIs(pz, id, d[0]));
+          else if (d.length < N) { ctx.push(L(id) + ' ' + phOnly(pz, id, d)); if (shown[id] !== d.join()) { const rl = rangeLine(id); if (rl) pre.push(rl); shown[id] = d.join(); } }
+        }
         // bridge: who else could still take the spot this step settles
         if (dom[id].size - rem[id].length === 1) {
           const p = [...dom[id]].find(q => rem[id].indexOf(q) < 0);
@@ -1713,22 +1809,26 @@ html.big .status3 .third span{font-size:16px}
         let concl;
         if (dom[id].size === 1) { concl = L(id) + ' ' + phMust(pz, id, [...dom[id]][0]); said.add(id); }
         else concl = L(id) + ' ' + phCant(pz, id, rem[id].sort());
-        let trialWhy = '';
-        { const gone = rem[id].slice().sort(), hid = gone.filter(q => !localShows(idxs, id, q)).slice(0, 2);
-          const bw = hid.map(q => blockWhy(idxs, id, q)); if (hid.length && bw.every(Boolean)) trialWhy = ' ' + bw.join('').trim(); }
         if (!mentioned.has(id) && !trialWhy) concl = 'trying ' + L(id) + ' in ' + K.posList(rem[id].sort(), N) + ' leaves no way to place ' + listWords([...mentioned].map(L)) + ' that fits, so ' + concl;
         level = Math.max(level, lvl);
         const q = (i) => '\u201c' + clueText(pz, pz.clues[i]) + '\u201d';
-        const head = idxs.length === 1 ? clueWord + ' ' + (idxs[0] + 1) + ' says ' + q(idxs[0]) : clueWord + 's ' + (idxs[0] + 1) + ' and ' + (idxs[1] + 1) + ' together: ' + q(idxs[0]) + ' and ' + q(idxs[1]);
+        const head = idxs.length === 1 ? clueWord + ' ' + (idxs[0] + 1) + ' says ' + q(idxs[0]) : clueWord + 's ' + listWords(idxs.map(i => String(i + 1))) + ' together: ' + listWords(idxs.map(q));
         const why = ctx.length ? ' We already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '.' : '';
         steps.push({ kind: 'clue', clues: idxs.slice(), text: head + why + trialWhy + ' So ' + concl + '.', pre: pre.length ? pre : undefined });
         return true;
       };
       let done = false;
-      for (const mo of [true, false]) for (let i = 0; i < pz.clues.length && !done; i++) if (tryClues([i], 1, false, mo)) done = true;
+      const C = pz.clues.length;
+      if (disp) {
+        for (let i = 0; i < C && !done; i++) if (tryClues([i], 1, false, true, true)) done = true;
+        for (const so of [true, false]) for (let x = 0; x < C && !done; x++) for (let y = x + 1; y < C && !done; y++) if (tryClues([x, y], 2, so, true, true)) done = true;
+        for (let x = 0; x < C && !done; x++) for (let y = x + 1; y < C && !done; y++) for (let z = y + 1; z < C && !done; z++) if (tryClues([x, y, z], 2, false, true, true)) done = true;
+        if (done) continue;
+      }
+      for (const mo of [true, false]) for (let i = 0; i < C && !done; i++) if (tryClues([i], 1, false, mo)) done = true;
       if (done) continue;
       for (const [so, mo] of [[true, true], [false, true], [true, false], [false, false]]) {
-        for (let x = 0; x < pz.clues.length && !done; x++) for (let y = x + 1; y < pz.clues.length && !done; y++) if (tryClues([x, y], 2, so, mo)) done = true;
+        for (let x = 0; x < C && !done; x++) for (let y = x + 1; y < C && !done; y++) if (tryClues([x, y], 2, so, mo)) done = true;
         if (done) break;
       }
       if (done) continue;
@@ -3094,7 +3194,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.13' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.14' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3379,6 +3479,7 @@ function freeNewKind(F, i) {
   openSheet('<h2>' + (F.q.length > 1 ? (i + 1) + ' of ' + F.q.length + ' · ' : '') + typeIcon(type, 30) + ' ' + TYPENAME[type] + '</h2><div class="sub">New kind for you! Take the short lesson first, or jump straight in. Hints are always free.</div>' +
     '<div class="col"><button class="btn" id="fnl">📘 Short lesson</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="fnp">Play now</button></div>');
   $app.classList.add('veil'); // Muse R27: hide the old puzzle behind the card
+  sheetClose = () => { stopTimer(); S.date = realToday; renderHome(); showFree(); };
   document.getElementById('fnl').onclick = () => { closeSheet(); startTutorial(type, () => playFree(F, i)); };
   document.getElementById('fnp').onclick = () => { closeSheet(); F.now = F.now || {}; F.now[type] = 1; const g = freeGet(); g.seen = Object.assign({}, g.seen, { [type]: 1 }); store.set('free', g); track('free_skip_lesson', { type }); playFree(F, i); };
 }
@@ -3400,17 +3501,18 @@ function keyText(ex, pz) {
   if (!ex || !ex.steps || !pz) return '';
   const st = ex.steps, t = pz.type, d = st.filter(s => s.kind === 'done').pop(); if (!d) return '';
   const lf = x => x.charAt(0).toLowerCase() + x.slice(1);
-  if (t === 'chests' && pz.sol !== undefined) return TL.chestKey(pz);
+  ex._ki = -1;
+  if (t === 'chests' && pz.sol !== undefined) { ex._ki = st.map(z => z.kind).lastIndexOf('case'); return TL.chestKey(pz); }
   if (t === 'trail' || t === 'letters' || t === 'wheels') {
     let x = d.text; const cut = [', so ', '. Next', '. The next gap', '. Wheel '].map(k => x.indexOf(k)).filter(i => i > 0);
-    if (cut.length && !/^(So the next|Next is|Next first|The next one)/.test(x)) x = x.slice(0, Math.min(...cut));
-    else { const p = st.filter(s => s.kind !== 'done').pop(); if (!p) return ''; x = p.text; const c = x.indexOf(': '); x = c > 0 && /^[\d−-]/.test(x.slice(c + 2)) ? x.slice(0, c) : x.split('. ')[0]; }
+    if (cut.length && !/^(So the next|Next is|Next first|The next one)/.test(x)) { x = x.slice(0, Math.min(...cut)); ex._ki = st[0] !== d ? 0 : -1; }
+    else { const p = st.filter(s => s.kind !== 'done').pop(); if (!p) return ''; ex._ki = st.indexOf(p); x = p.text; const c = x.indexOf(': '); x = c > 0 && /^[\d−-]/.test(x.slice(c + 2)) ? x.slice(0, c) : x.split('. ')[0]; }
     x = x.replace(/^So the rule is: /, '').replace(/\.$/, '');
     return 'Spot the rule: ' + lf(x) + '.' + (t === 'letters' ? ' (Turn letters into alphabet numbers first.)' : '');
   }
-  if (t === 'pyramid') { const sub = st.find(s => / − /.test(s.text)); return sub ? 'The key brick: ' + lf(sub.text) : 'Spot the rule: each brick is the two bricks under it added together. Work up from the bottom.'; }
+  if (t === 'pyramid') { const sub = st.find(s => / − /.test(s.text)); ex._ki = sub ? st.indexOf(sub) : -1; return sub ? 'The key brick: ' + lf(sub.text) : 'Spot the rule: each brick is the two bricks under it added together. Work up from the bottom.'; }
   { const i = st.findIndex((z, j) => /^Try /.test(z.text) && st[j + 1] && /^But /.test(st[j + 1].text));
-    if (i >= 0) { const a = st[i].text, c = a.lastIndexOf(', '); return a.split('. ')[0] + (c > 0 ? ', and ' + a.slice(c + 2).replace(/^so /, '').replace(/\.$/, '') : '') + '. ' + st[i + 1].text + ''; } }
+    if (i >= 0) { ex._ki = i; const a = st[i].text, c = a.lastIndexOf(', '); return a.split('. ')[0] + (c > 0 ? ', and ' + a.slice(c + 2).replace(/^so /, '').replace(/\.$/, '') : '') + '. ' + st[i + 1].text + ''; } }
   const pins = st.filter(s => s.kind !== 'done' && s.kind !== 'wrongplace');
   const last = x0 => { const x = x0.replace(/\. Counting every clue so far[^.]*\.?$/, '.'); return (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x; };
   // A clue that states the placement outright ("Owl finished 3rd") is not a turning point; skip it when another pin exists.
@@ -3450,6 +3552,7 @@ function keyText(ex, pz) {
         if (h) st.slice(0, zi).forEach((y, yi) => { const f = last(y.text); if (/can’t|can't/.test(f) && new RegExp('(^|\\D)' + h[1] + '(\\D|$)').test(f)) deps(yi).forEach(put); });
         return o; };
   const k = pins.find(z => isPin(z) && real(z) && !plain(z)) || pins.find(z => isPin(z) && !plain(z)) || pins.find(isPin) || pins[0];
+  ex._ki = k ? st.indexOf(k) : -1;
   if (!k) return '';
   let x = k.text; const rest = '';
   // Muse R29: when the pin leans on an earlier elimination, say it ("clue 2 already ruled out 4th").
@@ -3513,7 +3616,8 @@ function keyText(ex, pz) {
   const never = v => /tells the truth/.test(v) ? 'never lies' : 'never tells the truth';
   { const m = x.match(/^(\w+) says “([^”]*)” If \1 were a (knave|knight), those words would have to be (?:false|true)\. But with \1 a \3, they can’t be[^.]*\. So ([^.]*)\.$/); if (m) return 'A ' + m[3] + ' couldn’t say what ' + m[1] + ' says, so ' + m[4] + '.'; }
   // Muse/Nikola R35: Knights keys stay short.
-  if (t === 'knights') x = x.replace(/ would be a knight saying something false/g, ' would be a lying knight').replace(/ would be a knave saying something true/g, ' would be a truthful knave');
+  if (t === 'knights') x = x.replace(/ would be a knight saying something false/g, ' would be a lying knight').replace(/ would be a knave saying something true/g, ' would be a truthful knave')
+    .replace(/^If (\w+) were a knight, \1 would be a lying knight\./, 'If $1 were a knight, $1’s own words would turn out false.').replace(/^If (\w+) were a knave, \1 would be a truthful knave\./, 'If $1 were a knave, $1’s own words would turn out true.');
   { const m = x.match(/^Suppose card (\d) is the (\w+)\. Then (?:[^,]*?, and )?(card \d)’s words “[^”]*” would be (true|false), but the (\w+) always ([a-z ]+?)(?: \(the other order fails too\))?\. So card \d isn't the \w+\. It must be the (\w+)\.$/);
     if (m) return 'Card ' + m[1] + ' can’t be the ' + m[2] + ': that makes ' + m[3] + '’s words ' + m[4] + ', and the ' + m[5] + ' ' + never(m[6]) + '. So card ' + m[1] + ' is the ' + m[7] + '.'; }
   { const m = x.match(/^Card (\d) says “[^”]*” The (\w+) can't say that[^.]*\. So card \d is the (\w+)\.$/); if (m) return 'Neither the King nor the Jack could say card ' + m[1] + '’s words, so card ' + m[1] + ' is the ' + m[3] + '.'; }
@@ -3521,15 +3625,19 @@ function keyText(ex, pz) {
     if (m) return 'If card ' + m[1] + ' were the ' + m[2] + ', ' + m[3].replace(/^we know /, '') + ', making its words ' + m[4] + ', and the ' + m[2] + ' ' + never(m[5]) + '. So card ' + m[1] + (m[6] ? ' is the ' + m[6] : ' isn’t the ' + m[2]) + '.'; }
   if (t === 'cards' && x.length > 120) x = x.replace(/ \([^)]*\)/g, '').replace(/^Card \d says “[^”]*” /, '');
   { const m = x.match(/^(\w+) says “[^”]*” .*Either way, ([^.]*)\.$/); if (m) return 'Whatever ' + m[1] + ' is, ' + m[1] + '’s words mean ' + m[2] + '.'; }
-  { const m = x.match(/^Suppose ([^.]*)\. (?:Then [^.]*?(?:“[^”]*”[^.]*?)?\. )?But then ([^“.:]*)(?::? “[^”]*”)?\.? So ([^.]*)\.$/); if (m) return 'If ' + m[1].replace(/ is /, ' were ') + ', ' + m[2].trim() + '. So ' + m[3] + '.'; }
+  { const m = x.match(/^Suppose ([^.]*)\. (?:Then [^.]*?(?:“[^”]*”[^.]*?)?\. )?But then ([^“.:]*)(?::? “[^”]*”)?\.? So ([^.]*)\.$/); if (m) return ('If ' + m[1].replace(/ is /, ' were ') + ', ' + m[2].trim() + '. So ' + m[3] + '.')
+    .replace(/^If (\w+) were a knight, \1 would be a lying knight\./, 'If $1 were a knight, $1’s own words would turn out false.').replace(/^If (\w+) were a knave, \1 would be a truthful knave\./, 'If $1 were a knave, $1’s own words would turn out true.'); }
   return x + rest;
 }
-function takeaway(ex, pz) { const k = keyText(ex, pz || P.pz); return k ? '<div class="takeaway">🔑 ' + esc(k) + '<button class="linkbtn tkj" type="button">See this step in the Why list ↓</button></div>' : ''; }
+function takeaway(ex, pz) { const k = keyText(ex, pz || P.pz); return k ? '<div class="takeaway">🔑 ' + esc(k) + (ex._ki >= 0 ? '<button class="linkbtn tkj" type="button" data-step="' + ex._ki + '">See this step in the Why list ↓</button>' : '') + '</div>' : ''; }
 // Cooper R35: the key summary links to its row in the full Why list (opens it, scrolls there, flashes the row).
 function keyRow(root, txt) { const W = t => new Set(t.toLowerCase().replace(/🔑 key step/g, '').match(/[a-z0-9]+/g) || []); const kw = W(txt); let best = null, bs = -1;
   root.querySelectorAll('.why li:not(.done):not(.derived)').forEach(li => { const w = W(li.textContent); let sc = 0; kw.forEach(x => { if (w.has(x)) sc++; }); sc = sc / Math.sqrt(w.size + 1) + (li.classList.contains('whykey') ? 0.5 : 0); if (sc > bs) { bs = sc; best = li; } }); return best; }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.tkj'); if (!b) return; const sh = b.closest('.sheet') || document; const box = sh.querySelector('#whybox'); if (!box) return; box.classList.remove('hidden');
-  const li = keyRow(box, b.parentNode.textContent.replace(b.textContent, '')); if (!li) return; li.classList.remove('flash'); void li.offsetWidth; li.classList.add('flash'); li.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  // Nikola R36: jump by step number, not by matching words; respect reduced motion and move focus to the row.
+  const li = box.querySelector('.why li[data-step="' + b.dataset.step + '"]') || keyRow(box, b.parentNode.textContent.replace(b.textContent, '')); if (!li) return;
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  li.classList.remove('flash'); void li.offsetWidth; if (!calm) li.classList.add('flash'); li.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' }); li.setAttribute('tabindex', '-1'); li.focus({ preventScroll: true }); });
 function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : F.how === 'expert' ? '🧠 Expert try' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (P.slot + 1) + ' of ' + F.q.length : ''); }
 function freeSolved(ms) {
   const F = P.free; const t = P.pz.type; const clean = !P.miss && !P.hints;
@@ -3776,11 +3884,13 @@ function fitBoard(keep) {
     if (keep) { bd.scrollTop = keep[0] || 0; sc.scrollTop = keep[1] || 0; }
     const tgt = sc.querySelector('.hl, .badc');
     if (tgt) { const a = tgt.getBoundingClientRect(), b = sc.getBoundingClientRect(); if (a.top < b.top || a.bottom > b.bottom) sc.scrollTop += a.top - b.top - 6; }
-    // Nikola R33: if the board has to scroll anyway, don't nest a second scroll pane inside it.
-    if (bd.scrollHeight - bd.clientHeight > 4) { sc.classList.remove('fitscroll', 'more'); sc.removeEventListener('scroll', upd);
-      cue.remove(); if (keep) bd.scrollTop = keep[0] || 0; // Nikola R34: restore after the pane grows, so the board doesn't jump
-      return; }
+    // Nikola R33/R36: if the board has to scroll anyway (measured after the "More below" cue shows, and again a frame later
+    // once fonts and messages settle), don't nest a second scroll pane inside it.
     upd();
+    const unnest = () => { if (!sc.classList.contains('fitscroll') || bd.scrollHeight - bd.clientHeight <= 4) return false;
+      sc.classList.remove('fitscroll', 'more'); sc.removeEventListener('scroll', upd); cue.remove(); if (keep) bd.scrollTop = keep[0] || 0; return true; };
+    if (unnest()) return;
+    requestAnimationFrame(() => requestAnimationFrame(unnest)); if (document.fonts && document.fonts.ready) document.fonts.ready.then(unnest);
   } else if (keep) bd.scrollTop = keep[0] || 0;
 }
 function renderPuzzle() {
@@ -4015,8 +4125,12 @@ function whyList(ex, extraCls) {
   let keys = body.length >= 4 ? body.filter(s => pinStep(s.text) && real(s)).slice(0, 3) : [];
   if (body.length >= 4 && keys.length < 2) { const more = body.filter(s => real(s) && keys.indexOf(s) < 0).sort((a, b) => (/Suppose|If \S+ were/.test(b.text) - /Suppose|If \S+ were/.test(a.text)) || b.text.length - a.text.length);
     keys = keys.concat(more.slice(0, 2 - keys.length)); keys.sort((a, b) => body.indexOf(a) - body.indexOf(b)); }
-  // Nikola R34: a Code Lock "we already know D could only go in spot …" that no step above has said gets its own short line first.
+  // Nikola R36: one shared key list. The step behind the 🔑 card is always marked 🔑 here too.
   const pz = P && P.ex === ex ? P.pz : null, pre = new Map();
+  if (pz) keyText(ex, pz);
+  { const ks = ex._ki >= 0 ? ex.steps[ex._ki] : null;
+    if (ks && ks.kind !== 'done' && keys.indexOf(ks) < 0) { if (keys.length >= 3) keys.pop(); keys.push(ks); keys.sort((a, b) => body.indexOf(a) - body.indexOf(b)); } }
+  // Nikola R34: a Code Lock "we already know D could only go in spot …" that no step above has said gets its own short line first.
   if (pz && pz.type === 'lock' && pz.clues) { const said = [];
     ex.steps.forEach(st => { const km = st.text.match(/[Ww]e already know ([^.]*)\./); if (km) { let m; const re = /(\d) could only go in spots? ((?:\d(?:, | or )?)+)/g;
         while ((m = re.exec(km[1]))) { const d = m[1], ok = m[2].match(/\d/g); if (said.some(t => new RegExp('(^|\\D)' + d + ' (could only go in spot|can.t go in spot|is in the code, and it must go)').test(t))) continue;
@@ -4026,10 +4140,10 @@ function whyList(ex, extraCls) {
           const why = (wc.length ? 'clue' + (wc.length > 1 ? 's ' : ' ') + lw(wc) + ' show' + (wc.length > 1 ? '' : 's') + ' ' + d + ' in spot' + (wsp.length > 1 ? 's ' : ' ') + lw(wsp) + ' in the wrong place' : '') + (wc.length && tk.length ? ', and ' : '') + (tk.length ? 'the steps above rule out spot' + (tk.length > 1 ? 's ' : ' ') + lw(tk) : '');
           const line = 'So far, ' + d + ' could only go in spot ' + lw(ok, 'or') + ': ' + why + '.'; if (!pre.has(st)) pre.set(st, []); pre.get(st).push(line); said.push(line); } }
       said.push(st.text); }); }
-  const li0 = s => '<li class="' + (s.kind === 'done' ? 'done' : keys.indexOf(s) >= 0 ? 'whykey' : '') + '">' + (keys.indexOf(s) >= 0 ? '<b class="kmark">🔑 Key step</b> ' : '') + esc(s.text) + '</li>';
+  const li0 = s => '<li data-step="' + ex.steps.indexOf(s) + '" class="' + (s.kind === 'done' ? 'done' : keys.indexOf(s) >= 0 ? 'whykey' : '') + '">' + (keys.indexOf(s) >= 0 ? '<b class="kmark">🔑 Key step</b> ' : '') + esc(s.text) + '</li>';
   const li = s => (pre.get(s) || []).concat(s.pre || []).map(t => '<li class="derived">' + esc(t) + '</li>').join('') + li0(s);
   // Muse R35: a Why with no 🔑 steps says why instead of leaving the header out.
-  const nok = body.length < 4 ? 'This one is short, so no step is marked 🔑. Each step follows straight from the clues.' : 'Here each clue gives its answer away, so no single step is the 🔑 key. Follow them in order.';
+  const nok = body.length < 4 ? 'This one is short, so no step is marked 🔑. Each step follows straight from the one before.' : 'Here each clue gives its answer away, so no single step is the 🔑 key. Follow them in order.';
   return (keys.length ? '<div class="whyhd">The 🔑 key steps crack it. The others fill in the rest. <button class="linkbtn jk" type="button">Jump to the first 🔑 key step</button></div>' : '<div class="whyhd nokey">' + nok + '</div>') + '<ol class="why">' + ex.steps.map(li).join('') + '</ol>';
 }
 // The next unsolved puzzle of that day, or the day's results once all three are done.
@@ -4287,9 +4401,11 @@ function openSheet(html) {
   if (ft) { const upd = () => { const m = sh.scrollHeight - sh.scrollTop - sh.clientHeight > 6; if (ft.classList.contains('more') !== m) ft.classList.toggle('more', m); };
     sh.addEventListener('scroll', upd, { passive: true }); new MutationObserver(upd).observe(sh, { childList: true, subtree: true, attributeFilter: ['class'] }); upd(); }
 }
-function sheetDismiss() { closeSheet(); if (S.screen === 'home') renderHome(); }
+// Muse R36: a sheet can say where ✕ goes (the new-kind card goes back to the Free play menu, never to a stale solved board).
+let sheetClose = null;
+function sheetDismiss() { const f = sheetClose; closeSheet(); if (f) f(); else if (S.screen === 'home') renderHome(); }
 document.addEventListener('keydown', ev => { if (ev.key !== 'Escape') return; if (document.getElementById('ov')) sheetDismiss(); else if (document.getElementById('coach') && P && P.tutorial) endTutorial(true); });
-function closeSheet() { const o = document.getElementById('ov'); if (o) o.remove(); $app.classList.remove('veil'); }
+function closeSheet() { sheetClose = null; const o = document.getElementById('ov'); if (o) o.remove(); $app.classList.remove('veil'); }
 
 // =================== TYPE LIBRARY ===================
 // Each puzzle type plugs in here: init (empty answer), explain, board, wire, check, answer, hid (element id to highlight).
@@ -4505,9 +4621,9 @@ function pyramidBoard() {
 const TYPES = {
   lock: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainLock(pz), board: () => lockBoard(), wire: () => wireLock(), check: (pz, e) => TL.checkLock(pz, e), answer: pz => 'The code is ' + pz.code.join(' '), hid: i => 'cl' + i },
   cards: { init: () => [null, null, null], explain: pz => TL.explainCards(pz), board: () => cardsBoard(), wire: () => wireCards(), check: (pz, e) => TL.checkCards(pz, e), answer: pz => pz.sol.map((r, i) => 'Card ' + (i + 1) + ': ' + TL.RN[r]).join(' · '), hid: i => 'cw' + i },
-  lineup: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
-  balance: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
-  houses: { init: pz => ({ col: new Array(pz.N).fill(null), pet: new Array(pz.N).fill(null) }), explain: pz => TL.explainGrid(pz), board: () => housesBoard(), wire: () => housesWire(), check: (pz, e) => TL.checkGrid(pz, housesToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
+  lineup: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz, true), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
+  balance: { init: pz => new Array(pz.N).fill(null), explain: pz => TL.explainGrid(pz, true), board: () => slotsBoard(), wire: () => slotsWire(), check: (pz, e) => TL.checkGrid(pz, slotsToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
+  houses: { init: pz => ({ col: new Array(pz.N).fill(null), pet: new Array(pz.N).fill(null) }), explain: pz => TL.explainGrid(pz, true), board: () => housesBoard(), wire: () => housesWire(), check: (pz, e) => TL.checkGrid(pz, housesToAs(pz, e)), answer: pz => TL.answerText(pz, pz.sol), hid: i => 'cl' + i },
   knights: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainKnights(pz), board: () => knightsBoard(), wire: () => knightsWire(), check: (pz, e) => TL.checkKnights(pz, e), answer: pz => TL.knAnswer(pz, pz.sol), hid: i => 'cw' + i },
   switches: { init: pz => new Array(pz.n).fill(null), explain: pz => TL.explainSwitches(pz), board: () => switchesBoard(), wire: () => switchesWire(), check: (pz, e) => TL.checkSwitches(pz, e), answer: pz => TL.swAnswer(pz, pz.sol), hid: i => 'cl' + i },
   wheels: { init: () => '', explain: pz => TL.explainWheels(pz), board: () => wheelsBoard(), wire: () => wireNum(), check: (pz, e) => TL.checkWheels(pz, e), answer: pz => 'The missing number is ' + pz.sol, hid: i => 'cl' + i },
