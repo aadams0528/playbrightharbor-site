@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.27.1 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.0 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -725,6 +725,14 @@ html.hc .pip.g::after{content:"✓"} html.hc .pip.y::after{content:"↔";color:#
 .status3 .third{position:relative} .status3 .third b{font-family:var(--disp);font-size:16px;line-height:1.15;position:static} .status3 .third .new{position:absolute;top:8px;right:8px;margin:0}
 .status3 .third span{font-size:15px;color:#d9dcef;font-weight:700;line-height:1.2}
 html.big .status3 .third span{font-size:16px}
+.freebtn{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:2px;padding:11px 14px;border:0;border-radius:16px;background:rgba(255,255,255,.1);color:#fff;box-shadow:0 4px 0 rgba(0,0,0,.25);font:inherit;cursor:pointer}
+.freebtn .fb1{font-family:var(--disp);font-size:17px;font-weight:800}.freebtn .fb2{font-size:15px;color:#d9dcef;font-weight:700}
+@media (min-width:480px){.status3{grid-template-columns:repeat(4,minmax(0,1fr))}.freebtn{grid-column:auto;flex-direction:column;gap:2px;margin:0;padding:9px 6px;min-height:96px;justify-content:flex-start;text-align:center}.freebtn .fb1{font-size:16px;line-height:1.15;margin-top:4px}}
+.fpw{display:flex;align-items:center;gap:12px;text-align:left;margin:10px 0 4px;background:#fff3c4;color:var(--ink);font-size:17px}.fpw small{display:block;font-size:15px;font-weight:700;opacity:.85}.fpw .fpi{flex:0 0 auto;display:flex}
+.fptier{display:flex;gap:8px}.fptier button{flex:1;border:2px solid var(--line);border-radius:999px;padding:10px 6px;font:800 16px var(--body,inherit);background:var(--panel2);color:var(--ink)}.fptier button.on{background:var(--gold);border-color:var(--gold);color:#2b2208}
+.fpgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0 10px}
+.fpk{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border:2px solid var(--line);border-radius:14px;background:var(--panel2);color:var(--ink);font:700 15px var(--body,inherit);line-height:1.1;min-height:70px}
+.fpk.on{border-color:var(--gold);background:#fff3c4}.fpk .fpn{position:absolute;top:4px;right:6px;font-style:normal;font-weight:900;font-size:15px;color:#8a6500}
 .donecd{display:block;width:100%;background:none;border:0;font-family:inherit;cursor:pointer;text-align:center;font-size:16px;font-weight:700;color:var(--ink2);margin-top:10px}
 #ov .week{margin:12px 0}
 #ov .wd{background:var(--panel2);color:var(--ink2);font-size:14px;font-weight:700}
@@ -2956,7 +2964,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.27.1' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.0' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanByKind();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3164,6 +3172,89 @@ function bonusSolved(ms) {
   document.getElementById('bh').onclick = () => { closeSheet(); renderHome(); };
 }
 
+// ----- Free play (Alan 11-19, decision card) -----
+// Fresh, solver-checked puzzles of any kind, on top of the shared Daily Three: Shuffle 3, pick up to 3 kinds, or one.
+// Nothing here touches results, the streak, the harbor lights or the weekly goals.
+// store 'free' = { n: puzzles made (the seed counter), t: last difficulty, k: { kind: [solves, clean solves] } }
+function freeGet() { const v = store.get('free', null); return v && typeof v === 'object' ? { n: v.n || 0, t: v.t || 'M', k: v.k || {} } : { n: 0, t: 'M', k: {} }; }
+// Every kind's solves and clean solves (no miss, no hint) across Daily, Expert, past days and Free play.
+function kindStats() {
+  const c = {}; const seen = {}; const add = (t, clean) => { const v = c[t] || (c[t] = [0, 0]); v[0]++; if (clean) v[1]++; };
+  [false, true].forEach(x => [store.get(RK(x), {}), store.get(AK(x), {})].forEach(all => Object.keys(all).forEach(d => {
+    const r = all[d]; if (!r || !r.s || seen[x + d]) return; seen[x + d] = 1; let day = null;
+    r.s.forEach((v, i) => { if (v) { day = day || getDayM(d, x); const t = day && day[i] && day[i].type; if (t) add(t, !v.miss && !v.hints); } });
+  })));
+  const f = freeGet().k; Object.keys(f).forEach(t => { const v = c[t] || (c[t] = [0, 0]); v[0] += f[t][0] || 0; v[1] += f[t][1] || 0; });
+  return c;
+}
+// The weakest skill: the kind with the lowest share of clean solves, among kinds solved at least twice.
+// Ties go to the kind with more solves (the pattern is clearer). Null until there is enough play to say.
+function weakestKind() {
+  const c = kindStats(); let best = null;
+  Object.keys(c).forEach(t => { const [n, k] = c[t]; if (n < 2 || k === n || !TYPENAME[t]) return; const r = k / n;
+    if (!best || r < best.r || (r === best.r && n > best.n)) best = { t, n, k, r }; });
+  return best;
+}
+const FREE_TIERS = ['E', 'M', 'T'];
+function showFree() {
+  const f = freeGet(); const wk = weakestKind(); track('free_open', {});
+  openSheet('<h2>🔀 Free play</h2><div class="sub">New puzzles any time. They don\'t change your streak or today\'s three.</div>' +
+    (wk ? '<button class="btn wide fpw" id="fpw"><span class="fpi">' + typeIcon(wk.t, 30) + '</span><span>🎯 Practice ' + TYPENAME[wk.t] + '<small>Your trickiest kind: ' + wk.k + ' of ' + wk.n + ' clean</small></span></button>' : '') +
+    '<div class="col"><button class="btn wide" id="fps">🔀 Shuffle 3</button><button class="btn ghost wide fpick" style="color:var(--ink);background:var(--panel2)" id="fpp">✋ Pick your puzzles</button></div>' +
+    '<div class="sub" style="margin:12px 0 6px">How hard?</div><div class="fptier" role="radiogroup" aria-label="How hard">' +
+    FREE_TIERS.map(t => '<button class="' + (t === f.t ? 'on' : '') + '" data-ft="' + t + '" role="radio" aria-checked="' + (t === f.t) + '">' + TIERNAME[t] + '</button>').join('') + '</div>');
+  const tier = () => (document.querySelector('[data-ft].on') || {}).dataset ? document.querySelector('[data-ft].on').dataset.ft : 'M';
+  document.querySelectorAll('[data-ft]').forEach(b => b.onclick = () => { document.querySelectorAll('[data-ft]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); const g = freeGet(); g.t = b.dataset.ft; store.set('free', g); });
+  document.getElementById('fps').onclick = () => { const g = freeGet(); startFree(TL.rngFrom('ahalock-free-mix|' + g.n).shuffle(TL.ROSTER.slice()).slice(0, 3), tier(), 'shuffle'); };
+  document.getElementById('fpp').onclick = () => showFreePick(tier());
+  if (wk) document.getElementById('fpw').onclick = () => startFree([wk.t], tier(), 'practice');
+}
+function showFreePick(tier) {
+  const pick = [];
+  openSheet('<h2>✋ Pick puzzles</h2><div class="sub">Tap one kind, or up to three.</div><div class="fpgrid">' +
+    TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><i class="fpn"></i></button>').join('') +
+    '</div><div class="col"><button class="btn wide" id="fpgo" disabled>Pick a kind</button><button class="linkbtn" id="fpbk">‹ Back</button></div>');
+  const go = document.getElementById('fpgo');
+  const draw = () => { document.querySelectorAll('[data-fk]').forEach(b => { const k = pick.indexOf(b.dataset.fk); b.classList.toggle('on', k >= 0); b.setAttribute('aria-pressed', k >= 0); b.querySelector('.fpn').textContent = k >= 0 ? k + 1 : ''; });
+    go.disabled = !pick.length; go.textContent = !pick.length ? 'Pick a kind' : pick.length === 1 ? 'Play 1 puzzle' : 'Play ' + pick.length + ' puzzles'; };
+  document.querySelectorAll('[data-fk]').forEach(b => b.onclick = () => { const t = b.dataset.fk, k = pick.indexOf(t); if (k >= 0) pick.splice(k, 1); else if (pick.length < 3) pick.push(t); else toast('Three at most. Tap one to swap it out.'); draw(); });
+  go.onclick = () => { if (pick.length) startFree(pick.slice(), tier, 'pick'); };
+  document.getElementById('fpbk').onclick = showFree;
+}
+function startFree(q, tier, how) { closeSheet(); track('free_start', { how, n: q.length, tier }); playFree({ q, i: 0, tier: FREE_TIERS.indexOf(tier) >= 0 ? tier : 'M', how, ms: [], clean: 0 }); }
+function playFree(F) {
+  const type = F.q[F.i];
+  if (!store.get('tut', {})[type]) { startTutorial(type, () => playFree(F)); return; }
+  const g = freeGet(); const pz = TL.genAny(TL.rngFrom('ahalock-free|' + g.n), type, F.tier); pz.tier = pz.tier || F.tier; g.n++; store.set('free', g);
+  stopTimer();
+  P = { ds: null, slot: F.i, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false, free: F,
+    entry: TYPES[pz.type].init(pz), sel: 0, notes: {}, noteMode: false, sub: null, ex: TYPES[pz.type].explain(pz) };
+  P.glow = true; renderPuzzle(); window.scrollTo(0, 0);
+  timerInt = setInterval(() => { const t = document.getElementById('tm'); if (t && !P.solved) t.textContent = fmtT(Date.now() - P.t0); }, 500);
+}
+function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (F.i + 1) + ' of ' + F.q.length : ''); }
+function freeSolved(ms) {
+  const F = P.free; const t = P.pz.type; const clean = !P.miss && !P.hints;
+  const g = freeGet(); const v = g.k[t] || [0, 0]; v[0]++; if (clean) v[1]++; g.k[t] = v; store.set('free', g);
+  F.ms[F.i] = ms; if (clean) F.clean++;
+  track('free_done', { type: t, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
+  const more = F.i + 1 < F.q.length; const end = !more && F.q.length > 1;
+  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div>' +
+    '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + (clean ? '✅' : '👍') + '</b><span>' + (clean ? 'CLEAN' : 'SOLVED') + '</span></div></div>' +
+    (end ? '<div class="sub" style="font-size:16px">All ' + F.q.length + ' solved · ' + F.clean + ' clean · ' + fmtT(F.ms.reduce((a, x) => a + (x || 0), 0)) + '</div>' : '') +
+    '<div class="col">' + (more ? '<button class="btn" id="fnx">Next puzzle</button>' : '<button class="btn" id="fag">' + (F.how === 'practice' ? '🎯 One more ' + TYPENAME[t] : '🔀 Shuffle 3 more') + '</button>') +
+    '<button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="fmenu">Free play menu</button><button class="linkbtn" id="fhome">‹ Back to home</button>' +
+    '<button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
+  document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
+  if (more) document.getElementById('fnx').onclick = () => { closeSheet(); adNext(F.q[F.i + 1], () => playFree(Object.assign(F, { i: F.i + 1 }))); };
+  else document.getElementById('fag').onclick = () => { closeSheet(); const q = F.how === 'practice' ? [t] : TL.rngFrom('ahalock-free-mix|' + freeGet().n).shuffle(TL.ROSTER.slice()).slice(0, 3);
+    adNext(q[0], () => playFree({ q, i: 0, tier: F.tier, how: F.how === 'practice' ? 'practice' : 'shuffle', ms: [], clean: 0 })); };
+  document.getElementById('fmenu').onclick = showFree;
+  document.getElementById('fhome').onclick = () => { closeSheet(); renderHome(); };
+}
+// After the Daily Three: one optional practice on the weakest skill (path-to-elite item 8).
+function practiceBtn() { const wk = weakestKind(); return wk ? '<button class="btn ghost" style="color:var(--ink);background:var(--panel2)" id="fpdw">🎯 Practice your trickiest: ' + TYPENAME[wk.t] + '</button>' : ''; }
+
 function weekPill(wk, all) {
   const n = wk.filter(d => dayDone(all[d])).length;
   return '<button class="wkpill third" id="wkp" aria-label="This week: ' + n + ' of 7 days played. Tap for the week, the countdown and tomorrow\'s puzzles."><div class="hico">🗓️</div><b>' + (expertOn() ? 'Expert week' : 'This week') + '</b><span>' + n + ' of 7 days</span></button>';
@@ -3295,10 +3386,12 @@ function renderHome() {
     '</div>' +
     // Update B (Alan 11-18): one status row under the Today card. Each part is one tap: Lantern Week goals, Story, and This week
     // (the week strip, the countdown, tomorrow's puzzles and the bonus line live in that sheet).
-    '<div class="status3">' + weekRow() + storyCard() + weekPill(wk, all) + '</div>' +
+    // Free play (Alan 11-19): one slim full-width row under the status tiles on phones, a fourth tile on wider screens.
+    '<div class="status3">' + weekRow() + storyCard() + weekPill(wk, all) + '<button class="freebtn" id="free"><span class="fb1">🔀 Free play</span><span class="fb2">Shuffle or pick puzzles</span></button></div>' +
     '');
   document.getElementById('go').onclick = () => { if (next === -1) return showDaySummary(ds); if (next === 0) { const f = firstSlot(ds); if (f > 0) return startPuzzle(ds, f); if (f < 0) { track('warmup', {}); return startTutorial('trail', () => startPuzzle(ds, 0)); } } startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
+  document.getElementById('free').onclick = showFree;
   document.getElementById('help').onclick = showHelp;
   { const tt = document.getElementById('toToday'); if (tt) tt.onclick = () => { S.date = realToday; renderHome(); }; }
   $app.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => startReplay(ds, +b.dataset.rp, false));
@@ -3375,12 +3468,12 @@ function renderPuzzle() {
   const pz = P.pz;
   const res = results()[P.ds];
   const SO = P.story ? STORY[P.story.s].objs[P.story.o] : null;
-  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? STORY[P.story.s].name + ' · final lock' : TYPENAME[pz.type] + ' ' + ideaTag(pz.type)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz.type)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
-    (P.tutorial || SO || P.bonus ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.free ? freeLabel() + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3].map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span> ' + ideaTag(pz.type) : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? STORY[P.story.s].name + ' · final lock' : TYPENAME[pz.type] + ' ' + ideaTag(pz.type)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz.type)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
+    (P.tutorial || SO || P.bonus || P.free ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
-  const acts = P.solved && !P.tutorial ? (P.bonus ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">‹ Back to home</button></div>' : '<div class="actions stick"><button class="btn ghost" id="hint">‹ Home</button><button class="btn" id="chk">Continue ›</button></div>')
+  const acts = P.solved && !P.tutorial ? (P.free ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">' + (P.free.i + 1 < P.free.q.length ? 'Next puzzle' : 'Free play menu') + '</button></div>' : P.bonus ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">‹ Back to home</button></div>' : '<div class="actions stick"><button class="btn ghost" id="hint">‹ Home</button><button class="btn" id="chk">Continue ›</button></div>')
     : '<div class="actions' + (P.tutorial ? '' : ' stick') + '"><button class="btn ghost" id="hint">💡 Hint' + (hintNeedsAd() ? ' ▶' : '') + '</button><button class="btn" id="chk">Lock it in!</button></div>';
   const inBoard = false;
   const introH = SO && P.intro ? iconize('<div class="msg info inb">' + P.intro.t + '</div>') : '';
@@ -3395,7 +3488,7 @@ function renderPuzzle() {
   if (P.solved && !P.tutorial) {
     // closed the success sheet: Continue brings it back (or goes on), Home goes home
     document.getElementById('hint').onclick = () => renderHome();
-    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.bonus ? renderHome() : P.replay ? replayNext() : dailyNext(P.ds);
+    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.free ? (P.free.i + 1 < P.free.q.length ? adNext(P.free.q[P.free.i + 1], () => playFree(Object.assign(P.free, { i: P.free.i + 1 }))) : showFree()) : P.bonus ? renderHome() : P.replay ? replayNext() : dailyNext(P.ds);
   } else {
     document.getElementById('chk').onclick = check;
     document.getElementById('hint').onclick = hint;
@@ -3574,7 +3667,8 @@ function solved() {
   const ms = Date.now() - P.t0; P.solvedMs = ms;
   stopTimer();
   if (P.replay) { renderPuzzle(); ahaPop(); setTimeout(() => replaySolved(ms), 900); return; }
-  if (!P.tutorial) { adCount(); goalEvent({ k: 'solve', pz: P.pz, miss: P.miss, hints: P.hints, ms, story: storyStopDone(), bonus: !!P.bonus }); }
+  if (!P.tutorial) { adCount(); if (!P.free) goalEvent({ k: 'solve', pz: P.pz, miss: P.miss, hints: P.hints, ms, story: storyStopDone(), bonus: !!P.bonus }); }
+  if (P.free) { renderPuzzle(); ahaPop(); setTimeout(() => freeSolved(ms), 900); return; }
   if (P.tutorial) { renderPuzzle(); ahaPop(); setTimeout(tutSolved, 900); return; }
   if (P.bonus) { renderPuzzle(); ahaPop(); setTimeout(() => bonusSolved(ms), 900); return; }
   if (P.story) { renderPuzzle(); ahaPop(); setTimeout(storySolved, 900); return; }
@@ -3725,10 +3819,11 @@ function showDaySummary(ds) {
     '<button class="btn wide" id="share" style="margin:2px 0 8px">Share result</button>' +
     '<div class="sub" style="font-size:15px">' + legendLine(e) + '</div>' +
     tomorrowCard(ds) + (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="sub" style="font-size:16px">⭐ ' + nextBonusLine() + '</div>' : '') +
-    '<div class="col">' + bonusBtn() + keepGoingBtn() + '<div class="quiet2"><button class="linkbtn" id="home">‹ Home</button><button class="linkbtn" id="again">🔁 Play this day again</button></div></div>' +
+    '<div class="col">' + bonusBtn() + keepGoingBtn() + practiceBtn() + '<div class="quiet2"><button class="linkbtn" id="home">‹ Home</button><button class="linkbtn" id="again">🔁 Play this day again</button></div></div>' +
     (adsOn() && window.AL_STORE ? '<div class="sub" style="text-align:center;font-size:15px;margin-top:8px">Enjoying Ahalock? <button class="linkbtn" id="dsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button></div>' : ''));
   const db = document.getElementById('dsBuy'); if (db) db.onclick = async () => { if (await AL_STORE.buy()) showDaySummary(ds); };
   const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
+  const pw = document.getElementById('fpdw'); if (pw) pw.onclick = () => { const wk = weakestKind(); track('keep_going', { to: 'practice' }); if (wk) startFree([wk.t], freeGet().t, 'practice'); };
   { const bn = document.getElementById('bon'); if (bn) bn.onclick = () => { track('keep_going', { to: 'bonus' }); startBonus(); }; }
   wireRemindAsk(() => showDaySummary(ds));
   document.getElementById('share').onclick = () => shareDay(ds);
@@ -4709,6 +4804,9 @@ function mergeAhalock(local, cloud) {
     ['intro', 'finSeen'].forEach(k => { if ((ls && ls[k]) || (cs && cs[k])) st[k] = 1; });
     out.story = st;
   }
+  if (local.free || cloud.free) { const a = local.free || {}, b = cloud.free || {}; const k = Object.assign({}, b.k || {});
+    Object.keys(a.k || {}).forEach(t => { if (!k[t] || (a.k[t][0] || 0) >= (k[t][0] || 0)) k[t] = a.k[t]; });
+    out.free = { n: Math.max(a.n || 0, b.n || 0), t: a.t || b.t || 'M', k }; }
   if (local.tut || cloud.tut) out.tut = Object.assign({}, cloud.tut || {}, local.tut || {});
   if (out.shareTime === undefined && cloud.shareTime !== undefined) out.shareTime = cloud.shareTime;
   if (!out.sdraft && cloud.sdraft) out.sdraft = cloud.sdraft;
@@ -4760,7 +4858,7 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs };
+window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs, showFree, showFreePick, startFree, freeGet, weakestKind, kindStats };
 window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
