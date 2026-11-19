@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.1 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.2 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -730,6 +730,8 @@ html.big .status3 .third span{font-size:16px}
 @media (min-width:480px){.status3{grid-template-columns:repeat(4,minmax(0,1fr))}.freebtn{grid-column:auto;flex-direction:column;gap:2px;margin:0;padding:9px 6px;min-height:96px;justify-content:flex-start;text-align:center}.freebtn .fb1{font-size:16px;line-height:1.15;margin-top:4px}}
 .fpw{display:flex;align-items:center;gap:12px;text-align:left;margin:10px 0 4px;background:#fff3c4;color:var(--ink);font-size:17px}.fpw small{display:block;font-size:15px;font-weight:700;opacity:.85}.fpw .fpi{flex:0 0 auto;display:flex}
 .fpnote{text-align:center;font-size:15px;font-weight:800;color:#5a4a12;background:#fff3c4;border-radius:999px;padding:6px 12px;margin:6px auto 2px;width:max-content;max-width:100%}
+.fpmast{position:relative;overflow:hidden;margin:10px 0 4px;padding:9px 12px 12px;border-radius:14px;background:var(--panel2);color:var(--ink);text-align:center}.fpmast b{display:block;font-size:17px}.fpmast span{display:block;font-size:15px;font-weight:700;opacity:.8}.fpmast i{position:absolute;left:0;bottom:0;height:5px;background:var(--gold)}
+.fpk .fpm{font-size:13px;font-weight:800;opacity:.75}
 .fptier{display:flex;gap:8px}.fptier button{flex:1;border:2px solid var(--line);border-radius:999px;padding:10px 6px;font:800 16px var(--body,inherit);background:var(--panel2);color:var(--ink)}.fptier button.on{background:var(--gold);border-color:var(--gold);color:#2b2208}
 .fpgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0 10px}
 .fpk{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border:2px solid var(--line);border-radius:14px;background:var(--panel2);color:var(--ink);font:700 15px var(--body,inherit);line-height:1.1;min-height:70px}
@@ -2965,7 +2967,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.1' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.2' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanByKind();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3197,9 +3199,13 @@ function weakestKind() {
   return best;
 }
 const FREE_TIERS = ['E', 'M', 'T'];
+// Kinds mastered (Alan 11-19 card): a kind is mastered after 5 clean solves anywhere (Daily, Expert, past days, Free play).
+const MASTER_N = 5;
+function masteredLine(c) { c = c || kindStats(); const n = TL.ROSTER.filter(t => (c[t] || [0, 0])[1] >= MASTER_N).length;
+  return '<div class="fpmast" aria-label="Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '"><b>🏅 Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '</b><span>' + (n === TL.ROSTER.length ? 'Every kind mastered. Wonderful!' : MASTER_N + ' clean solves masters a kind') + '</span><i style="width:' + Math.round(100 * n / TL.ROSTER.length) + '%"></i></div>'; }
 function showFree() {
   const f = freeGet(); const wk = weakestKind(); track('free_open', {});
-  openSheet('<h2>🔀 Free play</h2><div class="sub">New puzzles any time. They don\'t change your streak or today\'s three.</div>' +
+  openSheet('<h2>🔀 Free play</h2><div class="sub">New puzzles any time. They don\'t change your streak or today\'s three.</div>' + masteredLine() +
     (wk ? '<button class="btn wide fpw" id="fpw"><span class="fpi">' + typeIcon(wk.t, 30) + '</span><span>🎯 Practice ' + TYPENAME[wk.t] + '<small>Your trickiest kind: ' + wk.k + ' of ' + wk.n + ' clean</small></span></button>' : '') +
     '<div class="col"><button class="btn wide" id="fps">🔀 Shuffle 3</button><button class="btn ghost wide fpick" style="color:var(--ink);background:var(--panel2)" id="fpp">✋ Pick your puzzles</button></div>' +
     '<div class="sub" style="margin:12px 0 6px">How hard?</div><div class="fptier" role="radiogroup" aria-label="How hard">' +
@@ -3211,9 +3217,9 @@ function showFree() {
   if (wk) document.getElementById('fpw').onclick = () => startFree([wk.t], tier(), 'practice');
 }
 function showFreePick(tier) {
-  const pick = [];
+  const pick = []; const c = kindStats();
   openSheet('<h2>✋ Pick puzzles</h2><div class="sub">Tap one kind, or up to three.</div><div class="fpgrid">' +
-    TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><i class="fpn"></i></button>').join('') +
+    TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><small class="fpm">' + (((c[t] || [0, 0])[1]) >= MASTER_N ? '🏅 Mastered' : Math.min((c[t] || [0, 0])[1], MASTER_N) + ' of ' + MASTER_N) + '</small><i class="fpn"></i></button>').join('') +
     '</div><div class="col"><button class="btn wide" id="fpgo" disabled>Pick a kind</button><button class="linkbtn" id="fpbk">‹ Back</button></div>');
   const go = document.getElementById('fpgo');
   const draw = () => { document.querySelectorAll('[data-fk]').forEach(b => { const k = pick.indexOf(b.dataset.fk); b.classList.toggle('on', k >= 0); b.setAttribute('aria-pressed', k >= 0); b.querySelector('.fpn').textContent = k >= 0 ? k + 1 : ''; });
@@ -3245,11 +3251,13 @@ function freeNext() { const F = P.free; if (!F || !P.solved || F.i !== P.slot ||
 function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (F.i + 1) + ' of ' + F.q.length : ''); }
 function freeSolved(ms) {
   const F = P.free; const t = P.pz.type; const clean = !P.miss && !P.hints;
+  const before = (kindStats()[t] || [0, 0])[1];
   const g = freeGet(); const v = g.k[t] || [0, 0]; v[0]++; if (clean) v[1]++; g.k[t] = v; store.set('free', g);
+  const newly = clean && before < MASTER_N && before + 1 >= MASTER_N;
   F.ms[F.i] = ms; if (clean) F.clean++;
   track('free_done', { type: t, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
   const more = F.i + 1 < F.q.length; const end = !more && F.q.length > 1;
-  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div><div class="fpnote">' + (F.q.length > 1 ? (F.i + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' +
+  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div><div class="fpnote">' + (F.q.length > 1 ? (F.i + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : '') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + (clean ? '✅' : '👍') + '</b><span>' + (clean ? 'CLEAN' : 'SOLVED') + '</span></div></div>' +
     (end ? '<div class="sub" style="font-size:16px">All ' + F.q.length + ' solved · ' + F.clean + ' clean · ' + fmtT(F.ms.reduce((a, x) => a + (x || 0), 0)) + '</div>' : '') +
     '<div class="col">' + (more ? '<button class="btn" id="fnx">Next puzzle</button>' : '<button class="btn" id="fag">' + (F.how === 'practice' ? '🎯 One more ' + TYPENAME[t] : '🔀 Shuffle 3 more') + '</button>') +
