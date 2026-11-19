@@ -271,8 +271,8 @@ details.rules{border:1px solid var(--line);border-radius:14px;padding:10px 12px}
 .really{margin:0;font-size:17px;line-height:1.35;padding:10px 12px;border-radius:12px;background:var(--plate);border-left:4px solid var(--good,#2e9a58)}
 .tl.landing button{animation:yrland .42s cubic-bezier(.2,1.4,.4,1) both}.tl.landing button.big{animation-name:yrbig;animation-duration:.6s}
 .tl.landing .tlpair{animation:yrfade .4s 2s both}
-@keyframes yrland{from{opacity:.35;transform:translateY(-14px) scale(.6)}to{opacity:1;transform:none}}
-@keyframes yrbig{0%{opacity:.35;transform:translateY(-18px) scale(.5)}60%{opacity:1;transform:scale(1.5)}100%{transform:none}}
+@keyframes yrland{from{opacity:.35;transform:translateY(-14px)}to{opacity:1;transform:none}} /* no scaling, so each year reads at full size as it lands (Muse, round 30) */
+@keyframes yrbig{0%{opacity:.35;transform:translateY(-18px)}50%{opacity:1;transform:none;box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 14px transparent}}
 @keyframes yrfade{from{opacity:0}to{opacity:1}}
 .howhead{font-weight:700;color:var(--ink);margin:10px 0 0!important}
 .board.fin{display:none}
@@ -333,6 +333,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
 #archive h2,#expert h2{margin:0;font-family:var(--display);font-weight:800;font-size:22px}
 .arow{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
 .arow b{font-family:var(--mono)}
+.arow.last{border:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--paper))}.arow .lasttag{font-family:inherit;color:var(--ink)}
 .arow small{display:block;color:var(--muted);font-size:15px}
 .arow .res{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--muted)}
 .arow .res.done{color:var(--ink)}
@@ -402,7 +403,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 59</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 60</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1622,7 +1623,7 @@ function giveUp(){
 }
 
 function finish(){
-  G.done=true;stopPicking();$("#sr").textContent="";
+  G.done=true;G.celebrate=true;stopPicking();$("#sr").textContent="";
   const t=sortIds(G.order),pos=G.order.map((id,i)=>{const d=Math.abs(t.indexOf(id)-i);return d===0?"g":d===1?"n":"m"});
   G.score=G.gaveUp?rnd(scoreParts().got*.5):finalScore();
   G.why=scoreParts();
@@ -1664,6 +1665,8 @@ function nearMiss(){
   const min=Math.min(...g);
   // Skip any closest pair the "Wait, really?" line above already compared, so the second line adds something new (Cooper, round 26).
   const lead=really().replace(/<[^>]+>/g,"").toLowerCase(),said=i=>lead.includes(shortName(t[i]).toLowerCase())&&lead.includes(shortName(t[i+1]).toLowerCase()); // any case: a name can open the sentence (Muse, round 28)
+  // A hand-written lead names its own cards, so skip when it already gives the closest gap (Muse, round 30: day 39 had none).
+  if(authored()&&new RegExp(`\\b${min} years?\\b`).test(lead))return "";
   const ties=g.map((v,i)=>v===min&&!said(i)?i:-1).filter(i=>i>=0);if(!ties.length)return "";
   const swapped=G.finalOrder&&ties.some(i=>G.finalOrder.indexOf(t[i])>G.finalOrder.indexOf(t[i+1]));
   const N=i=>`<b>${shortName(t[i])}</b>`,yrs=min===1?"1 year":min+" years",list=a=>a.length===2?a.join(" and "):a.slice(0,-1).join(", ")+" and "+a[a.length-1];
@@ -1706,7 +1709,9 @@ function surpriseCard(){ // the card you had furthest from its spot (or the olde
 // lands its last year bigger, and only a Flawless 100 gets the full-screen confetti.
 // Every dot is drawn, faint, in the same frame as the result and the first one lands at once, so the line is never bare (Muse, round 22).
 function landYears(r){
-  const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
+  const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;
+  // Only a fresh finish lands the years and celebrates; reopening a saved result just shows it (Muse, round 30).
+  if(!G.celebrate)return;delete G.celebrate;persist();const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,step=still?0:380;
   if(!still){tl.classList.add("landing");bs.forEach((b,i)=>b.style.animationDelay=(i*step/1000)+"s");if(perfect)bs[bs.length-1].classList.add("big")}
   bs.forEach((b,i)=>setTimeout(()=>sfx("land",i),i*step));
@@ -1846,6 +1851,7 @@ function really(){
   if(authored())return `<p class="really">😮 <b>Wait, really?</b> ${revealLine(G.n)}</p>`;
   let line=workedLine(G.ids,G.kind==="practice"?0:G.n);
   line=line.replace(/^(<b>)?([a-z])/,(_,a,c)=>(a||"")+c.toUpperCase());
+  if(G.kind!=="daily")line=line.replace(/today's whole line/g,"this whole line").replace(/today's other gaps/g,"this line's other gaps").replace(/today's line/g,"this line"); // a past or practice puzzle isn't "today's" (Muse, round 30)
   return `<p class="really">😮 <b>Wait, really?</b> ${line}</p>`;
 }
 // One insight right after a miss (Cooper, round 19): the first pair still out of order, with years, before any arithmetic.
@@ -1864,7 +1870,7 @@ function showResult(){
       <div class="row"><button class="btn primary" id="go">Play today's puzzle</button></div>`;
     r.hidden=false;showStories(sortIds(G.ids)[0]);$("#go").onclick=()=>{tutorial=false;setMode("daily")};return;
   }
-  const replay=G.kind==="replay",share=replay?"":shareText(),how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)} of ${TRIES}`:`Not solved in ${TRIES} tries`;
+  const replay=G.kind==="replay",share=shareText(),how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)} of ${TRIES}`:`Not solved in ${TRIES} tries`;
   const daily=G.kind==="daily",dorA=daily||G.kind==="archive";
   r.innerHTML=`${G.milestone?`<div class="milestone">🎉 ${G.milestone}-day streak!</div>`:""}
     <div class="scoreline"><span class="score">${G.score}<small>/100</small></span><span class="tier">${tier(G.score)}</span></div>
@@ -1876,10 +1882,10 @@ function showResult(){
     ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
     ${chalResult()}
     <div class="row">
-      ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="bReplay">🔁 Replay for fun</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
+      ${replay?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="again">🔁 Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="bReplay">🔁 Replay for fun</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
     ${answerList()}
-    ${G.kind==="practice"||authored()||!nearMiss()?"":`<p class="connect">${nearMiss()}</p>`}
+    ${G.kind==="practice"||!nearMiss()?"":`<p class="connect">${nearMiss()}</p>`}
     ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 <b>Remind me when tomorrow's puzzle is ready?</b></p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
     ${daily&&S.giftDay===G.n+1&&!S.giftPaid?`<p class="tomorrow gift">🎁 <b>Day 1 done!</b> Come back tomorrow for puzzle #${G.n+1} and get a free ❄️ streak freeze.</p>`:""}
     ${daily&&S.played===CHAL_AT&&!S.chalTest?`<p class="firstday">⚡ <b>New: Challenges!</b> Practice now has a ⚡ button: one puzzle a day with a twist, worth +${CHAL_PTS} history points.</p>`:""}
@@ -1902,7 +1908,7 @@ function showResult(){
   r.querySelectorAll(".tl button,.answer button").forEach(b=>b.onclick=()=>{showFact(+b.dataset.id);storyRead(+b.dataset.id)});
   if($("#bReplay"))$("#bReplay").onclick=replayPuzzle;
   if($("#bWeek"))$("#bWeek").onclick=weekStories;
-  if(replay){$("#again").onclick=()=>replayPuzzle();$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
+  if(replay){$("#share").onclick=()=>{track("share_tap",{mode:"replay",puzzle:G.n});shareSheet(share)};$("#again").onclick=()=>replayPuzzle();$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
   if($("#rYes")){track("remind_prompt_shown",{puzzle:G.n});$("#rYes").onclick=()=>setRemind($("#rTime").value).then(()=>$("#remind").remove());$("#rNo").onclick=()=>{setRemind(false);$("#remind").remove()}}
   if(G.kind==="daily"){$("#share").onclick=()=>{track("share_tap",{mode:"daily",puzzle:G.n});shareSheet(share)};$("#more").onclick=()=>interstitial(()=>setMode("practice"));tick()}
   if(G.kind==="archive"){$("#share").onclick=()=>{track("share_tap",{mode:"archive",puzzle:G.n});shareSheet(share)};$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
@@ -1916,7 +1922,7 @@ function showResult(){
 }
 function shareText(){
   const how=G.gaveUp?"Answer shown":G.marks.every(m=>m==="g")?`Solved on try ${Math.min(G.attempt,TRIES)}/${TRIES}`:`Not solved in ${TRIES}`;
-  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}${G.spot?" 🎯":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${LEVELS[levelOf(G.ids)]}${themeOf(G.n,G.ids)&&G.kind!=="practice"?" · "+themeOf(G.n,G.ids):""}\nhttps://playwhenly.com`;
+  return `${NAME} #${G.n}${G.kind==="archive"&&!G.live?" (archive)":G.kind==="replay"?" (replay)":""} · ${G.score}/100 ${tier(G.score)}${noHelp()?" ⭐":""}${G.spot?" 🎯":""}\n${G.rows&&G.rows.length?G.rows.join("\n"):G.tiles}\n${how} · ${LEVELS[levelOf(G.ids)]}${themeOf(G.n,G.ids)&&G.kind!=="practice"?" · "+themeOf(G.n,G.ids):""}\nhttps://playwhenly.com`;
 }
 // ---------- share card (elite plan, item 4) ----------
 // A spoiler-free picture: date, theme, score, the try rows, streak and one "Which came first?" pair from the day.
@@ -2063,7 +2069,9 @@ function setMode(m){
   if(m==="daily")newDaily();else if(m==="practice")newPractice();
   if(game)render();else if(m==="archive")showArchive();else newExpert();
 }
+let lastArch=0; // the Archive opens back at the day you just played, highlighted (Cooper, round 30)
 function playArchive(n){
+  lastArch=n;
   ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",t==="Archive"));
   $("#archive").hidden=true;$("#expert").hidden=true;$("#meta").hidden=$("#board").hidden=false;newArchive(n);render();scrollTo(0,0);
 }
@@ -2079,6 +2087,9 @@ function showArchive(){
   a.innerHTML=`<h2>Past puzzles</h2><p class="star" style="margin:0">Play any day you missed. Open one you've finished to see its stories or replay it for fun. Past puzzles don't change your streak.</p>${rows.some(r=>r.includes(" · earlier set"))?`<p class="star" style="margin:4px 0 0">"Earlier set" marks a day you played before its cards were changed. It keeps the cards, title and level you played, so an earlier weekend can show Medium or Tricky.</p>`:""}`+
     (rows.length?rows.join(""):`<p class="fact">Puzzle #1 is today's. From tomorrow, every past puzzle shows up here.</p>`);
   a.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>playArchive(+b.dataset.n));
+  const last=lastArch&&a.querySelector(`[data-n="${lastArch}"]`);
+  if(last){last.classList.add("last");last.setAttribute("aria-current","true");last.querySelector("small").insertAdjacentHTML("beforeend",' · <b class="lasttag">just played</b>');
+    requestAnimationFrame(()=>last.scrollIntoView({block:"center"}))}
 }
 
 // ---------- expert mode ----------
