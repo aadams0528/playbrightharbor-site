@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.31.0 (landing moment + postcard) -->
+<!-- Tripsake v0.31.1 (merge Undo + what's sent) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1549,7 +1549,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -3903,6 +3903,7 @@ function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) retu
     <div><label class="l" for="myName">Your name, so they see who added what${myName() ? "" : " (needed)"}</label><input type="text" id="myName" value="${esc(myName())}" placeholder="Type your first name" maxlength="30"></div>
     ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about <span id="tsPSize">${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))}</span>)</span></label>`
       : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : `There are no photos of your own in this ${tnoun(t)}, so only`} the stops, best moments and captions travel. The file is <span id="tsSize">small</span>.</p>`}
+    <p class="note tsends" style="margin:0"><b>What they get:</b> ${plural(t.stops.length, "stop")}, the dates, your best moments, notes and captions${real ? ", and your photos if ticked" : ""}. <b>Not sent:</b> your other ${tnoun(t) === "memory" ? "memories" : "trips"}, your home, voice notes and settings.</p>
     <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">Send the ${tnoun(t)} file</button>
     <details class="ldtips"><summary>How sharing works</summary><ol class="note sharesteps"><li>You send the file (<b>${esc(tripFileName(t))}</b>) by Messages, WhatsApp, email or AirDrop.</li><li>They open it: More → Open a shared trip or memory.</li><li>They add their photos and best moments, then tap 👥 Share this ${tnoun(t)}.</li><li>You open their file the same way, and it merges into yours. Nothing is lost and no photo is doubled.</li></ol><p class="note" style="margin:0">Nothing is uploaded to us, and there's no account.</p></details></div>`, "tshare");
   if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el){ el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); const w = el.parentNode; if (w && w.firstChild && w.firstChild.nodeType === 3) w.firstChild.textContent = w.firstChild.textContent.replace(/about $/, ""); } }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
@@ -3969,7 +3970,15 @@ function openTripImport(d){ pendingTrip = d; const local = findLocalShared(d) ||
     ${local ? "" : `<p class="note" style="margin:0">Then add your photos and best moments, and send it back with 👥 Share this ${tnoun(d.trip)} on its page.</p>`}
     <div class="row-btns" style="margin:0"><button class="btn primary" data-tin-go>${local ? "Merge it in" : "Add the " + tnoun(d.trip)}</button><button class="btn" data-close>Not now</button></div></div>`, "tin"); }
 async function titleOffer(id, use){ const raw = store.get("realTrips", []) || []; const t = raw.find(x => x.id === id); if (!t) return; const nm = t.titleOffer; if (use && nm) t.title = nm; delete t.titleOffer; if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; } await refreshTrips(id); openTrip(id, true); toast(use ? `Renamed to “${nm}”` : "Kept your name"); }
+/* Undo a merge (elite C, item 8): what this browser had before, and every photo the merge wrote, so one tap puts it all back */
+let MERGE_UNDO = null;
+async function undoMerge(){ const u = MERGE_UNDO; MERGE_UNDO = null; if (!u) return;
+  try { Object.entries(u.ls).forEach(([k, v]) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+    for (const k of u.added){ try { await idb.del(k); } catch(e){} imgCache.delete(k); }
+    for (const [k, v] of u.replaced){ try { await idb.put(k, v); } catch(e){} } } catch(e){ toast("Couldn't undo the merge"); return; }
+  sessionStorage.setItem("tgUndone", "1"); location.reload(); }
 async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && String(nm.value).trim()) store.set("myName", String(nm.value).trim().slice(0, 30)); const me = myName();
+  const undo = {ls:{}, added:[], replaced:[]}; ["tg.realTrips", "tg.phLabels", "tg.dayLines", "tg.bookWords", "tg.mergeDupes", "tg.hideSample", "tg.myName"].forEach(k => { try { undo.ls[k] = localStorage.getItem(k); } catch(e){} });
   const raw = store.get("realTrips", []) || []; let t = findLocalShared(d, raw) || (intoId ? raw.find(x => x.id === intoId) || null : null); let added = 0, newStops = 0, imgFail = 0, moments = 0, dupes = 0, full = 0, bookIn = false, removedOut = 0;
   if (t && intoId && !findLocalShared(d, raw)) t.shareIds = [...new Set([...(t.shareIds || []), d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean))]; // remember their copy, so the next send merges straight away
   const smp = !t ? sampleFor(d) : null; const isNew = !t && !smp;
@@ -3991,10 +4000,10 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
         const f = ip.img ? await picPrint(ip.img) : null; let hit = hh && hashes.has(hh) ? hashes.get(hh) : null, turn = hit ? 0 : -1; if (!hit && f) for (const q of prints){ turn = picTurn(f, q.f); if (turn >= 0){ hit = q; break; } } if (hh) theirHashes.add(hh);
         if (hit && hit.hidden){ removedOut++; have.add(ip.uid); MERGE_DUPES.push({trip:t.id, sid:hit.sid, i:hit.i, key:hit.key, ip:{uid:ip.uid}, removed:true, ok:true}); continue; } /* you removed this photo: their copy doesn't bring it back */
         if (hit){ dupes++; have.add(ip.uid); // kept once: yours stays, unless theirs is the same way up and clearly bigger
-          let used = false; if (!turn && f && hit.f && f.px > hit.f.px * 1.5){ /* an exact same file has no bigger copy */ try { const old = imgCache.get(hit.key); await idb.put(hit.key, await (await fetch(ip.img)).blob()); used = true; { const hs = t.stops.find(y => y.id === hit.sid), hp = hs && hs.photos[hit.i]; var mineBy = hp ? hp[5] || null : null; if (hp) hp[5] = ip.by && ip.by !== me ? ip.by : d.from || null; } MERGE_DUPES.push({trip:t.id, sid:hit.sid, i:hit.i, key:hit.key, mineBy, mine:old, theirs:ip.img, ip:Object.assign({}, ip, {img:null}), by:ip.by && ip.by !== me ? ip.by : d.from || "", used}); continue; } catch(e){} }
+          let used = false; if (!turn && f && hit.f && f.px > hit.f.px * 1.5){ /* an exact same file has no bigger copy */ try { const old = imgCache.get(hit.key); try { const ov = await idb.get(hit.key); if (ov != null) undo.replaced.push([hit.key, ov]); } catch(e){} await idb.put(hit.key, await (await fetch(ip.img)).blob()); used = true; { const hs = t.stops.find(y => y.id === hit.sid), hp = hs && hs.photos[hit.i]; var mineBy = hp ? hp[5] || null : null; if (hp) hp[5] = ip.by && ip.by !== me ? ip.by : d.from || null; } MERGE_DUPES.push({trip:t.id, sid:hit.sid, i:hit.i, key:hit.key, mineBy, mine:old, theirs:ip.img, ip:Object.assign({}, ip, {img:null}), by:ip.by && ip.by !== me ? ip.by : d.from || "", used}); continue; } catch(e){} }
           MERGE_DUPES.push({trip:t.id, sid:hit.sid, i:hit.i, key:hit.key, mineBy:(() => { const hs = t.stops.find(y => y.id === hit.sid); return hs && hs.photos[hit.i] ? hs.photos[hit.i][5] || null : null; })(), mine:imgCache.get(hit.key), theirs:ip.img, ip:Object.assign({}, ip, {img:null}), by:ip.by && ip.by !== me ? ip.by : d.from || "", used, turned:turn > 0}); continue; } } /* only against photos you already had: two similar shots in their copy both stay */
       const idx = s.photos.length; /* their photos are never dropped at the stop limit: a merge may take a stop past it, like Keep both */ const by = ip.by && ip.by !== me ? ip.by : null;
-      if (ip.scene === "real"){ if (!ip.img || !/^data:image\//.test(ip.img)){ imgFail++; continue; } try { const b = await (await fetch(ip.img)).blob(); await idb.put("rp:" + s.id + "-" + idx, b); } catch(e){ imgFail++; continue; } }
+      if (ip.scene === "real"){ if (!ip.img || !/^data:image\//.test(ip.img)){ imgFail++; continue; } try { const b = await (await fetch(ip.img)).blob(); await idb.put("rp:" + s.id + "-" + idx, b); undo.added.push("rp:" + s.id + "-" + idx); } catch(e){ imgFail++; continue; } }
       s.photos.push([ip.scene === "real" ? "real" : String(ip.scene || "city"), String(ip.caption || "").slice(0, 120), null, 0, ip.uid, by]); have.add(ip.uid); added++;
       if (ip.label && !labels[s.id + "-" + idx]) labels[s.id + "-" + idx] = String(ip.label).slice(0, 60); }
   }
@@ -4010,9 +4019,10 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   if (isNew && !store.get("realHome", null) && !REAL_TRIPS.length) store.set("hideSample", false);
   if (newStops && !isNew && d.trip.title && d.trip.title !== t.title) t.titleOffer = String(d.trip.title).slice(0, 80); /* their copy has more stops in its name: offer it */ if (t.titleOffer) store.set("realTrips", raw);
   try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
-  closeSheet(); await refreshTrips(); sharedNotice(); }
+  MERGE_UNDO = undo; closeSheet(); await refreshTrips(); sharedNotice(); }
+function undoneNotice(){ try { if (sessionStorage.getItem("tgUndone")){ sessionStorage.removeItem("tgUndone"); setTimeout(() => toast("Merge undone. Everything is as it was before"), 800); } } catch(e){} }
 function sharedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgShared") || "null"); sessionStorage.removeItem("tgShared"); } catch(e){} if (!v) return;
-  toast(v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : v.added || v.newStops || v.moments || v.bookIn ? `Merged from ${v.from || "their copy"}: ${[v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : "", v.bookIn ? "their trip book words" : ""].filter(Boolean).join(", ")}${v.dupes ? `. ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once (Show me is on the trip page)` : ""}${v.removedOut ? `. ${plural(v.removedOut, "photo")} you removed ${v.removedOut === 1 ? "was" : "were"} left out` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything${v.removedOut ? ` (${plural(v.removedOut, "photo")} you removed stayed out)` : ""}`);
+  toast((v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : v.added || v.newStops || v.moments || v.bookIn ? `Merged from ${v.from || "their copy"}: ${[v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : "", v.bookIn ? "their trip book words" : ""].filter(Boolean).join(", ")}${v.dupes ? `. ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once (Show me is on the trip page)` : ""}${v.removedOut ? `. ${plural(v.removedOut, "photo")} you removed ${v.removedOut === 1 ? "was" : "were"} left out` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything${v.removedOut ? ` (${plural(v.removedOut, "photo")} you removed stayed out)` : ""}`) + (MERGE_UNDO && !v.isNew ? ". Your own photos and words are unchanged" : ""), MERGE_UNDO ? undoMerge : null, !!MERGE_UNDO);
   if (v.imgFail) setTimeout(() => toast(`${plural(v.imgFail, "photo")} couldn't be added in this browser`), 600);
   setTimeout(() => { if (TRIPS.find(x => x.id === v.id)) openTrip(v.id); }, 900); }
 
@@ -4435,6 +4445,6 @@ if (store.get("seen", false)){ LIGHT_ORDER.forEach(id => lit.set(id, 1)); pinsSh
   else if (!store.get("guided", false) && !store.get("guideShown", false)) setTimeout(() => { if (!document.querySelector(".sheet")) openGuide(1); }, 900); }
 else if (!REAL_TRIPS.length){ $("#scan").hidden = true; introRunning = false; globeDark = true; store.set("seen", true); store.set("staged", true); setTimeout(openWelcome, 300); } // first open starts with your photos
 else { intro(); store.set("seen", true); }
-loadImages(); restoredNotice(); realAddedNotice(); sharedNotice(); openTripAfterReload(); setTimeout(journalCheck, 2500); if (REAL_TRIPS.length) $("#chipTag").textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample";
+loadImages(); restoredNotice(); realAddedNotice(); sharedNotice(); undoneNotice(); openTripAfterReload(); setTimeout(journalCheck, 2500); if (REAL_TRIPS.length) $("#chipTag").textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample";
 requestAnimationFrame(loop);
 </script>
