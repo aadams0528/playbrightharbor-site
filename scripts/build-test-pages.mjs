@@ -43,6 +43,8 @@ function build(g) {
     if (!game.includes("__WORDS__")) throw new Error("src/game.html is missing the __WORDS__ placeholder");
     game = game.replace("__WORDS__", readFileSync(join(src, "words.txt"), "utf8").trim());
   }
+  // the game's own icon goes in <head> too, or the browser asks for /favicon.ico first and logs a 404 (Nikola, Color Rivers round 19)
+  const icon = (game.match(/<link rel="icon"[^>]*>/) || [""])[0];
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -51,7 +53,7 @@ function build(g) {
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/${g.repo} src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
 <title>${g.name} (test version)</title>
-${g.head || ""}</head>
+${icon ? icon + "\n" : ""}${g.head || ""}</head>
 <body>
 ${game.trimEnd()}
 
