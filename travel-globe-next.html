@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.31.2 (Nikola r30 fixes) -->
+<!-- Tripsake v0.31.3 (Nikola r31 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -407,7 +407,8 @@ label.l{font-size:calc(17px * var(--fs,1));color:var(--muted);display:block;marg
 .toast .tbar{position:absolute;left:10px;right:10px;bottom:3px;height:2px;border-radius:2px;background:var(--lit-soft);transform-origin:left;animation:tbar linear forwards;opacity:.7}@keyframes tbar{to{transform:scaleX(0)}}
 .bkrec{display:flex;gap:14px;align-items:center;background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:calc(18px * var(--fs,1))}.bkbig{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--lit);color:#1a1300;font-size:26px;font-weight:700}
 .pcprev{position:fixed;inset:0;z-index:60;background:rgba(3,6,14,.86);display:grid;place-items:center;padding:16px}.pcin{display:flex;flex-direction:column;gap:12px;align-items:center;max-width:420px;width:100%}.pcin img{width:100%;max-height:68vh;object-fit:contain;border-radius:14px;border:1px solid var(--line)}
-.toast{position:fixed}.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
+.mundo{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:calc(17px * var(--fs,1))}
+.toast{position:fixed;width:max-content;max-width:calc(100vw - 32px)}.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
 .toast{display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box}
 .toast button{color:var(--lit-soft);font-weight:700;text-decoration:underline;flex:none}
 .toast:has(button:not(.tx)){padding:12px 16px;gap:16px}.toast button:not(.tx){min-height:40px;padding:4px 10px}
@@ -1554,7 +1555,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1732,7 +1733,7 @@ function openTrip(id, noFly){
     <div class="tripmore" ${tripMoreOpen ? "" : "hidden"}>
       <button class="morerow" data-trip-rename="${t.id}"><div class="flag ring">✎</div><div class="txt"><div class="t">Rename this ${tnoun(t)}</div><div class="s">${esc(t.title)}</div></div></button>
       <button class="morerow" data-trip-kind="${t.id}"><div class="flag ring">${t.homeMem ? "✈" : "🏠"}</div><div class="txt"><div class="t">${t.homeMem ? "Turn into a trip" : "Move to Close to home"}</div><div class="s">${t.homeMem ? "For a stay away from home, even close by. It counts toward your trips and miles" : "For a night out or a day near home. It stays yours, but no longer counts as travel"}</div></div></button>
-      <button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete ${tnoun(t)}</div><div class="s">Takes it off this phone. Your original photos stay</div></div></button>
+      <button class="morerow" data-trip-del="${t.id}"><div class="flag ring">🗑</div><div class="txt"><div class="t">Delete ${tnoun(t)}</div><div class="s">Takes it off this device. Your original photos stay</div></div></button>
     </div>` : ""}
     ${backAgainHTML(t)}${chs.length ? `<p class="note" style="margin:0">📚 ${chs.map(c => `${esc(c.name)} (${chapterYears(c)})`).join(" · ")}</p>` : ""}
     ${t.sharedWith && t.sharedWith.length ? `<p class="note" style="margin:0">👥 Shared with ${esc(t.sharedWith.join(", "))}. Send it again any time and your copies merge.</p>` : ""}
@@ -1835,15 +1836,16 @@ function photoLB(phId){
 function undoCountdown(t, ms){ const bar = document.createElement("i"); bar.className = "tbar"; bar.style.animationDuration = ms + "ms"; t.appendChild(bar); const ub = t.querySelector("button:not(.tx)"), end = Date.now() + ms; { const k = t.querySelector(".tkeep"); if (k) k.remove(); }
   const tick = () => { if (!t.isConnected) return; const left = Math.ceil((end - Date.now()) / 1000); if (left <= 0){ t.remove(); return; } if (ub) ub.textContent = `Undo · ${left}s`; setTimeout(tick, 250); }; tick(); }
 const closeToast = () => document.querySelectorAll(".toast:not(.undo)").forEach(x => x.remove());
-function toast(msg, undo, sticky){
+function toast(msg, undo, sticky, label){
   // a pending Undo is only replaced by another Undo or ended by your next tap; plain messages show alongside it
   // one message at a time, except that a plain message never pushes out a pending Undo: it shows just below it instead
   const keep = !undo ? document.querySelector(".toast.undo") : null; document.querySelectorAll(".toast").forEach(x => { if (x !== keep) x.remove(); });
   const t = document.createElement("div"); t.className = "toast" + (keep ? " below" : ""); t.setAttribute("role", "status"); t.textContent = msg;
-  if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b);
+  if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = label || "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b);
     const x = document.createElement("button"); x.className = "tx"; x.textContent = "✕"; x.setAttribute("aria-label", "Close"); x.onclick = () => t.remove(); t.appendChild(x); }
   document.body.appendChild(t);
   if (!undo && !sticky){ setTimeout(() => t.remove(), 5000); return; } /* long enough to read */
+  if (undo && label) return; /* an action like "Save to Downloads instead" stays until you tap it or ✕ */
   if (undo){ const inTrip = $("#overlay").dataset.kind === "trip"; if (/Heads up/.test(msg)) return; if (inTrip){ const k = document.createElement("small"); k.className = "tkeep"; k.textContent = "Undo stays while this trip is open, then 10 seconds"; t.appendChild(k); return; } // a warning, or an Undo on an open trip, stays until you tap Undo or ✕ or leave the trip
     undoCountdown(t, msg.length > 90 ? 16000 : 10000); return; } // Undo stays 10 seconds (a tap elsewhere can't lose it); a "Heads up" warning stays until you tap Undo or ✕
   if (sticky) t.style.pointerEvents = "none"; // a sticky message never blocks the tap that dismisses it
@@ -2649,7 +2651,7 @@ async function forgetTrips(trips){ const tids = new Set(trips.map(t => t.id)), s
     const vl = store.get("voiceLen", {}) || {}; let vch = false; days.forEach(k => { if (vl["vn:day:" + k] != null){ delete vl["vn:day:" + k]; vch = true; } }); if (vch) store.set("voiceLen", vl); }
   const dayHit = k => /^vn:day:/.test(k) && days.has(k.slice(7));
   const vk = store.get("voiceKeys", []); if (Array.isArray(vk)) store.set("voiceKeys", vk.filter(k => !hit(String(k)) && !dayHit(String(k)))); }
-async function removeRealTrips(){ await forgetTrips([...REAL_TRIPS]); store.set("realTrips", []); store.set("hideSample", false); await refreshTrips(null, "Your loaded trips were removed. Your home stays set."); } // your home stays set
+async function removeRealTrips(){ await forgetTrips([...REAL_TRIPS]); store.set("realTrips", []); store.set("hideSample", false); await refreshTrips(null, store.get("realHome", null) ? "Your loaded trips were removed. Your home stays set." : "Your loaded trips were removed."); } // your home stays set
 async function deleteRealTrip(id){ const t = REAL_TRIPS.find(x => x.id === id); if (!t) return; await forgetTrips([t]); const raw = (store.get("realTrips", []) || []).filter(x => x.id !== id); store.set("realTrips", raw); if (!raw.length) store.set("hideSample", false);
   await refreshTrips(null, `Deleted ${t.title}. Your original photos are not touched.`); }
 
@@ -3101,31 +3103,35 @@ function pcMap(x, t, W, Hm){ const st = stopsOf(t).filter(s => isFinite(s.lon) &
   const pts = st.map(s => [s.lon, s.lat]), c = d3.geoCentroid({type:"MultiPoint", coordinates:pts});
   const P = d3.geoOrthographic().clipAngle(90).precision(.3).rotate([-c[0], -c[1]]).translate([W / 2, Hm / 2]);
   let sc = 420; if (pts.length > 1){ P.fitExtent([[150, 170], [W - 150, Hm - 150]], {type:"MultiPoint", coordinates:pts}); sc = P.scale(); }
-  sc = Math.max(430, Math.min(9000, sc)); P.scale(sc).translate([W / 2, Hm / 2]); /* close enough that every stop has its own pin, never smaller than the whole globe */
+  sc = Math.max(430, Math.min(2600, sc)); P.scale(sc).translate([W / 2, Hm / 2]); /* close enough to see the region, far enough that land, coast and borders still show (Nikola r31: Banff was all land) */
   if (pts.length > 1){ const xy = pts.map(q => P(q)), mx = (Math.min(...xy.map(q => q[0])) + Math.max(...xy.map(q => q[0]))) / 2, my = (Math.min(...xy.map(q => q[1])) + Math.max(...xy.map(q => q[1]))) / 2; P.translate([W - mx, Hm - my]); }
   const pth = d3.geoPath(P, x);
   x.save(); x.beginPath(); pth({type:"Sphere"}); x.fillStyle = "#0f1d3d"; x.fill(); x.clip();
   x.beginPath(); pth(d3.geoGraticule10()); x.strokeStyle = "rgba(255,255,255,.06)"; x.lineWidth = 1.5; x.stroke();
   x.beginPath(); pth(land); x.fillStyle = "#3a4a6b"; x.fill(); x.strokeStyle = "rgba(255,255,255,.22)"; x.lineWidth = 2; x.stroke();
-  const been = sc > 1500 ? [] : countries.filter(f => pts.some(q => d3.geoContains(f, q))); been.forEach(f => { x.beginPath(); pth(f); x.fillStyle = "rgba(242,178,74,.24)"; x.fill(); }); /* the countries you were in glow, on a wide view */
+  const been = countries.filter(f => pts.some(q => d3.geoContains(f, q))); been.forEach(f => { x.beginPath(); pth(f); x.fillStyle = "rgba(242,178,74,.24)"; x.fill(); }); /* the countries you were in glow, on a wide view */
   x.beginPath(); pth(topojson.mesh(WORLD, WORLD.objects.countries, (a, b) => a !== b)); x.strokeStyle = "rgba(6,10,20,.55)"; x.lineWidth = 1.6; x.stroke();
   if (pts.length > 1){ const route = {type:"LineString", coordinates:pts}; x.lineCap = "round"; x.lineJoin = "round";
     x.beginPath(); pth(route); x.strokeStyle = "rgba(242,198,109,.28)"; x.lineWidth = 16; x.stroke(); x.beginPath(); pth(route); x.strokeStyle = "#f2c66d"; x.lineWidth = 6; x.stroke(); }
-  if (sc > 1500){ x.beginPath(); pth(d3.geoGraticule().step([1, 1])()); x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 1.5; x.stroke(); } /* close up, a fine grid keeps the land from reading as a flat colour */
+  if (sc > 1500){ x.beginPath(); pth(d3.geoGraticule().step([1, 1])()); x.strokeStyle = "rgba(255,255,255,.045)"; x.lineWidth = 1.5; x.stroke(); } /* close up, a fine grid keeps the land from reading as a flat colour */
   x.restore();
   if (sc > 1500){ const R = 105, cx = W - 70 - R, cy = 70 + R, L = d3.geoOrthographic().clipAngle(90).rotate([-c[0], -Math.max(-60, Math.min(60, c[1]))]).scale(R).translate([cx, cy]), lp = d3.geoPath(L, x); /* a small globe in the corner shows where in the world this is */
     x.beginPath(); lp({type:"Sphere"}); x.fillStyle = "#0f1d3d"; x.fill(); x.lineWidth = 3; x.strokeStyle = "rgba(242,198,109,.7)"; x.stroke();
     x.beginPath(); lp(land); x.fillStyle = "#4a5a7d"; x.fill(); const q = L(c); if (q){ x.beginPath(); x.arc(q[0], q[1], 9, 0, 7); x.fillStyle = "#f2b24a"; x.fill(); x.lineWidth = 3; x.strokeStyle = "#060a14"; x.stroke(); } }
+  // pins never sit on each other: close stops are nudged apart, with a thin line back to the real spot (Nikola r31)
+  const r = st.length > 12 ? 16 : 24, real = st.map(s => P([s.lon, s.lat])), pos = real.map(q => q ? [q[0], q[1]] : null), gap = 2 * r + 10;
+  for (let it = 0; it < 60; it++){ let moved = false; for (let a = 0; a < pos.length; a++) for (let b = a + 1; b < pos.length; b++){ const A = pos[a], B = pos[b]; if (!A || !B) continue; let dx = B[0] - A[0], dy = B[1] - A[1], dd = Math.hypot(dx, dy); if (dd >= gap) continue; if (dd < .01){ dx = Math.cos(b * 2.4); dy = Math.sin(b * 2.4); dd = 1; } const push = (gap - dd) / 2 + .5; A[0] -= dx / dd * push; A[1] -= dy / dd * push; B[0] += dx / dd * push; B[1] += dy / dd * push; moved = true; } if (!moved) break; }
   x.textAlign = "center"; x.textBaseline = "middle";
-  st.forEach((s, i) => { const q = P([s.lon, s.lat]); if (!q) return; const r = st.length > 12 ? 16 : 24;
+  st.forEach((s, i) => { const q = pos[i], o = real[i]; if (!q) return;
+    if (Math.hypot(q[0] - o[0], q[1] - o[1]) > 3){ x.beginPath(); x.moveTo(o[0], o[1]); x.lineTo(q[0], q[1]); x.strokeStyle = "rgba(255,255,255,.75)"; x.lineWidth = 2.5; x.stroke(); x.beginPath(); x.arc(o[0], o[1], 5, 0, 7); x.fillStyle = "#f2c66d"; x.fill(); }
     const g = x.createRadialGradient(q[0], q[1], 0, q[0], q[1], r * 2.4); g.addColorStop(0, "rgba(242,178,74,.55)"); g.addColorStop(1, "rgba(242,178,74,0)"); x.fillStyle = g; x.beginPath(); x.arc(q[0], q[1], r * 2.4, 0, 7); x.fill();
     x.beginPath(); x.arc(q[0], q[1], r, 0, 7); x.fillStyle = "#f2b24a"; x.fill(); x.lineWidth = 4; x.strokeStyle = "#060a14"; x.stroke();
     if (st.length <= 12){ x.fillStyle = "#1a1300"; x.font = "700 26px Figtree, system-ui, sans-serif"; x.fillText(String(i + 1), q[0], q[1] + 1); } });
-  if (st.length <= 6){ const used = []; x.textAlign = "left"; x.font = "600 30px Figtree, system-ui, sans-serif"; x.lineJoin = "round";
-    st.forEach(s => { const q = P([s.lon, s.lat]); if (!q) return; const nm = String(stopName(s)).split(",")[0].slice(0, 22), w = x.measureText(nm).width; let lx = q[0] + 34, ly = q[1]; if (lx + w > W - 30) lx = q[0] - 34 - w;
-      const ly0 = ly; while (used.some(u => Math.abs(u[1] - ly) < 36 && lx < u[0] + u[2] && lx + w > u[0])) ly += 38; used.push([lx, ly, w]);
-      if (ly !== ly0){ x.beginPath(); x.moveTo(q[0], q[1]); x.lineTo(lx < q[0] ? lx + w + 4 : lx - 4, ly - 9); x.strokeStyle = "rgba(255,255,255,.6)"; x.lineWidth = 2; x.stroke(); }
-      x.lineWidth = 8; x.strokeStyle = "rgba(6,10,20,.85)"; x.strokeText(nm, lx, ly); x.fillStyle = "#ffffff"; x.fillText(nm, lx, ly); }); } /* the places, named, so it reads as your trip at a glance */
+  if (st.length <= 6){ const used = pos.filter(Boolean).map(q => [q[0] - r, q[1], 2 * r]); x.textAlign = "left"; x.font = "600 30px Figtree, system-ui, sans-serif"; x.lineJoin = "round";
+    st.forEach((s, i) => { const q = pos[i]; if (!q) return; const nm = String(stopName(s)).split(",")[0].slice(0, 22), w = x.measureText(nm).width;
+      const tries = [[q[0] + r + 10, q[1]], [q[0] - r - 10 - w, q[1]], [q[0] - w / 2, q[1] - r - 22], [q[0] - w / 2, q[1] + r + 24]]; /* right, left, above, below: the first spot that's free, so each name stays beside its own pin */
+      let at = tries.find(([lx, ly]) => lx > 20 && lx + w < W - 20 && !used.some(u => Math.abs(u[1] - ly) < 34 && lx < u[0] + u[2] + 6 && lx + w + 6 > u[0])) || tries[0];
+      used.push([at[0], at[1], w]); x.lineWidth = 8; x.strokeStyle = "rgba(6,10,20,.85)"; x.strokeText(nm, at[0], at[1]); x.fillStyle = "#ffffff"; x.fillText(nm, at[0], at[1]); }); } /* the places, named, so it reads as your trip at a glance */
   x.textBaseline = "alphabetic"; }
 async function makePostcard(id){ const t = TRIPS.find(x => x.id === id); if (!t) return;
   try { const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
@@ -3781,22 +3787,23 @@ async function exportBackup(){
   const fname = `tripsake-backup-${todayStr()}.zip`, how = await saveBackupBlob(blob, fname); if (!how) return;
   const receipt = [counts.trips ? plural(counts.trips, "trip") : "", counts.home ? plural(counts.home, "memory close to home", "memories close to home") : "", counts.moments ? plural(counts.moments, "moment") : "", plural(counts.photos, "photo")].filter(Boolean).join(" · ");
   store.set("lastBackup", Date.now()); store.set("lastBackupReceipt", receipt); closeToast();
-  backupReceipt({receipt, counts, skipped, fname, size:blob.size, how});
+  try { if (tab === "more") renderBody(); } catch(e){} /* the More row shows the new backup straight away (Nikola r31) */
+  backupReceipt({receipt, counts, skipped, fname:saveBackupBlob.savedAs || fname, size:blob.size, how, pieces:entries.length});
   } catch(e){ toast(/too big/.test(e && e.message) ? "This backup is over 4 GB, too big for one file. Remove some trips' Keep all photos and try again" : "The backup couldn't be made. Nothing was changed", null, true); }
   finally { exportBackup.busy = false; }
 }
 // → "shared" (the share sheet saved it), "picked" (written to a file you chose), "downloaded" (handed to the browser's downloads), or false (not saved)
-async function saveBackupBlob(blob, fname){
+async function saveBackupBlob(blob, fname){ saveBackupBlob.savedAs = fname;
   if ((isIOS() || IN_APP) && navigator.canShare){ let f = null; try { f = new File([blob], fname, {type:"application/zip"}); } catch(e){} if (f && navigator.canShare({files:[f]})){ try { await navigator.share({files:[f], title:"Tripsake backup"}); return "shared"; } catch(e){ if (e && e.name === "AbortError"){ closeToast(); toast("Backup not saved. Tap Save a backup file again, then Save to Files", null, true); return false; } } } } /* on iPhone the share sheet says whether the file was really saved, so a cancelled save is never counted as a backup */
-  if (window.showSaveFilePicker){ try { const h = await window.showSaveFilePicker({suggestedName:fname, types:[{description:"Tripsake backup", accept:{"application/zip":[".zip"]}}]}); const w = await h.createWritable(); await w.write(blob); await w.close(); return "picked"; }
-    catch(e){ if (e && e.name === "AbortError"){ closeToast(); toast("Backup not saved. Nothing was changed", null, true); return false; } } } /* on a computer you pick the place, so Cancel really means not saved (Nikola r30) */
+  if (window.showSaveFilePicker && !saveBackupBlob.noPicker){ try { const h = await window.showSaveFilePicker({suggestedName:fname, types:[{description:"Tripsake backup", accept:{"application/zip":[".zip"]}}]}); const w = await h.createWritable(); await w.write(blob); await w.close(); saveBackupBlob.savedAs = h.name || fname; return "picked"; }
+    catch(e){ if (e && e.name === "AbortError"){ closeToast(); toast("Backup not saved. Nothing was changed.", () => { saveBackupBlob.noPicker = true; exportBackup().finally(() => { saveBackupBlob.noPicker = false; }); }, true, "Save to Downloads instead"); return false; } } } /* on a computer you pick the place, so Cancel really means not saved (Nikola r30); if the picker can't open, Downloads is one tap away (Nikola r31) */
   try { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); return "downloaded"; } catch(e){ toast("This browser blocked the download"); return false; }
 }
 function backupReceipt(r){
-  const where = r.how === "downloaded" ? `Your browser is putting <b>${esc(r.fname)}</b> in your Downloads. Check it's there, then move it somewhere safe like iCloud Drive or Google Drive.` : `<b>${esc(r.fname)}</b> is saved where you chose. Keep it somewhere safe, like iCloud Drive or Google Drive.`;
+  const where = r.how === "downloaded" ? `Your browser is saving it to Downloads as <b>${esc(r.fname)}</b>. If a file with that name is already there, your browser may add a number, like (1). Check it's there, then move it somewhere safe like iCloud Drive or Google Drive.` : r.how === "picked" ? `Saved as <b>${esc(r.fname)}</b> in the place you chose. Keep it somewhere safe, like iCloud Drive or Google Drive.` : `<b>${esc(r.fname)}</b> went where you chose in the share sheet. Check it's there, and keep it somewhere safe like iCloud Drive or Google Drive.`;
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Backup " + (r.how === "downloaded" ? "made" : "saved"))}
-    <div class="bkrec"><div class="bkbig">✓</div><div><b>${esc(r.receipt)}</b><br>${r.counts.voice ? plural(r.counts.voice, "voice note") + " · " : ""}${sizeText(r.size)}</div></div>
-    <p style="margin:0">Every photo was read back from the finished file and matched byte for byte.${r.skipped ? ` <b>${plural(r.skipped, "photo")} couldn't be read on this device</b> and ${r.skipped === 1 ? "is" : "are"} not in this backup.` : ""}</p>
+    <div class="bkrec"><div class="bkbig">✓</div><div><b>${esc(r.receipt)}</b><br>${plural(r.counts.voice || 0, "voice note")} · ${sizeText(r.size)}</div></div>
+    <ul class="note" style="margin:0;padding-left:20px;display:grid;gap:4px"><li><b>Check:</b> all ${plural(r.pieces, "piece")} read back from the finished file and matched byte for byte (CRC-32).</li>${r.skipped ? `<li><b>${plural(r.skipped, "photo")} couldn't be read on this device</b> and ${r.skipped === 1 ? "is" : "are"} not in this backup.</li>` : ""}</ul>
     <p class="note" style="margin:0">${where}</p>
     <button class="btn primary" data-close style="align-self:flex-start">Done</button></div>`, "bkreceipt"); }
 // what a backup would leave in place: data this browser has that the file doesn't
@@ -4000,7 +4007,7 @@ async function sendTripFile(id){ const t = TRIPS.find(x => x.id === id); if (!t)
   const nPh = data.trip.stops.reduce((a, s) => a + s.photos.filter(p => p.img).length, 0); /* a clear finish, not a sheet that just closes (Nikola r30) */
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(shared ? "Sent" : "File saved")}
     <div class="bkrec"><div class="bkbig">✓</div><div><b>${esc(t.title)}</b><br>${plural(data.trip.stops.length, "stop")}${nPh ? " · " + plural(nPh, "photo") : ""} · ${sizeText(blob.size)}</div></div>
-    <p style="margin:0">${shared ? `It went through your phone's share sheet. When they've added theirs and sent it back, open their file under More → Open a shared trip or memory.` : `<b>${esc(name)}</b> is in your Downloads. Send it to them by email, Messages or WhatsApp. They open it under More → Open a shared trip or memory.`}</p>
+    <p style="margin:0">${shared ? `It went through the share sheet. When they've added theirs and sent it back, open their file under More → Open a shared trip or memory.` : `Your browser saved <b>${esc(name)}</b>, usually in Downloads. Check it's there, then send it to them by email, Messages or WhatsApp. They open it under More → Open a shared trip or memory.`}</p>
     <button class="btn primary" data-close style="align-self:flex-start">Done</button></div>`, "tshared"); }
 function readTripFile(file){ const fr = new FileReader(); fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){} if (!d || d.app !== "travel-globe" || d.kind !== "trip" || !d.trip || !Array.isArray(d.trip.stops)){ toast("That file isn't a Tripsake trip"); return; } if (+d.v > 1){ toast("This file is from a newer version of Tripsake. Update the app, then open it again"); return; } /* never half-read a newer file (Nikola r19) */ openTripImport(d); }; fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file); }
 function findLocalShared(d, raw = store.get("realTrips", []) || []){ const ids = new Set([d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean));
@@ -4045,20 +4052,31 @@ function openTripImport(d){ pendingTrip = d; const local = findLocalShared(d) ||
 async function titleOffer(id, use){ const raw = store.get("realTrips", []) || []; const t = raw.find(x => x.id === id); if (!t) return; const nm = t.titleOffer; if (use && nm) t.title = nm; delete t.titleOffer; if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; } await refreshTrips(id); openTrip(id, true); toast(use ? `Renamed to “${nm}”` : "Kept your name"); }
 /* Undo a merge (elite C, item 8): what this browser had before, and every photo the merge wrote, so one tap puts it all back */
 let MERGE_UNDO = null;
-const UNDO_KEYS = ["tg.realTrips", "tg.phLabels", "tg.dayLines", "tg.bookWords", "tg.mergeDupes", "tg.hideSample", "tg.myName"];
-const undoPrint = () => { let s = ""; UNDO_KEYS.forEach(k => { try { s += k + "=" + (localStorage.getItem(k) || "") + "\n"; } catch(e){} }); return crc32(new TextEncoder().encode(s)); };
-/* the Undo is kept on the phone, so it survives a reload, and is offered on the trip page until you change anything after the merge (Nikola r30) */
-function mergeUndoInfo(id){ const m = store.get("mergeUndo", null); if (!m || (id && m.id !== id) || Date.now() - (m.at || 0) > 30 * DAY) return null; return m.print === undoPrint() ? m : null; }
-function mergeUndoHTML(t){ const m = mergeUndoInfo(t.id); if (!m) return ""; return `<p class="note" style="margin:0">↩ Merged from ${esc(m.from || "their copy")} ${new Date(m.at).toLocaleDateString("en-US", {month:"short", day:"numeric"})}. <button class="linkbtn" data-merge-undo>Undo this merge</button></p>`; }
-async function undoMerge(){ let u = MERGE_UNDO; MERGE_UNDO = null; if (!u){ if (!mergeUndoInfo()){ toast("This merge can't be undone any more, because the trip changed after it"); return; } try { u = await idb.get("undo:merge"); } catch(e){} } if (!u){ toast("Couldn't find that merge to undo"); return; }
-  try { Object.entries(u.ls).forEach(([k, v]) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+/* merge Undo is about the one trip that was merged: it puts that trip, its captions, the journal lines the merge added and its book words back, and leaves every other trip alone (Nikola r31) */
+function tripPrint(id, days){ const raw = store.get("realTrips", []) || [], t = raw.find(x => x.id === id), lab = store.get("phLabels", {}) || {}, dl = store.get("dayLines", {}) || {}, bw = store.get("bookWords", {}) || {}; let s = JSON.stringify(t || null);
+  if (t){ const sids = t.stops.map(x => x.id); Object.keys(lab).filter(k => sids.some(sid => k.startsWith(sid + "-"))).sort().forEach(k => s += "|" + k + "=" + lab[k]); }
+  (days || []).forEach(d => s += "|" + d + "=" + (dl[d] ? dl[d].text : "")); s += "|" + JSON.stringify(bw[id] || null); return crc32(new TextEncoder().encode(s)); }
+function mergeUndoState(id){ const m = store.get("mergeUndo", null); if (!m || (id && m.id !== id) || Date.now() - (m.at || 0) > 30 * DAY) return null; return {m, ok:m.print === tripPrint(m.id, m.days)}; }
+function mergeUndoHTML(t){ const st = mergeUndoState(t.id); if (!st) return ""; const {m} = st, when = new Date(m.at).toLocaleDateString("en-US", {month:"short", day:"numeric"});
+  return st.ok ? `<div class="mundo"><span>↩ Merged from <b>${esc(m.from || "their copy")}</b> on ${when}</span><button class="btn" data-merge-undo>Undo this merge</button></div>`
+    : `<p class="note" style="margin:0">↩ Merged from ${esc(m.from || "their copy")} on ${when}. Undo is no longer available because this ${tnoun(t)} changed after the merge. <button class="linkbtn" data-merge-undo-x>OK</button></p>`; }
+async function undoMerge(){ let u = MERGE_UNDO; MERGE_UNDO = null; const st = mergeUndoState(); if (!st || !st.ok){ toast("This merge can't be undone any more, because the trip changed after it"); return; }
+  if (!u || u.tripId !== st.m.id){ try { u = await idb.get("undo:merge"); } catch(e){} } if (!u || u.tripId !== st.m.id){ toast("Couldn't find that merge to undo"); return; }
+  try { const raw = store.get("realTrips", []) || [], i = raw.findIndex(x => x.id === u.tripId), now = i >= 0 ? raw[i] : null;
+    if (u.before){ if (i >= 0) raw[i] = u.before; else raw.push(u.before); } else if (i >= 0) raw.splice(i, 1);
+    const sids = new Set([...(now ? now.stops.map(x => x.id) : []), ...(u.before ? u.before.stops.map(x => x.id) : [])]);
+    const lab = store.get("phLabels", {}) || {}; Object.keys(lab).forEach(k => { if ([...sids].some(sid => k.startsWith(sid + "-"))) delete lab[k]; }); Object.assign(lab, u.labels || {});
+    const dl = store.get("dayLines", {}) || {}; (u.days || []).forEach(d => delete dl[d]);
+    const bw = store.get("bookWords", {}) || {}; if (u.book) bw[u.tripId] = u.book; else delete bw[u.tripId];
+    const md = (store.get("mergeDupes", []) || []).filter(x => x.trip !== u.tripId).concat(u.dupes || []);
+    store.set("realTrips", raw); store.set("phLabels", lab); store.set("dayLines", dl); store.set("bookWords", bw); store.set("mergeDupes", md); if (u.hideSample != null) store.set("hideSample", u.hideSample);
     for (const k of u.added){ try { await idb.del(k); } catch(e){} imgCache.delete(k); }
     for (const [k, v] of u.replaced){ try { await idb.put(k, v); } catch(e){} } } catch(e){ toast("Couldn't undo the merge"); return; }
   try { await idb.del("undo:merge"); } catch(e){} store.set("mergeUndo", null);
   sessionStorage.setItem("tgUndone", "1"); location.reload(); }
 async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && String(nm.value).trim()) store.set("myName", String(nm.value).trim().slice(0, 30)); const me = myName();
-  const undo = {ls:{}, added:[], replaced:[]}; UNDO_KEYS.forEach(k => { try { undo.ls[k] = localStorage.getItem(k); } catch(e){} });
-  const raw = store.get("realTrips", []) || []; let t = findLocalShared(d, raw) || (intoId ? raw.find(x => x.id === intoId) || null : null); let added = 0, newStops = 0, imgFail = 0, moments = 0, dupes = 0, full = 0, bookIn = false, removedOut = 0;
+  const undo = {added:[], replaced:[], days:[], hideSample:store.get("hideSample", null)};
+  const raw = store.get("realTrips", []) || []; let t = findLocalShared(d, raw) || (intoId ? raw.find(x => x.id === intoId) || null : null); { const bt = t ? JSON.parse(JSON.stringify(t)) : null; undo.before = bt; if (bt){ const sids = bt.stops.map(x => x.id); undo.labels = {}; Object.keys(phLabels).forEach(k => { if (sids.some(sid => k.startsWith(sid + "-"))) undo.labels[k] = phLabels[k]; }); undo.book = BOOK_WORDS[bt.id] ? Object.assign({}, BOOK_WORDS[bt.id]) : null; undo.dupes = MERGE_DUPES.filter(x => x.trip === bt.id).map(({mine, theirs, ...r}) => r); } } let added = 0, newStops = 0, imgFail = 0, moments = 0, dupes = 0, full = 0, bookIn = false, removedOut = 0;
   if (t && intoId && !findLocalShared(d, raw)) t.shareIds = [...new Set([...(t.shareIds || []), d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean))]; // remember their copy, so the next send merges straight away
   const smp = !t ? sampleFor(d) : null; const isNew = !t && !smp;
   if (smp){ t = {id:smp.id, shareId:d.trip.shareId, replaces:smp.id, title:smp.title, country:smp.country, start:smp.start, end:smp.end, sharedWith:[], stops:smp.stops.map(st => { const {trip, photos, allPhotos, ...rest} = st; return Object.assign(rest, {uid:st.id, photos:(allPhotos || photos).map(p => [p.scene, p.caption, p.col, p.rating, p.uid || p.id, p.by])}); })}; raw.push(t); }
@@ -4090,19 +4108,23 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   t.stops = t.stops.filter(s => s.photos.length); t.stops.sort((a, b) => a.date.localeCompare(b.date));
   if (!t.stops.length){ toast("That trip had no photos this browser can show"); return; }
   t.start = t.stops[0].date < t.start ? t.stops[0].date : t.start; t.end = t.stops[t.stops.length - 1].date > t.end ? t.stops[t.stops.length - 1].date : t.end;
-  Object.entries(d.lines || {}).forEach(([day, l]) => { if (!dayLines[day] && l && l.text) dayLines[day] = {text:String(l.text).slice(0, 160), by:l.by && l.by !== me ? l.by : undefined, at:Date.now()}; });
+  Object.entries(d.lines || {}).forEach(([day, l]) => { if (!dayLines[day] && l && l.text) undo.days.push(day), dayLines[day] = {text:String(l.text).slice(0, 160), by:l.by && l.by !== me ? l.by : undefined, at:Date.now()}; });
   if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; }
   store.set("phLabels", labels); store.set("dayLines", dayLines); await saveDupes();
   if (d.book && typeof d.book === "object"){ const mine = BOOK_WORDS[t.id] || {}; const w = {ded:mine.ded || String(d.book.ded || "").slice(0, 600), ref:mine.ref || String(d.book.ref || "").slice(0, 600)}; // yours win; an empty page takes theirs
     if (w.ded !== (mine.ded || "") || w.ref !== (mine.ref || "")){ BOOK_WORDS[t.id] = w; store.set("bookWords", BOOK_WORDS); bookIn = true; } }
   if (isNew && !store.get("realHome", null) && !REAL_TRIPS.length) store.set("hideSample", false);
   if (newStops && !isNew && d.trip.title && d.trip.title !== t.title) t.titleOffer = String(d.trip.title).slice(0, 80); /* their copy has more stops in its name: offer it */ if (t.titleOffer) store.set("realTrips", raw);
-  const swapped = undo.replaced.length;
-  try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, swapped, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
-  MERGE_UNDO = undo; if (!isNew){ let kept = false; try { await idb.put("undo:merge", undo); kept = true; } catch(e){} store.set("mergeUndo", kept ? {id:t.id, from:d.from || "", at:Date.now(), print:undoPrint()} : null); } closeSheet(); await refreshTrips(); sharedNotice(); }
+  const swapped = undo.replaced.length, linesIn = undo.days.length, changed = isNew || added || newStops || moments || bookIn || linesIn || swapped;
+  undo.tripId = t.id;
+  try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, swapped, linesIn, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
+  /* Undo only when something changed, and kept on the device so it's still on the trip page after a reload (Nikola r31) */
+  MERGE_UNDO = changed ? undo : null; if (changed){ let kept = false; try { await idb.put("undo:merge", undo); kept = true; } catch(e){} store.set("mergeUndo", kept ? {id:t.id, from:d.from || "", at:Date.now(), days:undo.days, print:tripPrint(t.id, undo.days)} : null); }
+  closeSheet(); await refreshTrips(); sharedNotice(); }
 function undoneNotice(){ try { if (sessionStorage.getItem("tgUndone")){ sessionStorage.removeItem("tgUndone"); setTimeout(() => toast("Merge undone. Everything is as it was before"), 800); } } catch(e){} }
 function sharedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgShared") || "null"); sessionStorage.removeItem("tgShared"); } catch(e){} if (!v) return;
-  toast((v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : v.added || v.newStops || v.moments || v.bookIn ? `Merged from ${v.from || "their copy"}: ${[v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : "", v.bookIn ? "their trip book words" : ""].filter(Boolean).join(", ")}${v.dupes ? `. ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once (Show me is on the trip page)` : ""}${v.removedOut ? `. ${plural(v.removedOut, "photo")} you removed ${v.removedOut === 1 ? "was" : "were"} left out` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything${v.removedOut ? ` (${plural(v.removedOut, "photo")} you removed stayed out)` : ""}`) + (v.swapped ? `. ${plural(v.swapped, "of your photos was", "of your photos were")} swapped for their bigger copy` : "") + (MERGE_UNDO && !v.isNew ? `. ${v.swapped ? "Everything else of yours is" : "Your own photos and words are"} unchanged, and Undo stays on the trip page` : ""), MERGE_UNDO ? undoMerge : null, !!MERGE_UNDO);
+  const bits = [v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : "", v.linesIn ? plural(v.linesIn, "journal line") : "", v.bookIn ? "their trip book words" : "", v.swapped ? `${plural(v.swapped, "sharper copy", "sharper copies")} of photos you had` : ""].filter(Boolean);
+  toast((v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : bits.length ? `Merged from ${v.from || "their copy"}: ${bits.join(", ")}.${v.dupes ? ` ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once.` : ""}${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything, so nothing changed.${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}`) + (MERGE_UNDO ? " Undo is also on the trip page." : ""), MERGE_UNDO ? undoMerge : null, !!MERGE_UNDO);
   if (v.imgFail) setTimeout(() => toast(`${plural(v.imgFail, "photo")} couldn't be added in this browser`), 600);
   setTimeout(() => { if (TRIPS.find(x => x.id === v.id)) openTrip(v.id); }, 900); }
 
@@ -4146,6 +4168,7 @@ document.addEventListener("click", e => {
   let b;
   if ((b = g("[data-dupes]"))){ openDupes(b.dataset.dupes); return; }
   if (g("[data-merge-undo]")){ undoMerge(); return; }
+  if ((b = g("[data-merge-undo-x]"))){ store.set("mergeUndo", null); try { idb.del("undo:merge"); } catch(e){} const pp = b.closest("p"); if (pp) pp.remove(); return; }
   if ((b = g("[data-dupes-ok]"))){ dupesOk(b.dataset.dupesOk); return; }
   if ((b = g("[data-title-offer]"))){ titleOffer(b.dataset.titleOffer, b.dataset.use === "1"); return; }
   if ((b = g("[data-dup-use]"))){ dupUse(+b.dataset.dupUse, b.dataset.which); return; }
@@ -4327,7 +4350,7 @@ document.addEventListener("click", e => {
   if ((b = g("[data-ld-add]"))){ if (b.dataset.none){ loadState = null; closeSheet(true); toast("Nothing new: those photos are already on your globe"); return; } addRealTrips(); return; }
   if (g("[data-ld-again]")){ openLoader(); return; }
   if (g("[data-sample-toggle]")){ store.set("hideSample", !NOSAMPLE); refreshTrips(null, NOSAMPLE ? "Showing the sample traveler again" : "Sample traveler hidden"); return; }
-  if (g("[data-real-remove]")){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories?" : "Remove my loaded trips?")}<p class="note" style="margin:0">This takes your ${tmCount(REAL_TRIPS)} loaded from your photos, their photos, captions and stories off this device and brings back the sample traveler. Your home stays set, and your original photos are not touched.</p><div class="row-btns"><button class="btn primary" data-real-remove-yes>Remove them</button><button class="btn" data-close>Keep them</button></div></div>`); return; }
+  if (g("[data-real-remove]")){ openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories?" : "Remove my loaded trips?")}<p class="note" style="margin:0">This takes your ${tmCount(REAL_TRIPS)} loaded from your photos, their photos, captions and stories off this device and brings back the sample traveler. ${store.get("realHome", null) ? "Your home stays set, and your" : "Your"} original photos are not touched.</p><div class="row-btns"><button class="btn primary" data-real-remove-yes>Remove them</button><button class="btn" data-close>Keep them</button></div></div>`); return; }
   if (g("[data-real-remove-yes]")){ removeRealTrips(); return; }
   if ((b = g("[data-trip-del]"))){ const t = TRIPS.find(x => x.id === b.dataset.tripDel); if (!t) return; openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(`Delete this ${tnoun(t)}?`)}<p class="note" style="margin:0"><b>${esc(t.title)}</b>, its ${plural(t.stops.reduce((a, s) => a + s.photos.length, 0), "photo")}${(() => { const h = t.stops.reduce((a, s) => a + ((s.allPhotos || s.photos).length - s.photos.length), 0); return h ? ` (and ${plural(h, "photo")} you removed earlier)` : ""; })()}, captions, best moments and voice notes come off this device. Your original photos are not touched. This can't be undone.</p><div class="row-btns"><button class="btn primary" data-trip-del-yes="${t.id}">Delete it</button><button class="btn" data-close>Keep it</button></div></div>`); return; }
   if ((b = g("[data-trip-rename]"))){ const t = TRIPS.find(x => x.id === b.dataset.tripRename); if (!t) return; openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Rename this " + tnoun(t))}<label class="l" for="tripNewName">Name</label><input type="text" id="tripNewName" maxlength="80" value="${esc(t.title)}"><div class="row-btns"><button class="btn primary" data-trip-rename-go="${t.id}">Save the name</button><button class="btn" data-open-trip="${t.id}">Cancel</button></div></div>`, "rename"); setTimeout(() => { const i = $("#tripNewName"); if (i){ i.focus(); i.select(); } }, 50); return; }
@@ -4469,7 +4492,7 @@ function openWelcome(){ /* the guided first run: three plain steps; home is aske
     ${loadState && loadState.awaitHome && loadState.pts && loadState.pts.length ? `<button class="btn primary ldgo" data-resume-review>Carry on with my ${plural(loadState.total || loadState.pts.length, "photo")}</button><button class="btn" data-load-photos style="align-self:stretch;justify-content:center;min-height:52px">Pick different photos</button>` : `<button class="btn primary ldgo" data-load-photos>Start: pick my photos</button>`}
     <button class="btn" data-sample-photos style="align-self:stretch;justify-content:center;min-height:52px">Try it with sample photos</button>
     <button class="btn" data-sample-look style="align-self:stretch;justify-content:center;min-height:48px">Skip for now, just look around</button>
-    <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone? Restore from a backup file<input type="file" accept="application/json,.json,application/zip,.zip" id="importFileW" style="position:absolute;width:1px;height:1px;opacity:0"></label>
+    <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone or computer? Restore from a backup file<input type="file" accept="application/json,.json,application/zip,.zip" id="importFileW" style="position:absolute;width:1px;height:1px;opacity:0"></label>
     <p class="ldhow">🔒 Your photos stay on this device. Nothing is uploaded, and there's no account.</p></div>`, "welcome");
 }
 /* ---------------- home: asked once, first thing; change it under More ---------------- */
