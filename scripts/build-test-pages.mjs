@@ -45,6 +45,9 @@ function build(g) {
   }
   // the game's own icon goes in <head> too, or the browser asks for /favicon.ico first and logs a 404 (Nikola, Color Rivers round 19)
   const icon = (game.match(/<link rel="icon"[^>]*>/) || [""])[0];
+  // and the game's own <title> and icon leave <body>, where they are invalid markup (Nikola, Color Rivers round 20)
+  game = game.replace(/^\s*<title>[^<]*<\/title>\s*/i, "");
+  if (icon) game = game.replace(icon, "").replace(/^\s+/, "");
   const html = `<!doctype html>
 <html lang="en">
 <head>
