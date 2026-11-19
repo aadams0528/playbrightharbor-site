@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.6 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.7 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -465,6 +465,7 @@ html,body{overflow-anchor:none}
 .why li{background:#fff;border:2px solid var(--line);border-radius:12px;padding:7px 10px 7px 38px;position:relative;font-weight:700;font-size:14px;line-height:1.32;counter-increment:w}
 .why li::before{content:counter(w);position:absolute;left:9px;top:9px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
 .why li.done{background:#eefaf2;border-color:var(--green)}
+.whyhd{font-weight:800;font-size:15px;margin:6px 0 4px}.whyall{display:block;margin:6px auto 0}
 .why li.done::before{background:var(--green);content:"✓"}
 .sharecard{background:var(--bg);color:#fff;border-radius:18px;padding:16px;text-align:center;margin:6px 0 14px;font-family:var(--disp)}
 .sharecard .t{font-size:22px} .sharecard .t span{color:var(--gold)}
@@ -2990,7 +2991,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.6' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.7' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3189,7 +3190,7 @@ function bonusSolved(ms) {
   const tw = P.bonus.tw; const star = tw === 'nohint' ? !P.hints : tw === 'onetry' ? !P.miss : ms < 180000;
   const b = bonusGet(); b.n++; b.days[P.bonus.ds] = { tw, star: star ? 1 : 0, ms }; store.set('bonus', b);
   track('bonus_done', { twist: tw, star: star ? 1 : 0, seconds: Math.round(ms / 1000) });
-  openSheet('<h2>' + (star ? 'Bonus solved! ⭐' : 'Bonus solved!') + '</h2><div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' +
+  openSheet('<h2>' + (star ? 'Bonus solved! ⭐' : 'Bonus solved!') + '</h2><div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' + takeaway(P.ex, P.pz) +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + TWISTS[tw].e + '</b><span>' + TWISTS[tw].n.toUpperCase() + '</span></div></div>' +
     '<div class="sub" style="font-size:15px">' + (star ? 'You earned the ⭐ for ' + TWISTS[tw].n.toLowerCase() + '.' : tw === 'onetry' ? 'No ⭐ this time (there was a miss), but you cracked it!' : 'No ⭐ this time, but you cracked it!') + ' ' + nextBonusLine() + '</div>' +
     '<div class="col"><button class="btn" id="bh">‹ Back to home</button><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>' + promoOver());
@@ -3306,11 +3307,25 @@ function keyText(ex, pz) {
   if (t === 'pyramid') { const sub = st.find(s => / − /.test(s.text)); return sub ? 'The key brick: ' + lf(sub.text) : 'Spot the rule: each brick is the two bricks under it added together. Work up from the bottom.'; }
   const pins = st.filter(s => s.kind !== 'done' && s.kind !== 'wrongplace');
   const last = x => (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x;
-  const k = pins.find(s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }) || pins[0];
+  // A clue that states the placement outright ("Owl finished 3rd") is not a turning point; skip it when another pin exists.
+  const plain = z => { const q = z.text.match(/^Clue \d+ says “([^”]*)” So ([^.]*)\.$/); return !!q && q[1].includes(q[2].split(' ').pop()); };
+  const isPin = s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }; const k = pins.find(z => isPin(z) && !plain(z)) || pins.find(isPin) || pins[0];
   if (!k) return '';
   let x = k.text; const rest = st.indexOf(k) < st.length - 2 ? ' The rest follows from there.' : '';
+  // Muse R29: when the pin leans on an earlier elimination, say it ("clue 2 already ruled out 4th").
+  let elim = '';
+  if (!/We already know/.test(x)) { const fl = last(x).replace(/^(So|Either way,) /, ''); const sm = fl.match(/^(.+?) (?:must|is|lives|works)\b/);
+    if (sm) { const subj = sm[1], place = fl.split(' ').pop(), before = st.slice(0, st.indexOf(k)), cl = z => last(z.text).replace(/^(So|No other [^,]*, so) /, '');
+      // The earlier step that ruled out the subject's other spot; failing that, what already fills or rules out the other spots.
+      let prev = before.filter(z => { const f = last(z.text); return f.includes(subj) && /can’t|can't/.test(f); }).slice(-1);
+      if (!prev.length) prev = before.filter(z => { const f = cl(z); return !f.includes(subj) && (isPin(z) || (/can’t|can't/.test(f) && new RegExp('(^|\\D)' + place.replace(/\D/g, '') + '(\\D|$)').test(f))); }).slice(-2);
+      if (prev.length) { const refs = prev.map(z => (z.text.match(/^Clues? ([\d, and]+?)(?= says| \(|:| together)/) || [])[1]).filter(Boolean);
+        const why = prev.map(z => { const w = cl(z).replace(/\.$/, ''); return w.charAt(0).toLowerCase() + w.slice(1); }).join(' and ');
+        const at = x.lastIndexOf(' So '); elim = (refs.length === prev.length ? (refs.length > 1 ? 'clues ' + refs.join(' and ') : 'clue ' + refs[0]) + ' already showed ' : 'we already know ') + why;
+        if (at > 0) x = x.slice(0, at) + ' ' + elim.charAt(0).toUpperCase() + elim.slice(1) + '.' + x.slice(at); } } }
   if (x.length > 150) { const m = x.match(/^(Clues? [\d, and]+?)(?: says| \(|:| together)/); const f = last(x).replace(/^(So|Either way,) /, '');
-    if (m && f) return m[1] + (/^Clues/.test(m[1]) ? ' are' : ' is') + ' the turning point: ' + f + '.' + rest; }
+    const kn = (x.match(/[Ww]e already know ([^.]*)\./) || [])[1]; const head = m && m[1] + (/^Clues/.test(m[1]) ? ' are' : ' is') + ' the turning point: ';
+    if (m && f) return head + (kn && (head + kn + f).length < 230 ? 'we already know ' + kn + ', so ' : elim ? elim.charAt(0).toLowerCase() + elim.slice(1) + ', so ' : '') + f + '.' + rest; }
   if (x.length > 200 && /^Suppose /.test(x)) { const so = x.lastIndexOf(' So '); if (so > 0 && /[.”]/.test(x[so - 1])) {
     const m = x.match(/(card \d’s words “[^”]*” would be (?:true|false)), but (the \w+ always [a-z ]+)/);
     const mid = m ? 'Then ' + m[1] + ', but ' + m[2] + (/ If /.test(x) ? ' (the other order fails too).' : '.') : ((x.match(/But then [^“.]*(?:“[^”]*”|\.)/) || ['That breaks a rule.'])[0]);
@@ -3784,7 +3799,18 @@ function solved() {
 }
 function ahaPop() { setTimeout(() => { SFX.aha(); buzz('ok'); }, 80); const d = document.createElement('div'); d.className = 'aha'; d.textContent = 'Aha!'; document.body.appendChild(d); setTimeout(() => d.remove(), 850); }
 function whyToggle() { const w = document.getElementById('whybox'); w.classList.toggle('hidden'); if (!w.classList.contains('hidden')) { const b = document.getElementById('why'); (b || w).scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
-function whyList(ex, extraCls) { return '<ol class="why">' + ex.steps.map(s => '<li class="' + (s.kind === 'done' ? 'done' : '') + '">' + esc(s.text) + '</li>').join('') + '</ol>'; }
+// Cooper R29: Why leads with the 2-3 deciding steps; the full walk-through is one tap away.
+const PIN_RE = /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot|Every gap|gaps repeat|Each gap|the rule|times the one before|take turns|brick is/;
+function pinStep(t) { const f = (t.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || t; return PIN_RE.test(f) && !/ or |can’t|can't|n’t|n't| not /.test(f); }
+function whyList(ex, extraCls) {
+  const li = s => '<li class="' + (s.kind === 'done' ? 'done' : '') + '">' + esc(s.text) + '</li>';
+  const all = '<ol class="why">' + ex.steps.map(li).join('') + '</ol>';
+  const body = ex.steps.filter(s => s.kind !== 'done'), pins = body.filter(s => pinStep(s.text)).slice(0, 3), done = ex.steps.filter(s => s.kind === 'done');
+  if (body.length < 4 || !pins.length || pins.length === body.length) return all;
+  return '<div class="whykey"><div class="whyhd">The deciding steps</div><ol class="why">' + pins.concat(done).map(li).join('') + '</ol>' +
+    '<button class="linkbtn whyall">Show all ' + ex.steps.length + ' steps</button></div><div class="whyfull hidden">' + all + '</div>';
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.whyall'); if (!b) return; const k = b.closest('.whykey'); k.nextElementSibling.classList.remove('hidden'); k.remove(); });
 // The next unsolved puzzle of that day, or the day's results once all three are done.
 function dailyNext(ds) { const r = results()[ds]; const sl = r ? r.s.findIndex(x => !x) : 0; if (dayDone(r)) showDaySummary(ds); else adNext(getDay(ds)[sl].type, () => startPuzzle(ds, sl)); }
 // Play a finished day again, just for fun: nothing is saved, so results, streak and goals stay as they were.
@@ -4641,7 +4667,7 @@ function storySolved() {
   const st = sget(); const wasDone = sdone(st, s, o); if (!wasDone) track('story_stop_done', { stop: s + 1, step: o + 1 }); st.done[s + '-' + o] = 1; sset(st); store.set('sdraft', null);
   const ex = P.ex;
   if (!O.fin) {
-    openSheet(iconize('<h2>' + esc(O.name) + ' solved! ' + O.e + '</h2>') + '<div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' +
+    openSheet(iconize('<h2>' + esc(O.name) + ' solved! ' + O.e + '</h2>') + '<div class="sub">' + esc(TYPES[P.pz.type].answer(P.pz)) + '</div>' + iconize(takeaway(ex, P.pz)) +
       iconize('<div class="ecard big"><div class="et">You found: ' + esc(O.ev.tag) + '</div><div class="ex">' + esc(TL.clueText(getStoryPz(s, 2), O.ev.clue)) + '</div>' + (O.ev.how ? '<div class="en">' + esc(O.ev.how) + '</div>' : '') + '</div>') +
       (O.log ? iconize('<div class="klog">📜 ' + esc(O.log) + '</div>') : '') +
       '<div class="col"><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(ex) + '</div></div><div class="sfoot"><button class="btn" id="nx">Back to ' + esc(STORY[s].name) + '</button></div>');
@@ -4972,7 +4998,7 @@ function confirmDelete() {
       if (!/cancel/i.test(String((e && e.message) || e))) document.getElementById('delErr').innerHTML = 'Couldn\'t delete right now. Try again, or email <a href="mailto:support@playbrightharbor.com" style="color:inherit">support@playbrightharbor.com</a> and we\'ll delete it for you.'; }
     renderCloud(); };
 }
-window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs, showFree, showFreePick, startFree, freeGet, weakestKind, kindStats, keyText, get CHEST_NAMES() { return TL.CHESTS.map(c => c[0]); } };
+window.__TL = !TEST_BUILD ? { toast, onNoAds: null, grantNoAds: () => { if (!store.get('noads', false)) { store.set('noads', true); return true; } return false; } } : { showHowTo, showHelp, startReplay, get tut() { return tutState; }, renderPuzzle, STORY, sget, renderMap, renderStop, startStory, getStoryPz, isPat, solEntry, wrongEntry, store, getDay, startPuzzle, renderHome, get P() { return P; }, check, hint, keyPress, setRole, startTutorial, results, archived, streak, shareText, migrateResults, mergeAhalock, cloudGet, solved, streak, shieldGet, toast, onNoAds: null, adsGet, hintAsk, wkGet, weekGoals, goalEvent, showGoals, bonusToday, startBonus, playBonus, bonusGet, nextBonusLine, holidayFor, getDayM, harborImg, kindImgs, showFree, showFreePick, startFree, freeGet, weakestKind, kindStats, keyText, whyList, get CHEST_NAMES() { return TL.CHESTS.map(c => c[0]); } };
 window.__TL.onNoAds = () => { if (S.screen === 'home') renderAdsRow(); };
 { const moved = migrateResults(); const saved = shieldApply(); renderHome(); if (moved) setTimeout(() => toast('Puzzles were updated. Your old results are kept.'), 300);
   if (saved) setTimeout(() => toast('🛡️ Your streak shield saved your ' + saved + '-day streak!'), moved ? 2200 : 400);
