@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.30.1 (faster start) -->
+<!-- Tripsake v0.30.2 (faster saving) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1170,6 +1170,7 @@ function loop(t){
   else if (spinning && !dragging && !REDUCED()){ rot[0] += dt * .006; dirty = true; if (!spinFor) spinFor = performance.now(); if (performance.now() - spinFor > 12000 && !introRunning){ spinning = false; spinFor = 0; } } // 12 s of clock time, however slow the frames
   if (!spinning) spinFor = 0;
   if (document.hidden){ requestAnimationFrame(loop); return; }
+  if ((SAVING || READING) && !replayState){ requestAnimationFrame(loop); return; } /* faster saving (elite B): the globe holds still while photos are saved, so the phone spends its time on the photos */
   if (introRunning || selectedTrip || replayState || Math.abs(shiftY) > .5) dirty = true;
   else if (TH().animated){ SH_USED += dt; if (t - (lastDraw || 0) > 28) dirty = true; } /* the falling leaves only need about 30 frames a second */
   if (dirty){ draw(t); dirty = false; lastDraw = t; }
@@ -1548,7 +1549,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.30.1 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.30.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1650,7 +1651,7 @@ function openSheet(html, kind = ""){ if (typeof vrec !== "undefined" && vrec) vr
   document.addEventListener("pointermove", e => { if (y0 == null || !el) return; dy = Math.max(0, e.clientY - y0); el.style.transform = dy ? `translateY(${dy}px)` : ""; });
   const end = () => { if (y0 == null || !el) return; const s = el; y0 = null; el = null; s.style.transition = "transform .18s"; if (dy > 90 && !unsavedWhat()){ s.style.transform = "translateY(100%)"; setTimeout(closeSheet, 160); } else { s.style.transform = ""; if (dy > 90) leaveAsk(); } };
   document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end); })();
-let SAVING = false;
+let SAVING = false, READING = false; /* while photos are read or saved, the globe holds still */
 /* what an open import review would add if saved, in words ("your 2 ticked trips"); empty when nothing would be lost */
 const TYPED_IDS = ["tripNewName", "ldManTitle", "ldMemHeldTitle", "chName", "bucketName", "newCatName"]; /* names typed into a form with its own Save button (Nikola r20) */
 function typedUnsaved(){ return TYPED_IDS.some(id => { const i = document.querySelector("#overlay .sheet #" + id); return i && i.value.trim() && i.value !== i.defaultValue; }); }
@@ -2210,6 +2211,7 @@ function libAskHTML(kind){ return kind === "none" ? `<b style="color:var(--ink)"
 async function processFiles(files){
   const [a, b] = periodRange(); const prog = $("#ldProg"); const pts = []; let noLoc = 0, outside = 0, i = 0; const noLocNames = [], noLocPts = [], noLocAll = [], why = []; const nm = f => f.name || "a photo";
   if (loadState.homeMem && $("#ldAsTrip") && $("#ldAsTrip").checked) loadState.homeMem = false; /* a night in a hotel near home: a trip, by choice */
+  READING = true; try {
   for (const f of files){
     i++; if (i === 1 || i % 5 === 0 || i === files.length){ { const pc = Math.round(i / files.length * 100); prog.innerHTML = `<b style="color:var(--ink)">Reading ${i.toLocaleString()} of ${plural(files.length, "photo")}… ${pc}%</b><div class="ldbar"><i style="width:${pc}%"></i></div>`; } await new Promise(r => setTimeout(r, 0)); }
     let ex = {}, bad = false; try { ex = await readExif(f) || {}; } catch(e){ bad = true; }
@@ -2220,6 +2222,7 @@ async function processFiles(files){
     if (!isFinite(ex.lat)){ why.push({file:f, msg:`${nm(f)}: ${ex.t ? `taken ${new Date(t).toLocaleString("en-US", {month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit"})}, but has no location` : bad ? "couldn't be read. The file may be damaged or not a photo" : "no camera data (Exif) found, so no date or location. Screenshots, edited copies and some messaging apps remove it"}`}); noLoc++; if (noLocNames.length < 6) noLocNames.push(f.name || "a photo"); if (ex.t) noLocPts.push({file:f, t}); noLocAll.push({file:f, t:ex.t || null, name:nm(f), kind:ex.t ? "nogps" : bad ? "bad" : "noexif"}); continue; }
     pts.push({file:f, lat:ex.lat, lon:ex.lon, t});
   }
+  } finally { READING = false; }
   pts.sort((x, y) => x.t - y.t);
   if (loadState.homeMem && !loadState.sample){ const rh = store.get("realHome", null); if (!(rh && isFinite(rh.lat)) && pts.some(p => !p.atHome)){ /* no home set yet: ask whether this is a trip or a memory close to home, and only ask for home if it's a memory (Alan 11-14) */
     loadState.memPending = {pts, noLoc, noLocNames, noLocPts, outside, total:files.length, why, noLocAll, title:(($("#ldManTitle") || {}).value || "").trim()}; openMemAsk(); return; } }
@@ -2576,8 +2579,12 @@ async function addRealTripsRun(L, pick, names, hideSample){
     for (let si = 0; si < t.stops.length; si++){
       const s = t.stops[si]; const sid = id + "s" + si; const fresh = s.pts.filter(p => !drop.has(p)); if (!fresh.length) continue; const chosen = stopPick(fresh, cap).keep;
       const photos = [];
-      for (const p of chosen){ let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); } if (!url){ await new Promise(r => setTimeout(r, 1500)); url = await thumb(p.file, 720, true); } /* a phone short of memory late in a big import: wait, then try a smaller copy, rather than lose the photo */
-        if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
+      /* faster saving (elite B): the next few photos are shrunk while this one is stored, three at a time; they are still saved in order */
+      const conv = async p => { let url = await thumb(p.file, 1024, true); if (!url){ await new Promise(r => setTimeout(r, 400)); url = await thumb(p.file, 1024, true); } if (!url){ await new Promise(r => setTimeout(r, 1500)); url = await thumb(p.file, 720, true); } /* a phone short of memory late in a big import: wait, then try a smaller copy, rather than lose the photo */
+        if (url instanceof Blob){ try { url = await blobURL(url); } catch(e){ url = null; } } return url; };
+      const ahead = [], AHEAD = 3; for (let k = 0; k < Math.min(AHEAD, chosen.length); k++) ahead[k] = conv(chosen[k]);
+      for (let k = 0; k < chosen.length; k++){ const p = chosen[k]; let url = await ahead[k]; ahead[k] = null; if (k + AHEAD < chosen.length) ahead[k + AHEAD] = conv(chosen[k + AHEAD]);
+        if (typeof url === "string" && (url.length < 2000 || !url.startsWith("data:image/"))) url = null;
         done++; prog.textContent = `Saving photos ${done} of ${total}…`;
         const pid = sid + "-" + photos.length; if (!url){ failed++; const hf = isHeic(p.file); if (hf) heicFails++; photos.push(["missing", hf ? "An iPhone HEIC photo this browser couldn't open" : "A photo that couldn't be opened here. The original is still in your photo library", null, 0]); /* no file names on screen */ continue; }
         try { await idb.put("rp:" + pid, url); photos.push(["real", new Date(p.t).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}), null, 0]); } catch(e){ failed++; } }
