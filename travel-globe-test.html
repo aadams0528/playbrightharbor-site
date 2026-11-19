@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.31.4 (Nikola r32 fixes) -->
+<!-- Tripsake v0.31.5 (round 33 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -499,6 +499,8 @@ label.l{font-size:calc(17px * var(--fs,1));color:var(--muted);display:block;marg
 .morerow{min-height:56px}
 .morerow.big{min-height:68px}
 .morerow.big .t{font-size:calc(18px * var(--fs,1))}
+.bigpin{position:sticky;top:-12px;z-index:3;background:var(--panel);box-shadow:0 6px 12px -8px rgba(0,0,0,.6)} /* Larger text stays reachable while More scrolls (Muse r33) */
+.dangersec{margin-top:10px}.dangerrow .s b{color:#ffb4a8}
 .foldhd{display:flex;gap:12px;align-items:center;width:100%;padding:14px 12px;border-radius:14px;background:var(--panel-2);border:1.5px solid var(--line,rgba(255,255,255,.12));text-align:left;box-sizing:border-box;min-height:68px}
 .foldhd .t{font-weight:700;font-size:calc(19px * var(--fs,1))}
 .foldhd .s{font-size:calc(17px * var(--fs,1));color:var(--muted)}
@@ -595,7 +597,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 const store = {
   get(k, d){ try { const v = localStorage.getItem("tg." + k); if (v == null) return d; const p = JSON.parse(v);
     if (d !== undefined && d !== null && (p === null || typeof p !== typeof d || Array.isArray(p) !== Array.isArray(d))) return d; return p; } catch(e){ return d; } },
-  set(k, v){ try { localStorage.setItem("tg." + k, JSON.stringify(v)); return true; } catch(e){ return false; } }
+  set(k, v){ try { localStorage.setItem("tg." + k, JSON.stringify(v)); if (k !== "mergeUndo" && typeof refreshMundo === "function" && refreshMundo.soon) try { refreshMundo.soon(); } catch(e){} return true; } catch(e){ return false; } }
 };
 const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
 const fmtShort = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric"});
@@ -608,7 +610,7 @@ function dRange(a, b, long){ return !b || a === b ? fmt(a) : `${long ? fmt(a) : 
 const HOME = {name:"Home · Denver area", lon:-104.99, lat:39.74}; // replaced by the real home once real trips are loaded
 // your own trips only start and end at home once you've set one; until then they start at their first stop (the sample home is never used for them)
 let HOME_SET = !!store.get("realHome", null);
-const homeFor = t => !(t && t.real) || HOME_SET ? [HOME.lon, HOME.lat] : null;
+const homeFor = t => !(t && t.real) || HOME_SET || (t && t.replaces) ? [HOME.lon, HOME.lat] : null; /* a sample that became your copy keeps the sample traveler's home for its miles (Nikola r33) */
 const startOf = t => { const h = homeFor(t); if (h) return h; const f = stopsOf(t)[0]; return f ? [f.lon, f.lat] : [HOME.lon, HOME.lat]; };
 const homeShown = () => HOME_SET || !NOSAMPLE;
 // scene names drive the drawn sample photos; col = collection (food, hike, view, golf)
@@ -1376,6 +1378,11 @@ async function remindSync(){ const LN = LNOTE(); if (!LN) return;
     const plan = remindPlan(), log = store.get("remindLog", {}) || {}; plan.forEach(x => { if (x.trip) log[x.trip] = x.day; }); store.set("remindLog", log);
     if (plan.length) await LN.schedule({notifications:plan.map((x, i) => ({id:300 + i, title:x.title, body:x.body, schedule:{at:x.at, allowWhileIdle:true}, extra:{trip:x.trip || ""}}))});
   } catch(e){} }
+function openRemindSheet(){ const on = !!store.get("remind", false);
+  openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Phone reminders")}
+    <p style="margin:0">${on ? "Reminders are on." : "Reminders are off."} When they're on, Tripsake sends at most one a day, at ${hourLabel(store.get("remindHour", 9))}: a trip from this week in past years, or your Sunday postcard. The same trip never comes back within 30 days.</p>
+    <p class="note" style="margin:0">You can change the time or turn them off here any time.${LNOTE() ? "" : " The test page doesn't send them; the phone app does."}</p>
+    <div class="row-btns">${on ? `<button class="btn" data-remind-off>Turn reminders off</button>` : `<button class="btn primary" data-remind-on>Turn reminders on</button>`}<button class="btn" data-close>${on ? "Keep them on" : "Not now"}</button></div></div>`, "remind"); }
 async function remindSet(on){
   if (on && LNOTE()){ const p = await LNOTE().requestPermissions().catch(() => ({display:"denied"})); if (p.display !== "granted"){ store.set("remind", false); renderBody(); return toast("Notifications are off for Tripsake. Turn them on in your phone's Settings, then try again"); } }
   store.set("remind", !!on); renderBody(); await remindSync();
@@ -1449,6 +1456,8 @@ function postcardHTML(){
     <p class="note">${p.sunday ? "A new one arrives every Sunday." : "In the app this arrives every Sunday morning."} <button style="text-decoration:underline;color:var(--muted);font-size:inherit" data-postcard-off>Turn off</button></p></div>`;
 }
 function thisYearAgo(y){ const n = new Date().getFullYear() - y; return n === 1 ? "1 year ago" : `${n} years ago`; }
+/* says what the miles count: with a home they include getting there and back (Cooper r33) */
+function milesText(t){ const n = tripMiles(t); return n.toLocaleString() + (n === 1 ? " mile" : " miles") + (homeFor(t) ? " there and back" : ""); }
 function tripMiles(t){ const h = homeFor(t), sp = stopsOf(t).map(s => [s.lon, s.lat]); let pts = h ? [h, ...sp, h] : sp; let m = 0; for (let i = 1; i < pts.length; i++) m += d3.geoDistance(pts[i-1], pts[i]) * 3959; return Math.round(m); }
 function days(t){ return Math.round((new Date(t.end) - new Date(t.start)) / 864e5) + 1; }
 const catLabel = k => (CATS.find(c => c.k === k) || {label:"Place"}).label;
@@ -1519,12 +1528,12 @@ function renderBody(){
     /* Alan 11-19: More folds into four short labelled sections, each one tap to open. Larger text stays on top so nobody has to hunt for it */
     const lb = store.get("lastBackup", 0); if (!lb && REAL_TRIPS.length && !moreOpen.auto){ moreOpen.auto = 1; moreOpen.add("safe"); } /* no backup yet: open the safety section once */
     const fold = (k, icon, t, sub, fill) => { const o = moreOpen.has(k); h += `<button class="foldhd" data-fold="${k}" aria-expanded="${o}"><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">${icon}</div><div class="txt"><div class="t">${t}</div><div class="s">${sub}</div></div><span class="chev" aria-hidden="true">›</span></button><div class="foldbody"${o ? "" : " hidden"}>`; fill(); h += `</div>`; };
-    h += `<label class="morerow switchrow"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
+    h += `<label class="morerow switchrow bigpin"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
     fold("safe", "⤒", "Keep your trips safe", lb ? `Backup, restore, shared files · last backup ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric"})}` : REAL_TRIPS.length ? "<b>No backup yet.</b> Backup, restore and shared files" : "Backup, restore and shared files", () => {
     h += `<button class="morerow" data-export><div class="flag ring">⤒</div><div class="txt"><div class="t">Save a backup file</div><div class="s">${(() => { const lb = store.get("lastBackup", 0); return lb ? `Last backup file: ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}${store.get("lastBackupReceipt", "") ? ` (${esc(store.get("lastBackupReceipt", ""))}, all checked ✓)` : ""}. Save a new one after adding trips` : "No backup yet. Right now everything is saved only on this device"; })()}</div></div></button>`;
-    h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json,application/zip,.zip" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">👥</div><div class="txt"><div class="t">Open a shared trip or memory</div><div class="s">A file someone sent you. It joins yours, or merges into your copy</div></div><input type="file" accept="application/json,.json" id="tripFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0 4px">Tripsake keeps smaller copies of your photos for your stories. Keep your originals in your photo library and its own backup.${(() => { const ps = store.get("persisted", null); if (IN_APP || ps === null || !REAL_TRIPS.length) return ""; return ps ? " <b>Kept safe on this device:</b> the browser has agreed not to clear them." : isIOS() ? " On iPhone, Safari can clear a website's photos after a few weeks unused. <b>Add Tripsake to your Home Screen</b> (Share, then Add to Home Screen) so iPhone keeps them, and save a backup file." : " This browser may clear them if space runs low, so save a backup file now and then."; })()}</p>`;
+    h += `<div class="sec dangersec">Moving to a new device</div><label class="morerow dangerrow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s"><b>Replaces everything</b> saved in this browser with what's in the backup. Save a backup first if you're not sure</div></div><input type="file" accept="application/json,.json,application/zip,.zip" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`; /* the one that replaces things sits apart from the harmless shared-file row, with plain words (Muse r33) */
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
     h += `<p class="note" style="margin:0">${imgStoreOK ? "" : "<b>Photos can't be stored in this browser, so new photos last for this visit only.</b> "}Everything you add stays in this browser. Nothing is uploaded. The real app keeps it on your phone, with optional cloud backup.</p>`;
     });
@@ -1545,7 +1554,7 @@ function renderBody(){
     fold("stories", "🎞", "Stories and reminders", "Calmer story, story arc, phone reminders, Sunday postcard", () => {
     h += `<button class="morerow" data-calm-toggle><div class="flag ring">🌙</div><div class="txt"><div class="t">Calmer story</div><div class="s">${store.get("calmStory", false) ? "On · photos stay still and the globe hops between stops instead of flying" : "Off · photos zoom and the globe flies between stops. Tap for a calmer story"}</div></div></button>`;
     h += `<button class="morerow" data-arc-toggle><div class="flag ring">🎞</div><div class="txt"><div class="t">Story arc</div><div class="s">${arcOn() ? "On · stories open on your arrival, linger on your best photos and end on a closing shot" : "Off · stories play every photo in date order. Tap to turn on"}</div></div></button>`;
-    { const on = !!store.get("remind", false), hr = store.get("remindHour", 9); h += `<button class="morerow" data-remind-toggle><div class="flag ring">🔔</div><div class="txt"><div class="t">Phone reminders</div><div class="s">${on ? `On · at most one a day, at ${hourLabel(hr)}, when a past trip or your Sunday postcard comes up` : "Off · tap for a nudge when a past trip comes up, at most one a day"}</div></div></button>`;
+    { const on = !!store.get("remind", false), hr = store.get("remindHour", 9); h += `<button class="morerow" data-remind-open><div class="flag ring">🔔</div><div class="txt"><div class="t">Phone reminders</div><div class="s">${on ? `On · at most one a day, at ${hourLabel(hr)}, when a past trip or your Sunday postcard comes up` : "Off · tap to read about it"}</div></div></button>`;
       if (on) h += `<label class="morerow"><div class="flag ring">⏰</div><div class="txt"><div class="t">Reminder time</div></div><select id="remindHour" aria-label="Reminder time" style="font-size:calc(17px * var(--fs,1));padding:8px;border-radius:10px;background:var(--panel);color:inherit;border:1px solid var(--line,rgba(255,255,255,.2))">${REM_HOURS.map(x => `<option value="${x}"${x === hr ? " selected" : ""}>${hourLabel(x)}</option>`).join("")}</select></label>`; }
     h += `<button class="morerow" data-postcard-toggle><div class="flag ring">✉</div><div class="txt"><div class="t">Sunday postcard</div><div class="s">${store.get("postcardOff", false) ? "Off · tap to turn on" : "On · this week in past years, every Sunday"}</div></div></button>`;
     });
@@ -1556,7 +1565,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.4 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.5 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1845,6 +1854,7 @@ function toast(msg, undo, sticky, label){
   if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = label || "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b);
     const x = document.createElement("button"); x.className = "tx"; x.textContent = "✕"; x.setAttribute("aria-label", "Close"); x.onclick = () => t.remove(); t.appendChild(x); }
   document.body.appendChild(t);
+  if (keep){ const r = keep.getBoundingClientRect(); t.style.top = Math.round(r.bottom + 8) + "px"; } /* a follow-up sits under the real height of the Undo message, never on top of it (Nikola r33) */
   if (!undo && !sticky){ setTimeout(() => t.remove(), 5000); return; } /* long enough to read */
   if (undo && label) return; /* an action like "Save to Downloads instead" stays until you tap it or ✕ */
   if (undo){ const inTrip = $("#overlay").dataset.kind === "trip"; if (/Heads up/.test(msg)) return; if (inTrip){ const k = document.createElement("small"); k.className = "tkeep"; k.textContent = "Undo stays while this trip is open, then 10 seconds"; t.appendChild(k); return; } // a warning, or an Undo on an open trip, stays until you tap Undo or ✕ or leave the trip
@@ -2328,7 +2338,7 @@ function openReview(){
     <div id="ldHomePick" hidden>${whereHTML("Pick your home town. Trips are worked out again from it.")}<button class="btn" data-ld-home-set style="margin-top:6px">Use this as home</button></div>
     ${tr.length > 1 ? `<button class="btn" data-ld-names style="align-self:flex-start">Name every trip by place and month</button>` : ""}
     ${tr.length ? `<p class="ldhow" style="margin:0">Each stop keeps up to ${stopCap()} photos. Every photo still helps find your trips and stops.</p><label class="switch" id="ldAllWrap" style="gap:10px;align-items:center;justify-content:flex-start"${tr.some(t => capInfo(t, PER_STOP).some(c => c.drop.length)) || L.bigCap ? "" : " hidden"}><input type="checkbox" id="ldAll"${L.bigCap ? " checked" : ""} style="width:22px;height:22px;accent-color:var(--lit)"><span>Keep all photos for every trip, up to ${BIG_STOP} a stop (uses more space on this device)</span></label>` : ""}
-    ${L.homeMem ? "" : tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide"${L.hideChoice === false ? "" : " checked"} style="width:22px;height:22px;accent-color:var(--lit)"><span>Hide the sample traveler's ${plural(SAMPLE_TRIPS.length, "example trip")} that came with the app, so the globe shows only my trips (you can show them again under More)</span></label>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
+    ${L.homeMem ? "" : tr.length ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start"><input type="checkbox" id="ldHide"${L.hideChoice === false ? "" : " checked"} style="width:22px;height:22px;accent-color:var(--lit)"><span>Hide the sample traveler's ${plural(SAMPLE_TRIPS.length, "example trip")} that came with the app, so the globe shows only my trips (to bring them back: More → Your setup → Sample traveler)</span></label>` : `<button class="btn" data-ld-again style="align-self:flex-start">Choose other photos</button>`}
     <div id="ldProg" class="note" style="margin:0" aria-live="polite"></div></div>`, "loader");
   tr.forEach(async (t, i) => { const u = await thumb(t.stops[0].pts[0].file, 160); const im = document.querySelector(`[data-ld-cover="${i}"]`); if (im && u) im.src = u; });
   updateAddCount(); drawTiles(); fillThumbs();
@@ -2609,6 +2619,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
       : one ? "That trip is already on your globe, with all of these photos" : "Those trips are already on your globe, with all of these photos", null, !!(jw.fail || jw.full)); btn.disabled = false; return; }
   if (!store.set("realTrips", [...existing, ...out])){ toast("Couldn't save: this browser's storage is full"); btn.disabled = false; return; }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { store.set("persisted", ok ? 1 : 0); }).catch(() => {}); } catch(e){} /* ask the browser not to clear your photos when space runs low or the site sits unused */
+  if (L.sample && L.home && L.home.label) store.set("practiceHome", L.home.label.replace(/ area$/, "")); /* so "Where's home?" can say why it asks after a practice import (Muse r33) */
   if (!L.sample && (!L.manual || store.get("realHome", null))) store.set("realHome", {lat:L.home.lat, lon:L.home.lon, label:L.home.label}); /* a trip made by hand never sets your home by guessing */
   if (L.manual) try { sessionStorage.removeItem("tgManName"); } catch(e){}
   store.set("hideSample", hideSample);
@@ -3088,10 +3099,10 @@ async function replayRun(id, opts, run){
   { const pb = document.getElementById("rpause"); if (pb) pb.style.visibility = "hidden"; } /* the story is over, so there's nothing to pause */
   const card = document.getElementById("rcard"); const doneLabel = replayState.fromEdit ? "Back to Edit my story" : replayState.fromTrip && !REC ? `${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}` : "Back to globe"; /* the guided first story names where Done goes too (Muse r23) */
   card.innerHTML = opts.guided
-    ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
-    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button><button class="btn" data-postcard-make="${t.id}">📮 Share a postcard</button></div></div>`;
+    ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-postcard-make="${t.id}">📮 Share a postcard</button></div></div>` /* the first story ends with a postcard too; the video maker waits on the trip page so the first finish stays simple (Muse r33) */
+    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${milesText(t)}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button><button class="btn" data-postcard-make="${t.id}">📮 Share a postcard</button></div></div>`;
   card.style.opacity = 1; prog(1); replayState.ended = true; el.classList.add("ended");
-  if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
+  if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${milesText(t)}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
   // the end card stays until you leave; Previous goes back to the last stop
   await new Promise(res => { (function tick(){ if (!alive() || replayState.back) return res(); requestAnimationFrame(tick); })(); }); if (!alive()) return;
   replayState.back = false; replayState.paused = false; replayState.ended = false; el.classList.remove("ended"); replayState.beat = performance.now(); card.style.opacity = 0; card.innerHTML = ""; { const pb = document.getElementById("rpause"); if (pb){ pb.style.visibility = ""; pb.textContent = "❚❚"; pb.setAttribute("aria-label", "Pause"); } }
@@ -3148,7 +3159,7 @@ async function makePostcard(id){ const t = TRIPS.find(x => x.id === id); if (!t)
     const lines = recWrap(x, t.title, W - 140).slice(0, 2); lines.forEach((l, i) => x.fillText(l, 70, 1080 + i * 92));
     const y2 = 1080 + lines.length * 92 + 10; x.fillStyle = "#f2c66d"; x.font = "600 40px Figtree, system-ui, sans-serif";
     x.fillText(t.homeMem ? `${memDates(t)} · Close to home` : `${dRange(t.start, t.end)}`, 70, y2); x.fillStyle = "rgba(255,255,255,.8)"; x.font = "38px Figtree, system-ui, sans-serif";
-    if (!t.homeMem) x.fillText(`${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`, 70, y2 + 56);
+    if (!t.homeMem) x.fillText(`${plural(days(t), "day")} · ${plural(st.length, "place")} · ${milesText(t)}`, 70, y2 + 56);
     x.textAlign = "right"; x.font = "52px 'Instrument Serif', Georgia, serif"; x.fillStyle = "#ffffff"; const sw = x.measureText("sake").width; x.fillText("Trip", W - 70 - sw, H - 60); x.font = "italic 52px 'Instrument Serif', Georgia, serif"; x.fillStyle = "#f2c66d"; x.fillText("sake", W - 70, H - 60);
     const blob = await new Promise(r => c.toBlob(r, "image/jpeg", .9)); if (!blob) throw new Error("no image");
     PC_BLOB = blob; PC_NAME = `${t.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "trip"}-postcard.jpg`;
@@ -3166,11 +3177,11 @@ function endReplay(){
   const cut = !!(rec && rec.mr.state !== "inactive" && !rec.finishing); if (cut) recAbort();
   if (cut) setTimeout(() => toast("Your video stopped before it finished, so nothing was saved. Tap 🎬 Make a shareable video to try again.", null, true), 400); /* never vanish without a word (Nikola r21) */
   music.stop(); setTimeout(() => { if (!replayState) music.stopNow(); }, 1500);
-  document.body.classList.remove("replaying"); setTimeout(resize, 30);
+  document.body.classList.remove("replaying"); try { resize(); } catch(e){} setTimeout(resize, 30); /* size the globe for the normal layout before flying, so it lands on the trip, not on empty space (Muse r33) */
   setTimeout(() => { try { if (tab === "trips" && !document.body.classList.contains("replaying")) renderBody(); } catch(e){} }, 60); /* Home re-picks its reminder after a story, so "A trip to revisit" shows the moment it's earned (Muse r28) */
   const back = replayState && (cut && TRIPS.includes(replayState.trip) ? replayState.trip.id : replayState.fromTrip && !(replayState.opts && replayState.opts.record) ? replayState.fromTrip : null), toEdit = back && !cut && replayState.fromEdit;
   replayState = null; selectedTrip = null; $("#replay").hidden = true; $("#replay").innerHTML = ""; $("#replay").classList.remove("recording", "ended"); dirty = true;
-  if (back && TRIPS.some(x => x.id === back)){ if (toEdit) openVideoEdit(back); else openTrip(back); return; } /* straight back, with no flash of the trips list in between (Cooper r23) */
+  if (back && TRIPS.some(x => x.id === back)){ if (toEdit) openVideoEdit(back); else { openTrip(back); setTimeout(() => { const t = TRIPS.find(x => x.id === back); if (!replayState && t && selectedTrip === t) flyToStops(stopsOf(t), 700); }, 120); } return; } /* straight back, with no flash of the trips list in between (Cooper r23) */
   flyTo(HOME.lon, 25, 1, 1200).then(() => { if (!replayState && !anim) spinning = true; });
 }
 
@@ -3571,7 +3582,7 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); PWA.pr
 window.addEventListener("appinstalled", () => { PWA.prompt = null; toast("Installed. Tripsake is on your home screen."); if (tab === "more") renderBody(); });
 (function pwaSetup(){ if (!PWA.site) return; const pg = location.pathname.split("/").pop().replace(/\.html$/, ""), add = (tag, attrs) => { const e = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); document.head.appendChild(e); };
   if (!document.querySelector('link[rel="manifest"]')) add("link", {rel:"manifest", href:pg + ".webmanifest"});
-  add("link", {rel:"apple-touch-icon", href:"travel-globe-icon-180.png"}); add("meta", {name:"apple-mobile-web-app-capable", content:"yes"}); add("meta", {name:"mobile-web-app-capable", content:"yes"});
+  add("link", {rel:"apple-touch-icon", href:"travel-globe-icon-180.png"}); add("link", {rel:"icon", type:"image/png", href:"travel-globe-icon-192.png"}); /* a real favicon, so the page has no 404 (Nikola r32, r33) */ add("meta", {name:"apple-mobile-web-app-capable", content:"yes"}); add("meta", {name:"mobile-web-app-capable", content:"yes"});
   add("meta", {name:"apple-mobile-web-app-title", content:"Tripsake"}); add("meta", {name:"apple-mobile-web-app-status-bar-style", content:"black-translucent"}); add("meta", {name:"theme-color", content:"#060a14"});
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("travel-globe-sw.js", {scope:"./travel-globe"}).then(() => { if (tab === "more") setTimeout(renderBody, 1500); }).catch(() => {}); })();
 function installStatus(){ if (isStandalone()) return "Installed · you're using the home screen app"; if (!PWA.site) return "Works on the web page, not in this viewer"; if (PWA.prompt) return "Ready to install · works offline";
@@ -3779,11 +3790,11 @@ async function exportBackup(){
     files[k] = {f, type:blob.type || "image/jpeg", size:blob.size, crc:crc32(new Uint8Array(await blob.arrayBuffer()))}; entries.push({name:f, data:blob}); }
   const counts = Object.assign(bkCounts(keys), {photos:Object.keys(files).filter(k => !k.startsWith("vn:")).length, voice:Object.keys(files).filter(k => k.startsWith("vn:")).length});
   const dataJSON = JSON.stringify({keys}), manifest = {app:"travel-globe", version:2, exported:new Date().toISOString(), counts, dataCrc:crc32(new TextEncoder().encode(dataJSON)), files};
-  entries.unshift({name:"manifest.json", data:JSON.stringify(manifest)}, {name:"data.json", data:dataJSON});
+  const manText = JSON.stringify(manifest), manCrc = crc32(new TextEncoder().encode(manText)); entries.unshift({name:"manifest.json", data:manText}, {name:"data.json", data:dataJSON});
   const blob = await zipBuild(entries);
   // the check: read the finished file back and compare every piece byte for byte (CRC-32), not just its size
   const back = await zipRead(blob); let missing = -1;
-  if (back && back.has("data.json") && crc32(new Uint8Array(await back.get("data.json").arrayBuffer())) === manifest.dataCrc){ missing = 0; for (const x of Object.values(files)){ const g = back.get(x.f); if (!g || g.size !== x.size || crc32(new Uint8Array(await g.arrayBuffer())) !== x.crc) missing++; } }
+  if (back && back.has("data.json") && crc32(new Uint8Array(await back.get("data.json").arrayBuffer())) === manifest.dataCrc && back.has("manifest.json") && crc32(new Uint8Array(await back.get("manifest.json").arrayBuffer())) === manCrc){ /* the manifest is checked too, so "all N pieces" is exactly true (Muse r33) */ missing = 0; for (const x of Object.values(files)){ const g = back.get(x.f); if (!g || g.size !== x.size || crc32(new Uint8Array(await g.arrayBuffer())) !== x.crc) missing++; } }
   if (missing){ toast(`The backup didn't check out (${missing < 0 ? "your trips couldn't be read back" : plural(missing, "photo") + " didn't match"}). Nothing was saved. Please try again`, null, true); return; }
   const fname = `tripsake-backup-${todayStr()}.zip`, how = await saveBackupBlob(blob, fname); if (!how) return;
   const receipt = [counts.trips ? plural(counts.trips, "trip") : "", counts.home ? plural(counts.home, "memory close to home", "memories close to home") : "", counts.moments ? plural(counts.moments, "moment") : "", plural(counts.photos, "photo")].filter(Boolean).join(" · ");
@@ -3971,9 +3982,13 @@ async function addPhotosToTrip(id, files){ const raw = store.get("realTrips", []
 const tnoun = t => t && (t.homeMem || t.kind === "home") ? "memory" : "trip"; /* one word for each thing: a memory is never called a trip */
 /* everything the trip file carries, so the sheet says exactly what's sent (Nikola r30) */
 function tripSendsList(t, real){ const sts = t.stops; let mom = 0, oth = 0, lab = 0; const ppl = new Set();
-  sts.forEach(s => { const st = getStory(s); if (st.best || st.who || st.note) mom++; Object.entries(s.others || {}).forEach(([n, v]) => { if (v && (v.best || v.who || v.note)){ oth++; ppl.add(n); } }); s.photos.forEach(ph => { if (phLabel(ph)) lab++; }); });
+  sts.forEach(s => { const st = getStory(s); if ((stories[s.id] || notes[s.id]) && (st.best || st.who || st.note)) mom++; Object.entries(s.others || {}).forEach(([n, v]) => { if (v && (v.best || v.who || v.note)){ oth++; ppl.add(n); } }); s.photos.forEach(ph => { if (phLabel(ph)) lab++; }); });
   const lines = Object.keys(dayLines).filter(d => d >= t.start && d <= t.end && dayLines[d] && dayLines[d].text).length, w = BOOK_WORDS[t.id], book = !!(w && (w.ded || w.ref));
-  return [plural(sts.length, "stop") + " with their dates and places", mom ? plural(mom, "best moment and note", "best moments and notes") : "", lab ? plural(lab, "photo caption") : "", lines ? plural(lines, "journal line") : "", book ? "your trip book words" : "", oth ? `${plural(oth, "moment")} from ${[...ppl].map(esc).join(", ")}` : "", real ? "your photos, if ticked above" : ""].filter(Boolean).join(", "); }
+  const sw = (t.sharedWith || []).filter(n => n && n !== myName()); const who = `the people on the ${tnoun(t)}: your name${sw.length ? " and " + sw.map(esc).join(", ") : ""}`; /* the file carries the people list too, so the sheet names it (Muse r33) */
+  return [plural(sts.length, "stop") + " with their dates and places", who, mom ? plural(mom, "best moment and note", "best moments and notes") : "", lab ? plural(lab, "photo caption") : "", lines ? plural(lines, "journal line") : "", book ? "your trip book words" : "", oth ? `${plural(oth, "moment")} from ${[...ppl].map(esc).join(", ")}` : "", real ? "your photos, if ticked above" : ""].filter(Boolean).join(", "); }
+/* a browser that can't hand files to the share sheet only saves the file, so the button says Save, not Send (Muse r33) */
+function canSendFiles(){ try { return !!(navigator.canShare && navigator.canShare({files:[new File(["{}"], "t.json", {type:"application/json"})]})); } catch(e){ return false; } }
+const shareVerb = () => canSendFiles() ? "Send" : "Save";
 function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const real = t.stops.reduce((a, s) => a + s.photos.filter(p => p.scene === "real").length, 0);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Share this " + tnoun(t))}<div class="steps">${esc(t.title)}</div>
     <p style="margin:0">Send it to someone who was there. They add their photos and send it back, and your two copies merge.</p>
@@ -3981,12 +3996,12 @@ function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) retu
     ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about <span id="tsPSize">${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))}</span>)</span></label>`
       : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : `There are no photos of your own in this ${tnoun(t)}, so only`} the stops, best moments and captions travel. The file is <span id="tsSize">small</span>.</p>`}
     <p class="note tsends" style="margin:0"><b>What they get:</b> ${tripSendsList(t, real)}. <b>Never sent:</b> your other ${tnoun(t) === "memory" ? "memories" : "trips"}, your home, voice notes and settings.</p>
-    <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">Send the ${tnoun(t)} file</button>
-    <details class="ldtips"><summary>How sharing works</summary><ol class="note sharesteps"><li>You send the file (<b>${esc(tripFileName(t))}</b>) by Messages, WhatsApp, email or AirDrop.</li><li>They open it: More → Open a shared trip or memory.</li><li>They add their photos and best moments, then tap 👥 Share this ${tnoun(t)}.</li><li>You open their file the same way, and it merges into yours. Nothing is lost and no photo is doubled.</li></ol><p class="note" style="margin:0">Nothing is uploaded to us, and there's no account.</p></details></div>`, "tshare");
+    <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">${shareVerb()} the ${tnoun(t)} file</button>
+    <details class="ldtips"><summary>How sharing works</summary><ol class="note sharesteps"><li>You send the file (<b>${esc(tripFileName(t))}</b>) by Messages, WhatsApp, email or AirDrop.</li><li>They open it: More → Keep your trips safe → Open a shared trip or memory.</li><li>They add their photos and best moments, then tap 👥 Share this ${tnoun(t)}.</li><li>You open their file the same way, and it merges into yours. Nothing is lost and no photo is doubled.</li></ol><p class="note" style="margin:0">Nothing is uploaded to us, and there's no account.</p></details></div>`, "tshare");
   if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el){ el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); const w = el.parentNode; if (w && w.firstChild && w.firstChild.nodeType === 3) w.firstChild.textContent = w.firstChild.textContent.replace(/about $/, ""); } }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
   if (!real) buildTripFile(t, false).then(d => { const el = $("#tsSize"); if (el) el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); }).catch(() => {}); /* the size of the very file that is sent, not a guess (Muse r18) */ }
 async function buildTripFile(t, withPhotos){ const from = myName(); const out = {app:"travel-globe", kind:"trip", v:1, from, sent:new Date().toISOString(), trip:{shareId:tripShareId(t), aka:t.shareIds || [], ...(t.homeMem ? {kind:"home"} : {}), title:t.title, country:t.country, start:t.start, end:t.end, people:[...new Set([from, ...(t.sharedWith || [])].filter(Boolean))], stops:[]}, lines:{}};
-  for (const s of t.stops){ const st = getStory(s); const mine = {who:st.who || "", best:st.best || "", note:st.note || ""}; const o = {uid:s.uid || s.id, name:stopName(s), lat:s.lat, lon:s.lon, date:s.date, others:Object.assign({}, s.others || {}), photos:[]};
+  for (const s of t.stops){ const st = getStory(s), builtIn = !stories[s.id] && !notes[s.id]; const mine = builtIn ? {who:"", best:"", note:""} : {who:st.who || "", best:st.best || "", note:st.note || ""}; /* a sample's built-in story is the sample traveler's, not yours, so it isn't sent as yours (Nikola r33) */ const o = {uid:s.uid || s.id, name:stopName(s), lat:s.lat, lon:s.lon, date:s.date, others:Object.assign({}, s.others || {}), photos:[]};
     if (from && (mine.best || mine.who || mine.note)) o.others[from] = mine; else if (!from) o.story = mine;
     for (const ph of s.photos){ const q = {uid:ph.uid || ph.id, scene:ph.scene, caption:ph.caption, by:ph.by || from || "", label:phLabel(ph) || ""};
       if (ph.scene === "real" && withPhotos){ let v = null; try { v = await idb.get("rp:" + ph.id); } catch(e){} if (v instanceof Blob){ try { v = await blobURL(v); } catch(e){ v = null; } } if (typeof v === "string" && v.startsWith("data:image/")) q.img = v; }
@@ -4003,12 +4018,12 @@ async function sendTripFile(id){ const t = TRIPS.find(x => x.id === id); if (!t)
   const btn = document.querySelector("[data-tshare-go]"); if (btn){ btn.disabled = true; btn.textContent = `Packing the ${tnoun(t)}…`; }
   const data = await buildTripFile(t, !$("#tsPhotos") || $("#tsPhotos").checked); const name = tripFileName(t);
   const blob = new Blob([JSON.stringify(data)], {type:"application/json"}); const file = new File([blob], name, {type:"application/json"}); let shared = false;
-  try { if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:t.title, text:`${data.from} shared "${t.title}" from Tripsake. Open it in Tripsake: More → Open a shared trip or memory.`}); shared = true; } } catch(e){ if (e && e.name === "AbortError"){ if (btn){ btn.disabled = false; btn.textContent = `Send the ${tnoun(t)} file`; } return; } }
+  try { if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:t.title, text:`${data.from} shared "${t.title}" from Tripsake. Open it in Tripsake: More → Keep your trips safe → Open a shared trip or memory.`}); shared = true; } } catch(e){ if (e && e.name === "AbortError"){ if (btn){ btn.disabled = false; btn.textContent = `${shareVerb()} the ${tnoun(t)} file`; } return; } }
   if (!shared){ try { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); } catch(e){ toast("This browser blocked the file"); return; } }
   const nPh = data.trip.stops.reduce((a, s) => a + s.photos.filter(p => p.img).length, 0); /* a clear finish, not a sheet that just closes (Nikola r30) */
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(shared ? "Sent" : "File saved")}
     <div class="bkrec"><div class="bkbig">✓</div><div><b>${esc(t.title)}</b><br>${plural(data.trip.stops.length, "stop")}${nPh ? " · " + plural(nPh, "photo") : ""} · ${sizeText(blob.size)}</div></div>
-    <p style="margin:0">${shared ? `It went through the share sheet. When they've added theirs and sent it back, open their file under More → Open a shared trip or memory.` : `Your browser saved <b>${esc(name)}</b>, usually in Downloads. Check it's there, then send it to them by email, Messages or WhatsApp. They open it under More → Open a shared trip or memory.`}</p>
+    <p style="margin:0">${shared ? `It went through the share sheet. When they've added theirs and sent it back, open their file under More → Keep your trips safe → Open a shared trip or memory.` : `Your browser saved <b>${esc(name)}</b>, usually in Downloads. Check it's there, then send it to them by email, Messages or WhatsApp. They open it under More → Keep your trips safe → Open a shared trip or memory.`}</p>
     <button class="btn primary" data-close style="align-self:flex-start">Done</button></div>`, "tshared"); }
 function readTripFile(file){ const fr = new FileReader(); fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){} if (!d || d.app !== "travel-globe" || d.kind !== "trip" || !d.trip || !Array.isArray(d.trip.stops)){ toast("That file isn't a Tripsake trip"); return; } if (+d.v > 1){ toast("This file is from a newer version of Tripsake. Update the app, then open it again"); return; } /* never half-read a newer file (Nikola r19) */ openTripImport(d); }; fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file); }
 function findLocalShared(d, raw = store.get("realTrips", []) || []){ const ids = new Set([d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean));
@@ -4061,10 +4076,15 @@ function tripPrint(id, days){ const raw = store.get("realTrips", []) || [], t = 
     ["stories", "notes", "stopNames", "phHidden", "phRot", "phOrder", "covers", "stopState"].forEach(n => { const o = store.get(n, {}) || {}; if (typeof o !== "object") return; Object.keys(o).filter(hit).sort().forEach(k => s += "|" + n + ":" + k + "=" + JSON.stringify(o[k])); }); }
   (days || []).forEach(d => s += "|" + d + "=" + (dl[d] ? dl[d].text : "")); s += "|" + JSON.stringify(bw[id] || null); return crc32(new TextEncoder().encode(s)); }
 function mergeUndoState(id){ const m = store.get("mergeUndo", null); if (!m || (id && m.id !== id) || Date.now() - (m.at || 0) > 30 * DAY) return null; return {m, ok:m.print === tripPrint(m.id, m.days)}; }
-function mergeUndoHTML(t){ const st = mergeUndoState(t.id); if (!st) return ""; const {m} = st, when = new Date(m.at).toLocaleDateString("en-US", {month:"short", day:"numeric"});
+/* the trip page's Undo row redraws the moment the trip changes, so a withdrawn Undo never leaves its button behind (Nikola r33) */
+const UNDO_GONE = t => `Undo is no longer available because this ${tnoun(t)} changed after the merge.`;
+function mergeUndoHTML(t){ return `<div class="mundowrap" data-mundo="${t.id}">${mergeUndoInner(t)}</div>`; }
+function refreshMundo(){ document.querySelectorAll("[data-mundo]").forEach(el => { const t = TRIPS.find(x => x.id === el.dataset.mundo); if (!t) return; const h = mergeUndoInner(t); if (el.innerHTML !== h) el.innerHTML = h; }); }
+refreshMundo.soon = () => { clearTimeout(refreshMundo.tm); refreshMundo.tm = setTimeout(refreshMundo, 60); };
+function mergeUndoInner(t){ const st = mergeUndoState(t.id); if (!st) return ""; const {m} = st, when = new Date(m.at).toLocaleDateString("en-US", {month:"short", day:"numeric"});
   return st.ok ? `<div class="mundo"><span>↩ Merged from <b>${esc(m.from || "their copy")}</b> on ${when}</span><button class="btn" data-merge-undo>Undo this merge</button></div>`
-    : `<p class="note" style="margin:0">↩ Merged from ${esc(m.from || "their copy")} on ${when}. Undo is no longer available because this ${tnoun(t)} changed after the merge. <button class="linkbtn" data-merge-undo-x>OK</button></p>`; }
-async function undoMerge(){ let u = MERGE_UNDO; MERGE_UNDO = null; const st = mergeUndoState(); if (!st || !st.ok){ toast("This merge can't be undone any more, because the trip changed after it"); return; }
+    : `<p class="note" style="margin:0">↩ Merged from ${esc(m.from || "their copy")} on ${when}. ${UNDO_GONE(t)} <button class="linkbtn" data-merge-undo-x>OK</button></p>`; }
+async function undoMerge(){ let u = MERGE_UNDO; MERGE_UNDO = null; const st = mergeUndoState(); if (!st || !st.ok){ const tt = st && TRIPS.find(x => x.id === st.m.id); toast(tt ? UNDO_GONE(tt) : "Undo is no longer available because this trip changed after the merge."); refreshMundo(); return; } /* the same words as the trip page row (Nikola r33) */
   if (!u || u.tripId !== st.m.id){ try { u = await idb.get("undo:merge"); } catch(e){} } if (!u || u.tripId !== st.m.id){ toast("Couldn't find that merge to undo"); return; }
   try { const raw = store.get("realTrips", []) || [], i = raw.findIndex(x => x.id === u.tripId), now = i >= 0 ? raw[i] : null;
     if (u.before){ if (i >= 0) raw[i] = u.before; else raw.push(u.before); } else if (i >= 0) raw.splice(i, 1);
@@ -4093,8 +4113,9 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
     const dd = x => Math.abs(new Date(x.date + "T12:00") - new Date(is.date + "T12:00")) / DAY;
     let s = t.stops.find(x => (x.uid || x.id) === is.uid) || t.stops.find(x => x.date === is.date && d3.geoDistance([x.lon, x.lat], [is.lon, is.lat]) * KM < 3) || t.stops.find(x => dd(x) <= 1 && d3.geoDistance([x.lon, x.lat], [is.lon, is.lat]) * KM < 10);
     if (!s){ s = {id:t.id + "-" + Math.random().toString(36).slice(2, 7), uid:is.uid, name:is.name, lat:+is.lat, lon:+is.lon, date:is.date, photos:[]}; t.stops.push(s); newStops++; }
-    s.others = Object.assign({}, s.others || {}); Object.entries(is.others || {}).forEach(([n, v]) => { if (n && n !== me && v){ const nv = {who:String(v.who || "").slice(0, 120), best:String(v.best || "").slice(0, 300), note:String(v.note || "").slice(0, 600)}; if ((nv.best || nv.who || nv.note) && JSON.stringify(s.others[n] || null) !== JSON.stringify(nv)) moments++; s.others[n] = nv; } });
-    if (is.story && d.from && d.from !== me && (is.story.best || is.story.who || is.story.note)) s.others[d.from] = is.story;
+    s.others = Object.assign({}, s.others || {}); const own = getStory({id:s.id, trip:{id:t.id}}), sameAsMine = nv => nv.best === (own.best || "") && nv.note === (own.note || "") && (!nv.who || nv.who === (own.who || "")); /* a moment word for word what you already have on this stop (a sample's built-in story too) is not new (Nikola r33) */
+    Object.entries(is.others || {}).forEach(([n, v]) => { if (n && n !== me && v){ const nv = {who:String(v.who || "").slice(0, 120), best:String(v.best || "").slice(0, 300), note:String(v.note || "").slice(0, 600)}; if (!s.others[n] && sameAsMine(nv)) return; if ((nv.best || nv.who || nv.note) && JSON.stringify(s.others[n] || null) !== JSON.stringify(nv)) moments++; s.others[n] = nv; } });
+    if (is.story && d.from && d.from !== me && (is.story.best || is.story.who || is.story.note) && !sameAsMine({who:String(is.story.who || ""), best:String(is.story.best || ""), note:String(is.story.note || "")})) s.others[d.from] = is.story;
     const have = new Set(s.photos.map((p, i) => p[4] || s.id + "-" + i)); t.stops.forEach(x => x.photos.forEach((p, i) => have.add(p[4] || x.id + "-" + i))); paired.forEach(u => have.add(u));
     const hashes = new Map(), theirHashes = new Set(), prints = []; if (is.photos.some(ip => ip.uid && !have.has(ip.uid))) for (const x of t.stops){ const near = dd(x) <= 1; for (let i = 0; i < x.photos.length; i++){ const p = x.photos[i]; if (p[0] !== "real") continue; const u = imgCache.get("rp:" + x.id + "-" + i), hh = imgHash(u); const q = {key:"rp:" + x.id + "-" + i, sid:x.id, i, hidden:!!PH_HIDDEN[x.id + "-" + i]}; if (hh && before.has(x.id + "-" + i)) hashes.set(hh, q); if (near && u && before.has(x.id + "-" + i)){ const f = await picPrint(u); if (f) prints.push(Object.assign({f}, q)); } } }
     for (const ip of is.photos){ if (!ip.uid || have.has(ip.uid)) continue; { const hh = ip.img ? imgHash(ip.img) : null; if (hh && theirHashes.has(hh)){ have.add(ip.uid); continue; } /* the same file twice in their copy */
@@ -4126,14 +4147,16 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   if (newStops && !isNew && d.trip.title && d.trip.title !== t.title) t.titleOffer = String(d.trip.title).slice(0, 80); /* their copy has more stops in its name: offer it */ if (t.titleOffer) store.set("realTrips", raw);
   const swapped = undo.replaced.length, linesIn = undo.days.length, changed = isNew || added || newStops || moments || bookIn || linesIn || swapped;
   undo.tripId = t.id;
-  try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, swapped, linesIn, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
+  /* one Undo slot: a second merge says it replaces the earlier merge's Undo (Muse r33) */
+  const prevU = changed ? store.get("mergeUndo", null) : null, prevT = prevU && TRIPS.find(x => x.id === prevU.id), prevUndo = prevT && (mergeUndoState(prevU.id) || {}).ok ? `${prevU.from || "their copy"}${prevT && prevU.id !== t.id ? ` into "${prevT.title}"` : ""}` : "";
+  try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, swapped, linesIn, title:t.title, from:d.from || "", id:t.id, prevUndo})); } catch(e){}
   /* Undo only when something changed, and kept on the device so it's still on the trip page after a reload (Nikola r31) */
   MERGE_UNDO = changed ? undo : null; if (changed){ let kept = false; try { await idb.put("undo:merge", undo); kept = true; } catch(e){} store.set("mergeUndo", kept ? {id:t.id, from:d.from || "", at:Date.now(), days:undo.days, print:tripPrint(t.id, undo.days)} : null); }
   closeSheet(); await refreshTrips(); sharedNotice(); }
 function undoneNotice(){ try { if (sessionStorage.getItem("tgUndone")){ sessionStorage.removeItem("tgUndone"); setTimeout(() => toast("Merge undone. Everything is as it was before"), 800); } } catch(e){} }
 function sharedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.getItem("tgShared") || "null"); sessionStorage.removeItem("tgShared"); } catch(e){} if (!v) return;
   const bits = [v.added ? plural(v.added, "new photo") : "", v.newStops ? plural(v.newStops, "new stop") : "", v.moments ? plural(v.moments, "new or changed best moment") : "", v.linesIn ? plural(v.linesIn, "journal line") : "", v.bookIn ? "their trip book words" : "", v.swapped ? `${plural(v.swapped, "sharper copy", "sharper copies")} of photos you had` : ""].filter(Boolean);
-  toast((v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : bits.length ? `Merged from ${v.from || "their copy"}: ${bits.join(", ")}.${v.dupes ? ` ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once.` : ""}${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything, so nothing changed.${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}`) + (MERGE_UNDO ? " Undo is also on the trip page." : ""), MERGE_UNDO ? undoMerge : null, !!MERGE_UNDO);
+  toast((v.isNew ? `Added "${v.title}"${v.from ? " from " + v.from : ""}. Add your photos and best moments, then share it back.` : bits.length ? `Merged from ${v.from || "their copy"}: ${bits.join(", ")}.${v.dupes ? ` ${plural(v.dupes, "photo")} you both had ${v.dupes === 1 ? "was" : "were"} kept once.` : ""}${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}` : `Nothing new from ${v.from || "their copy"}: you already had everything, so nothing changed.${v.removedOut ? ` ${plural(v.removedOut, "photo")} you removed stayed out.` : ""}`) + (MERGE_UNDO ? " Undo is also on the trip page." + (v.prevUndo ? ` This replaces the Undo for the earlier merge from ${v.prevUndo}.` : "") : ""), MERGE_UNDO ? undoMerge : null, !!MERGE_UNDO);
   if (v.imgFail) setTimeout(() => toast(`${plural(v.imgFail, "photo")} couldn't be added in this browser`), 600);
   setTimeout(() => { if (TRIPS.find(x => x.id === v.id)) openTrip(v.id); }, 900); }
 
@@ -4190,7 +4213,7 @@ document.addEventListener("click", e => {
   if (g("[data-open-layers]")){ openLayers(); return; }
   if (g("[data-add-more]")){ openAddMenu(true); return; }
   if (g("[data-add-back]")){ openAddMenu(); return; }
-  if (g("[data-fold]")){ const k = g("[data-fold]").dataset.fold; moreOpen.has(k) ? moreOpen.delete(k) : moreOpen.add(k); renderBody(); return; }
+  if (g("[data-fold]")){ const k = g("[data-fold]").dataset.fold; if (moreOpen.has(k)) moreOpen.delete(k); else { moreOpen.clear(); moreOpen.add(k); } renderBody(); { const hd = document.querySelector(`[data-fold="${k}"]`); if (hd && moreOpen.has(k)) hd.scrollIntoView({block:"nearest"}); } return; } /* one section open at a time, so More stays a short list (Muse r33) */
   if (g("[data-add-memory]")){ closeSheet(); openSnap("food"); return; }
   if (g("[data-add-manual]")){ closeSheet(); openManual(); return; }
   if (g("[data-tips-again]")){ store.set("helpSeen", {}); HELP_SEEN = {}; toast("Done. Help lines come back on trip pages, Add and Layers"); renderBody(); return; }
@@ -4348,7 +4371,7 @@ document.addEventListener("click", e => {
   if (g("[data-sample-photos]")){ trySamplePhotos(); return; }
   if (g("[data-ld-native]")){ nativeImport(); return; }
   if (g("[data-open-settings]")){ try { window.location.href = "app-settings:"; } catch(er){} return; }
-  if (g("[data-sample-look]")){ globeDark = false; closeSheet(); $("#scan").hidden = false; introRunning = true; intro(); return; }
+  if (g("[data-sample-look]")){ store.set("guideShown", true); /* "just look around" means one dismissal, not a second sheet; the guide waits under More (Muse r33) */ globeDark = false; closeSheet(); $("#scan").hidden = false; introRunning = true; intro(); return; }
   if ((b = g("[data-ld-period]"))){ loadState.period = b.dataset.ldPeriod; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x === b)); $("#ldCustom").hidden = loadState.period !== "custom"; return; }
   if (g("[data-ld-home]")){ $("#ldHomePick").hidden = false; $("#whereQ").focus(); return; }
   if (g("[data-ld-home-set]")){ if (!whereDraft.set){ toast("Search for your home town first"); return; } loadState.home = {lat:whereDraft.lat, lon:whereDraft.lon, label:whereDraft.label.replace(/^near /i, "").split(",")[0].replace(/ area$/i, "") + " area"}; loadState.homeOk = true; loadState.homeGuessed = false; loadState.trips = findTrips(loadState.pts, loadState.home); openReview(); return; }
@@ -4372,7 +4395,10 @@ document.addEventListener("click", e => {
   if (g("[data-pc-share]")){ sharePostcard(); return; }
   if (g("[data-pc-close]") || (e.target && e.target.classList && e.target.classList.contains("pcprev"))){ closePostcard(); return; }
   if (g("[data-postcard-make]")){ makePostcard(g("[data-postcard-make]").dataset.postcardMake); return; }
-  if (g("[data-remind-toggle]")){ remindSet(!store.get("remind", false)); return; }
+  if (g("[data-remind-toggle]")){ remindSet(!store.get("remind", false)); return; } /* the explicit "Remind me" offer on Home */
+  if (g("[data-remind-open]")){ openRemindSheet(); return; } /* reading about reminders never turns them on; the switch is inside (Muse r33) */
+  if (g("[data-remind-on]")){ closeSheet(true); remindSet(true); return; }
+  if (g("[data-remind-off]")){ closeSheet(true); remindSet(false); return; }
   if (g("[data-remind-no]")){ store.set("remind", false); renderBody(); toast("No reminders. You can turn them on in More, under Stories and reminders"); return; }
   if (g("[data-otd-hide]")){ store.set("otdHidden", todayStr()); renderBody(); toast("On This Day hidden until tomorrow", () => { store.set("otdHidden", ""); renderBody(); }); return; }
   if (g("[data-otd-show]")){ store.set("otdHidden", ""); renderBody(); return; }
@@ -4510,7 +4536,7 @@ const homeClean = l => String(l || "").replace(/^near /i, "").split(",")[0].repl
 function openHomeSheet(next, first){ homeNext = next; const rh = store.get("realHome", null);
   whereDraft = rh && isFinite(rh.lat) ? {lon:rh.lon, lat:rh.lat, label:rh.label, set:true} : {lon:0, lat:0, label:"Search your city, or use your location", set:false};
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead(rh ? "Your home" : next === "review" || next === "memory" ? "One question: where's home?" : "Where's home?")}
-    <p style="margin:0">${next === "memory" ? (loadState && loadState.memPending && loadState.memPending.pts.some(p => p.atHome) ? "Some of these photos don't say where they were taken. They go at home, so we need to know where home is. Set it once; you can change it later under More." : "Memories close to home are kept around where you live, so we need to know where home is. Set it once; you can change it later under More.") : rh ? "Change it any time. Trips are the places you went away from home." : next === "review" ? "Your trips are the places you went away from home, so we need to know where home is. Set it once; you can change it later under More." : "Tripsake finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
+    <p style="margin:0">${next === "memory" ? (loadState && loadState.memPending && loadState.memPending.pts.some(p => p.atHome) ? "Some of these photos don't say where they were taken. They go at home, so we need to know where home is. Set it once; you can change it later under More." : "Memories close to home are kept around where you live, so we need to know where home is. Set it once; you can change it later under More.") : rh ? "Change it any time. Trips are the places you went away from home." : next === "review" ? "Your trips are the places you went away from home, so we need to know where home is. Set it once; you can change it later under More." : store.get("practiceHome", "") && REAL_TRIPS.length ? `The practice photos used the sample traveler's home in ${esc(store.get("practiceHome", ""))}, so their near-home photos were sorted from there. Your own home isn't set yet. Set it once, so your own photos become trips; you can change it later under More.` : "Tripsake finds trips as the places you went away from home. Set it once and you can change it later under More."}</p>
     ${whereHTML("Your home stays on this device.").replace(/<button class="btn" data-where-map>[^<]*<\/button>/, "").replace('<small class="guesstag">Not set yet</small>', '<small class="guesstag">Not set yet · </small>')}
     <div class="row-btns" style="margin:0"><button class="btn" data-home-geo>📍 Use my location</button><button class="btn primary" data-home-save>${next === "review" ? "Set home and find my trips" : next === "memory" ? "Set home and save my memory" : "Set as home"}</button></div>
     ${""}<!-- no "work it out from my photos": a trip's photos can look like home (Alan 11-13). Home is your location or the city you type. -->
