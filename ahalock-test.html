@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.3 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.4 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -731,6 +731,7 @@ html.big .status3 .third span{font-size:16px}
 .fpw{display:flex;align-items:center;gap:12px;text-align:left;margin:10px 0 4px;background:#fff3c4;color:var(--ink);font-size:17px}.fpw small{display:block;font-size:15px;font-weight:700;opacity:.85}.fpw .fpi{flex:0 0 auto;display:flex}
 .fpnote{text-align:center;font-size:15px;font-weight:800;color:#5a4a12;background:#fff3c4;border-radius:999px;padding:6px 12px;margin:6px auto 2px;width:max-content;max-width:100%}
 .fpmast{position:relative;overflow:hidden;margin:10px 0 4px;padding:9px 12px 12px;border-radius:14px;background:var(--panel2);color:var(--ink);text-align:center}.fpmast b{display:block;font-size:17px}.fpmast span{display:block;font-size:15px;font-weight:700;opacity:.8}.fpmast i{position:absolute;left:0;bottom:0;height:5px;background:var(--gold)}
+.fpmast .fpnear{font-size:15px;font-weight:800;padding:2px 6px;position:relative;z-index:1}
 .fpk .fpm{font-size:13px;font-weight:800;opacity:.75}
 .fptier{display:flex;gap:8px}.fptier button{flex:1;border:2px solid var(--line);border-radius:999px;padding:10px 6px;font:800 16px var(--body,inherit);background:var(--panel2);color:var(--ink)}.fptier button.on{background:var(--gold);border-color:var(--gold);color:#2b2208}
 .fpgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0 10px}
@@ -2719,12 +2720,17 @@ const IDEAS = {
   out: { n: 'Rule out', d: 'Cross off what can\'t be, until only one choice is left.' },
   lies: { n: 'If one lies…', d: 'Ask "what if this one is lying?" and follow it until something breaks.' },
   onetrue: { n: 'Only one is true', d: 'Try each sign as the true one. Only one choice keeps the rest false.' },
+  onelie: { n: 'Only one lies', d: 'Try each sign as the lie. Only one choice keeps the rest true.' },
+  truthmark: { n: 'Truth marks it', d: 'Try each chest as the treasure: its sign must be true and every empty chest\'s sign false.' },
   order: { n: 'Put in order', d: 'Link the clues into a chain from first to last.' },
   pattern: { n: 'Find the pattern', d: 'Spot the rule in the ones you can see, then use it on the gap.' },
   back: { n: 'Work backwards', d: 'Start from what you know and undo the steps to find what\'s missing.' }
 };
 const IDEAOF = { lock: 'out', houses: 'out', switches: 'out', cards: 'lies', knights: 'lies', chests: 'onetrue', lineup: 'order', balance: 'order', wheels: 'pattern', trail: 'pattern', letters: 'pattern', pyramid: 'back' };
-const ideaTag = (type, cls) => IDEAOF[type] ? '<span class="idea' + (cls ? ' ' + cls : '') + '">💡 ' + IDEAS[IDEAOF[type]].n + '</span>' : '';
+// Cooper R26: Treasure Chests has three rules, so its idea follows the puzzle's rule (one true / one lies / truth marks it).
+const CHESTIDEA = { one: 'onetrue', lie: 'onelie', tre: 'truthmark' };
+function ideaKey(x) { if (x && typeof x === 'object') return x.type === 'chests' && CHESTIDEA[x.rule] ? CHESTIDEA[x.rule] : IDEAOF[x.type]; return IDEAOF[x]; }
+const ideaTag = (x, cls) => ideaKey(x) ? '<span class="idea' + (cls ? ' ' + cls : '') + '">💡 ' + IDEAS[ideaKey(x)].n + '</span>' : '';
 // Expert (Options): the Daily Three one difficulty step up, from the same generators (every puzzle still
 // has exactly one answer you can reach without guessing). Expert days keep their own results (xres, xarch)
 // so the normal daily stays the same for everyone; the streak counts a day done in either.
@@ -2967,7 +2973,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.3' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.4' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3194,19 +3200,19 @@ function kindStats() {
 // Ties go to the kind with more solves (the pattern is clearer). Null until there is enough play to say.
 function weakestKind() {
   const c = kindStats(); let best = null;
-  Object.keys(c).forEach(t => { const [n, k] = c[t]; if (n < 2 || k === n || !TYPENAME[t]) return; const r = k / n;
+  Object.keys(c).forEach(t => { const [n, k] = c[t]; if (n < 2 || k === n || k >= MASTER_N || !TYPENAME[t]) return; const r = k / n; // Cooper R26: mastered kinds aren't 'trickiest'
     if (!best || r < best.r || (r === best.r && n > best.n)) best = { t, n, k, r }; });
   return best;
 }
 const FREE_TIERS = ['E', 'M', 'T'];
 // Kinds mastered (Alan 11-19 card): a kind is mastered after 5 clean solves anywhere (Daily, Expert, past days, Free play).
 const MASTER_N = 5;
-function masteredLine(c) { c = c || kindStats(); const n = TL.ROSTER.filter(t => (c[t] || [0, 0])[1] >= MASTER_N).length;
+function masteredLine(c, menu) { c = c || kindStats(); const n = TL.ROSTER.filter(t => (c[t] || [0, 0])[1] >= MASTER_N).length;
   const near = TL.ROSTER.filter(t => (c[t] || [0, 0])[1] === MASTER_N - 1);
-  return '<div class="fpmast" aria-label="Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '"><b>🏅 Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '</b><span>' + (n === TL.ROSTER.length ? 'Every kind mastered. Wonderful!' : near.length ? 'One clean solve to master ' + near.slice(0, 2).map(t => TYPENAME[t]).join(' or ') : MASTER_N + ' clean solves masters a kind') + '</span><i style="width:' + Math.round(100 * n / TL.ROSTER.length) + '%"></i></div>'; }
+  return '<div class="fpmast" aria-label="Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '"><b>🏅 Kinds mastered: ' + n + ' of ' + TL.ROSTER.length + '</b><span>' + (n === TL.ROSTER.length ? 'Every kind mastered. Wonderful!' : near.length ? (menu ? 'One clean solve to master: ' + near.slice(0, 2).map(t => '<button class="linkbtn fpnear" data-near="' + t + '">▶ ' + TYPENAME[t] + '</button>').join(' ') : 'One clean solve to master ' + near.slice(0, 2).map(t => TYPENAME[t]).join(' or ')) : MASTER_N + ' clean solves masters a kind') + '</span><i style="width:' + Math.round(100 * n / TL.ROSTER.length) + '%"></i></div>'; }
 function showFree() {
   const f = freeGet(); const wk = weakestKind(); track('free_open', {});
-  openSheet('<h2>🔀 Free play</h2><div class="sub">New puzzles any time. They don\'t change your streak or today\'s three.</div>' + masteredLine() +
+  openSheet('<h2>🔀 Free play</h2><div class="sub">New puzzles any time. They don\'t change your streak or today\'s three.</div>' + masteredLine(null, true) +
     (wk ? '<button class="btn wide fpw" id="fpw"><span class="fpi">' + typeIcon(wk.t, 30) + '</span><span>🎯 Practice ' + TYPENAME[wk.t] + '<small>Your trickiest kind: ' + wk.k + ' of ' + wk.n + ' clean</small></span></button>' : '') +
     '<div class="col"><button class="btn wide" id="fps">🔀 Shuffle 3</button><button class="btn ghost wide fpick" style="color:var(--ink);background:var(--panel2)" id="fpp">✋ Pick your puzzles</button></div>' +
     '<div class="sub" style="margin:12px 0 6px">How hard?</div><div class="fptier" role="radiogroup" aria-label="How hard">' +
@@ -3216,11 +3222,12 @@ function showFree() {
   document.getElementById('fps').onclick = () => { const g = freeGet(); startFree(TL.rngFrom('ahalock-free-mix|' + g.n).shuffle(TL.ROSTER.slice()).slice(0, 3), tier(), 'shuffle'); };
   document.getElementById('fpp').onclick = () => showFreePick(tier());
   if (wk) document.getElementById('fpw').onclick = () => startFree([wk.t], tier(), 'practice');
+  document.querySelectorAll('[data-near]').forEach(b => b.onclick = () => startFree([b.dataset.near], tier(), 'practice')); // Cooper R26: one tap to the practice
 }
 function showFreePick(tier) {
   const pick = []; const c = kindStats();
   openSheet('<h2>✋ Pick puzzles</h2><div class="sub">Tap one kind, or up to three.</div><div class="fpgrid">' +
-    TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><small class="fpm">' + (((c[t] || [0, 0])[1]) >= MASTER_N ? '🏅 Mastered' : ((c[t] || [0, 0])[1]) === MASTER_N - 1 ? 'One to master!' : Math.min((c[t] || [0, 0])[1], MASTER_N) + ' of ' + MASTER_N) + '</small><i class="fpn"></i></button>').join('') +
+    TL.ROSTER.map(t => '<button class="fpk" data-fk="' + t + '" aria-pressed="false">' + typeIcon(t, 28) + '<span>' + TYPENAME[t] + '</span><small class="fpm">' + (((c[t] || [0, 0])[1]) >= MASTER_N ? '🏅 Mastered' : ((c[t] || [0, 0])[1]) === MASTER_N - 1 ? 'One to master!' : ((c[t] || [0, 0])[1]) ? Math.min((c[t] || [0, 0])[1], MASTER_N) + ' of ' + MASTER_N : '') + '</small><i class="fpn"></i></button>').join('') +
     '</div><div class="col"><button class="btn wide" id="fpgo" disabled>Pick a kind</button><button class="linkbtn" id="fpbk">‹ Back</button></div>');
   const go = document.getElementById('fpgo');
   const draw = () => { document.querySelectorAll('[data-fk]').forEach(b => { const k = pick.indexOf(b.dataset.fk); b.classList.toggle('on', k >= 0); b.setAttribute('aria-pressed', k >= 0); b.querySelector('.fpn').textContent = k >= 0 ? k + 1 : ''; });
@@ -3230,10 +3237,13 @@ function showFreePick(tier) {
   document.getElementById('fpbk').onclick = showFree;
 }
 function startFree(q, tier, how) { closeSheet(); track('free_start', { how, n: q.length, tier }); playFree({ q, i: 0, tier: FREE_TIERS.indexOf(tier) >= 0 ? tier : 'M', how, ms: [], clean: 0 }); }
-function playFree(F) {
-  const type = F.q[F.i];
-  if (P && P.free === F && P.slot === F.i && !P.solved) return; // same double-tap guard as startPuzzle
-  if (!store.get('tut', {})[type] && !(F.now && F.now[type])) { freeNewKind(F, type); return; }
+// Muse R26: the set position only moves when the next puzzle actually opens (F.i = i below), so a lesson, a closed
+// intro card or a double tap can never leave the old solved puzzle on screen with a dead Next button.
+function playFree(F, i) {
+  if (i === undefined) i = F.i; const type = F.q[i];
+  if (P && P.free === F && P.slot === i && !P.solved) return; // same double-tap guard as startPuzzle
+  if (!store.get('tut', {})[type] && !(F.now && F.now[type])) { freeNewKind(F, i); return; }
+  F.i = i;
   const g = freeGet(); const pz = TL.genAny(TL.rngFrom('ahalock-free|' + g.n), type, F.tier); pz.tier = pz.tier || F.tier; g.n++; store.set('free', g);
   stopTimer();
   P = { ds: null, slot: F.i, pz, t0: Date.now(), miss: 0, hints: 0, hintPos: 0, told: [], msg: null, bad: null, hl: null, solved: false, tutorial: false, free: F,
@@ -3241,11 +3251,12 @@ function playFree(F) {
   P.glow = true; renderPuzzle(); window.scrollTo(0, 0);
   timerInt = setInterval(() => { const t = document.getElementById('tm'); if (t && !P.solved) t.textContent = fmtT(Date.now() - P.t0); }, 500);
 }
-function freeNewKind(F, type) {
-  openSheet('<h2>' + (F.q.length > 1 ? (F.i + 1) + ' of ' + F.q.length + ' · ' : '') + typeIcon(type, 30) + ' ' + TYPENAME[type] + '</h2><div class="sub">New kind for you! Take the short lesson first, or jump straight in. Hints are always free.</div>' +
+function freeNewKind(F, i) {
+  const type = F.q[i]; F.going = null; // the card is up: closing it and tapping Next again must reopen it
+  openSheet('<h2>' + (F.q.length > 1 ? (i + 1) + ' of ' + F.q.length + ' · ' : '') + typeIcon(type, 30) + ' ' + TYPENAME[type] + '</h2><div class="sub">New kind for you! Take the short lesson first, or jump straight in. Hints are always free.</div>' +
     '<div class="col"><button class="btn" id="fnl">📘 Short lesson</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="fnp">Play now</button></div>');
-  document.getElementById('fnl').onclick = () => { closeSheet(); startTutorial(type, () => playFree(F)); };
-  document.getElementById('fnp').onclick = () => { closeSheet(); F.now = F.now || {}; F.now[type] = 1; track('free_skip_lesson', { type }); playFree(F); };
+  document.getElementById('fnl').onclick = () => { closeSheet(); startTutorial(type, () => playFree(F, i)); };
+  document.getElementById('fnp').onclick = () => { closeSheet(); F.now = F.now || {}; F.now[type] = 1; track('free_skip_lesson', { type }); playFree(F, i); };
 }
 // Cooper R25: a double tap on Next opened the puzzle and the second tap typed a stray key. Board taps in the first
 // 450 ms of a new puzzle are ignored (the back button, ? and sheets still work).
@@ -3256,17 +3267,18 @@ document.addEventListener('click', ev => {
   ev.stopPropagation(); ev.preventDefault();
 }, true);
 // Next puzzle in the set; a second tap (sheet + sticky bar) does nothing, so no puzzle is skipped.
-function freeNext() { const F = P.free; if (!F || !P.solved || F.i !== P.slot || F.i + 1 >= F.q.length) return; F.i++; adNext(F.q[F.i], () => playFree(F)); }
-function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (F.i + 1) + ' of ' + F.q.length : ''); }
+function freeNext() { const F = P.free; if (!F || !P.solved) return; const i = P.slot + 1; if (i >= F.q.length) return;
+  if (F.going === i && Date.now() - F.goingAt < 1200) return; F.going = i; F.goingAt = Date.now(); adNext(F.q[i], () => playFree(F, i)); }
+function freeLabel() { const F = P.free; return (F.how === 'practice' ? '🎯 Practice' : '🔀 Free play') + (F.q.length > 1 ? ' · ' + (P.slot + 1) + ' of ' + F.q.length : ''); }
 function freeSolved(ms) {
   const F = P.free; const t = P.pz.type; const clean = !P.miss && !P.hints;
   const before = (kindStats()[t] || [0, 0])[1];
   const g = freeGet(); const v = g.k[t] || [0, 0]; v[0]++; if (clean) v[1]++; g.k[t] = v; store.set('free', g);
   const newly = clean && before < MASTER_N && before + 1 >= MASTER_N;
-  F.ms[F.i] = ms; if (clean) F.clean++;
+  const fi = P.slot; F.ms[fi] = ms; if (clean) F.clean++;
   track('free_done', { type: t, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
-  const more = F.i + 1 < F.q.length; const end = !more && F.q.length > 1;
-  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div><div class="fpnote">' + (F.q.length > 1 ? (F.i + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
+  const more = fi + 1 < F.q.length; const end = !more && F.q.length > 1;
+  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div><div class="fpnote">' + (F.q.length > 1 ? (fi + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · Daily and streak unchanged</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + (clean ? '✅' : '👍') + '</b><span>' + (clean ? 'CLEAN' : 'SOLVED') + '</span></div></div>' +
     (end ? '<div class="sub" style="font-size:16px">All ' + F.q.length + ' solved · ' + F.clean + ' clean · ' + fmtT(F.ms.reduce((a, x) => a + (x || 0), 0)) + '</div>' : '') +
     '<div class="col">' + (more ? '<button class="btn" id="fnx">Next puzzle</button>' : '<button class="btn" id="fag">' + (F.how === 'practice' ? '🎯 One more ' + TYPENAME[t] : '🔀 Shuffle 3 more') + '</button>') +
@@ -3280,6 +3292,14 @@ function freeSolved(ms) {
   document.getElementById('fhome').onclick = () => { closeSheet(); renderHome(); };
 }
 // After the Daily Three: one optional practice on the weakest skill (path-to-elite item 8).
+// Muse R26: Expert was only a checkbox in Help; the results card offers it once the day is done.
+function showExpertOffer() {
+  track('expert_offer', {});
+  openSheet('<h2>🧠 Expert puzzles</h2><div class="sub">The same kinds of puzzles, one step harder, with trickier clues. Every puzzle still has exactly one answer and needs no guessing.</div><div class="sub">Turn it on and today\'s Expert three are ready to play now. Your normal results stay saved, and you can switch back any time in Help.</div>' +
+    '<div class="col"><button class="btn" id="xOn">Turn on Expert</button><button class="btn ghost small" style="color:var(--ink);background:var(--panel2)" id="xNo">Not now</button></div>');
+  document.getElementById('xOn').onclick = () => { store.set('expert', true); track('option', { expert: true, from: 'results' }); closeSheet(); toast('🧠 Expert on: harder clues from today.'); renderHome(); };
+  document.getElementById('xNo').onclick = () => { closeSheet(); renderHome(); };
+}
 function practiceBtn() { const wk = weakestKind(); return wk ? '<button class="btn ghost" style="color:var(--ink);background:var(--panel2)" id="fpdw">🎯 Practice your trickiest: ' + TYPENAME[wk.t] + '</button>' : ''; }
 
 function weekPill(wk, all) {
@@ -3289,7 +3309,7 @@ function weekPill(wk, all) {
 // The This week sheet: pick a day to play or replay, see the countdown, tomorrow's puzzles and the next bonus.
 // "You learned…" in This week: the ideas behind the puzzles you solved this week (daily, any mark), most used first.
 function learnedNote(wk, all) {
-  const c = {}; wk.forEach(d => { const r = all[d]; if (!r) return; const day = getDay(d); r.s.forEach((x, i) => { if (x && day[i]) { const k = IDEAOF[day[i].type]; if (k) c[k] = (c[k] || 0) + 1; } }); });
+  const c = {}; wk.forEach(d => { const r = all[d]; if (!r) return; const day = getDay(d); r.s.forEach((x, i) => { if (x && day[i]) { const k = ideaKey(day[i]); if (k) c[k] = (c[k] || 0) + 1; } }); });
   const ks = Object.keys(c).sort((a, b) => c[b] - c[a]);
   if (!ks.length) return '<div class="learned"><b>You learned…</b><div>Solve a puzzle to see the ideas you use this week.</div></div>';
   return '<div class="learned"><b>You learned this week</b><div class="ideas">' + ks.map(k => '<span class="idea">💡 ' + IDEAS[k].n + (c[k] > 1 ? ' ×' + c[k] : '') + '</span>').join('') + '</div><div>' + esc(IDEAS[ks[0]].n) + ': ' + esc(IDEAS[ks[0]].d) + '</div></div>';
@@ -3499,12 +3519,12 @@ function renderPuzzle() {
   const pz = P.pz;
   const res = results()[P.ds];
   const SO = P.story ? STORY[P.story.s].objs[P.story.o] : null;
-  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.free ? freeLabel() + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3].map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span> ' + ideaTag(pz.type) : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? STORY[P.story.s].name + ' · final lock' : TYPENAME[pz.type] + ' ' + ideaTag(pz.type)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz.type)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.free ? freeLabel() + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3].map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span> ' + ideaTag(pz) : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? STORY[P.story.s].name + ' · final lock' : TYPENAME[pz.type] + ' ' + ideaTag(pz)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
     (P.tutorial || SO || P.bonus || P.free ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
   const msg = P.msg ? '<div class="msg ' + P.msg.k + '">' + P.msg.t + '</div>' : '';
-  const acts = P.solved && !P.tutorial ? (P.free ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">' + (P.free.i + 1 < P.free.q.length ? 'Next puzzle' : 'Free play menu') + '</button></div>' : P.bonus ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">‹ Back to home</button></div>' : '<div class="actions stick"><button class="btn ghost" id="hint">‹ Home</button><button class="btn" id="chk">Continue ›</button></div>')
+  const acts = P.solved && !P.tutorial ? (P.free ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">' + (P.slot + 1 < P.free.q.length ? 'Next puzzle' : 'Free play menu') + '</button></div>' : P.bonus ? '<div class="actions stick"><button class="btn ghost hidden" id="hint"></button><button class="btn" id="chk">‹ Back to home</button></div>' : '<div class="actions stick"><button class="btn ghost" id="hint">‹ Home</button><button class="btn" id="chk">Continue ›</button></div>')
     : '<div class="actions' + (P.tutorial ? '' : ' stick') + '"><button class="btn ghost" id="hint">💡 Hint' + (hintNeedsAd() ? ' ▶' : '') + '</button><button class="btn" id="chk">Lock it in!</button></div>';
   const inBoard = false;
   const introH = SO && P.intro ? iconize('<div class="msg info inb">' + P.intro.t + '</div>') : '';
@@ -3519,7 +3539,7 @@ function renderPuzzle() {
   if (P.solved && !P.tutorial) {
     // closed the success sheet: Continue brings it back (or goes on), Home goes home
     document.getElementById('hint').onclick = () => renderHome();
-    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.free ? (P.free.i + 1 < P.free.q.length ? freeNext() : showFree()) : P.bonus ? renderHome() : P.replay ? replayNext() : dailyNext(P.ds);
+    document.getElementById('chk').onclick = () => P.story ? renderStop(P.story.s) : P.free ? (P.slot + 1 < P.free.q.length ? freeNext() : showFree()) : P.bonus ? renderHome() : P.replay ? replayNext() : dailyNext(P.ds);
   } else {
     document.getElementById('chk').onclick = check;
     document.getElementById('hint').onclick = hint;
@@ -3749,7 +3769,7 @@ function showSolved(ms) {
   const lit = P.replay || P.bonus || P.story || !res ? 0 : res.s.filter(Boolean).length;
   // Muse R25: a kind mastered in the Daily (its 5th clean solve in any mode) is celebrated here too.
   const mast = !P.replay && !P.story && !P.miss && !P.hints && (kindStats()[pz.type] || [0, 0])[1] === MASTER_N;
-  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' + (mast ? '<div class="fpnote mastnote">🏅 You mastered ' + TYPENAME[pz.type] + ' today</div>' : '') + (P.story ? '' : '<div class="ideal">' + ideaTag(pz.type, 'big') + '<span>' + esc(IDEAS[IDEAOF[pz.type]].d) + '</span></div>') +
+  openSheet('<h2>' + head + '</h2>' + (lit ? harborSvg(lit, lit, 'insheet') : '') + '<div class="sub">' + esc(TYPES[pz.type].answer(pz)) + '</div>' + (mast ? '<div class="fpnote mastnote">🏅 You mastered ' + TYPENAME[pz.type] + ' today</div>' : '') + (P.story ? '' : '<div class="ideal">' + ideaTag(pz, 'big') + '<span>' + esc(IDEAS[ideaKey(pz)].d) + '</span></div>') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + P.hints + '</b><span>' + (P.hints === 1 ? 'HINT' : 'HINTS') + '</span></div></div>' +
     '<div class="col"><button class="btn" id="nx">' + (allDone ? (P.ds === trueToday ? 'See today\'s results' : 'See results') : 'Next puzzle') + '</button><button class="linkbtn whylink" id="why">Why? Show me step by step</button><div id="whybox" class="hidden">' + whyList(P.ex) + '</div></div>');
   document.getElementById('why').onclick = () => { document.getElementById('whybox').classList.toggle('hidden'); };
@@ -3857,10 +3877,11 @@ function showDaySummary(ds) {
     '<button class="btn wide" id="share" style="margin:2px 0 8px">Share result</button>' +
     '<div class="sub" style="font-size:15px">' + legendLine(e) + '</div>' +
     tomorrowCard(ds) + (ds === realToday && !(bonusToday() && !bonusDone()) ? '<div class="sub" style="font-size:16px">⭐ ' + nextBonusLine() + '</div>' : '') +
-    '<div class="col">' + bonusBtn() + keepGoingBtn() + practiceBtn() + '<div class="quiet2"><button class="linkbtn" id="home">‹ Home</button><button class="linkbtn" id="again">🔁 Play this day again</button></div></div>' +
+    '<div class="col">' + bonusBtn() + keepGoingBtn() + practiceBtn() + '<div class="quiet2"><button class="linkbtn" id="home">‹ Home</button><button class="linkbtn" id="again">🔁 Play this day again</button>' + (expertOn() ? '' : '<button class="linkbtn" id="dsExp">🧠 Want it harder? Try Expert</button>') + '</div></div>' +
     (adsOn() && window.AL_STORE ? '<div class="sub" style="text-align:center;font-size:15px;margin-top:8px">Enjoying Ahalock? <button class="linkbtn" id="dsBuy">Remove ads' + (AL_STORE.price ? ' · ' + esc(AL_STORE.price) : '') + '</button></div>' : ''));
   const db = document.getElementById('dsBuy'); if (db) db.onclick = async () => { if (await AL_STORE.buy()) showDaySummary(ds); };
   const kg = document.getElementById('kgo'); if (kg) kg.onclick = () => { track('keep_going', { to: 'story' }); closeSheet(); renderMap(); };
+  const dx = document.getElementById('dsExp'); if (dx) dx.onclick = showExpertOffer;
   const pw = document.getElementById('fpdw'); if (pw) pw.onclick = () => { const wk = weakestKind(); track('keep_going', { to: 'practice' }); if (wk) startFree([wk.t], freeGet().t, 'practice'); };
   { const bn = document.getElementById('bon'); if (bn) bn.onclick = () => { track('keep_going', { to: 'bonus' }); startBonus(); }; }
   wireRemindAsk(() => showDaySummary(ds));
