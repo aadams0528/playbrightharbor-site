@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.31.3 (Nikola r31 fixes) -->
+<!-- Tripsake v0.31.4 (Nikola r32 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -408,11 +408,12 @@ label.l{font-size:calc(17px * var(--fs,1));color:var(--muted);display:block;marg
 .bkrec{display:flex;gap:14px;align-items:center;background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:calc(18px * var(--fs,1))}.bkbig{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--lit);color:#1a1300;font-size:26px;font-weight:700}
 .pcprev{position:fixed;inset:0;z-index:60;background:rgba(3,6,14,.86);display:grid;place-items:center;padding:16px}.pcin{display:flex;flex-direction:column;gap:12px;align-items:center;max-width:420px;width:100%}.pcin img{width:100%;max-height:68vh;object-fit:contain;border-radius:14px;border:1px solid var(--line)}
 .mundo{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:calc(17px * var(--fs,1))}
-.toast{position:fixed;width:max-content;max-width:calc(100vw - 32px)}.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
+.toast{position:fixed;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box}.toast.undo{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:calc(100vw - 32px);max-width:560px;padding-right:52px}.toast.undo .tmsg{flex:1 1 100%}.toast.undo .tx{position:absolute;top:6px;right:6px} /* full width: the words on top, the button under them, ✕ inside (Nikola r32) */.toast.below{top:calc(env(safe-area-inset-top,0px) + 156px)}
 .toast{display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box}
 .toast button{color:var(--lit-soft);font-weight:700;text-decoration:underline;flex:none}
 .toast:has(button:not(.tx)){padding:12px 16px;gap:16px}.toast button:not(.tx){min-height:40px;padding:4px 10px}
 .toast button.tx{color:var(--ink);text-decoration:none;font-weight:700;width:40px;height:40px;min-height:40px;padding:0;margin-left:-6px;border:1px solid var(--line);border-radius:50%;background:var(--panel);display:inline-flex;align-items:center;justify-content:center;font-size:calc(17.5px * var(--fs,1))} /* a close that looks like a close */
+.toast.undo:has(button){padding:12px 54px 12px 16px;flex-wrap:wrap;gap:8px 12px}
 .badge{display:inline-block;font-size:calc(17px * var(--fs,1));font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(255,122,184,.18);color:#ffb3d4;vertical-align:1px}
 .morerow{display:flex;gap:12px;align-items:center;padding:10px;border-radius:12px;background:var(--panel-2);text-align:left;width:100%;position:relative;box-sizing:border-box}
 .morerow .txt{flex:1;min-width:0}
@@ -1555,7 +1556,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.4 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -1840,7 +1841,7 @@ function toast(msg, undo, sticky, label){
   // a pending Undo is only replaced by another Undo or ended by your next tap; plain messages show alongside it
   // one message at a time, except that a plain message never pushes out a pending Undo: it shows just below it instead
   const keep = !undo ? document.querySelector(".toast.undo") : null; document.querySelectorAll(".toast").forEach(x => { if (x !== keep) x.remove(); });
-  const t = document.createElement("div"); t.className = "toast" + (keep ? " below" : ""); t.setAttribute("role", "status"); t.textContent = msg;
+  const t = document.createElement("div"); t.className = "toast" + (keep ? " below" : ""); t.setAttribute("role", "status"); { const m = document.createElement("span"); m.className = "tmsg"; m.textContent = msg; t.appendChild(m); }
   if (undo){ t.classList.add("undo"); const b = document.createElement("button"); b.textContent = label || "Undo"; b.onclick = () => { t.remove(); undo(); }; t.appendChild(b);
     const x = document.createElement("button"); x.className = "tx"; x.textContent = "✕"; x.setAttribute("aria-label", "Close"); x.onclick = () => t.remove(); t.appendChild(x); }
   document.body.appendChild(t);
@@ -4054,7 +4055,10 @@ async function titleOffer(id, use){ const raw = store.get("realTrips", []) || []
 let MERGE_UNDO = null;
 /* merge Undo is about the one trip that was merged: it puts that trip, its captions, the journal lines the merge added and its book words back, and leaves every other trip alone (Nikola r31) */
 function tripPrint(id, days){ const raw = store.get("realTrips", []) || [], t = raw.find(x => x.id === id), lab = store.get("phLabels", {}) || {}, dl = store.get("dayLines", {}) || {}, bw = store.get("bookWords", {}) || {}; let s = JSON.stringify(t || null);
-  if (t){ const sids = t.stops.map(x => x.id); Object.keys(lab).filter(k => sids.some(sid => k.startsWith(sid + "-"))).sort().forEach(k => s += "|" + k + "=" + lab[k]); }
+  if (t){ const sids = t.stops.map(x => x.id); Object.keys(lab).filter(k => sids.some(sid => k.startsWith(sid + "-"))).sort().forEach(k => s += "|" + k + "=" + lab[k]);
+    /* notes, best moments, hidden or put-back photos, turns, order, covers and stop names count as changing the trip too (Nikola r32) */
+    const hit = k => k === id || sids.some(sid => k === sid || k.startsWith(sid + "-") || k === "c_" + sid);
+    ["stories", "notes", "stopNames", "phHidden", "phRot", "phOrder", "covers", "stopState"].forEach(n => { const o = store.get(n, {}) || {}; if (typeof o !== "object") return; Object.keys(o).filter(hit).sort().forEach(k => s += "|" + n + ":" + k + "=" + JSON.stringify(o[k])); }); }
   (days || []).forEach(d => s += "|" + d + "=" + (dl[d] ? dl[d].text : "")); s += "|" + JSON.stringify(bw[id] || null); return crc32(new TextEncoder().encode(s)); }
 function mergeUndoState(id){ const m = store.get("mergeUndo", null); if (!m || (id && m.id !== id) || Date.now() - (m.at || 0) > 30 * DAY) return null; return {m, ok:m.print === tripPrint(m.id, m.days)}; }
 function mergeUndoHTML(t){ const st = mergeUndoState(t.id); if (!st) return ""; const {m} = st, when = new Date(m.at).toLocaleDateString("en-US", {month:"short", day:"numeric"});
@@ -4109,6 +4113,11 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   if (!t.stops.length){ toast("That trip had no photos this browser can show"); return; }
   t.start = t.stops[0].date < t.start ? t.stops[0].date : t.start; t.end = t.stops[t.stops.length - 1].date > t.end ? t.stops[t.stops.length - 1].date : t.end;
   Object.entries(d.lines || {}).forEach(([day, l]) => { if (!dayLines[day] && l && l.text) undo.days.push(day), dayLines[day] = {text:String(l.text).slice(0, 160), by:l.by && l.by !== me ? l.by : undefined, at:Date.now()}; });
+  { const mine = BOOK_WORDS[t.id] || {}, bookWould = !!(d.book && typeof d.book === "object" && ((!mine.ded && d.book.ded) || (!mine.ref && d.book.ref)));
+    if (!isNew && !added && !newStops && !moments && !undo.days.length && !undo.replaced.length && !bookWould){ /* nothing new: nothing is saved at all, so a sample trip stays a sample trip (Nikola r32) */
+      MERGE_DUPES = (store.get("mergeDupes", []) || []).filter(x => x && typeof x.id === "string" && typeof x.trip === "string" && typeof x.key === "string"); MERGE_UNDO = null;
+      try { sessionStorage.setItem("tgShared", JSON.stringify({isNew:false, added:0, newStops:0, imgFail, moments:0, dupes:0, full, bookIn:false, removedOut, swapped:0, linesIn:0, title:t.title, from:d.from || "", id:t.id})); } catch(e){}
+      closeSheet(); sharedNotice(); return; } }
   if (!store.set("realTrips", raw)){ toast("Couldn't save: this browser's storage is full"); return; }
   store.set("phLabels", labels); store.set("dayLines", dayLines); await saveDupes();
   if (d.book && typeof d.book === "object"){ const mine = BOOK_WORDS[t.id] || {}; const w = {ded:mine.ded || String(d.book.ded || "").slice(0, 600), ref:mine.ref || String(d.book.ref || "").slice(0, 600)}; // yours win; an empty page takes theirs
