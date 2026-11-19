@@ -273,6 +273,9 @@ details.rules{border:1px solid var(--line);border-radius:14px;padding:10px 12px}
 @keyframes yrbig{0%{opacity:0;transform:translateY(-18px) scale(.5)}60%{opacity:1;transform:scale(1.5)}100%{transform:none}}
 @keyframes yrfade{from{opacity:0}to{opacity:1}}
 .howhead{font-weight:700;color:var(--ink);margin:10px 0 0!important}
+.answer{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.answer button{width:100%;min-height:44px;text-align:left;font:inherit;font-size:17px;line-height:1.3;color:inherit;background:var(--plate);border:0;border-radius:10px;padding:8px 12px;cursor:pointer}
+.answer button b{display:inline-block;min-width:3.2em;font-variant-numeric:tabular-nums}
 .missfix{margin:0;font-size:18px;line-height:1.35;padding:10px 12px;border-radius:12px;background:var(--plate)}
 .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:16px;text-decoration:underline;cursor:pointer;padding:4px;align-self:center}
 body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
@@ -396,7 +399,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 48</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 49</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1671,7 +1674,11 @@ function timeline(){
   {const a=Math.min(...x),z=Math.max(...x)-a||1;for(let i=0;i<x.length;i++)x[i]=(x[i]-a)/z*100} // spreading can push the first dot below 0; bring all back to 0-100 (Muse, round 19)
   for(let i=0;i<x.length;i++)x[i]=9+x[i]*.82; // keep the end dots and their years well inside the card
   let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
-  return `<p class="tlhint">👆 Tap a year for its story</p><div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
+  return `<p class="tlhint">👆 Tap a year or a card for its story</p><div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
+}
+// The answer in order with its years, in the first view (Muse, round 20). Each row opens that card's story.
+function answerList(){
+  return `<ol class="answer" aria-label="The answer, oldest first">${sortIds(G.ids).map(id=>`<li><button data-id="${id}"><b>${yr(id)}</b> ${EVENTS[id][2]}</button></li>`).join("")}</ol>`;
 }
 function surpriseCard(){ // the card you had furthest from its spot (or the oldest card if you were perfect)
   const t=sortIds(G.ids);let id=t[t.length-1],far=0; // a perfect order opens on the newest card, where the reveal ends (Muse, round 20)
@@ -1689,7 +1696,27 @@ function landYears(r){
 }
 // "Wait, really?" (elite plan, item 1): one line on how today's five connect, worked out from the
 // verified years only, so it can never state something the deck doesn't.
+// Hand-picked "Wait, really?" lines (Cooper, round 20: "for a 10, these moments should feel handpicked").
+// {shown words|Card title}: the title must be one of that day's cards; every number must be a year gap between that day's cards.
+// tests/handpicked-test.js checks both. Days without a line fall back to the worked-out sentence below.
+const REVEALS={
+ 39:"The {Grand Ole Opry|Grand Ole Opry's first broadcast} had already been on the radio for 26 years when {I Love Lucy|I Love Lucy premieres} first aired, and it is still on today.",
+ 40:"{Basketball|Basketball is invented} was only 12 years old when the {first Tour de France|First Tour de France} set off.",
+ 41:"{Coca-Cola|Coca-Cola is invented} is 72 years older than {Pizza Hut|First Pizza Hut opens}, yet {Spam|Spam goes on sale}, Cheerios, McDonald's and Pizza Hut all arrived within 21 years of each other.",
+ 42:"{Pac-Man|Pac-Man arcade game} is only 4 years older than {Tetris|Tetris is created}, and the {Game Boy|Nintendo Game Boy comes out} shipped with Tetris just 5 years after it was made.",
+ 43:"{Women won the vote|US women win the right to vote} 144 years after the {Declaration of Independence|Declaration of Independence}, and the {Civil Rights Act|Civil Rights Act is signed} came only 44 years after that.",
+ 44:"The {Wright brothers flew|Wright brothers' first flight} just 27 years after {Bell patented the telephone|Bell patents the telephone}, and the {polio vaccine|Polio vaccine is declared safe} came only 52 years after that first flight.",
+ 45:"{Woodstock|Woodstock music festival} came only 15 years after {Elvis recorded his first single|Elvis records his first single}, and {Napster|Napster lets people share songs} 30 years after Woodstock.",
+ 79:"A {helicopter flew on Mars|First helicopter flight on Mars} just 60 years after the {first person went to space|First person in space}.",
+ 80:"Only 46 years separate the {first liquid-fueled rocket|First liquid-fueled rocket} and the {last moonwalk|Last people walk on the moon}.",
+ 81:"{Neptune|Neptune is discovered} was found 236 years after {Galileo spotted Jupiter's moons|Galileo spots moons around Jupiter}, but {Curiosity|Curiosity rover lands on Mars} reached Mars just 54 years after {NASA was founded|NASA is founded}.",
+ 82:"The {first moon landing|First moon landing} came just 12 years after {Sputnik|Sputnik, the first satellite}, the first satellite.",
+ 83:"A {spacecraft flew past Pluto|Spacecraft flies past Pluto} just 9 years after it was {called a dwarf planet|Pluto is called a dwarf planet}.",
+ 84:"{Pluto was discovered|Pluto is discovered} just 1 year after {Hubble showed the universe is expanding|Hubble shows the universe is expanding}, and 876 years after Chinese astronomers spotted a 'guest star'."
+};
+function revealLine(n){const h=REVEALS[n];return h?h.replace(/\{([^|}]+)\|[^}]+\}/g,(_,w)=>`<b>${w}</b>`):""}
 function really(){
+  if((G.kind==="daily"||G.kind==="archive")&&REVEALS[G.n])return `<p class="really">😮 <b>Wait, really?</b> ${revealLine(G.n)}</p>`;
   const t=sortIds(G.ids),y=t.map(yr),n=t.length,span=y[n-1]-y[0],T=i=>`<b>“${EVENTS[t[i]][2]}”</b>`,yrs=v=>v===1?"1 year":v+" years";
   const gaps=y.slice(1).map((v,i)=>v-y[i]),big=gaps.indexOf(Math.max(...gaps)),others=span-gaps[big];
   let line="";const mid=(y[0]+y[n-1])/2;let m=-1;
@@ -1728,6 +1755,7 @@ function showResult(){
     ${G.rows&&G.rows.length?`<div class="pairs rows" aria-label="Your tries, one row per try">${G.rows.map(r=>`<span>${r}</span>`).join("")}</div>`:`<div class="pairs" aria-label="Your result">${G.tiles}</div>`}
     ${missFix()}
     ${timeline()}
+    ${answerList()}
     ${G.kind==="practice"||G.kind==="replay"?"":really()}
     ${G.kind==="practice"?"":`<p class="connect">${nearMiss()}</p>`}
     ${replay?`<p class="next" style="margin:0">Just for fun. Your saved score for #${G.n} stays <b>${G.orig}</b>.</p>`:""}
@@ -1754,7 +1782,7 @@ function showResult(){
     ${NATIVE&&adsAllowed()&&G.kind!=="tutorial"?`<button class="linkbtn noads" id="noads">Remove ads · ${removePrice}</button>`:""}
     <textarea class="copy" id="copybox" rows="4" readonly hidden>${share}</textarea>`;
   r.hidden=false;if(G.gain&&!G.gain.shown){G.gain.shown=true;persist()}showStories(surpriseCard());landYears(r);$("#sr").textContent=`Puzzle finished. ${G.score} out of 100, ${tier(G.score)}. ${how}.`;
-  r.querySelectorAll(".tl button").forEach(b=>b.onclick=()=>{showFact(+b.dataset.id);storyRead(+b.dataset.id)});
+  r.querySelectorAll(".tl button,.answer button").forEach(b=>b.onclick=()=>{showFact(+b.dataset.id);storyRead(+b.dataset.id)});
   if($("#bReplay"))$("#bReplay").onclick=replayPuzzle;
   if($("#bWeek"))$("#bWeek").onclick=weekStories;
   if(replay){$("#again").onclick=()=>replayPuzzle();$("#more").onclick=()=>interstitial(()=>setMode("archive"))}
