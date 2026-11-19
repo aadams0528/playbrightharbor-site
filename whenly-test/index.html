@@ -402,7 +402,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 55</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 56</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1661,14 +1661,17 @@ function recordDaily(){
 // ---------- result ----------
 function nearMiss(){
   const t=sortIds(G.order),g=[];for(let i=0;i<t.length-1;i++)g.push(yr(t[i+1])-yr(t[i]));
-  const min=Math.min(...g),ties=g.map((v,i)=>v===min?i:-1).filter(i=>i>=0);
+  const min=Math.min(...g);
+  // Skip any closest pair the "Wait, really?" line above already compared, so the second line adds something new (Cooper, round 26).
+  const lead=G.kind==="replay"?"":really().replace(/<[^>]+>/g,""),said=i=>lead.includes(shortName(t[i]))&&lead.includes(shortName(t[i+1]));
+  const ties=g.map((v,i)=>v===min&&!said(i)?i:-1).filter(i=>i>=0);if(!ties.length)return "";
   const swapped=G.finalOrder&&ties.some(i=>G.finalOrder.indexOf(t[i])>G.finalOrder.indexOf(t[i+1]));
   const N=i=>`<b>${shortName(t[i])}</b>`,yrs=min===1?"1 year":min+" years",list=a=>a.length===2?a.join(" and "):a.slice(0,-1).join(", ")+" and "+a[a.length-1];
   const today=G.kind==="daily"?" today":"";let line;
   if(ties.length===1){
     const A=N(ties[0]),B=N(ties[0]+1);
     // Two wordings by day (Muse, round 24).
-    line=(G.n||0)%2&&G.kind!=="practice"?`Closest call ${G.kind==="daily"?"today":"on this line"}: only ${yrs} between ${A} and ${B}.`:`${G.kind==="daily"?"Closest pair today":"Closest pair"}: ${A} and ${B}, ${min<=10?"just ":""}${yrs} apart.`;
+    line=(G.n||0)%2&&G.kind!=="practice"?`Closest call ${G.kind==="daily"?"today":"on this line"}: ${min<=10?"only ":""}${yrs} between ${A} and ${B}.`:`${G.kind==="daily"?"Closest pair today":"Closest pair"}: ${A} and ${B}, ${min<=10?"just ":""}${yrs} apart.`;
   }else if(ties[ties.length-1]-ties[0]===ties.length-1){
     // Tied pairs in a row (Cooper, round 25): name the run.
     const run=[];for(let i=ties[0];i<=ties[ties.length-1]+1;i++)run.push(N(i));
@@ -1770,6 +1773,11 @@ function lineShapes(ids,fam){
   const near=(a,b)=>a<=b*2/3;
   const huge=others>0&&gaps[big]>=others*2.5,long=others>0&&gaps[big]>others;
   const G1=yrs(gaps[big]),A=T(big),B=T(big+1);
+  // An end card earns its own line only when its gap stands out: the day's biggest, or twice the middle gap (Muse, round 26).
+  const med=[...gaps].sort((a,b)=>a-b)[Math.floor(gaps.length/2)],stand=v=>v===gaps[big]||v>=med*2;
+  // A card near the middle, both families (Muse, round 26: halfway was too rare). Exact within 3% of the span, near within 8%.
+  let m=-1;for(const i of inner)if(Math.abs(y[i]-mid)<=span*.08&&(m<0||Math.abs(y[i]-mid)<Math.abs(y[m]-mid)))m=i;
+  const exact=m>0&&Math.abs(y[m]-mid)<=span*.03,lo=m>0?y[m]-y[0]:0,hi=m>0?y[n-1]-y[m]:0;
   // One gap 2.5 times all the others combined leads, with three openings that take turns (Muse, round 25).
   if(huge)add("gap","huge",null,{lead:1,v:[
     `Most of today's line is one long wait: ${G1} between ${A} and ${B}.`,
@@ -1780,21 +1788,24 @@ function lineShapes(ids,fam){
   if(fam===0){
     if(span<25)add("span","tight0",`All five fit inside just ${yrs(span)}, from ${T(0)} to ${T(n-1)}.`);
     else if(span<=80)add("span","life0",`From ${T(0)} to ${T(n-1)} is just ${yrs(span)}, so all five fit inside one lifetime.`);
-    let m=-1;for(const i of inner)if(Math.abs(y[i]-mid)<=span*.03&&(m<0||Math.abs(y[i]-mid)<Math.abs(y[m]-mid)))m=i;
-    if(m>0)add("half","half0",`${T(m)} came almost exactly halfway between ${T(0)} and ${T(n-1)}, about ${yrs(Math.round(span/2))} from each.`);
+    if(exact)add("half","half0",`${T(m)} came almost exactly halfway between ${T(0)} and ${T(n-1)}, about ${yrs(Math.round(span/2))} from each.`);
+    else if(m>0)add("half","half0b",`${T(m)} came close to halfway between ${T(0)} and ${T(n-1)}: ${yrs(lo)} after one and ${hi} before the other.`);
     const k=inner.find(i=>y[i]>mid&&near(y[n-1]-y[i],y[i]-y[0]));if(k)add("nearer","closer0",`${T(k)} ${is(k)} closer in time to ${T(n-1)} than to ${T(0)}: ${yrs(y[n-1]-y[k])} versus ${y[k]-y[0]}.`);
-    if(an>0)add("anchor","anchor0",`${T(an)} ${is(an)} closer to us than to ${T(0)}: ${yrs(NOW_YEAR-y[an])} ago, but ${y[an]-y[0]} after it.`);
-    if(long&&!huge)add("gap","long0",`Most of today's line is one long wait: ${G1} between ${A} and ${B}.`);
+    if(an>0)add("anchor","anchor0",`From today, go back ${yrs(NOW_YEAR-y[an])} to ${T(an)}, then ${y[an]-y[0]} more to ${T(0)}.`); // two clear anchors, no "it" (Cooper, round 26)
+    if(long&&!huge)add("gap","long0",`The biggest wait on today's line is the ${G1} from ${A} to ${B}, more than all the other gaps combined.`); // its own words, not a long-gap opening (Muse, round 26)
     if(gaps[n-2]<=span/6)add("edge","finish0",`${T(n-1)} arrived only ${yrs(gaps[n-2])} after ${T(n-2)}, the closest finish on today's line.`);
-    add("edge","last0",`${T(n-1)} came ${yrs(gaps[n-2])} after everything else today.`);
+    if(stand(gaps[n-2]))add("edge","last0",`${T(n-1)} came last, a full ${yrs(gaps[n-2])} after ${T(n-2)}.`);
+    if(out.length<2)add("span","all0",`From ${T(0)} to ${T(n-1)}, today's line covers ${yrs(span)}.`); // always something to fall back on
     return out;
   }
   if(span<25)add("span","tight1",`Blink and you'd miss it: today's whole line spans just ${yrs(span)}, from ${T(0)} to ${T(n-1)}.`);
   const k=[...inner].reverse().find(i=>y[i]<mid&&near(y[i]-y[0],y[n-1]-y[i]));if(k)add("nearer","nearer1",`On today's line, ${T(k)} ${is(k)==="are"?"sit":"sits"} nearer to ${T(0)} than to ${T(n-1)}: ${yrs(y[k]-y[0])} versus ${y[n-1]-y[k]}.`);
   if(an>0)add("anchor","anchor1",`We are closer in time to ${T(an)} than ${T(an)} ${is(an)==="are"?"were":"was"} to ${T(0)}: ${yrs(NOW_YEAR-y[an])} versus ${y[an]-y[0]}.`);
-  if(long&&!huge)add("gap","long1",`Nothing on today's line happened in the ${G1} between ${A} and ${B}, a longer stretch than all the other gaps put together.`);
+  if(exact||m>0)add("half","half1",`On today's line, ${T(m)} sits near the middle: ${yrs(lo)} after ${T(0)} and ${hi} before ${T(n-1)}.`);
+  if(long&&!huge)add("gap","long1",`Between ${A} and ${B} lie ${G1}, more than all of today's other gaps put together.`); // its own words (Muse, round 26)
   if(gaps[0]<=span/6)add("edge","start1",`Only ${yrs(gaps[0])} separate ${T(0)} and ${T(1)}, the first two on today's line.`);
-  add("edge","first1",`${T(0)} came ${yrs(gaps[0])} before anything else today.`);
+  if(stand(gaps[0]))add("edge","first1",`${T(0)} ${is(0)==="are"?"were":"was"} already ${yrs(gaps[0])} in the past when ${T(1)} came along.`); // a named contrast (Cooper, round 26)
+  if(out.length<2)add("span","all1",`Today's line stretches ${yrs(span)}, from ${T(0)} to ${T(n-1)}.`);
   return out;
 }
 // Neighboring days never share an idea: each day takes its best shape whose idea wasn't used on either of the two days
@@ -1866,7 +1877,7 @@ function showResult(){
       ${replay?`<button class="btn primary" id="again">Replay again</button><button class="btn ghost" id="more">More past puzzles</button>`:daily?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">${extraLeft("practice")?`🎲 Play ${extraLeft("practice")} more`:"🎲 Play more"}</button>`:G.kind==="archive"?`<button class="btn primary" id="share">Share result</button><button class="btn ghost" id="more">More past puzzles</button>`:G.tw&&!G.chalCleared?`<button class="btn primary" id="again">⚡ Try another</button><button class="btn ghost" id="toPractice">Practice</button>`:`<button class="btn primary" id="again">Next puzzle</button>`}
     </div>
     ${answerList()}
-    ${G.kind==="practice"||authored()?"":`<p class="connect">${nearMiss()}</p>`}
+    ${G.kind==="practice"||authored()||!nearMiss()?"":`<p class="connect">${nearMiss()}</p>`}
     ${daily&&NATIVE&&S.remind==null?`<div class="remind" id="remind"><p>🔔 <b>Remind me when tomorrow's puzzle is ready?</b></p><div class="row">${timeSelect("rTime","09:00")}<button class="btn primary" id="rYes">Remind me</button><button class="btn ghost" id="rNo">No thanks</button></div></div>`:""}
     ${daily&&S.giftDay===G.n+1&&!S.giftPaid?`<p class="tomorrow gift">🎁 <b>Day 1 done!</b> Come back tomorrow for puzzle #${G.n+1} and get a free ❄️ streak freeze.</p>`:""}
     ${daily&&S.played===CHAL_AT&&!S.chalTest?`<p class="firstday">⚡ <b>New: Challenges!</b> Practice now has a ⚡ button: one puzzle a day with a twist, worth +${CHAL_PTS} history points.</p>`:""}
