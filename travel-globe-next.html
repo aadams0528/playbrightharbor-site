@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.30.2 (faster saving) -->
+<!-- Tripsake v0.31.0 (landing moment + postcard) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1549,7 +1549,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.30.2 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2832,6 +2832,9 @@ const music = (() => {
   function hardStop(){ clearInterval(timer); timer = null; if (stopMood){ stopMood(); stopMood = null; } if (master){ try { master.disconnect(); } catch(e){} master = null; } if (song){ song.pause(); song = null; } ALL.forEach(a => { try { a.pause(); } catch(e){} }); ALL.clear(); if (songURL){ URL.revokeObjectURL(songURL); songURL = null; } playingKey = null; }
   return {
     get playing(){ return playingKey; },
+    chime(){ /* a soft two-note bell as the pin lands (elite C); only while music is on, so a muted story stays silent */
+      try { if (!playingKey || musicMuted) return; const c = ctx(); if (!c) return; const t = c.currentTime + .02, g = c.createGain(); g.gain.value = 1; g.connect(c.destination); if (recDest) g.connect(recDest);
+        [[88, 0, .05], [95, .09, .035]].forEach(([n, d, pk]) => { const o = c.createOscillator(), e = c.createGain(); o.type = "sine"; o.frequency.value = midi(n); o.connect(e); e.connect(g); env(e, t + d, .01, pk, 1.1); o.start(t + d); o.stop(t + d + 1.3); }); } catch(e){} },
     async play(tripId, opts = {}){
       hardStop(); let choice = opts.choice || musicChoice(tripId); if (choice === "off") return;
       const vol = musicMuted && !opts.preview ? .0001 : 1;
@@ -2982,6 +2985,9 @@ function drawArrival(th, t){
   const ar = replayState && replayState.arrive; if (!ar) return; const k = (t - ar.t) / 1400; if (k < 0 || k > 1) return;
   if (!visible(ar.lon, ar.lat)) return; const p = proj([ar.lon, ar.lat]);
   ctx.strokeStyle = th.pin; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3 * (1 - k) + .5; ctx.beginPath(); ctx.arc(p[0], p[1], 8 + 46 * d3.easeCubicOut(k), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  /* landing moment (elite C): the pin pops (grows past full size, settles) inside a short gold glow */
+  const kp = Math.min(1, (t - ar.t) / 380); if (kp < 1 || k < .5){ const sc = kp < 1 ? (kp < .6 ? d3.easeBackOut(kp / .6) * 1.35 : 1.35 - .35 * (kp - .6) / .4) : 1, gl = Math.max(0, 1 - k * 2);
+    ctx.save(); ctx.shadowColor = th.pin; ctx.shadowBlur = 26 * gl; ctx.fillStyle = th.pin; ctx.globalAlpha = .35 + .65 * gl; ctx.beginPath(); ctx.arc(p[0], p[1], 7 * sc, 0, 7); ctx.fill(); ctx.restore(); }
 }
 function momentPhoto(el, src, whole, zd){ /* the whole photo over a soft blurred copy of itself; it starts a little zoomed and eases back to all of it */
   const f = document.createElement("div"); f.className = "kbf" + (whole ? " whole" : ""); if (zd) f.style.setProperty("--zd", Math.round(zd) + "ms");
@@ -3034,7 +3040,7 @@ async function replayRun(id, opts, run){
     }
     replayState.next = false; replayState.landedAt = performance.now(); { const nb = document.getElementById("rskip"); if (nb) nb.textContent = "Next stop ›"; }
     replayState.roads[i] = car && !jump ? replayState.lastRoad : null;
-    replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true; if (rec) rec.chip = "";
+    replayState.leg = i; replayState.arrive = {lon:s.lon, lat:s.lat, t:performance.now()}; chip.hidden = true; dirty = true; if (rec) rec.chip = ""; if (!jump) music.chime();
     await wait(600, false); if (!alive()) return; if (goBack()){ i = Math.max(0, i - 2); jump = true; continue; }
     if (replayState.next){ replayState.next = false; i++; continue; } // Next pressed while arriving: go on to the next stop
     mom.querySelector(".pics").innerHTML = "";
@@ -3073,7 +3079,7 @@ async function replayRun(id, opts, run){
   const card = document.getElementById("rcard"); const doneLabel = replayState.fromEdit ? "Back to Edit my story" : replayState.fromTrip && !REC ? `${/^back\b/i.test(t.title) ? "Return to" : "Back to"} ${esc(t.title)}` : "Back to globe"; /* the guided first story names where Done goes too (Muse r23) */
   card.innerHTML = opts.guided
     ? `<div class="c"><h3>Your first story is saved</h3><p>${esc(t.title)} · ${plural(days(t), "day")} · ${plural(st.length, "place")}. Come back tomorrow for On This Day, or relive another trip any time.</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button></div></div>`
-    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button></div></div>`;
+    : `<div class="c"><h3>${esc(t.title)}</h3><p>${t.homeMem ? `${memDates(t)} · 🏠 Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}</p><div class="row-btns"><button class="btn primary" data-replay-done>${doneLabel}</button><button class="btn" data-replay="${t.id}">Watch again</button><button class="btn" data-share="${t.id}">🎬 Make a shareable video</button><button class="btn" data-postcard-make="${t.id}">📮 Share a postcard</button></div></div>`;
   card.style.opacity = 1; prog(1); replayState.ended = true; el.classList.add("ended");
   if (REC){ replayPace = savedPace; card.style.opacity = 0; if (rec) rec.end = {title:t.title, sub:t.homeMem ? `${memDates(t)} · Close to home` : `${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`}; await wait(3500, false); if (alive() && rec) recFinish(); return; }
   // the end card stays until you leave; Previous goes back to the last stop
@@ -3081,6 +3087,25 @@ async function replayRun(id, opts, run){
   replayState.back = false; replayState.paused = false; replayState.ended = false; el.classList.remove("ended"); replayState.beat = performance.now(); card.style.opacity = 0; card.innerHTML = ""; { const pb = document.getElementById("rpause"); if (pb){ pb.style.visibility = ""; pb.textContent = "❚❚"; pb.setAttribute("aria-label", "Pause"); } }
   i = st.length - 1; jump = true; music.unsoften && music.unsoften(); }
 }
+/* Share a postcard (elite C): a still of the end frame, the globe with your whole route, plus the trip's name and numbers. Made on the phone, nothing uploaded */
+async function makePostcard(id){ const t = TRIPS.find(x => x.id === id); if (!t) return;
+  try { const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d"), th = TH();
+    const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#0b1430"); bg.addColorStop(1, "#060a14"); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 160; i++){ x.fillStyle = `rgba(255,255,255,${.15 + ((i * 37) % 10) / 20})`; x.fillRect((i * 911) % W, (i * 577) % 980, 1.6, 1.6); }
+    const cw = canvas.width, ch = canvas.height, side = Math.min(cw, ch), sx = (cw - side) / 2, sy = Math.max(0, (ch - side) / 2 - ch * .08); x.drawImage(canvas, sx, sy, side, Math.min(side, ch - sy), 0, 0, W, W * Math.min(side, ch - sy) / side); { const v = x.createRadialGradient(W / 2, 520, 300, W / 2, 520, 760); v.addColorStop(0, "rgba(6,10,20,0)"); v.addColorStop(1, "rgba(6,10,20,.55)"); x.fillStyle = v; x.fillRect(0, 0, W, 1060); }
+    const fade = x.createLinearGradient(0, 860, 0, 1060); fade.addColorStop(0, "rgba(6,10,20,0)"); fade.addColorStop(1, "rgba(6,10,20,1)"); x.fillStyle = fade; x.fillRect(0, 860, W, 200); x.fillStyle = "#060a14"; x.fillRect(0, 1060, W, H - 1060);
+    const st = stopsOf(t); x.textAlign = "left"; x.fillStyle = "#ffffff"; x.font = "88px 'Instrument Serif', Georgia, serif";
+    const lines = recWrap(x, t.title, W - 140).slice(0, 2); lines.forEach((l, i) => x.fillText(l, 70, 1080 + i * 92));
+    const y2 = 1080 + lines.length * 92 + 10; x.fillStyle = "#f2c66d"; x.font = "600 40px Figtree, system-ui, sans-serif";
+    x.fillText(t.homeMem ? `${memDates(t)} · Close to home` : `${dRange(t.start, t.end)}`, 70, y2); x.fillStyle = "rgba(255,255,255,.8)"; x.font = "38px Figtree, system-ui, sans-serif";
+    if (!t.homeMem) x.fillText(`${plural(days(t), "day")} · ${plural(st.length, "place")} · ${tripMiles(t).toLocaleString()} ${tripMiles(t) === 1 ? "mile" : "miles"}`, 70, y2 + 56);
+    x.textAlign = "right"; x.font = "52px 'Instrument Serif', Georgia, serif"; x.fillStyle = "#ffffff"; const sw = x.measureText("sake").width; x.fillText("Trip", W - 70 - sw, H - 60); x.font = "italic 52px 'Instrument Serif', Georgia, serif"; x.fillStyle = "#f2c66d"; x.fillText("sake", W - 70, H - 60);
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", .9)); if (!blob) throw new Error("no image");
+    const fname = `${t.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "trip"}-postcard.jpg`;
+    let f = null; try { f = new File([blob], fname, {type:"image/jpeg"}); } catch(e){}
+    if (f && navigator.canShare && navigator.canShare({files:[f]})){ try { await navigator.share({files:[f], title:t.title}); return; } catch(e){ if (e && e.name === "AbortError") return; } }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); toast("Postcard saved to your downloads");
+  } catch(e){ toast("The postcard couldn't be made here"); } }
 function endReplay(){
   if (voiceNow){ voiceNow.pause(); voiceNow._done && voiceNow._done(); voiceNow = null; }
   const cut = !!(rec && rec.mr.state !== "inactive" && !rec.finishing); if (cut) recAbort();
@@ -4221,6 +4246,7 @@ document.addEventListener("click", e => {
   if (g("[data-calm-toggle]")){ const on = !store.get("calmStory", false); store.set("calmStory", on); applyCalm(); renderBody(); toast(on ? "Calmer story on. Photos stay still and the globe hops between stops" : "Calmer story off"); return; }
   if (g("[data-arc-toggle]")){ const off = arcOn(); store.set("arcOff", off); renderBody(); toast(off ? "Story arc off. Stories play every photo in date order" : "Story arc on"); return; }
   if (g("[data-postcard-off]")){ store.set("postcardOff", true); renderBody(); toast("Sunday postcard turned off. Turn it back on in More, under Stories and reminders", () => { store.set("postcardOff", false); renderBody(); }); return; }
+  if (g("[data-postcard-make]")){ makePostcard(g("[data-postcard-make]").dataset.postcardMake); return; }
   if (g("[data-remind-toggle]")){ remindSet(!store.get("remind", false)); return; }
   if (g("[data-remind-no]")){ store.set("remind", false); renderBody(); toast("No reminders. You can turn them on in More, under Stories and reminders"); return; }
   if (g("[data-otd-hide]")){ store.set("otdHidden", todayStr()); renderBody(); toast("On This Day hidden until tomorrow", () => { store.set("otdHidden", ""); renderBody(); }); return; }
