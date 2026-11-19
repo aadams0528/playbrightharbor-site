@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.29.0 (simpler Add and More, opt-in phone reminders) -->
+<!-- Tripsake v0.30.0 (zip backups, checked before saved) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -1499,8 +1499,8 @@ function renderBody(){
     const fold = (k, icon, t, sub, fill) => { const o = moreOpen.has(k); h += `<button class="foldhd" data-fold="${k}" aria-expanded="${o}"><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">${icon}</div><div class="txt"><div class="t">${t}</div><div class="s">${sub}</div></div><span class="chev" aria-hidden="true">›</span></button><div class="foldbody"${o ? "" : " hidden"}>`; fill(); h += `</div>`; };
     h += `<label class="morerow switchrow"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
     fold("safe", "⤒", "Keep your trips safe", lb ? `Backup, restore, shared files · last backup ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric"})}` : REAL_TRIPS.length ? "<b>No backup yet.</b> Backup, restore and shared files" : "Backup, restore and shared files", () => {
-    h += `<button class="morerow" data-export><div class="flag ring">⤒</div><div class="txt"><div class="t">Save a backup file</div><div class="s">${(() => { const lb = store.get("lastBackup", 0); return lb ? `Last backup file: ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}. Save a new one after adding trips` : "No backup yet. Right now everything is saved only on this phone"; })()}</div></div></button>`;
-    h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
+    h += `<button class="morerow" data-export><div class="flag ring">⤒</div><div class="txt"><div class="t">Save a backup file</div><div class="s">${(() => { const lb = store.get("lastBackup", 0); return lb ? `Last backup file: ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}${store.get("lastBackupReceipt", "") ? ` (${esc(store.get("lastBackupReceipt", ""))}, all checked ✓)` : ""}. Save a new one after adding trips` : "No backup yet. Right now everything is saved only on this phone"; })()}</div></div></button>`;
+    h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">⤓</div><div class="txt"><div class="t">Restore from a backup file</div><div class="s">Replaces what's saved in this browser</div></div><input type="file" accept="application/json,.json,application/zip,.zip" id="importFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<label class="morerow" style="cursor:pointer"><div class="flag ring">👥</div><div class="txt"><div class="t">Open a shared trip or memory</div><div class="s">A file someone sent you. It joins yours, or merges into your copy</div></div><input type="file" accept="application/json,.json" id="tripFile" style="position:absolute;width:1px;height:1px;opacity:0"></label>`;
     h += `<p class="note" style="margin:0 4px">Tripsake keeps smaller copies of your photos for your stories. Keep your originals in your photo library and its own backup.${(() => { const ps = store.get("persisted", null); if (IN_APP || ps === null || !REAL_TRIPS.length) return ""; return ps ? " <b>Kept safe on this phone:</b> the browser has agreed not to clear them." : isIOS() ? " On iPhone, Safari can clear a website's photos after a few weeks unused. <b>Add Tripsake to your Home Screen</b> (Share, then Add to Home Screen) so iPhone keeps them, and save a backup file." : " This browser may clear them if space runs low, so save a backup file now and then."; })()}</p>`;
     if (REAL_TRIPS.length) h += `<button class="morerow" data-real-remove><div class="flag ring">✕</div><div class="txt"><div class="t">${REAL_TRIPS.some(u => u.homeMem) ? "Remove my loaded trips and memories" : "Remove my loaded trips"}</div><div class="s">Takes your ${tmCount(REAL_TRIPS)} and their photos off this device</div></div></button>`;
@@ -1534,7 +1534,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.29.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.30.0 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -3634,25 +3634,80 @@ function openVideoStart(id){
 
 /* ---------------- backup ---------------- */
 let pendingRestore = null;
+/* ---------------- backup v2 (elite, Alan 11-19): one .zip holding manifest.json + data.json + each photo as its own file.
+   Photos go in as they are (no text copies), so 3,000+ photos stay small enough to save, and every count is checked
+   by reading the finished file back before we call it saved. Old .json backups still restore. ---------------- */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u8 => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+async function zipBuild(entries){ /* entries: [{name, data: Blob|string}] → stored (no compression) zip Blob; photos are already compressed */
+  const parts = [], cd = [], enc = new TextEncoder(); let off = 0;
+  for (const e of entries){ const nm = enc.encode(e.name), u8 = typeof e.data === "string" ? enc.encode(e.data) : new Uint8Array(await e.data.arrayBuffer()), crc = crc32(u8), sz = u8.length;
+    const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true); h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true); h.setUint16(26, nm.length, true);
+    parts.push(h.buffer, nm, u8);
+    const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+    cd.push(c.buffer, nm); off += 30 + nm.length + sz; if (off > 0xFFFFFFF0) throw new Error("too big"); }
+  const cdSize = cd.reduce((n, x) => n + x.byteLength, 0), z = new DataView(new ArrayBuffer(22));
+  z.setUint32(0, 0x06054b50, true); z.setUint16(8, entries.length, true); z.setUint16(10, entries.length, true); z.setUint32(12, cdSize, true); z.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, z.buffer], {type:"application/zip"}); }
+async function zipRead(blob){ /* → Map name → Blob, or null if it isn't a zip we wrote */
+  const tail = new DataView(await blob.slice(Math.max(0, blob.size - 65558)).arrayBuffer()); let e = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50){ e = i; break; }
+  if (e < 0) return null; const n = tail.getUint16(e + 10, true), cdSize = tail.getUint32(e + 12, true), cdOff = tail.getUint32(e + 16, true);
+  const cd = new DataView(await blob.slice(cdOff, cdOff + cdSize).arrayBuffer()), dec = new TextDecoder(), out = new Map(); let p = 0;
+  for (let i = 0; i < n; i++){ if (cd.getUint32(p, true) !== 0x02014b50) return null; const meth = cd.getUint16(p + 10, true), sz = cd.getUint32(p + 20, true), nl = cd.getUint16(p + 28, true), xl = cd.getUint16(p + 30, true), cl = cd.getUint16(p + 32, true), lo = cd.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nl)); if (meth !== 0) return null;
+    const lh = new DataView(await blob.slice(lo, lo + 30).arrayBuffer()), start = lo + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+    out.set(name, blob.slice(start, start + sz)); p += 46 + nl + xl + cl; }
+  return out; }
+const bkCounts = keys => { const j = k => { try { return JSON.parse(keys[k] || "null"); } catch(e){ return null; } }; const rt = j("tg.realTrips") || [];
+  return {trips:rt.filter(t => t.kind !== "home").length, home:rt.filter(t => t.kind === "home").length, moments:(j("tg.snaps") || []).length}; };
 async function exportBackup(){
-  const keys = {}; try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith("tg.")) keys[k] = localStorage.getItem(k); } } catch(e){}
-  let images = {}; try { images = await idb.all(); for (const k of Object.keys(images)){ const v = images[k]; if (typeof v === "string") continue; if (v instanceof Blob && (String(k).startsWith("rp:") || String(k).startsWith("vn:"))){ try { images[k] = await blobURL(v); } catch(e){ delete images[k]; } } else delete images[k]; } } catch(e){} imgCache.forEach((v, k) => { if (!images[k] && !String(v).startsWith("blob:")) images[k] = v; });
-  const data = {app:"travel-globe", version:1, exported:new Date().toISOString(), keys, images};
+  if (exportBackup.busy) return toast("Still saving the backup. One moment"); exportBackup.busy = true;
   try {
-    const blob = new Blob([JSON.stringify(data)], {type:"application/json"}), fname = `tripsake-backup-${todayStr()}.json`;
-    if (isIOS() && navigator.canShare){ let f = null; try { f = new File([blob], fname, {type:"application/json"}); } catch(e){} if (f && navigator.canShare({files:[f]})){ try { await navigator.share({files:[f], title:"Tripsake backup"}); } catch(e){ if (e && e.name === "AbortError"){ toast("Backup not saved. Tap Save a backup file again, then Save to Files"); return; } f = null; } if (f){ store.set("lastBackup", Date.now()); if (typeof tab !== "undefined" && tab === "more" && !$("#overlay").dataset.kind) renderBody(); const nI = Object.keys(images).filter(k => !String(k).startsWith("vn:")).length; toast(`Backup file saved: ${nI ? `${nI.toLocaleString()} of your own photo${nI === 1 ? "" : "s"}` : "no photos of your own yet"}. Keep it somewhere safe.`); return; } } } /* on iPhone the share sheet says whether the file was really saved, so a cancelled save is never counted as a backup */
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tripsake-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); store.set("lastBackup", Date.now()); if (typeof tab !== "undefined" && tab === "more" && !$("#overlay").dataset.kind) renderBody(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    const nImg = Object.keys(images).filter(k => !String(k).startsWith("vn:")).length; toast(`Backup file saved: ${snaps.length ? plural(snaps.length, "moment you added", "moments you added") + " and " : ""}${nImg ? `${nImg.toLocaleString()} of your own photo${nImg === 1 ? "" : "s"}` : "no photos of your own yet"}${SAMPLE_TRIPS.length ? ". The example trips come with the app, so they don't need saving" : ""}. Keep it somewhere safe.`);
-  } catch(e){ toast("This browser blocked the download"); }
+  const keys = {}; try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith("tg.")) keys[k] = localStorage.getItem(k); } } catch(e){}
+  let raw = {}; try { raw = await idb.all(); } catch(e){}
+  const imgs = []; for (const [k, v] of Object.entries(raw)){ const sk = String(k); if (sk.startsWith("song:") || sk.startsWith("dup:")) continue; if (v instanceof Blob) imgs.push([sk, v]); else if (typeof v === "string" && /^data:(image|audio)\//.test(v)) imgs.push([sk, v]); }
+  imgCache.forEach((v, k) => { if (!(k in raw) && typeof v === "string" && v.startsWith("data:image/")) imgs.push([String(k), v]); });
+  toast(`Saving a backup of ${plural(imgs.filter(x => !x[0].startsWith("vn:")).length, "photo")}…`, null, true);
+  const files = {}, entries = []; let i = 0;
+  for (const [k, v] of imgs){ let blob = v; if (typeof v === "string"){ try { blob = await (await fetch(v)).blob(); } catch(e){ continue; } } const ext = /png/.test(blob.type) ? "png" : /webp/.test(blob.type) ? "webp" : /audio/.test(blob.type) ? (/mp4|m4a|aac/.test(blob.type) ? "m4a" : "webm") : "jpg", f = `photos/${String(++i).padStart(5, "0")}.${ext}`; files[k] = {f, type:blob.type || "image/jpeg", size:blob.size}; entries.push({name:f, data:blob}); }
+  const counts = Object.assign(bkCounts(keys), {photos:Object.keys(files).filter(k => !k.startsWith("vn:")).length, voice:Object.keys(files).filter(k => k.startsWith("vn:")).length});
+  const manifest = {app:"travel-globe", version:2, exported:new Date().toISOString(), counts, files};
+  entries.unshift({name:"manifest.json", data:JSON.stringify(manifest)}, {name:"data.json", data:JSON.stringify({keys})});
+  const blob = await zipBuild(entries);
+  // the check: read the finished file back and make sure every piece is there at the right size
+  const back = await zipRead(blob); const missing = back ? Object.values(files).filter(x => !back.has(x.f) || back.get(x.f).size !== x.size).length : -1;
+  if (!back || !back.has("data.json") || missing){ toast(`The backup didn't check out (${missing < 0 ? "the file couldn't be read back" : plural(missing, "photo") + " missing"}). Nothing was saved. Please try again`, null, true); return; }
+  const receipt = [counts.trips ? plural(counts.trips, "trip") : "", counts.home ? plural(counts.home, "memory close to home", "memories close to home") : "", counts.moments ? plural(counts.moments, "moment") : "", plural(counts.photos, "photo")].filter(Boolean).join(" · ");
+  store.set("lastBackupReceipt", receipt);
+  await saveBackupBlob(blob, `tripsake-backup-${todayStr()}.zip`, `Backup saved: ${receipt} · all checked ✓. Keep it somewhere safe`);
+  } catch(e){ toast(/too big/.test(e && e.message) ? "This backup is over 4 GB, too big for one file. Remove some trips' Keep all photos and try again" : "The backup couldn't be made. Nothing was changed", null, true); }
+  finally { exportBackup.busy = false; }
+}
+async function saveBackupBlob(blob, fname, msg){
+  const done = () => { store.set("lastBackup", Date.now()); if (typeof tab !== "undefined" && tab === "more" && !$("#overlay").dataset.kind) renderBody(); toast(msg, null, true); };
+  if ((isIOS() || IN_APP) && navigator.canShare){ let f = null; try { f = new File([blob], fname, {type:"application/zip"}); } catch(e){} if (f && navigator.canShare({files:[f]})){ try { await navigator.share({files:[f], title:"Tripsake backup"}); return done(); } catch(e){ if (e && e.name === "AbortError"){ toast("Backup not saved. Tap Save a backup file again, then Save to Files"); return; } } } } /* on iPhone the share sheet says whether the file was really saved, so a cancelled save is never counted as a backup */
+  try { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); done(); } catch(e){ toast("This browser blocked the download"); }
 }
 // what a backup would leave in place: data this browser has that the file doesn't
 const DATA_KEYS = {"tg.snaps":"moments", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections", "tg.chapters":"life chapters", "tg.covers":"trip covers", "tg.phHidden":"photos removed from trips", "tg.phOrder":"photo order", "tg.phRot":"turned photos", "tg.backSeen":"hidden Back again cards", "tg.bookWords":"trip book dedications and reflections"};
 function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
 function restoreKeptHTML(d){ const kept = restoreKept(d); const has = Object.keys(DATA_KEYS).filter(k => k in d.keys).map(k => DATA_KEYS[k]);
   return `This replaces ${has.length ? has.join(", ") : "nothing but settings"} in this browser. ${kept.length ? `The backup has no ${kept.map(x => x.label).join(", ")}, so the ones in this browser (${kept.map(x => x.label.split(" ")[0] + ": " + x.n).join(", ")}) stay unless you tick below.</p><label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="rsWipe" style="width:20px;height:20px;accent-color:var(--lit)"><span>Remove them too, so this browser matches the backup exactly</span></label><p class="note" style="margin:0">` : ""}Settings like your globe style stay as they are. `; }
+async function importZip(file){
+  let z = null; try { z = await zipRead(file); } catch(e){}
+  if (!z || !z.has("manifest.json") || !z.has("data.json")){ toast("That file isn't a Tripsake backup"); return; }
+  let m = null, data = null; try { m = JSON.parse(await z.get("manifest.json").text()); data = JSON.parse(await z.get("data.json").text()); } catch(e){}
+  if (!m || m.app !== "travel-globe" || !data || !data.keys){ toast("That file isn't a Tripsake backup"); return; }
+  const images = {}; let missing = 0; Object.entries(m.files || {}).forEach(([k, x]) => { const b = z.get(x.f); if (b && b.size === x.size) images[k] = new Blob([b], {type:x.type}); else missing++; });
+  return {app:"travel-globe", exported:m.exported, keys:data.keys, images, missing, counts:m.counts}; }
 function importBackup(file){
+  if (/\.zip$/i.test(file.name || "") || /zip/.test(file.type || "")){ importZip(file).then(d => { if (d) importBackupData(d); }); return; }
   const fr = new FileReader();
-  fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){}
+  fr.onload = () => { let d = null; try { d = JSON.parse(fr.result); } catch(e){} importBackupData(d); };
+  fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file);
+}
+function importBackupData(d){ {
     if (d && d.app === "travel-globe" && d.kind === "trip"){ openTripImport(d); return; }
     if (!d || d.app !== "travel-globe" || !d.keys || typeof d.keys !== "object"){ toast("That file isn't a Tripsake backup"); return; }
     // a backup must hold something to restore: memories, loaded trips or stories
@@ -3660,8 +3715,8 @@ function importBackup(file){
     if (!has("tg.snaps") && !has("tg.realTrips") && !has("tg.stories") && !Array.isArray((() => { try { return JSON.parse(d.keys["tg.snaps"]); } catch(e){ return null; } })())){ toast("That backup has nothing in it to restore, so nothing was changed"); return; }
     pendingRestore = d; let n = 0; try { n = JSON.parse(d.keys["tg.snaps"] || "[]").length; } catch(e){}
     openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Restore this backup?")}<p style="margin:0">Backup from ${esc((() => { const x = new Date(d.exported || ""); return isFinite(x) ? x.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}) : "an unknown date"; })())}: ${[(() => { try { const a = JSON.parse(d.keys["tg.realTrips"] || "[]").map(t => ({homeMem:t.kind === "home"})); return a.length ? tmCount(a) : ""; } catch(e){ return ""; } })(), n ? plural(n, "moment", "moments") : "", plural(Object.keys(d.images || {}).filter(k => !String(k).startsWith("vn:")).length, "photo")].filter(Boolean).join(", ")}.</p><p class="note" style="margin:0">${restoreKeptHTML(d)}If saving fails, your old data is put back.</p><div class="row-btns" style="margin:0"><button class="btn primary" data-restore-go>Replace with this backup</button><button class="btn" data-close>Cancel</button></div></div>`);
-  };
-  fr.onerror = () => toast("That file couldn't be read"); fr.readAsText(file);
+    if (d.missing) toast(`Heads up: ${plural(d.missing, "photo")} in this backup couldn't be read. Everything else will come back`, null, true);
+  }
 }
 async function doRestore(){
   const d = pendingRestore; if (!d) return; const wipe = !!($("#rsWipe") && $("#rsWipe").checked);
@@ -3675,10 +3730,11 @@ async function doRestore(){
   // "already seen" flags never go backwards on restore, so a dismissed guide or welcome doesn't come back
   try { ["tg.guideShown", "tg.guided", "tg.seen"].forEach(k => { if (snap[k] === "true") localStorage.setItem(k, "true"); }); } catch(e){}
   // 3. photos: replace old ones, count what made it
-  const imgs = Object.entries(d.images || {}).filter(([k, v]) => typeof v === "string" && (v.startsWith("data:image/") || (String(k).startsWith("vn:") && v.startsWith("data:audio/")))); let ok = 0;
+  const imgs = Object.entries(d.images || {}).filter(([k, v]) => v instanceof Blob ? v.size > 0 : typeof v === "string" && (v.startsWith("data:image/") || (String(k).startsWith("vn:") && v.startsWith("data:audio/")))); let ok = 0;
   // write the new photos first; old ones are only removed once every new one is safely saved
   // loaded-trip photos and voice notes go back in as compact files, the way they were saved
-  for (const [k, v] of imgs){ try { let val = v; if (/^(rp|vn):/.test(k)){ try { val = await (await fetch(v)).blob(); } catch(e){ val = v; } } await idb.put(k, val); ok++; } catch(e){} }
+  for (const [k, v] of imgs){ try { let val = v; if (v instanceof Blob){ if (!/^(rp|vn):/.test(k)) val = await blobURL(v); } /* zip backups hold files; moments keep their text copies the way they were saved */
+      else if (/^(rp|vn):/.test(k)){ try { val = await (await fetch(v)).blob(); } catch(e){ val = v; } } await idb.put(k, val); ok++; } catch(e){} }
   // photos of trips loaded from your phone stay unless this backup brings its own loaded trips
   const keepSet = new Set(imgs.map(x => x[0])), keepReal = !("tg.realTrips" in d.keys) && !wipe, keepVoice = !imgs.some(x => String(x[0]).startsWith("vn:")) && !wipe;
   if (ok === imgs.length){ try { await idb.clearPhotos(k => keepSet.has(k) || (keepReal && String(k).startsWith("rp:")) || (keepVoice && String(k).startsWith("vn:"))); } catch(e){} }
@@ -4273,7 +4329,7 @@ function openWelcome(){ /* the guided first run: three plain steps; home is aske
     ${loadState && loadState.awaitHome && loadState.pts && loadState.pts.length ? `<button class="btn primary ldgo" data-resume-review>Carry on with my ${plural(loadState.total || loadState.pts.length, "photo")}</button><button class="btn" data-load-photos style="align-self:stretch;justify-content:center;min-height:52px">Pick different photos</button>` : `<button class="btn primary ldgo" data-load-photos>Start: pick my photos</button>`}
     <button class="btn" data-sample-photos style="align-self:stretch;justify-content:center;min-height:52px">Try it with sample photos</button>
     <button class="btn" data-sample-look style="align-self:stretch;justify-content:center;min-height:48px">Skip for now, just look around</button>
-    <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone? Restore from a backup file<input type="file" accept="application/json,.json" id="importFileW" style="position:absolute;width:1px;height:1px;opacity:0"></label>
+    <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone? Restore from a backup file<input type="file" accept="application/json,.json,application/zip,.zip" id="importFileW" style="position:absolute;width:1px;height:1px;opacity:0"></label>
     <p class="ldhow">🔒 Your photos stay on this device. Nothing is uploaded, and there's no account.</p></div>`, "welcome");
 }
 /* ---------------- home: asked once, first thing; change it under More ---------------- */
