@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.9.7 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.9.8 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -128,6 +128,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .sheet .stick { position: sticky; bottom: -22px; margin-bottom: -22px; padding-bottom: 22px; background: var(--card); }
 .rules { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; }
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+#skipCue { position: fixed; inset: 0; z-index: 29; cursor: pointer; }
 #rulesBox.setonly #rulesTitle, #rulesBox.setonly #rulesList { display: none; } #rulesBox.setonly #lookBtn[aria-pressed="true"] { background: linear-gradient(#ffe08a, #ffc53d); box-shadow: 0 0 0 3px rgba(255,214,90,.55); }
 #festBox .sheet { width: min(560px, 100%); }
 #street { display: block; width: 100%; margin: 6px 0; border-radius: 16px; }
@@ -202,7 +203,7 @@ html.big .btn { font-size: 22px; }
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.7</span>
+    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.8</span>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -238,6 +239,16 @@ html.big .btn { font-size: 22px; }
     <button class="btn" id="replayBtn">Play again</button>
   </div>
 </div>
+<div class="overlay" id="shareBox" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="shareTitle">
+    <h2 id="shareTitle">Share</h2>
+    <img id="shareImg" alt="The picture that will be shared" style="width:100%;max-width:320px;aspect-ratio:1;border-radius:16px;display:block;margin:10px auto">
+    <pre id="shareTxt" style="white-space:pre-wrap;font:inherit;font-size:17px;text-align:center;margin:0 0 12px"></pre>
+    <button class="btn primary" id="shareGo" style="width:100%">Share</button>
+    <button class="btn" id="shareCopy" style="width:100%;margin-top:8px">Copy text</button>
+    <button class="btn" id="shareClose" style="width:100%;margin-top:8px">Close</button>
+  </div>
+</div>
 <div class="overlay" id="festBox" hidden>
   <div class="sheet" role="dialog" aria-labelledby="festTitle">
     <h2 id="festTitle">My festival</h2>
@@ -271,6 +282,7 @@ html.big .btn { font-size: 22px; }
   </div>
 </div>
 <canvas id="confetti" hidden></canvas>
+<div id="skipCue" hidden aria-label="Tap to continue"></div>
 
 <script>
 /* Lantern Chain rules (shared by prototype.html and check.js; no packages).
@@ -796,7 +808,7 @@ function startTip() {
   if (!seen.preview && G.li >= 3 && G.li < LEVELS.length && !G.level.tip) return 'Tip: press and hold a lantern, or tap the eye at the top, to see where its flames will land. No match is used.';
   return G.level.tip || ruleReminder() || defaultTip();
 }
-function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; if (G.celebT) clearTimeout(G.celebT); G.celebT = 0; G.showCard = null; $('winBox').hidden = true; stopConfetti(); }
+function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; $('skipCue').hidden = true; if (G.celebT) clearTimeout(G.celebT); G.celebT = 0; G.showCard = null; $('winBox').hidden = true; stopConfetti(); }
 
 function unlocked(i) { if (tester || i === 0 || progress.stars[LEVELS[i - 1].id]) return true; for (var j = i; j < LEVELS.length; j++) if (progress.stars[LEVELS[j].id]) return true; return false; }
 /* ---------- today's lantern ---------- */
@@ -929,7 +941,7 @@ function titleActions(nx) {
     db.onclick = function () { if (daily.done[today()] && daily.res && daily.res.day === today()) showDailyResult(); else startLevel(DAILY_LI); };
   }
   var wb = $('weeklyBtn'), wkNow = weekStart(today()), wOpen = weeklyOpen() && !weekly.done[wkNow]; wb.hidden = !wOpen;
-  if (wOpen) { $('weeklySub').textContent = 'Opened by your daily lanterns · week of ' + shortDate(wkNow); wb.onclick = function () { startLevel(WEEKLY_LI); }; }
+  if (wOpen) { $('weeklySub').textContent = (tester && weekCount() < WEEK_NEED ? 'Tester unlocked (players light ' + WEEK_NEED + ' daily lanterns first)' : 'Opened by your daily lanterns') + ' · week of ' + shortDate(wkNow); wb.onclick = function () { startLevel(WEEKLY_LI); }; }
   $('festDot').hidden = album.cards.length <= album.seen;
   // once every level is done, today's lantern (if still dark) is the main action and sits above the replay button
   var lead = done && open && !daily.done[today()];
@@ -1385,12 +1397,14 @@ function afterMove() {
   if (L.shyLit(G.b, G.lit)) {
     tray(G.fail && G.fail.late >= 0
       ? "Oh no! The lantern in the gold ring lit too late, after this flame landed. Tap Undo and light it sooner."
-      : 'Oh no, a flame reached the shy lantern with no lit lantern beside it. Tap Undo to take that match back.', { warn: true });
+      : 'Oh no, a flame reached the shy lantern with no lit lantern beside it. Tap Undo to take that match back.' + ' Next time, tap the eye, then a lantern: red means it would wake one.', { warn: true });
     $('undoBtn').classList.add('pulse'); return;
   }
   if (L.isWin(G.b, G.lit)) { win(); return; }
-  if (G.hidNow && !G.tut) { tray('Saved! A flame reached a shy lantern, but its dome was down. The green check marks it safe.'); return; }
-  if (G.windMiss && !G.tut) { tray('The wind pushed that flame on: an arrow always sends a flame the way it points, whichever side it lands from. This one ' + G.windMiss + '.'); return; }
+  var windLine = G.windMiss && !G.tut ? 'The wind pushed a flame on: an arrow always sends a flame the way it points, whichever side it lands from. This one ' + G.windMiss + '.' : '';
+  if (windLine) seen['windMiss' + G.li] = true; // spent only now that the line really shows
+  if (G.hidNow && !G.tut) { tray('Saved! A flame reached a shy lantern, but its dome was down. The green check marks it safe.' + (windLine ? ' ' + windLine : '')); return; }
+  if (windLine) { tray(windLine); return; }
   if (G.padHit && !G.tut) { tray('A flame reached a floating lantern and went out on its lily pad. Floating lanterns only light when you tap them.'); return; }
   if (G.matches > 0 && !G.tut) tray(defaultTip());
 }
@@ -1414,7 +1428,7 @@ function doTap(idx, t) {
   G.hidNow = res.events.some(function (e) { return e.result === 'hid'; });
   G.matches++; G.lit = res.lit; G.hint = -1; G.hintStage = 0; G.fail = whyFail(res);
   var wm = res.events.find(function (e) { return e.path.length > 2 && !(e.warps && e.warps.length) && (e.result === 'grass' || e.result === 'off' || e.result === 'water') && e.path.slice(1, -1).some(function (p) { return typeof p === 'number' && G.b.cells[p].kind === 'wind'; }); });
-  G.windMiss = wm && !seen['windMiss' + G.li] ? (wm.result === 'off' ? 'blew off the board' : wm.result === 'water' ? 'landed in the pond' : 'landed on grass') : ''; if (G.windMiss) { seen['windMiss' + G.li] = true; }
+  G.windMiss = wm && !seen['windMiss' + G.li] ? (wm.result === 'off' ? 'blew off the board' : wm.result === 'water' ? 'landed in the pond' : 'landed on grass') : ''; 
   G.padHit = res.events.some(function (e) { var c = e.end >= 0 && G.b.cells[e.end]; return e.result === 'water' && c && c.kind === 'lantern' && !c.shy && !res.lit[c.li]; });
   var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t; addFx('burst', cellXY(idx), t); SFX.strike(); SFX.light(0); buzz(); G.chain = { n: 1, t: t, t0: t };
   G.anim = buildAnim(res, t); G.anim.fail = !!G.fail; G.busy = true; refresh(); wake();
@@ -1472,8 +1486,11 @@ function showPreview(idx) {
   if (tr) tr.events.forEach(function (e) { if (e.depth === 0 && e.end >= 0) first[e.end] = e.result; if (e.result === 'shy' && e.depth > 0) chainWake = true; });
   fl.forEach(function (f) { if ((f.res === 'shy' || f.res === 'hid') && first[f.end]) f.res = first[f.end] === 'shy' ? 'shy' : 'hid'; });
   var shy = fl.some(function (f) { return f.res === 'shy'; }), saveNow = fl.some(function (f) { return f.res === 'hid'; });
-  tray((n ? 'Its flames land on ' + n + (n === 1 ? ' lantern' : ' lanterns') + ' (gold ' + (n === 1 ? 'ring' : 'rings') + '). With the chain, this match lights ' + all + ' in all' + (allShy ? (allShy === 1 ? ', and one of them is shy.' : ', and ' + allShy + ' of them are shy.') : '.') : 'Its flames land on no lantern, so this match lights only itself.') +
-    (shy ? ' Red: a shy lantern would wake!' : chainWake ? ' Careful: further along, this chain wakes a shy lantern!' : saveNow ? ' The shy lantern it reaches is safe under its dome.' : '') + (G.look ? '' : ' Let go to keep your match.'));
+  var wakes = shy || chainWake, safeN = all - allShy, dome = saveNow ? ' A flame reaches a shy lantern, but its dome keeps it safe.' : '';
+  var msg = wakes ? 'Lights ' + safeN + ' safely; wakes ' + Math.max(1, allShy) + ' shy. This move fails.' + (shy ? ' Red: its own flame lands on a shy lantern.' : ' Careful: further along, the chain reaches a shy lantern with no dome.')
+    : all <= 1 ? 'Lights only this lantern.' + dome
+    : 'Lights ' + all + ' in all: ' + n + ' right away (gold ' + (n === 1 ? 'ring' : 'rings') + ')' + (all > n + 1 ? ', the rest along the chain.' : '.') + dome;
+  tray(msg + (G.look ? '' : ' Let go to keep your match.'));
   if (G.look) { $('trayText').textContent = 'Previewing · 0 matches used. ' + $('trayText').textContent.trim(); showStrike(idx); }
   wake();
 }
@@ -1564,7 +1581,7 @@ function win() {
   var isDaily = G.li === DAILY_LI, isWeekly = G.li === WEEKLY_LI, dw = null, newCard = '', wkBefore = weekCount();
   if (isDaily) { dw = dailyWin(st); if (dw.full && addCard('s' + daily.strings)) newCard = 's'; }
   else if (isStar(G.li)) { progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st); progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches); store.set('progress', progress); }
-  else if (isWeekly) { var wk = G.level.date, firstW = !weekly.done[wk]; weekly.done[wk] = Math.max(weekly.done[wk] || 0, st); if (firstW) weekly.wins++; store.set('weekly', weekly); if (addCard('k' + wk)) newCard = 'k'; }
+  else if (isWeekly) { var wk = G.level.date, firstW = !weekly.done[wk]; weekly.done[wk] = Math.max(weekly.done[wk] || 0, st); weekly.best = weekly.best || {}; var wb0 = weekly.best[wk]; if (!wb0 || G.matches < wb0[0]) weekly.best[wk] = [G.matches, lv.par]; if (firstW) weekly.wins++; store.set('weekly', weekly); if (addCard('k' + wk)) newCard = 'k'; }
   else if (!isStar(G.li)) {
     progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st);
     progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches);
@@ -1621,22 +1638,25 @@ function win() {
   tray(G.b.marked ? 'Every flag is lit!' : 'Every lantern lit!'); // replaces the tutorial bubble / tip, never a blank card
   var li = G.li;
   if (G.winTimer) clearTimeout(G.winTimer);
-  var big = last || wEnd || sEnd || isWeekly, hold = reduced ? 500 : big ? 2300 : 1500; // the lit board gets its moment: ripple, chord, sky lanterns, then the card
-  G.celebT = setTimeout(function () { G.celebT = 0; if (!G.won || G.li !== li || $('game').hidden) return; confetti(big ? 'fireworks' : 'sky'); SFX.win(big); buzz('win'); }, 80 + bloom);
-  G.showCard = function () { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; G.showCard = null;
-    if (!G.won || G.li !== li || $('game').hidden) return;
+  var big = last || wEnd || sEnd || isWeekly, hold = big ? 2400 : 1600; // the lit board gets its moment, counted from when the ripple ends
+  $('skipCue').hidden = false; // a full-screen catcher: a tap during the show opens the card, never Undo or a move
+  confetti(big ? 'fireworks' : 'sky', G.bloomFrom); // sky lanterns lift off each lantern as the ripple reaches it
+  G.celebT = setTimeout(function () { G.celebT = 0; if (!G.won || G.li !== li || $('game').hidden) return; SFX.win(big); buzz('win'); tray((G.b.marked ? 'Every flag is lit!' : 'Every lantern lit!') + ' Tap anywhere to continue.'); }, 80 + bloom);
+  G.showCard = function () { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; G.showCard = null; $('skipCue').hidden = true;
+    if (!G.won || G.li !== li || $('game').hidden) return; tray(G.b.marked ? 'Every flag is lit!' : 'Every lantern lit!');
     $('winBox').hidden = false; guardCard(); $('nextBtn').focus({ preventScroll: true }); };
-  G.winTimer = setTimeout(function () { if (G.showCard) G.showCard(); }, Math.max(hold, 200 + bloom)); // cleared by startLevel, show and undo
+  G.winTimer = setTimeout(function () { if (G.showCard) G.showCard(); }, bloom + hold); // cleared by startLevel, show and undo
 }
 // The lit board blooms once more in the order it caught, then the card comes up. Returns the extra wait in ms.
 function winBloom() {
-  if (reduced) return 0;
-  var b = G.b, t = performance.now() + 60, order = [];
+  var b = G.b, t = performance.now() + 60, order = [], r = $('board').getBoundingClientRect();
   b.lanterns.forEach(function (c, k) { if (G.disp[k] && !b.cells[c].shy) order.push(k); });
   order.sort(function (x, y) { return (G.pops[x] || 0) - (G.pops[y] || 0); });
-  var step = Math.max(18, Math.min(55, 260 / Math.max(1, order.length))); // a quick ripple: the card still comes in about a second
+  var step = reduced ? 0 : Math.max(35, Math.min(90, 800 / Math.max(1, order.length))); // the ripple runs in the order the board caught, under a second
+  G.bloomFrom = order.map(function (k, i) { var p = cellXY(b.lanterns[k]); return { x: r.left + p[0], y: r.top + p[1], at: 60 + i * step, s: G.S }; });
+  if (reduced) return 0;
   order.forEach(function (k, i) { var at = t + i * step; G.pops[k] = at; addFx('spark', cellXY(b.lanterns[k]), at, true); });
-  wake(); return order.length ? Math.round(Math.min(320, order.length * step) + 60) : 0;
+  wake(); return order.length ? Math.round(Math.min(900, order.length * step) + 60) : 0;
 }
 function weeklyShareText(st) {
   return 'Lantern Chain Festival board · week of ' + shortDate(G.level.date) + '\n' + '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) + ' ' + G.matches + (G.matches === 1 ? ' match' : ' matches') + ' (par ' + G.level.par + ')\n🏮🏮🏮🏮🏮🌟\n' + SHARE_URL;
@@ -1710,45 +1730,60 @@ function shareImage(txt, o) {
     return c;
   } catch (e) { return null; }
 }
-$('shareBtn').onclick = function () { shareNow(G.shareText, null, $('shareBtn'), G.shareLabel || 'Share my lantern'); };
-function shareNow(txt, o, b, label) {
-  if (navigator.share && navigator.canShare && window.File) { var cv = shareImage(txt, o);
-    if (cv && cv.toBlob) { cv.toBlob(function (blob) { var f = blob && new File([blob], 'lantern-chain.png', { type: 'image/png' });
-      if (f && navigator.canShare({ files: [f] })) navigator.share({ files: [f], text: txt }).catch(function () {}); else navigator.share({ text: txt }).catch(function () {}); }, 'image/png'); return; } }
-  var done = function () { var was = b.innerHTML; b.textContent = 'Copied! Paste it anywhere'; setTimeout(function () { if (label) b.textContent = label; else b.innerHTML = was; }, 2200); };
-  try { if (navigator.share) { navigator.share({ text: txt }).catch(function () {}); return; } } catch (e) {}
-  try { navigator.clipboard.writeText(txt).then(done, function () { b.textContent = 'Could not copy'; }); } catch (e) { b.textContent = 'Could not copy'; }
+$('shareBtn').onclick = function () { shareNow(G.shareText, null); };
+// Share opens a preview first: the picture and the words, so nothing goes out unseen. Never shows the board.
+function shareNow(txt, o) {
+  var cv = shareImage(txt, o); G.shareCv = cv; G.shareTxt = txt;
+  $('shareImg').hidden = !cv; if (cv) $('shareImg').src = cv.toDataURL('image/png');
+  $('shareTxt').textContent = txt; $('shareGo').hidden = !navigator.share; $('shareCopy').textContent = 'Copy text'; $('shareCopy').classList.toggle('primary', !navigator.share);
+  $('shareBox').hidden = false; (navigator.share ? $('shareGo') : $('shareCopy')).focus({ preventScroll: true });
 }
+$('shareGo').onclick = function () { var txt = G.shareTxt, cv = G.shareCv;
+  var plain = function () { try { navigator.share({ text: txt }).catch(function () {}); } catch (e) {} };
+  if (cv && cv.toBlob && navigator.canShare && window.File) cv.toBlob(function (blob) { var f = blob && new File([blob], 'lantern-chain.png', { type: 'image/png' });
+    if (f && navigator.canShare({ files: [f] })) navigator.share({ files: [f], text: txt }).catch(function () {}); else plain(); }, 'image/png');
+  else plain(); };
+$('shareCopy').onclick = function () { var b = $('shareCopy');
+  try { navigator.clipboard.writeText(G.shareTxt).then(function () { b.textContent = 'Copied! Paste it anywhere'; }, function () { b.textContent = 'Could not copy'; }); } catch (e) { b.textContent = 'Could not copy'; } };
+$('shareClose').onclick = function () { $('shareBox').hidden = true; };
 $('replayBtn').onclick = function () { if (cardGuarded()) return; if (G.resultMode) { G.resultMode = false; $('replayBtn').textContent = 'Play again'; $('winBox').hidden = true; startLevel(DAILY_LI); return; } $('winBox').hidden = true; startLevel(G.li); };
 
 var confettiGen = 0;
+$('skipCue').addEventListener('pointerdown', function (ev) { ev.preventDefault(); if (G.showCard) G.showCard(); else $('skipCue').hidden = true; });
 function stopConfetti() { confettiGen++; var c = $('confetti'); if (!c.hidden) { c.getContext('2d').clearRect(0, 0, c.width, c.height); c.hidden = true; } }
-function confetti(kind) {
-  if (reduced) return;
-  var gen = ++confettiGen;
+// The win celebration: each lit lantern lets go of a sky lantern as the ripple passes it, and they rise over the board.
+// Motion is timed by the clock, not by frames, so slow or fast screens see the same show. Reduced motion: they glow in place and fade.
+function confetti(kind, from) {
+  var gen = ++confettiGen, big = kind === 'fireworks';
   var c = $('confetti'), ctx = c.getContext('2d'), W = innerWidth, H = innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
   c.hidden = false; c.width = W * dpr; c.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   var cols = ['#ffd34d', '#ff8fa3', '#8fd3ff', '#b8f28a', '#ffffff'], ps = [];
-  for (var i = 0; i < 60; i++) ps.push({ x: Math.random() * W, y: -20 - Math.random() * H * 0.4, vy: 2 + Math.random() * 2.5, vx: -1 + Math.random() * 2, r: Math.random() * 6, c: cols[i % 5], s: 5 + Math.random() * 5 });
-  var sky = []; for (var k = 0; k < (kind === 'fireworks' ? 14 : 9); k++) sky.push({ x: W * (0.08 + 0.84 * Math.random()), y: H + 20 + Math.random() * H * 0.3, vy: 1.1 + Math.random() * 0.9, w: 12 + Math.random() * 8, ph: Math.random() * 6 });
-  var fw = [], bursts = kind === 'fireworks' ? 6 : 0; for (var b = 0; b < bursts; b++) fw.push({ x: W * (0.15 + 0.7 * Math.random()), y: H * (0.1 + 0.3 * Math.random()), at: b * 360 + Math.random() * 120, c: cols[b % 4] });
-  var t0 = performance.now();
+  if (!reduced) for (var i = 0; i < (big ? 50 : 30); i++) ps.push({ x: Math.random() * W, y0: -20 - Math.random() * H * 0.3, v: 0.12 + Math.random() * 0.12, vx: -0.05 + Math.random() * 0.1, r: Math.random() * 6, c: cols[i % 5], s: 4 + Math.random() * 4 });
+  from = (from || []).slice(0, big ? 24 : 16);
+  if (!from.length) for (var q0 = 0; q0 < 8; q0++) from.push({ x: W * (0.15 + 0.7 * Math.random()), y: H * 0.55, at: q0 * 60 });
+  var sky = from.map(function (o, k) { return { x: o.x, y: o.y, at: o.at || 0, v: 0.1 + Math.random() * 0.07, w: Math.max(14, Math.min(26, (o.s || 50) * 0.36)) * (0.9 + Math.random() * 0.25), ph: Math.random() * 6, dx: (Math.random() - 0.5) * 0.03 }; });
+  var fw = [], bursts = big && !reduced ? 7 : 0, by = from.reduce(function (m, o) { return Math.min(m, o.y); }, H * 0.5);
+  for (var b = 0; b < bursts; b++) fw.push({ x: W * (0.18 + 0.64 * Math.random()), y: Math.max(70, by - 40 - Math.random() * 120), at: 350 + b * 300 + Math.random() * 100, c: cols[b % 4] });
+  var t0 = performance.now(), dur = big ? 3600 : 3000;
   (function f(t) {
-    ctx.clearRect(0, 0, W, H);
-    ps.forEach(function (p) { p.x += p.vx + Math.sin((t + p.r * 100) / 300); p.y += p.vy; p.r += 0.08;
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.strokeStyle = 'rgba(40,20,60,.5)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); });
-    sky.forEach(function (q) { q.y -= q.vy; var sx = q.x + Math.sin(t / 700 + q.ph) * 8, w = q.w; // sky lanterns float up
-      var gl = ctx.createRadialGradient(sx, q.y, 1, sx, q.y, w * 2.2); gl.addColorStop(0, 'rgba(255,200,90,.45)'); gl.addColorStop(1, 'rgba(255,200,90,0)');
-      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(sx, q.y, w * 2.2, 0, 7); ctx.fill();
-      ctx.fillStyle = '#ff9d3a'; ctx.beginPath(); ctx.moveTo(sx - w * 0.5, q.y - w * 0.7); ctx.lineTo(sx + w * 0.5, q.y - w * 0.7); ctx.lineTo(sx + w * 0.38, q.y + w * 0.6); ctx.lineTo(sx - w * 0.38, q.y + w * 0.6); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.ellipse(sx, q.y + w * 0.45, w * 0.2, w * 0.12, 0, 0, 7); ctx.fill(); });
-    fw.forEach(function (f) { var u = (t - t0 - f.at) / 900; if (u < 0 || u > 1) return; // fireworks for a world finale and the last level
-      for (var j = 0; j < 18; j++) { var a = j / 18 * Math.PI * 2, r = 20 + u * 90, x = f.x + Math.cos(a) * r, y = f.y + Math.sin(a) * r + u * u * 30;
-        ctx.globalAlpha = 1 - u; ctx.fillStyle = j % 2 ? '#ffffff' : f.c; ctx.beginPath(); ctx.arc(x, y, 3.2 * (1 - u * 0.6), 0, 7); ctx.fill(); }
+    var e = t - t0; ctx.clearRect(0, 0, W, H);
+    ps.forEach(function (p) { var y = p.y0 + p.v * e, x = p.x + p.vx * e + Math.sin((t + p.r * 100) / 300) * 6;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(p.r + e / 400); ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 7); ctx.fill(); ctx.restore(); });
+    sky.forEach(function (q) { var a = e - q.at; if (a < 0) return; // a sky lantern lifts off its lantern and rises
+      var rise = reduced ? 0 : q.v * a + a * a * 0.00002, sy = q.y - q.w * 0.6 - rise, sx = q.x + (reduced ? 0 : Math.sin(a / 600 + q.ph) * 7 + q.dx * a), w = q.w;
+      var al = Math.min(1, a / 180) * (reduced ? Math.max(0, Math.min(1, (dur - 300 - e) / 500)) : Math.max(0, Math.min(1, (sy + 20) / 120)));
+      if (al <= 0) return; ctx.globalAlpha = al;
+      var gl = ctx.createRadialGradient(sx, sy, 1, sx, sy, w * 2.4); gl.addColorStop(0, 'rgba(255,205,100,.55)'); gl.addColorStop(1, 'rgba(255,205,100,0)');
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(sx, sy, w * 2.4, 0, 7); ctx.fill();
+      ctx.fillStyle = '#ff9d3a'; ctx.strokeStyle = 'rgba(120,50,10,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(sx - w * 0.5, sy - w * 0.7); ctx.lineTo(sx + w * 0.5, sy - w * 0.7); ctx.lineTo(sx + w * 0.38, sy + w * 0.6); ctx.lineTo(sx - w * 0.38, sy + w * 0.6); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,240,190,.55)'; ctx.fillRect(sx - w * 0.08, sy - w * 0.62, w * 0.16, w * 1.15);
+      ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.ellipse(sx, sy + w * 0.45, w * 0.2, w * 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; });
+    fw.forEach(function (f) { var u = (e - f.at) / 1000; if (u < 0 || u > 1) return; // fireworks over the board for a world finale, the Festival board and Starlight
+      for (var j = 0; j < 24; j++) { var an = j / 24 * Math.PI * 2, r = 16 + Math.sqrt(u) * 110, x = f.x + Math.cos(an) * r, y = f.y + Math.sin(an) * r + u * u * 40;
+        ctx.globalAlpha = 1 - u; ctx.fillStyle = j % 2 ? '#ffffff' : f.c; ctx.beginPath(); ctx.arc(x, y, 4 * (1 - u * 0.5), 0, 7); ctx.fill(); }
       ctx.globalAlpha = 1; });
     if (gen !== confettiGen) return; // a new board started: stopConfetti already cleared it
-    if (t - t0 < (kind === 'fireworks' ? 3200 : 2600)) requestAnimationFrame(f); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
+    if (e < dur) requestAnimationFrame(f); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
   })(t0);
 }
 
@@ -1876,7 +1911,8 @@ function drawStreet() {
 var CARD_INFO = { w: function (n) { return ['🏮', WORLDS[n] + ' is lit', 'World ' + (+n + 1) + ' of ' + WORLDS.length]; }, s: function (n) { return ['🎐', 'String of 7, #' + n, 'Seven daily lanterns']; }, k: function (d) { return ['🎆', 'Festival board', 'Week of ' + shortDate(d)]; }, c: function (n) { return ['✨', 'Starlight: ' + STAR_SETS[n], 'Ten star boards lit']; } };
 function postcardText(c) { var ty = c.k.charAt(0), arg = c.k.slice(1), info = CARD_INFO[ty](arg), extra = '';
   if (ty === 'w') { var ws = 0, m = 0, par = 0; worldLevels(+arg).forEach(function (i) { var id = LEVELS[i].id; ws += progress.stars[id] || 0; m += progress.best[id] || LEVELS[i].par; par += LEVELS[i].par; }); extra = '★ ' + ws + ' / ' + worldLevels(+arg).length * 3 + ' · ' + m + ' matches (par ' + par + ')'; }
-  else if (ty === 'k') { var st = weekly.done[arg] || 0; extra = '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st); }
+  else if (ty === 'k') { var st = weekly.done[arg] || 0, wbk = (weekly.best || {})[arg]; extra = '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) + (wbk ? ' · ' + wbk[0] + (wbk[0] === 1 ? ' match' : ' matches') + ' (par ' + wbk[1] + ')' : ''); }
+  else if (ty === 'c') { var cs = 0, cm = 0, cp = 0; STARS.forEach(function (x, k) { if (Math.floor(k / 10) !== +arg) return; cs += progress.stars[x.id] || 0; cm += progress.best[x.id] || x.par; cp += x.par; }); extra = '★ ' + cs + ' / 30 · ' + cm + ' matches (par ' + cp + ')'; }
   return 'Lantern Chain · ' + info[1] + '\n' + (c.d ? shortDate(c.d) + (extra ? ' · ' : '') : '') + extra + '\n' + SHARE_URL; }
 function showFest() {
   albumMigrate(); $('festBox').hidden = false; $('festBox').querySelector('.sheet').scrollTop = 0;
@@ -1891,7 +1927,7 @@ function showFest() {
     el.innerHTML = '<span class="pi"></span><b></b><small></small>';
     el.children[0].textContent = c.locked ? '?' : info[0]; el.children[1].textContent = c.locked ? WORLDS[arg] : info[1]; el.children[2].textContent = c.locked ? 'Light every level here' : (c.d ? shortDate(c.d) : info[2]);
     if (!c.locked) { el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Share this postcard';
-      el.onclick = function () { shareNow(postcardText(c), ty === 'w' ? { landmark: +arg } : ty === 'c' ? { landmark: 3 } : null, el.querySelector('small'), ''); }; }
+      el.onclick = function () { shareNow(postcardText(c), ty === 'w' ? { landmark: +arg } : ty === 'c' || ty === 'k' ? { landmark: 3 } : null); }; }
     box.appendChild(el); });
   album.seen = album.cards.length; store.set('album', album); $('festDot').hidden = true;
 }
