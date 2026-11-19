@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.9.4 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.9.7 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -135,6 +135,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 8px; }
 .pc { border-radius: 14px; padding: 12px 10px; min-height: 92px; display: flex; flex-direction: column; justify-content: center; text-align: center; border: 1.5px solid var(--card-edge);
   background: linear-gradient(160deg, #3a2f7a, #1d1846); color: #fff4d6; box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+.pc[role=button] { cursor: pointer; }
 .pc .pi { font-size: 30px; line-height: 1.1; } .pc b { font-size: 18px; } .pc small { font-size: 15px; opacity: .85; }
 .pc.w1 { background: linear-gradient(160deg, #2f6b4a, #173a2a); } .pc.w2 { background: linear-gradient(160deg, #2b5f8a, #142f4a); } .pc.w3 { background: linear-gradient(160deg, #8a3b5f, #3f1730); }
 .pc.s { background: linear-gradient(160deg, #a8541c, #4a220c); } .pc.k { background: linear-gradient(160deg, #b8871c, #5a3c08); }
@@ -142,6 +143,7 @@ h1 { font-family: var(--font-display); font-size: 44px; line-height: 1; margin: 
 #title p.ver { display: flex; flex-wrap: nowrap; justify-content: space-evenly; gap: 4px; white-space: nowrap; } #title p.ver .linkbtn { padding-left: 4px; padding-right: 4px; }
 #title { position: relative; } #ver { position: absolute; left: 10px; top: 4px; font-size: 13px; color: var(--ink-soft); opacity: .7; pointer-events: none; }
 .lvl.star { background: linear-gradient(#2e2a6b, #1b1747); color: #ffe7a3; border-color: #5a52b0; } .lvl.star small { color: #ffd65a; } .lvl.star.next { box-shadow: 0 0 0 3px rgba(255,214,90,.7); }
+#strikeBtn:not([hidden]) ~ #restartBtn, #strikeBtn:not([hidden]) ~ #hintBtn { display: none; } #strikeBtn { flex: 2; grid-column: span 2; }
 .newdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ff6b5a; margin-left: 4px; vertical-align: super; }
 .sethead { font-size: 28px; margin-top: 4px; }
 .sethead { font-family: var(--font-display); font-size: 22px; margin: 16px 0 8px; text-align: center; }
@@ -200,7 +202,7 @@ html.big .btn { font-size: 22px; }
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.4</span>
+    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.7</span>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -217,6 +219,7 @@ html.big .btn { font-size: 22px; }
     <div class="controls" id="controls">
       <button class="btn primary" id="trayBtn" hidden>Next</button>
       <button class="btn" id="undoBtn">Undo</button>
+      <button class="btn primary" id="strikeBtn" hidden>Light it</button>
       <button class="btn" id="restartBtn">Restart</button>
       <button class="btn" id="hintBtn">Hint</button>
     </div>
@@ -241,7 +244,7 @@ html.big .btn { font-size: 22px; }
     <p class="festsum" id="festWeek"></p>
     <canvas id="street" aria-label="Your festival street"></canvas>
     <p class="festsum" id="festSum"></p>
-    <h3 class="sethead">Postcards</h3>
+    <h3 class="sethead">Postcards</h3><p class="festsum" style="font-size:16px;margin-top:-4px">Tap a postcard to share it.</p>
     <div class="cards" id="cards"></div>
     <div class="stick"><button class="btn primary" id="festClose" style="width:100%">Back</button></div>
   </div>
@@ -788,10 +791,12 @@ function ruleReminder() {
   return '';
 }
 function startTip() {
+  var rem = G.li < LEVELS.length ? ruleReminder() : ''; if (rem && !G.level.tip) return rem;
+  if (!seen.shyLook && G.li > FIRST_SHY && G.li < LEVELS.length && hasShy() && !G.level.tip && !G.tut) return 'Not sure about a shy lantern? Tap the eye at the top, then a lantern: red means it would wake one. No match is used.';
   if (!seen.preview && G.li >= 3 && G.li < LEVELS.length && !G.level.tip) return 'Tip: press and hold a lantern, or tap the eye at the top, to see where its flames will land. No match is used.';
   return G.level.tip || ruleReminder() || defaultTip();
 }
-function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; $('winBox').hidden = true; stopConfetti(); }
+function clearWin() { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; if (G.celebT) clearTimeout(G.celebT); G.celebT = 0; G.showCard = null; $('winBox').hidden = true; stopConfetti(); }
 
 function unlocked(i) { if (tester || i === 0 || progress.stars[LEVELS[i - 1].id]) return true; for (var j = i; j < LEVELS.length; j++) if (progress.stars[LEVELS[j].id]) return true; return false; }
 /* ---------- today's lantern ---------- */
@@ -917,8 +922,9 @@ function titleActions(nx) {
     db.classList.toggle('done', !!dst);
     $('dailyTitle').textContent = dst ? 'Lit today ' + '★★★'.slice(0, dst) + '☆☆☆'.slice(0, 3 - dst) : 'Today\'s lantern';
     var goldNext = daily.last === dayAfter(today(), -1);
-    $('dailySub').textContent = dst ? 'See your result' + (sk > 1 ? ' · ' + sk + ' days in a row' : '')
-      : (goldNext ? 'Gold lantern ' + slot + ' of 7' : 'Lantern ' + slot + ' of 7 for your string') + (sk > 1 ? ' · ' + sk + ' days in a row' : '');
+    var wcn = weekCount(), fest = weekly.done[weekStart(today())] ? ' · Festival lit' : wcn < WEEK_NEED ? ' · Festival ' + wcn + ' of ' + WEEK_NEED : '';
+    $('dailySub').textContent = dst ? 'See your result' + (sk > 1 ? ' · ' + sk + ' days in a row' : '') + fest
+      : (goldNext ? 'Gold lantern ' + slot + ' of 7' : 'Lantern ' + slot + ' of 7') + (sk > 1 ? ' · ' + sk + ' days in a row' : '') + fest;
     db.setAttribute('aria-label', $('dailyTitle').textContent + '. ' + $('dailySub').textContent);
     db.onclick = function () { if (daily.done[today()] && daily.res && daily.res.day === today()) showDailyResult(); else startLevel(DAILY_LI); };
   }
@@ -950,7 +956,7 @@ function refresh() { $('matches').textContent = G.matches;
   mc.classList.toggle('atpar', !!dark && G.matches === G.level.par); mc.classList.toggle('over', G.matches > G.level.par); $('undoBtn').disabled = !G.hist.length || scripted(); $('restartBtn').disabled = scripted(); $('hintBtn').disabled = !!G.tut; $('undoBtn').classList.remove('pulse'); }
 
 function tray(text, opts) {
-  opts = opts || {};
+  opts = opts || {}; if (!(G.look && G.preview)) $('strikeBtn').hidden = true;
   $('trayText').textContent = text;
   $('tray').classList.toggle('warn', !!opts.warn);
   // a tutorial "Next" takes the place of Undo/Restart/Hint (same height), so the tray text gets the full width
@@ -1384,6 +1390,7 @@ function afterMove() {
   }
   if (L.isWin(G.b, G.lit)) { win(); return; }
   if (G.hidNow && !G.tut) { tray('Saved! A flame reached a shy lantern, but its dome was down. The green check marks it safe.'); return; }
+  if (G.windMiss && !G.tut) { tray('The wind pushed that flame on: an arrow always sends a flame the way it points, whichever side it lands from. This one ' + G.windMiss + '.'); return; }
   if (G.padHit && !G.tut) { tray('A flame reached a floating lantern and went out on its lily pad. Floating lanterns only light when you tap them.'); return; }
   if (G.matches > 0 && !G.tut) tray(defaultTip());
 }
@@ -1406,6 +1413,8 @@ function doTap(idx, t) {
   G.hist.push({ lit: G.lit, matches: G.matches, saved: Object.assign({}, G.saved) });
   G.hidNow = res.events.some(function (e) { return e.result === 'hid'; });
   G.matches++; G.lit = res.lit; G.hint = -1; G.hintStage = 0; G.fail = whyFail(res);
+  var wm = res.events.find(function (e) { return e.path.length > 2 && !(e.warps && e.warps.length) && (e.result === 'grass' || e.result === 'off' || e.result === 'water') && e.path.slice(1, -1).some(function (p) { return typeof p === 'number' && G.b.cells[p].kind === 'wind'; }); });
+  G.windMiss = wm && !seen['windMiss' + G.li] ? (wm.result === 'off' ? 'blew off the board' : wm.result === 'water' ? 'landed in the pond' : 'landed on grass') : ''; if (G.windMiss) { seen['windMiss' + G.li] = true; }
   G.padHit = res.events.some(function (e) { var c = e.end >= 0 && G.b.cells[e.end]; return e.result === 'water' && c && c.kind === 'lantern' && !c.shy && !res.lit[c.li]; });
   var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t; addFx('burst', cellXY(idx), t); SFX.strike(); SFX.light(0); buzz(); G.chain = { n: 1, t: t, t0: t };
   G.anim = buildAnim(res, t); G.anim.fail = !!G.fail; G.busy = true; refresh(); wake();
@@ -1424,12 +1433,13 @@ function canPreview(idx) { var c = G.b.cells[idx]; return c.kind === 'lantern' &
 function endPress() { if (G.press && G.press.timer) clearTimeout(G.press.timer); G.press = null; }
 $('board').addEventListener('pointerdown', function (ev) {
   ev.preventDefault(); wake();
+  if (G.won && G.showCard && $('winBox').hidden) { G.showCard(); return; }
   if (!G.b || G.won) return;
   var idx = boardIdx(ev); if (idx < 0) return;
   if (G.busy && !G.tut) { var nw = performance.now(); fastForward(nw); G.marks.push({ idx: idx, t: nw }); if (G.queue.length < 4) G.queue.push(idx); wake(); return; } // tap during a chain: play the rest quickly, then apply the tap
   if (G.busy) { finishAnim(); if (G.won || !G.b) return; }
   if (G.look) { endPress(); // Look mode (the eye button): a tap shows the flames and keeps them; the same lantern again lights it
-    if (canPreview(idx)) { if (G.preview && G.preview.idx === idx) { G.preview = null; setLook(false); tapCell(idx); } else showPreview(idx); }
+    if (canPreview(idx)) { if (G.preview && G.preview.idx === idx) { nudge(); var sb = $('strikeBtn'); sb.classList.add('pulse'); setTimeout(function () { sb.classList.remove('pulse'); }, 1600); } else showPreview(idx); }
     else { G.preview = null; tray('Tap a dark lantern to see where its flames land. Tap the eye again to stop looking.'); wake(); }
     return; }
   endPress(); G.preview = null;
@@ -1444,7 +1454,8 @@ $('board').addEventListener('pointerup', function (ev) {
 });
 $('board').addEventListener('pointercancel', function () { endPress(); if (G.preview) { G.preview = null; wake(); } });
 $('board').addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
-function setLook(on) { G.look = !!on; $('lookBtn').setAttribute('aria-pressed', G.look ? 'true' : 'false'); if (!G.look && G.preview) { G.preview = null; wake(); } }
+function setLook(on) { G.look = !!on; $('lookBtn').setAttribute('aria-pressed', G.look ? 'true' : 'false'); if (!G.look && G.preview) { G.preview = null; wake(); } if (!G.look) showStrike(-1); }
+function showStrike(idx) { var b = $('strikeBtn'); b.hidden = idx < 0; b.classList.remove('pulse'); b.onclick = idx < 0 ? null : function () { if (!G.preview || G.preview.idx !== idx) return; G.preview = null; setLook(false); tapCell(idx); }; }
 $('lookBtn').onclick = function () { if (!G.b || G.won) return; setLook(!G.look);
   if (G.look) { if (!seen.preview) { seen.preview = true; store.set('seen', seen); } tray('Looking: tap a dark lantern to see where its flames land. No match is used.'); }
   else { tray('Tap a lantern to light it.'); var s = tutCur(); if (s) tray(s.text); } };
@@ -1454,15 +1465,16 @@ function showPreview(idx) {
     if (f.end >= 0) { var tc = b.cells[f.end]; res = tc.water ? 'water' : tc.kind !== 'lantern' ? 'grass' : G.lit[tc.li] ? 'lit' : tc.shy ? (L.hidden(b, G.lit, f.end) ? 'hid' : 'shy') : 'light'; }
     if (res === 'light') n++; fl.push({ path: f.path, warps: f.warps, end: f.end, res: res }); });
   G.preview = { idx: idx, t: performance.now(), flights: fl };
-  if (!seen.preview) { seen.preview = true; store.set('seen', seen); }
+  if (!seen.preview || (hasShy() && !seen.shyLook)) { seen.preview = true; if (hasShy()) seen.shyLook = true; store.set('seen', seen); }
   // Judge shy lanterns with the real chain (dome timing included), the same run that gives the count.
-  var all = 0, tr = L.tap(b, G.lit, idx); if (tr) tr.lit.forEach(function (v, j) { if (v && !G.lit[j] && !b.cells[b.lanterns[j]].shy) all++; });
+  var all = 0, allShy = 0, tr = L.tap(b, G.lit, idx); if (tr) tr.lit.forEach(function (v, j) { if (v && !G.lit[j]) { all++; if (b.cells[b.lanterns[j]].shy) allShy++; } });
   var first = {}, chainWake = false;
   if (tr) tr.events.forEach(function (e) { if (e.depth === 0 && e.end >= 0) first[e.end] = e.result; if (e.result === 'shy' && e.depth > 0) chainWake = true; });
   fl.forEach(function (f) { if ((f.res === 'shy' || f.res === 'hid') && first[f.end]) f.res = first[f.end] === 'shy' ? 'shy' : 'hid'; });
   var shy = fl.some(function (f) { return f.res === 'shy'; }), saveNow = fl.some(function (f) { return f.res === 'hid'; });
-  tray((n ? 'Its flames land on ' + n + (n === 1 ? ' lantern' : ' lanterns') + ' (gold ' + (n === 1 ? 'ring' : 'rings') + '). With the chain, this match lights ' + all + ' in all.' : 'Its flames land on no lantern, so this match lights only itself.') +
-    (shy ? ' Red: a shy lantern would wake!' : chainWake ? ' Careful: further along, this chain wakes a shy lantern!' : saveNow ? ' The shy lantern it reaches is safe under its dome.' : '') + (G.look ? ' Tap it again to light it, or tap another lantern to look.' : ' Let go to keep your match.'));
+  tray((n ? 'Its flames land on ' + n + (n === 1 ? ' lantern' : ' lanterns') + ' (gold ' + (n === 1 ? 'ring' : 'rings') + '). With the chain, this match lights ' + all + ' in all' + (allShy ? (allShy === 1 ? ', and one of them is shy.' : ', and ' + allShy + ' of them are shy.') : '.') : 'Its flames land on no lantern, so this match lights only itself.') +
+    (shy ? ' Red: a shy lantern would wake!' : chainWake ? ' Careful: further along, this chain wakes a shy lantern!' : saveNow ? ' The shy lantern it reaches is safe under its dome.' : '') + (G.look ? '' : ' Let go to keep your match.'));
+  if (G.look) { $('trayText').textContent = 'Previewing · 0 matches used. ' + $('trayText').textContent.trim(); showStrike(idx); }
   wake();
 }
 function drawPreview(ctx, t) {
@@ -1609,11 +1621,12 @@ function win() {
   tray(G.b.marked ? 'Every flag is lit!' : 'Every lantern lit!'); // replaces the tutorial bubble / tip, never a blank card
   var li = G.li;
   if (G.winTimer) clearTimeout(G.winTimer);
-  G.winTimer = setTimeout(function () { // cleared by startLevel, show and undo; re-check state in case
-    G.winTimer = 0;
+  var big = last || wEnd || sEnd || isWeekly, hold = reduced ? 500 : big ? 2300 : 1500; // the lit board gets its moment: ripple, chord, sky lanterns, then the card
+  G.celebT = setTimeout(function () { G.celebT = 0; if (!G.won || G.li !== li || $('game').hidden) return; confetti(big ? 'fireworks' : 'sky'); SFX.win(big); buzz('win'); }, 80 + bloom);
+  G.showCard = function () { if (G.winTimer) clearTimeout(G.winTimer); G.winTimer = 0; G.showCard = null;
     if (!G.won || G.li !== li || $('game').hidden) return;
-    $('winBox').hidden = false; guardCard(); confetti(last || wEnd ? 'fireworks' : 'sky'); SFX.win(last || wEnd); buzz('win'); $('nextBtn').focus({ preventScroll: true });
-  }, 120 + bloom);
+    $('winBox').hidden = false; guardCard(); $('nextBtn').focus({ preventScroll: true }); };
+  G.winTimer = setTimeout(function () { if (G.showCard) G.showCard(); }, Math.max(hold, 200 + bloom)); // cleared by startLevel, show and undo
 }
 // The lit board blooms once more in the order it caught, then the card comes up. Returns the extra wait in ms.
 function winBloom() {
@@ -1665,12 +1678,47 @@ function showDailyResult() {
   G.shareText = shareText(r.st, r.m, r.par, r.day);
   $('winBox').hidden = false; guardCard(); $('nextBtn').focus({ preventScroll: true });
 }
-$('shareBtn').onclick = function () {
-  var txt = G.shareText, b = $('shareBtn');
-  var done = function () { b.textContent = 'Copied! Paste it anywhere'; setTimeout(function () { b.textContent = G.shareLabel || 'Share my lantern'; }, 2200); };
+// A picture for the share sheet: the night sky, your lanterns and the result (never the board).
+function shareImage(txt, o) {
+  o = o || {};
+  try {
+    var N = 1080, c = document.createElement('canvas'); c.width = N; c.height = N; var ctx = c.getContext('2d'), t = 0;
+    var bg = ctx.createLinearGradient(0, 0, 0, N); bg.addColorStop(0, '#15103a'); bg.addColorStop(1, '#3a2b72'); ctx.fillStyle = bg; ctx.fillRect(0, 0, N, N);
+    for (var i = 0; i < 70; i++) { ctx.fillStyle = 'rgba(255,250,220,' + (0.3 + (i % 5) / 10) + ')'; ctx.beginPath(); ctx.arc((i * 151.7) % N, (i * 97.3) % (N * 0.55), 2 + i % 3, 0, 7); ctx.fill(); }
+    ctx.fillStyle = 'rgba(255,240,180,.16)'; ctx.beginPath(); ctx.arc(N - 100, 100, 84, 0, 7); ctx.fill();
+    ctx.fillStyle = g3(ctx, N - 100, 100, 54, '#fff0b0'); ctx.beginPath(); ctx.arc(N - 100, 100, 54, 0, 7); ctx.fill();
+    var lines = txt.split('\n').filter(function (l) { return l && l !== SHARE_URL; }), head = lines[0].replace(/^Lantern Chain ?·? ?/, ''), rest = lines.slice(1).filter(function (l) { return !/[🏮🌟▫️⭐🔸]/u.test(l); });
+    var row = (lines.find(function (l) { return /[🏮🌟▫️⭐🔸]/u.test(l); }) || '🏮🏮🏮🏮🏮🏮🏮'), cells = Array.from(row.replace(/\uFE0F/g, '')).filter(function (ch) { return /[🏮🌟▫⭐🔸]/u.test(ch); }).slice(0, 15);
+    if (!cells.length) cells = ['🏮', '🏮', '🏮', '🏮', '🏮'];
+    var tail = row.replace(/[🏮🌟▫⭐🔸\uFE0F]/gu, '').trim(); if (tail) rest.push(tail); // e.g. "2 days in a row"
+    if (o.landmark != null) { // a postcard: the world's landmark, lit, in the middle of the night
+      var gl = ctx.createRadialGradient(N / 2, 470, 20, N / 2, 470, 380); gl.addColorStop(0, 'rgba(255,200,90,.45)'); gl.addColorStop(1, 'rgba(255,200,90,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 150, N, 640);
+      drawLandmark(ctx, o.landmark, N / 2, 530, 330, true, 1200); cells = [];
+    }
+    // the string of lanterns
+    var y0 = 360, sag = 70, n = cells.length, S = Math.min(130, (N - 120) / (n * 1.05));
+    if (cells.length) { ctx.strokeStyle = '#5a4630'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(30, y0); ctx.quadraticCurveTo(N / 2, y0 + sag * 2, N - 30, y0); ctx.stroke(); }
+    if (cells.length) cells.forEach(function (ch, k) { var u = (k + 0.5) / n, x = 40 + u * (N - 80), y = (1 - u) * (1 - u) * y0 + 2 * u * (1 - u) * (y0 + sag * 2) + u * u * y0;
+      var on = ch !== '▫', gold = ch === '🌟'; drawLantern(ctx, x, y + S * 0.55, S, { n: k % 3 + 1, lit: on, dim: !on, gold: gold, noLabel: true, t: t, seed: k }); });
+    ctx.textAlign = 'center'; ctx.fillStyle = '#ffe7a3'; ctx.font = '800 92px system-ui, sans-serif'; ctx.fillText('Lantern Chain', N / 2, 190);
+    ctx.fillStyle = '#ffffff'; var fsz = head.length > 30 ? 52 : 64; ctx.font = '800 ' + fsz + 'px system-ui, sans-serif'; ctx.fillText(head, N / 2, 728);
+    ctx.font = '700 54px system-ui, sans-serif'; ctx.fillStyle = '#ffd65a'; var wrapped = [];
+    rest.forEach(function (l) { if (ctx.measureText(l).width <= N - 100 || l.indexOf(' · ') < 0) { wrapped.push(l); return; }
+      var parts = l.split(' · '), cut = Math.ceil(parts.length / 2); wrapped.push(parts.slice(0, cut).join(' · ')); wrapped.push(parts.slice(cut).join(' · ')); });
+    wrapped.slice(0, 4).forEach(function (l, i) { ctx.fillText(l, N / 2, 810 + i * 66); });
+    ctx.font = '600 38px system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,244,214,.8)'; ctx.fillText(SHARE_URL, N / 2, N - 50);
+    return c;
+  } catch (e) { return null; }
+}
+$('shareBtn').onclick = function () { shareNow(G.shareText, null, $('shareBtn'), G.shareLabel || 'Share my lantern'); };
+function shareNow(txt, o, b, label) {
+  if (navigator.share && navigator.canShare && window.File) { var cv = shareImage(txt, o);
+    if (cv && cv.toBlob) { cv.toBlob(function (blob) { var f = blob && new File([blob], 'lantern-chain.png', { type: 'image/png' });
+      if (f && navigator.canShare({ files: [f] })) navigator.share({ files: [f], text: txt }).catch(function () {}); else navigator.share({ text: txt }).catch(function () {}); }, 'image/png'); return; } }
+  var done = function () { var was = b.innerHTML; b.textContent = 'Copied! Paste it anywhere'; setTimeout(function () { if (label) b.textContent = label; else b.innerHTML = was; }, 2200); };
   try { if (navigator.share) { navigator.share({ text: txt }).catch(function () {}); return; } } catch (e) {}
   try { navigator.clipboard.writeText(txt).then(done, function () { b.textContent = 'Could not copy'; }); } catch (e) { b.textContent = 'Could not copy'; }
-};
+}
 $('replayBtn').onclick = function () { if (cardGuarded()) return; if (G.resultMode) { G.resultMode = false; $('replayBtn').textContent = 'Play again'; $('winBox').hidden = true; startLevel(DAILY_LI); return; } $('winBox').hidden = true; startLevel(G.li); };
 
 var confettiGen = 0;
@@ -1748,6 +1796,9 @@ $('testBtn').onclick = function () {
   var j = $('jump'); j.innerHTML = '';
   LEVELS.forEach(function (lv, i) { var b = document.createElement('button'); b.className = 'btn'; b.textContent = i + 1; b.setAttribute('aria-label', 'Jump to level ' + (i + 1));
     b.onclick = function () { $('testBox').hidden = true; startLevel(i); }; j.appendChild(b); });
+  var extra = [['Fest', WEEKLY_LI, 'Jump to the Festival board']].concat(STARS.map(function (st, k) { return ['✦' + (k + 1), STAR_LI0 + k, 'Jump to Starlight ' + (k + 1)]; }));
+  extra.forEach(function (x) { var b = document.createElement('button'); b.className = 'btn'; b.textContent = x[0]; b.setAttribute('aria-label', x[2]);
+    b.onclick = function () { $('testBox').hidden = true; startLevel(x[1]); }; j.appendChild(b); });
   $('testBox').hidden = false;
 };
 $('testClose').onclick = function () { $('testBox').hidden = true; };
@@ -1823,6 +1874,10 @@ function drawStreet() {
   return { lit: LEVELS.filter(function (lv) { return progress.stars[lv.id]; }).length, k: kN };
 }
 var CARD_INFO = { w: function (n) { return ['🏮', WORLDS[n] + ' is lit', 'World ' + (+n + 1) + ' of ' + WORLDS.length]; }, s: function (n) { return ['🎐', 'String of 7, #' + n, 'Seven daily lanterns']; }, k: function (d) { return ['🎆', 'Festival board', 'Week of ' + shortDate(d)]; }, c: function (n) { return ['✨', 'Starlight: ' + STAR_SETS[n], 'Ten star boards lit']; } };
+function postcardText(c) { var ty = c.k.charAt(0), arg = c.k.slice(1), info = CARD_INFO[ty](arg), extra = '';
+  if (ty === 'w') { var ws = 0, m = 0, par = 0; worldLevels(+arg).forEach(function (i) { var id = LEVELS[i].id; ws += progress.stars[id] || 0; m += progress.best[id] || LEVELS[i].par; par += LEVELS[i].par; }); extra = '★ ' + ws + ' / ' + worldLevels(+arg).length * 3 + ' · ' + m + ' matches (par ' + par + ')'; }
+  else if (ty === 'k') { var st = weekly.done[arg] || 0; extra = '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st); }
+  return 'Lantern Chain · ' + info[1] + '\n' + (c.d ? shortDate(c.d) + (extra ? ' · ' : '') : '') + extra + '\n' + SHARE_URL; }
 function showFest() {
   albumMigrate(); $('festBox').hidden = false; $('festBox').querySelector('.sheet').scrollTop = 0;
   var r = drawStreet(), wc = weekCount(), wk = weekStart(today());
@@ -1835,13 +1890,15 @@ function showFest() {
     el.className = 'pc ' + ty + (ty === 'w' ? ' w' + arg : '') + (c.locked ? ' locked' : '');
     el.innerHTML = '<span class="pi"></span><b></b><small></small>';
     el.children[0].textContent = c.locked ? '?' : info[0]; el.children[1].textContent = c.locked ? WORLDS[arg] : info[1]; el.children[2].textContent = c.locked ? 'Light every level here' : (c.d ? shortDate(c.d) : info[2]);
+    if (!c.locked) { el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Share this postcard';
+      el.onclick = function () { shareNow(postcardText(c), ty === 'w' ? { landmark: +arg } : ty === 'c' ? { landmark: 3 } : null, el.querySelector('small'), ''); }; }
     box.appendChild(el); });
   album.seen = album.cards.length; store.set('album', album); $('festDot').hidden = true;
 }
 $('titleFest').onclick = showFest;
 albumMigrate(); $('festDot').hidden = album.cards.length <= album.seen;
 $('festClose').onclick = function () { $('festBox').hidden = true; };
-window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh, startLevel: startLevel, showPreview: showPreview, showFest: showFest, weekCount: weekCount, WEEKLY_LI: WEEKLY_LI, STAR_LI0: STAR_LI0, STARS: STARS }; // for automated tests
+window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh, startLevel: startLevel, showPreview: showPreview, shareImage: shareImage, showFest: showFest, postcardText: postcardText, weekCount: weekCount, WEEKLY_LI: WEEKLY_LI, STAR_LI0: STAR_LI0, STARS: STARS }; // for automated tests
 })();
 </script>
 
