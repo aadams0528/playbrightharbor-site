@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.31.5 (round 33 fixes) -->
+<!-- Tripsake v0.31.6 (round 34 fixes) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -499,6 +499,7 @@ label.l{font-size:calc(17px * var(--fs,1));color:var(--muted);display:block;marg
 .morerow{min-height:56px}
 .morerow.big{min-height:68px}
 .morerow.big .t{font-size:calc(18px * var(--fs,1))}
+.foldhd{scroll-margin-top:86px} /* an opened section's title lands below the pinned Larger text row (Nikola r34) */
 .bigpin{position:sticky;top:-12px;z-index:3;background:var(--panel);box-shadow:0 6px 12px -8px rgba(0,0,0,.6)} /* Larger text stays reachable while More scrolls (Muse r33) */
 .dangersec{margin-top:10px}.dangerrow .s b{color:#ffb4a8}
 .foldhd{display:flex;gap:12px;align-items:center;width:100%;padding:14px 12px;border-radius:14px;background:var(--panel-2);border:1.5px solid var(--line,rgba(255,255,255,.12));text-align:left;box-sizing:border-box;min-height:68px}
@@ -1526,7 +1527,7 @@ function renderBody(){
   } else if (tab === "more"){
     const staged = store.get("staged", false) && !REAL_TRIPS.length; /* new installs: the extras wait until your first trip, so the first visit stays simple */
     /* Alan 11-19: More folds into four short labelled sections, each one tap to open. Larger text stays on top so nobody has to hunt for it */
-    const lb = store.get("lastBackup", 0); if (!lb && REAL_TRIPS.length && !moreOpen.auto){ moreOpen.auto = 1; moreOpen.add("safe"); } /* no backup yet: open the safety section once */
+    const lb = store.get("lastBackup", 0); if (!lb && REAL_TRIPS.length && !moreOpen.auto){ moreOpen.auto = 1; if (!moreOpen.size) moreOpen.add("safe"); } /* still one section at a time (Muse r34) */ /* no backup yet: open the safety section once */
     const fold = (k, icon, t, sub, fill) => { const o = moreOpen.has(k); h += `<button class="foldhd" data-fold="${k}" aria-expanded="${o}"><div class="flag ring" style="color:var(--lit-soft);border-color:var(--lit-soft)">${icon}</div><div class="txt"><div class="t">${t}</div><div class="s">${sub}</div></div><span class="chev" aria-hidden="true">›</span></button><div class="foldbody"${o ? "" : " hidden"}>`; fill(); h += `</div>`; };
     h += `<label class="morerow switchrow bigpin"><div class="flag ring">A</div><div class="txt"><div class="t">Larger text</div><div class="s">Makes all the words bigger</div></div><input type="checkbox" id="bigText" ${BIG_TEXT ? "checked" : ""}></label>`;
     fold("safe", "⤒", "Keep your trips safe", lb ? `Backup, restore, shared files · last backup ${new Date(lb).toLocaleDateString("en-US", {month:"short", day:"numeric"})}` : REAL_TRIPS.length ? "<b>No backup yet.</b> Backup, restore and shared files" : "Backup, restore and shared files", () => {
@@ -1565,7 +1566,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.5 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.31.6 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -2619,7 +2620,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
       : one ? "That trip is already on your globe, with all of these photos" : "Those trips are already on your globe, with all of these photos", null, !!(jw.fail || jw.full)); btn.disabled = false; return; }
   if (!store.set("realTrips", [...existing, ...out])){ toast("Couldn't save: this browser's storage is full"); btn.disabled = false; return; }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { store.set("persisted", ok ? 1 : 0); }).catch(() => {}); } catch(e){} /* ask the browser not to clear your photos when space runs low or the site sits unused */
-  if (L.sample && L.home && L.home.label) store.set("practiceHome", L.home.label.replace(/ area$/, "")); /* so "Where's home?" can say why it asks after a practice import (Muse r33) */
+  if (L.sample && L.home && L.home.label){ store.set("practiceHome", L.home.label.replace(/ area$/, "")); store.set("homeAsked", true); } /* practice photos use the sample traveler's home, so no surprise "Where's home?" on a later load; your home is asked when you add your own photos (Nikola r34) */ /* so "Where's home?" can say why it asks after a practice import (Muse r33) */
   if (!L.sample && (!L.manual || store.get("realHome", null))) store.set("realHome", {lat:L.home.lat, lon:L.home.lon, label:L.home.label}); /* a trip made by hand never sets your home by guessing */
   if (L.manual) try { sessionStorage.removeItem("tgManName"); } catch(e){}
   store.set("hideSample", hideSample);
@@ -3984,18 +3985,19 @@ const tnoun = t => t && (t.homeMem || t.kind === "home") ? "memory" : "trip"; /*
 function tripSendsList(t, real){ const sts = t.stops; let mom = 0, oth = 0, lab = 0; const ppl = new Set();
   sts.forEach(s => { const st = getStory(s); if ((stories[s.id] || notes[s.id]) && (st.best || st.who || st.note)) mom++; Object.entries(s.others || {}).forEach(([n, v]) => { if (v && (v.best || v.who || v.note)){ oth++; ppl.add(n); } }); s.photos.forEach(ph => { if (phLabel(ph)) lab++; }); });
   const lines = Object.keys(dayLines).filter(d => d >= t.start && d <= t.end && dayLines[d] && dayLines[d].text).length, w = BOOK_WORDS[t.id], book = !!(w && (w.ded || w.ref));
-  const sw = (t.sharedWith || []).filter(n => n && n !== myName()); const who = `the people on the ${tnoun(t)}: your name${sw.length ? " and " + sw.map(esc).join(", ") : ""}`; /* the file carries the people list too, so the sheet names it (Muse r33) */
+  const sentWho = sts.filter(s => stories[s.id] || notes[s.id]).map(s => getStory(s).who).filter(Boolean), sw = [...new Set([...(t.sharedWith || []), ...sentWho].filter(n => n && n !== myName()))]; const who = `the people on the ${tnoun(t)}: your name${sw.length ? ", " + sw.map(esc).join(", ") : ""}`; /* every name the file carries, including who was there on each stop (Nikola r34) */ /* the file carries the people list too, so the sheet names it (Muse r33) */
   return [plural(sts.length, "stop") + " with their dates and places", who, mom ? plural(mom, "best moment and note", "best moments and notes") : "", lab ? plural(lab, "photo caption") : "", lines ? plural(lines, "journal line") : "", book ? "your trip book words" : "", oth ? `${plural(oth, "moment")} from ${[...ppl].map(esc).join(", ")}` : "", real ? "your photos, if ticked above" : ""].filter(Boolean).join(", "); }
 /* a browser that can't hand files to the share sheet only saves the file, so the button says Save, not Send (Muse r33) */
 function canSendFiles(){ try { return !!(navigator.canShare && navigator.canShare({files:[new File(["{}"], "t.json", {type:"application/json"})]})); } catch(e){ return false; } }
 const shareVerb = () => canSendFiles() ? "Send" : "Save";
+const sts0 = t => t.stops || [];
 function openTripShare(id){ const t = TRIPS.find(x => x.id === id); if (!t) return; const real = t.stops.reduce((a, s) => a + s.photos.filter(p => p.scene === "real").length, 0);
   openSheet(`<div class="pad" style="padding-top:18px">${sheetHead("Share this " + tnoun(t))}<div class="steps">${esc(t.title)}</div>
-    <p style="margin:0">Send it to someone who was there. They add their photos and send it back, and your two copies merge.</p>
-    <div><label class="l" for="myName">Your name, so they see who added what${myName() ? "" : " (needed)"}</label><input type="text" id="myName" value="${esc(myName())}" placeholder="Type your first name" maxlength="30"></div>
+    <p style="margin:0">${canSendFiles() ? "Send it to someone who was there." : "Save the file, then send it to someone who was there by email or Messages."} They add their photos and send it back, and your two copies merge.</p>
+    <div><label class="l" for="myName">Your name, so they see who added what${myName() ? " (from the last time you shared; change it if you like)" : " (needed)"}</label><input type="text" id="myName" value="${esc(myName())}" placeholder="Type your first name" maxlength="30"></div>
     ${real ? `<label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="tsPhotos" checked style="width:20px;height:20px;accent-color:var(--lit)"><span>Include my ${plural(real, "photo")} (smaller copies, about <span id="tsPSize">${sizeText(stopsOf(t).reduce((a, s) => a + s.photos.reduce((b, p) => b + (p.scene === "real" ? (imgCache.get("rp:" + p.id) || "").length : 0), 0), 2000))}</span>)</span></label>`
-      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only" : `There are no photos of your own in this ${tnoun(t)}, so only`} the stops, best moments and captions travel. The file is <span id="tsSize">small</span>.</p>`}
-    <p class="note tsends" style="margin:0"><b>What they get:</b> ${tripSendsList(t, real)}. <b>Never sent:</b> your other ${tnoun(t) === "memory" ? "memories" : "trips"}, your home, voice notes and settings.</p>
+      : `<p class="note" style="margin:0">${t.sample ? "The sample trip's photos are drawn on the device, so only the stops and what you've added travel." : `There are no photos of your own in this ${tnoun(t)}, so only the stops, best moments and captions travel.`} The file is <span id="tsSize">small</span>.</p>`}
+    <p class="note tsends" style="margin:0"><b>What they get:</b> ${tripSendsList(t, real)}. <b>Never sent:</b> your other ${tnoun(t) === "memory" ? "memories" : "trips"}, your home, voice notes and settings${(() => { const own = sts0(t).filter(s => !stories[s.id] && !notes[s.id]).map(s => getStory(s).who).filter(Boolean), nm = [...new Set(own)]; return nm.length ? `, and the sample's own companions and moments (${nm.map(esc).join("; ")}), which your friend's copy of the sample already has` : ""; })()}.</p>
     <button class="btn primary" data-tshare-go="${t.id}" style="align-self:flex-start">${shareVerb()} the ${tnoun(t)} file</button>
     <details class="ldtips"><summary>How sharing works</summary><ol class="note sharesteps"><li>You send the file (<b>${esc(tripFileName(t))}</b>) by Messages, WhatsApp, email or AirDrop.</li><li>They open it: More → Keep your trips safe → Open a shared trip or memory.</li><li>They add their photos and best moments, then tap 👥 Share this ${tnoun(t)}.</li><li>You open their file the same way, and it merges into yours. Nothing is lost and no photo is doubled.</li></ol><p class="note" style="margin:0">Nothing is uploaded to us, and there's no account.</p></details></div>`, "tshare");
   if (real) buildTripFile(t, true).then(d => { const el = $("#tsPSize"); if (el){ el.textContent = sizeText(new Blob([JSON.stringify(d)]).size); const w = el.parentNode; if (w && w.firstChild && w.firstChild.nodeType === 3) w.firstChild.textContent = w.firstChild.textContent.replace(/about $/, ""); } }).catch(() => {}); /* the real size of the file with photos, not a guess (Nikola r19) */
@@ -4097,9 +4099,17 @@ async function undoMerge(){ let u = MERGE_UNDO; MERGE_UNDO = null; const st = me
     for (const k of u.added){ try { await idb.del(k); } catch(e){} imgCache.delete(k); }
     for (const [k, v] of u.replaced){ try { await idb.put(k, v); } catch(e){} } } catch(e){ toast("Couldn't undo the merge"); return; }
   try { await idb.del("undo:merge"); } catch(e){} store.set("mergeUndo", null);
-  sessionStorage.setItem("tgUndone", "1"); location.reload(); }
+  /* undo in place, with no reload: the app's own copies catch up, the trip page redraws, and "Merge undone" shows over it with nothing covering it (Nikola r34) */
+  phLabels = store.get("phLabels", {}) || {}; dayLines = store.get("dayLines", {}) || {};
+  Object.keys(BOOK_WORDS).forEach(k => delete BOOK_WORDS[k]); Object.assign(BOOK_WORDS, store.get("bookWords", {}) || {});
+  MERGE_DUPES = (store.get("mergeDupes", []) || []).filter(x => x && typeof x.id === "string" && typeof x.trip === "string" && typeof x.key === "string");
+  const wasOpen = $("#overlay").dataset.kind === "trip" || !!document.querySelector(`[data-mundo="${u.tripId}"]`);
+  document.querySelectorAll(".toast").forEach(x => x.remove());
+  await refreshTrips(wasOpen ? u.tripId : null);
+  toast("Merge undone. Everything is as it was before."); }
 async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && String(nm.value).trim()) store.set("myName", String(nm.value).trim().slice(0, 30)); const me = myName();
   const undo = {added:[], replaced:[], days:[], hideSample:store.get("hideSample", null)};
+  const prevU0 = store.get("mergeUndo", null), prevOk0 = !!(prevU0 && (mergeUndoState(prevU0.id) || {}).ok); /* checked before this merge touches anything, so a second merge into the same trip still says it replaces the first Undo (Nikola r34) */
   const raw = store.get("realTrips", []) || []; let t = findLocalShared(d, raw) || (intoId ? raw.find(x => x.id === intoId) || null : null); { const bt = t ? JSON.parse(JSON.stringify(t)) : null; undo.before = bt; if (bt){ const sids = bt.stops.map(x => x.id); undo.labels = {}; Object.keys(phLabels).forEach(k => { if (sids.some(sid => k.startsWith(sid + "-"))) undo.labels[k] = phLabels[k]; }); undo.book = BOOK_WORDS[bt.id] ? Object.assign({}, BOOK_WORDS[bt.id]) : null; undo.dupes = MERGE_DUPES.filter(x => x.trip === bt.id).map(({mine, theirs, ...r}) => r); } } let added = 0, newStops = 0, imgFail = 0, moments = 0, dupes = 0, full = 0, bookIn = false, removedOut = 0;
   if (t && intoId && !findLocalShared(d, raw)) t.shareIds = [...new Set([...(t.shareIds || []), d.trip.shareId, ...(d.trip.aka || [])].filter(Boolean))]; // remember their copy, so the next send merges straight away
   const smp = !t ? sampleFor(d) : null; const isNew = !t && !smp;
@@ -4148,7 +4158,7 @@ async function mergeSharedTrip(d, intoId){ const nm = $("#myName"); if (nm && St
   const swapped = undo.replaced.length, linesIn = undo.days.length, changed = isNew || added || newStops || moments || bookIn || linesIn || swapped;
   undo.tripId = t.id;
   /* one Undo slot: a second merge says it replaces the earlier merge's Undo (Muse r33) */
-  const prevU = changed ? store.get("mergeUndo", null) : null, prevT = prevU && TRIPS.find(x => x.id === prevU.id), prevUndo = prevT && (mergeUndoState(prevU.id) || {}).ok ? `${prevU.from || "their copy"}${prevT && prevU.id !== t.id ? ` into "${prevT.title}"` : ""}` : "";
+  const prevU = changed && prevOk0 ? prevU0 : null, prevT = prevU && TRIPS.find(x => x.id === prevU.id), prevUndo = prevT ? `${prevU.from || "their copy"}${prevT && prevU.id !== t.id ? ` into "${prevT.title}"` : ""}` : "";
   try { sessionStorage.setItem("tgShared", JSON.stringify({isNew, added, newStops, imgFail, moments, dupes, full, bookIn, removedOut, swapped, linesIn, title:t.title, from:d.from || "", id:t.id, prevUndo})); } catch(e){}
   /* Undo only when something changed, and kept on the device so it's still on the trip page after a reload (Nikola r31) */
   MERGE_UNDO = changed ? undo : null; if (changed){ let kept = false; try { await idb.put("undo:merge", undo); kept = true; } catch(e){} store.set("mergeUndo", kept ? {id:t.id, from:d.from || "", at:Date.now(), days:undo.days, print:tripPrint(t.id, undo.days)} : null); }
