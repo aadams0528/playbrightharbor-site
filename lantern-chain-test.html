@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.9.14 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.9.16 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -207,7 +207,7 @@ html.calm #boardWrap.bump, html.calm .btn.pulse, html.calm #tray.shake { animati
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.14</span>
+    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.16</span>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -958,14 +958,14 @@ function titleActions(nx) {
 function startLevel(i) {
   G.li = i; G.level = i === DAILY_LI ? dailyLevel() : i === WEEKLY_LI ? weeklyLevel() : isStar(i) ? starLevel(i - STAR_LI0) : LEVELS[i]; G.b = L.parse(G.level);
   G.lit = L.initial(G.b); G.disp = G.lit.slice(); G.awake = {}; G.hist = []; G.matches = 0; G.busy = false; G.won = false;
-  G.anim = null; G.fx = []; G.embers = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.fail = null; G.queue = []; G.winNote = ''; G.marks = []; G.hint = -1; G.hintStage = 0; G.preview = null; G.kb = -1; $('chainChip').hidden = true; endPress(); if (G.look) setLook(false); G.saved = {}; G.hidNow = false; G.chain = null;
+  G.anim = null; G.fx = []; G.embers = []; G.pops = {}; G.ducks = {}; G.shades = {}; G.fail = null; G.queue = []; G.winNote = ''; G.marks = []; G.hint = -1; G.hintStage = 0; G.preview = null; G.kb = -1; G.kbOn = false; $('board').setAttribute('aria-label', 'Lantern board. Arrow keys move, Enter lights, P previews.'); $('chainChip').hidden = true; endPress(); if (G.look) setLook(false); G.saved = {}; G.hidNow = false; G.chain = null;
   clearWin();
   G.tut = G.level.tut && !(seen[G.level.intro] && progress.stars[G.level.id]) ? G.level.tut : null; G.tutStep = 0;
   $('lvname').innerHTML = (i === DAILY_LI ? 'Today\'s lantern' : i === WEEKLY_LI ? 'Festival board' : isStar(i) ? 'Starlight ' + (i - STAR_LI0 + 1) : 'Level ' + (i + 1)) + '<span></span>';
   $('lvname').querySelector('span').textContent = i === DAILY_LI ? new Date(G.level.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) : i === WEEKLY_LI ? 'Week of ' + shortDate(G.level.date) : G.level.name;
   $('par').textContent = G.level.par; $('testBtn').hidden = !tester;
   show('game'); layout(); refresh();
-  if (G.tut) showTut(); else tray(startTip() || (i >= LEVELS.length ? G.level.tip || defaultTip() : undefined));
+  if (G.tut) showTut(); else tray((i >= LEVELS.length ? newThingTip() : '') || startTip() || (i >= LEVELS.length ? G.level.tip || defaultTip() : undefined));
 }
 
 function scripted() { var s = tutCur(); return !!(s && !s.free); }
@@ -1404,10 +1404,11 @@ function afterMove() {
   if (L.isWin(G.b, G.lit)) { win(); return; }
   var windLine = G.windMiss && !G.tut ? 'Wind! A flame that lands on an arrow hops on the way the arrow points, whichever side it came from. This one ' + G.windMiss + '.' : '';
   if (windLine) seen['windMiss' + G.li] = true; // spent only now that the line really shows
-  if (G.hidNow && !G.tut) { tray('Saved! A flame reached a shy lantern, but its dome was down. The green check marks it safe.' + (windLine ? ' ' + windLine : '')); return; }
-  if (windLine) { tray(windLine); return; }
-  if (G.padHit && !G.tut) { tray('A flame reached a floating lantern and went out on its lily pad. Floating lanterns only light when you tap them.'); return; }
-  if (G.matches > 0 && !G.tut) tray(G.kbOn && G.kb >= 0 && document.activeElement === $('board') ? G.b.lanterns.filter(function (x, k) { var cc = G.b.cells[x]; return !cc.shy && (!G.b.marked || cc.mark) && !G.lit[k]; }).length + ' to go. ' + kbCellText() : defaultTip());
+  var kbMode = G.kbOn && G.kb >= 0 && document.activeElement === $('board'), toGo = kbMode && G.matches > 0 && !G.tut ? G.b.lanterns.filter(function (x, k) { var cc = G.b.cells[x]; return !cc.shy && (!G.b.marked || cc.mark) && !G.lit[k]; }).length + ' to go. ' : '';
+  if (G.hidNow && !G.tut) { tray(toGo + 'Saved! A flame reached a shy lantern, but its dome was down. The green check marks it safe.' + (windLine ? ' ' + windLine : '')); return; }
+  if (windLine) { tray(toGo + windLine); return; }
+  if (G.padHit && !G.tut) { tray(toGo + 'A flame reached a floating lantern and went out on its lily pad. Floating lanterns only light when you tap them.'); return; }
+  if (G.matches > 0 && !G.tut) tray(kbMode ? toGo + kbCellText() : defaultTip());
 }
 // When a tap wakes a shy lantern, work out why: the flame that reached it, and the neighbour
 // that lit in the same wave (too late for its dome), if there is one.
@@ -1451,7 +1452,7 @@ $('board').addEventListener('focus', function () { if (!G.b) return; if (G.kb < 
 $('board').addEventListener('blur', function () { wake(); });
 $('board').addEventListener('keydown', function (ev) {
   if (!G.b) return; var w = G.b.w, h = G.b.h, r = Math.floor(G.kb / w), c = G.kb % w, k = ev.key;
-  if (G.won) { if ((k === 'Enter' || k === ' ') && G.showCard) { ev.preventDefault(); stopConfetti(); G.showCard(); } return; }
+  if (G.won) { if (k === 'Enter' || k === ' ') { if (G.cardClosed && $('winBox').hidden) { ev.preventDefault(); reopenCard(); } else if (G.showCard) { ev.preventDefault(); stopConfetti(); G.showCard(); } } return; }
   if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight') { ev.preventDefault(); G.kbOn = true;
     if (k === 'ArrowUp') r = Math.max(0, r - 1); if (k === 'ArrowDown') r = Math.min(h - 1, r + 1); if (k === 'ArrowLeft') c = Math.max(0, c - 1); if (k === 'ArrowRight') c = Math.min(w - 1, c + 1);
     G.kb = r * w + c; var cl = G.b.cells[G.kb]; if (G.preview && !G.preview.keep) G.preview = null;
@@ -1468,7 +1469,7 @@ function endPress() { if (G.press && G.press.timer) clearTimeout(G.press.timer);
 $('board').addEventListener('pointerdown', function (ev) {
   ev.preventDefault(); G.kbOn = false; G.ptrFocus = true; try { $('board').focus({ preventScroll: true }); } catch (e) {} G.ptrFocus = false; wake();
   if (G.won && G.showCard && $('winBox').hidden) { G.showCard(); return; }
-  if (G.won && G.cardClosed && $('winBox').hidden) { G.cardClosed = false; $('winBox').hidden = false; guardCard(); return; }
+  if (G.won && G.cardClosed && $('winBox').hidden) { reopenCard(); return; }
   if (!G.b || G.won) return;
   var idx = boardIdx(ev); if (idx < 0) return;
   if (G.busy && !G.tut) { var nw = performance.now(); fastForward(nw); G.marks.push({ idx: idx, t: nw }); if (G.queue.length < 4) G.queue.push(idx); wake(); return; } // tap during a chain: play the rest quickly, then apply the tap
@@ -1511,7 +1512,8 @@ function showPreview(idx) {
   var msg = wakes ? 'Lights ' + safeN + ' safely; wakes ' + Math.max(1, allShy) + ' shy. This move fails.' + (shy ? ' Red: its own flame lands on a shy lantern.' : ' Careful: further along, the chain reaches a shy lantern with no dome.')
     : all <= 1 ? 'Lights only this lantern.' + dome
     : 'Lights ' + all + ' in all: ' + n + ' right away (gold ' + (n === 1 ? 'ring' : 'rings') + ')' + (all > n + 1 ? ', the rest along the chain.' : '.') + dome;
-  tray(msg + (G.look ? '' : G.kbPrev ? ' Enter or Space lights it · Esc cancels.' : ' Let go to keep your match.'));
+  var ts = tutCur(), gated = scripted() && !(ts.target && ts.target[0] * b.w + ts.target[1] === idx); // the lesson only lets its glowing lantern light
+  tray(msg + (gated ? ' The lesson wants the glowing lantern first.' : G.look ? '' : G.kbPrev ? ' Enter or Space lights it · Esc cancels.' : ' Let go to keep your match.'));
   if (G.look) { $('trayText').textContent = 'Previewing · 0 matches used. ' + $('trayText').textContent.trim(); showStrike(idx); }
   wake();
 }
@@ -1608,6 +1610,8 @@ function win() {
   G.won = true; SFX.last();
   var lv = G.level, st = starsFor(G.matches, lv.par);
   var isDaily = G.li === DAILY_LI, isWeekly = G.li === WEEKLY_LI, dw = null, newCard = '', wkBefore = weekCount();
+  var campaign = !isDaily && !isWeekly && !isStar(G.li), litAll = function () { return LEVELS.every(function (x) { return !!progress.stars[x.id]; }); }, litWorld = function (w) { return worldLevels(w).every(function (i) { return !!progress.stars[LEVELS[i].id]; }); };
+  var allBefore = campaign && litAll(), worldBefore = campaign && litWorld(worldOf(G.li));
   if (isDaily) { dw = dailyWin(st); if (dw.full && addCard('s' + daily.strings)) newCard = 's'; }
   else if (isStar(G.li)) { progress.stars[lv.id] = Math.max(progress.stars[lv.id] || 0, st); progress.best[lv.id] = Math.min(progress.best[lv.id] || 99, G.matches); store.set('progress', progress); }
   else if (isWeekly) { var wk = G.level.date, firstW = !weekly.done[wk]; weekly.done[wk] = Math.max(weekly.done[wk] || 0, st); weekly.best = weekly.best || {}; var wb0 = weekly.best[wk]; if (!wb0 || G.matches < wb0[0]) weekly.best[wk] = [G.matches, lv.par]; if (firstW) weekly.wins++; store.set('weekly', weekly); if (addCard('k' + wk)) newCard = 'k'; }
@@ -1617,9 +1621,9 @@ function win() {
     store.set('progress', progress);
   }
   if (lv.intro && !seen[lv.intro]) { seen[lv.intro] = true; store.set('seen', seen); }
-  var last = G.li === LEVELS.length - 1;
+  var last = campaign && (G.li === LEVELS.length - 1 || (litAll() && !allBefore)); // the whole festival: when the last unlit level anywhere lights, or a replay of the final board
   var sk = isStar(G.li) ? G.li - STAR_LI0 : -1, sEnd = sk >= 0 && sk % 10 === 9, sAll = sk >= 0 && STARS.every(function (x) { return !!progress.stars[x.id]; });
-  var wEnd = !isDaily && !isWeekly && sk < 0 && lastOfWorld(G.li);
+  var wEnd = campaign && (lastOfWorld(G.li) || (!worldBefore && litWorld(worldOf(G.li)))); // a world's finale, or the board that fills in a world
   if (sEnd && starSetDone(Math.floor(sk / 10)) && addCard('c' + Math.floor(sk / 10))) newCard = 'c';
   if (wEnd && worldLevels(worldOf(G.li)).every(function (i) { return !!progress.stars[LEVELS[i].id]; }) && addCard('w' + worldOf(G.li))) newCard = 'w';
   var wAll = wEnd && worldLevels(worldOf(G.li)).every(function (i) { return !!progress.stars[LEVELS[i].id]; });
@@ -1630,7 +1634,7 @@ function win() {
   if (G.winNote) $('winText').textContent = G.winNote + ' ' + $('winText').textContent;
   if (G.b.marked && (wEnd || last)) $('winText').textContent = 'Every flag is lit. ' + $('winText').textContent;
   if (wEnd && !wAll && !last) $('winText').textContent += ' Light the rest of ' + WORLDS[worldOf(G.li)] + ' for its postcard.';
-  $('nextBtn').textContent = last ? 'Back to levels' : wEnd ? 'On to ' + WORLDS[worldOf(G.li + 1)] : 'Next level';
+  $('nextBtn').textContent = last || G.li === LEVELS.length - 1 ? 'Back to levels' : wEnd && lastOfWorld(G.li) ? 'On to ' + WORLDS[worldOf(G.li + 1)] : 'Next level';
   if (isDaily) { // the see-you-tomorrow card
     $('winTitle').textContent = dw.full ? 'Your string is full!' : 'Today\'s lantern is lit!';
     $('winText').textContent = G.matches + (G.matches === 1 ? ' match' : ' matches') + '. Par ' + lv.par + '. ' +
@@ -1708,8 +1712,8 @@ function levelShareText(st) { var w = worldOf(G.li);
 function starBoardShareText(k, st) { var si = Math.floor(k / 10);
   return 'Lantern Chain · Starlight ' + (k + 1) + ', ' + G.level.name + '\n' + '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) + ' ' + G.matches + (G.matches === 1 ? ' match' : ' matches') + ' (par ' + G.level.par + ')\n' + STAR_SETS[si] + ' so far: ' + scopeLine(starSet(si)) + '\n' + SHARE_URL; }
 function worldShareText(w) {
-  var ws = 0, row = ''; worldLevels(w).forEach(function (i) { var v = progress.stars[LEVELS[i].id] || 0; ws += v; row += v === 3 ? '🏮' : v ? '🔸' : '▫️'; });
-  return 'Lantern Chain · ' + WORLDS[w] + ' is lit!\n' + shortDate(today()) + ' · ' + scopeLine(worldList(w)) + '\n' + row + '\n' + SHARE_URL;
+  var ws = 0, row = '', all = true; worldLevels(w).forEach(function (i) { var v = progress.stars[LEVELS[i].id] || 0; ws += v; if (!v) all = false; row += v === 3 ? '🏮' : v ? '🔸' : '▫️'; });
+  return 'Lantern Chain · ' + WORLDS[w] + (all ? ' is lit!' : ' finale lit!') + '\n' + shortDate(today()) + ' · ' + scopeLine(worldList(w)) + '\n' + row + '\n' + SHARE_URL;
 }
 function gameShareText() {
   var tot = 0, lines = WORLDS.map(function (wn, w) { var ws = 0; worldLevels(w).forEach(function (i) { ws += progress.stars[LEVELS[i].id] || 0; }); tot += ws; return '🏮 ' + wn + ' ★ ' + ws; });
@@ -1795,7 +1799,8 @@ $('shareCopy').onclick = function () { var b = $('shareCopy');
   try { navigator.clipboard.writeText(G.shareTxt).then(function () { b.textContent = 'Copied! Paste it anywhere'; }, function () { b.textContent = 'Could not copy'; }); } catch (e) { b.textContent = 'Could not copy'; } };
 $('shareClose').onclick = function () { $('shareBox').hidden = true; var f = G.shareFrom; G.shareFrom = null; if (f && f.focus && document.contains(f)) f.focus({ preventScroll: true }); };
 $('winClose').onclick = function () { if (cardGuarded()) return; if (G.resultMode) { $('nextBtn').click(); return; }
-  $('winBox').hidden = true; G.cardClosed = true; tray('Your lit board. Tap it to bring the card back.'); };
+  $('winBox').hidden = true; G.cardClosed = true; tray('Your lit board. Tap it, or press Enter, to bring the card back.'); try { $('board').focus({ preventScroll: true }); } catch (e) {} };
+function reopenCard() { G.cardClosed = false; $('winBox').hidden = false; guardCard(); var nb = $('nextBtn'); if (nb && !nb.hidden) try { nb.focus({ preventScroll: true }); } catch (e) {} }
 $('replayBtn').onclick = function () { if (cardGuarded()) return; if (G.resultMode) { G.resultMode = false; $('replayBtn').textContent = 'Play again'; $('winBox').hidden = true; startLevel(DAILY_LI); return; } $('winBox').hidden = true; startLevel(G.li); };
 
 var confettiGen = 0;
@@ -1843,6 +1848,7 @@ var RULES = [
   [0, 'Tap a dark lantern to light it with a match.'],
   [0, 'A lit lantern\'s flame hops exactly as many cells as its number, in all four directions: up, down, left and right. It jumps over whatever is in between.'],
   [0, 'A flame that lands on a dark lantern lights it, and that lantern hops too. That\'s a chain.'],
+  [0, 'Each flame hops once, straight out, and never comes back. So a lantern lit by a flame can\'t light the lantern that lit it unless its own number reaches.'],
   [0, 'Not sure? Press and hold a lantern, or tap the eye at the top and then a lantern, to see where its flames will land. No match is used.'],
   [0, 'Light every lantern. Match par (the fewest matches) for 3 stars. Undo, Restart and Hint are always free.'],
   [MARKS_AT, 'Flag levels: light every lantern with a gold flag. Lanterns without a flag can stay dark.'],
@@ -1854,10 +1860,20 @@ var RULES = [
   [WIND_AT, 'A flame that lands on a wind arrow is blown along: it hops the same distance again, the way the arrow points.'],
   [PORTAL_AT, 'A flame that lands on a portal comes out of its twin (same colour) and hops the same distance again, the same way.']
 ];
+function boardHas() { var h = { marks: !!G.b.marked }; G.b.cells.forEach(function (c) { if (c.kind === 'wind') h.wind = true; if (c.kind === 'portal') h.portal = true; if (c.water) h.water = true; if (c.shy) h.shy = true; }); return h; }
+function metIdx() { var m = 0; LEVELS.forEach(function (lv, i) { if (progress.stars[lv.id]) m = Math.max(m, i + 1); }); return m; }
+var NEW_TIPS = { wind: [function () { return WIND_AT; }, 'New here: a wind arrow. A flame that lands on it is blown along: it hops the same distance again, the way the arrow points. How to play (?) has every rule.'],
+  shy: [function () { return SHY_AT; }, 'New here: a shy lantern (eyes shut). Keep it dark. A lantern lit right next to it drops a glass dome that keeps it safe.'],
+  water: [function () { return WATER_AT; }, 'New here: the pond. A flame that lands on water goes out. Floating lanterns need their own match.'],
+  portal: [function () { return PORTAL_AT; }, 'New here: portals. A flame that lands on one comes out of its twin and hops on the same way.'] };
+function newThingTip() { if (G.tut || !G.b) return ''; var h = boardHas(), m = metIdx(), out = '';
+  ['shy', 'water', 'wind', 'portal'].some(function (f) { if (h[f] && m <= NEW_TIPS[f][0]() && !seen['new_' + f]) { seen['new_' + f] = true; store.set('seen', seen); out = NEW_TIPS[f][1]; return true; } return false; });
+  return out; }
 function showRules(fromTitle, setOnly) {
   var ol = $('rulesList'); ol.innerHTML = ''; $('rulesBox').classList.toggle('setonly', !!setOnly);
   var met = fromTitle ? 0 : G.li >= LEVELS.length ? [2, INTRO.shy, INTRO.water, INTRO.wind][G.level.tier] : G.li; LEVELS.forEach(function (lv, i) { if (progress.stars[lv.id]) met = Math.max(met, i); });
-  RULES.forEach(function (r) { if (met >= r[0]) { var li = document.createElement('li'); li.textContent = r[1]; ol.appendChild(li); } });
+  var has = !fromTitle && G.b ? boardHas() : {};
+  RULES.forEach(function (r) { if (met >= r[0] || (r[0] === WIND_AT && has.wind) || (r[0] === SHY_AT && has.shy) || (r[0] === WATER_AT && has.water) || (r[0] === PORTAL_AT && has.portal) || (r[0] === MARKS_AT && has.marks)) { var li = document.createElement('li'); li.textContent = r[1]; ol.appendChild(li); } });
   $('rulesBox').hidden = false;
 }
 $('rulesBtn').onclick = function () { showRules(false); };
@@ -1962,10 +1978,10 @@ function drawStreet() {
 var CARD_INFO = { w: function (n) { return ['🏮', WORLDS[n] + ' is lit', 'World ' + (+n + 1) + ' of ' + WORLDS.length]; }, s: function (n) { return ['🎐', 'String of 7, #' + n, 'Seven daily lanterns']; }, k: function (d) { return ['🎆', 'Festival board', 'Week of ' + shortDate(d)]; }, c: function (n) { return ['✨', 'Starlight: ' + STAR_SETS[n], 'Ten star boards lit']; } };
 // One line that says what a score covers: how many boards are lit, their stars, and matches vs par on those boards only.
 function scopeLine(list) { var n = 0, st = 0, m = 0, par = 0; list.forEach(function (lv) { var v = progress.stars[lv.id] || 0; if (!v) return; n++; st += v; m += progress.best[lv.id] || lv.par; par += lv.par; });
-  return (n === list.length ? 'All ' + n + ' boards lit' : n + ' of ' + list.length + ' boards lit') + ' · ★ ' + st + ' / ' + list.length * 3 + (n ? ' · ' + m + ' matches on ' + (n === list.length ? 'them' : 'those ' + n) + ' (par ' + par + ')' : ''); }
+  return (n === list.length ? 'All ' + n + ' boards lit' : n + ' of ' + list.length + ' boards lit') + ' · ★ ' + st + ' / ' + list.length * 3 + (n ? ' · ' + m + (m === 1 ? ' match on ' : ' matches on ') + (n === list.length ? (n === 1 ? 'it' : 'them') : n === 1 ? 'that one' : 'those ' + n) + ' (par ' + par + ')' : ''); }
 function worldList(w) { return worldLevels(w).map(function (i) { return LEVELS[i]; }); }
 function starSet(si) { return STARS.filter(function (x, k) { return Math.floor(k / 10) === si; }); }
-function postcardLine(c) { var t = postcardText(c).split('\n')[1] || ''; t = t.replace(/All (\d+) boards lit/, '$1/$1 lit').replace(/(\d+) of (\d+) boards lit/, '$1/$2 lit').replace(/ matches on (them|those \d+)/, ' matches').replace(/ \/ /g, '/'); return t || (c.d ? shortDate(c.d) : ''); } // short form for the tile; the shared card says it in full // the date and the numbers, as on the shared card
+function postcardLine(c) { var t = postcardText(c).split('\n')[1] || ''; t = t.replace(/All (\d+) boards lit/, '$1/$1 lit').replace(/(\d+) of (\d+) boards lit/, '$1/$2 lit').replace(/ (match|matches) on (them|it|that one|those \d+)/, ' $1').replace(/ \/ /g, '/'); return t || (c.d ? shortDate(c.d) : ''); } // short form for the tile; the shared card says it in full // the date and the numbers, as on the shared card
 function postcardText(c) { var ty = c.k.charAt(0), arg = c.k.slice(1), info = CARD_INFO[ty](arg), extra = '';
   if (ty === 'w') extra = scopeLine(worldList(+arg));
   else if (ty === 'k') { var st = weekly.done[arg] || 0, wbk = (weekly.best || {})[arg]; extra = '★★★'.slice(0, st) + '☆☆☆'.slice(0, 3 - st) + (wbk ? ' · ' + wbk[0] + (wbk[0] === 1 ? ' match' : ' matches') + ' (par ' + wbk[1] + ')' : ''); }
@@ -1997,7 +2013,7 @@ function showFest() {
 $('titleFest').onclick = showFest;
 albumMigrate(); $('festDot').hidden = album.cards.length <= album.seen;
 $('festClose').onclick = function () { $('festBox').hidden = true; };
-window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh, startLevel: startLevel, showPreview: showPreview, shareImage: shareImage, showFest: showFest, postcardText: postcardText, weekCount: weekCount, WEEKLY_LI: WEEKLY_LI, DAILY_LI: DAILY_LI, STAR_LI0: STAR_LI0, STARS: STARS }; // for automated tests
+window.__lc = { G: G, L: L, LEVELS: LEVELS, DAILY: DAILY, store: store, unlocked: unlocked, tapCell: tapCell, refresh: refresh, startLevel: startLevel, showPreview: showPreview, shareImage: shareImage, showFest: showFest, postcardText: postcardText, weekCount: weekCount, WEEKLY_LI: WEEKLY_LI, DAILY_LI: DAILY_LI, worldShareText: worldShareText, STAR_LI0: STAR_LI0, STARS: STARS }; // for automated tests
 })();
 </script>
 
