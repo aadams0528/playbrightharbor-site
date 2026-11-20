@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.32.3 (round 37 fixes) -->
+<!-- Tripsake v0.32.4 (practice profile for tester links) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -604,10 +604,14 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 function foldToTop(hd){ let c = hd.parentElement; while (c && c !== document.body){ const oy = getComputedStyle(c).overflowY; if ((oy === "auto" || oy === "scroll") && c.scrollHeight > c.clientHeight) break; c = c.parentElement; } if (!c || c === document.body){ hd.scrollIntoView({block:"start"}); return; }
   const pin = c.querySelector(".bigpin"), pinH = pin && getComputedStyle(pin).position === "sticky" ? pin.getBoundingClientRect().height : 0, top = c.getBoundingClientRect().top + Math.max(0, pinH - 12) + 6; c.scrollTop += hd.getBoundingClientRect().top - top; }
 const MUNDO_KEYS = new Set(["realTrips", "phLabels", "dayLines", "bookWords", "stories", "notes", "stopNames", "phHidden", "phRot", "phOrder", "covers", "stopState"]); /* only what tripPrint reads redraws the Undo row (Nikola r35) */
+/* tester links (web test page only, never in the phone app): ?day=, ?friend=1 and ?practice=1 run in a practice profile that lives only in this browser tab, so a kept library is never touched (Cooper r38). Closing the tab leaves it. TODO at ship: strip with TG_DATE */
+const PRACTICE = (() => { try { const q = new URLSearchParams(location.search); return (q.has("day") || q.get("friend") === "1" || q.get("practice") === "1") && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch(e){ return false; } })();
+const LS = (() => { try { return PRACTICE ? sessionStorage : localStorage; } catch(e){ return localStorage; } })();
+const PRACTICE_DB = (() => { if (!PRACTICE) return ""; try { let id = sessionStorage.getItem("tgPracticeId"); if (!id){ id = Date.now().toString(36); sessionStorage.setItem("tgPracticeId", id); } return "travel-globe-practice-" + id; } catch(e){ return "travel-globe-practice"; } })();
 const store = {
-  get(k, d){ try { const v = localStorage.getItem("tg." + k); if (v == null) return d; const p = JSON.parse(v);
+  get(k, d){ try { const v = LS.getItem("tg." + k); if (v == null) return d; const p = JSON.parse(v);
     if (d !== undefined && d !== null && (p === null || typeof p !== typeof d || Array.isArray(p) !== Array.isArray(d))) return d; return p; } catch(e){ return d; } },
-  set(k, v){ try { localStorage.setItem("tg." + k, JSON.stringify(v)); if (MUNDO_KEYS.has(k) && typeof refreshMundo === "function" && refreshMundo.soon) try { refreshMundo.soon(); } catch(e){} return true; } catch(e){ return false; } }
+  set(k, v){ try { LS.setItem("tg." + k, JSON.stringify(v)); if (MUNDO_KEYS.has(k) && typeof refreshMundo === "function" && refreshMundo.soon) try { refreshMundo.soon(); } catch(e){} return true; } catch(e){ return false; } }
 };
 const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}).replace(/^(\S+) /, "$1\u00a0").replace(/, (\d{4})$/, ",\u00a0$1"); /* nor "2025" on a line of its own (Nikola r37) */ /* "Mar 11" never splits across lines (Nikola r36) */
 const fmtShort = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric"}).replace(/^(\S+) /, "$1\u00a0");
@@ -823,7 +827,7 @@ function getStory(s){ const legacy = notes[s.id] ? {note:notes[s.id]} : {}; retu
 /* Photos you add live in IndexedDB (localStorage is too small for images) */
 const imgCache = new Map(); let imgStoreOK = true;
 const idb = (() => { let dbp = null;
-  const open = () => dbp || (dbp = new Promise((res, rej) => { try { const r = indexedDB.open("travel-globe", 1); r.onupgradeneeded = () => r.result.createObjectStore("img"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked")); } catch(e){ rej(e); } }));
+  const open = () => dbp || (dbp = new Promise((res, rej) => { try { const r = indexedDB.open(PRACTICE_DB || "travel-globe", 1); r.onupgradeneeded = () => r.result.createObjectStore("img"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked")); } catch(e){ rej(e); } }));
   const run = (mode, fn) => open().then(db => new Promise((res, rej) => { const tx = db.transaction("img", mode); const out = fn(tx.objectStore("img")); tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }));
   return { put:(k, v) => run("readwrite", st => { st.put(v, k); }), del:k => run("readwrite", st => { st.delete(k); }), clearPhotos:keep => run("readwrite", st => { const c = st.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur){ if (!String(cur.key).startsWith("song:") && !(keep && (typeof keep === "function" ? keep(cur.key) : keep.has(cur.key)))) cur.delete(); cur.continue(); } }; }),
     get:k => run("readonly", st => { const out = {}; const r = st.get(k); r.onsuccess = () => { out.v = r.result; }; return out; }).then(o => o.v),
@@ -1599,7 +1603,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.32.3 · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.32.4${PRACTICE ? " · practice profile (this tab only)" : ""} · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h;
 }
 const LAYER_LABEL = {trips:"Trips", snaps:"Moments", golf:"Golf", diary:"Travel Diary", bucket:"Bucket list"};
@@ -3814,7 +3818,7 @@ const bkCounts = keys => { const j = k => { try { return JSON.parse(keys[k] || "
 async function exportBackup(){
   if (exportBackup.busy) return toast("Still saving the backup. One moment"); exportBackup.busy = true;
   try {
-  const keys = {}; try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith("tg.")) keys[k] = localStorage.getItem(k); } } catch(e){}
+  const keys = {}; try { for (let i = 0; i < LS.length; i++){ const k = LS.key(i); if (k && k.startsWith("tg.")) keys[k] = LS.getItem(k); } } catch(e){}
   let raw = {}; try { raw = await idb.all(); } catch(e){}
   // only the photos of trips you still have: a removed trip's leftover photos never go into the file (Nikola r30)
   const live = new Set([...REAL_TRIPS, ...TRIPS].flatMap(t => t.stops.map(s => String(s.id))));
@@ -3858,7 +3862,7 @@ function backupReceipt(r){
     <button class="btn primary" data-close style="align-self:flex-start">Done</button></div>`, "bkreceipt"); }
 // what a backup would leave in place: data this browser has that the file doesn't
 const DATA_KEYS = {"tg.snaps":"moments", "tg.realTrips":"trips loaded from your photos", "tg.rounds":"golf rounds", "tg.hikes":"hikes", "tg.bucket":"bucket list places", "tg.stories":"trip stories", "tg.dayLines":"journal lines", "tg.phLabels":"photo labels", "tg.notes":"notes", "tg.stopNames":"stop names", "tg.customCats":"collections", "tg.chapters":"life chapters", "tg.covers":"trip covers", "tg.phHidden":"photos removed from trips", "tg.phOrder":"photo order", "tg.phRot":"turned photos", "tg.backSeen":"hidden Back again cards", "tg.bookWords":"trip book dedications and reflections"};
-function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
+function restoreKept(d){ const out = []; Object.entries(DATA_KEYS).forEach(([k, label]) => { if (k in d.keys) return; let v = null; try { v = JSON.parse(LS.getItem(k)); } catch(e){} const n = Array.isArray(v) ? v.length : v && typeof v === "object" ? Object.keys(v).length : 0; if (n) out.push({k, label, n}); }); return out; }
 function restoreKeptHTML(d){ const kept = restoreKept(d); const has = Object.keys(DATA_KEYS).filter(k => k in d.keys).map(k => DATA_KEYS[k]);
   return `This replaces ${has.length ? has.join(", ") : "nothing but settings"} in this browser. ${kept.length ? `The backup has no ${kept.map(x => x.label).join(", ")}, so the ones in this browser (${kept.map(x => x.label.split(" ")[0] + ": " + x.n).join(", ")}) stay unless you tick below.</p><label class="switch" style="gap:10px;align-items:center;justify-content:flex-start;margin:0"><input type="checkbox" id="rsWipe" style="width:20px;height:20px;accent-color:var(--lit)"><span>Remove them too, so this browser matches the backup exactly</span></label><p class="note" style="margin:0">` : ""}Settings like your globe style stay as they are. `; }
 async function importZip(file){
@@ -3888,14 +3892,14 @@ function importBackupData(d){ {
 async function doRestore(){
   const d = pendingRestore; if (!d) return; const wipe = !!($("#rsWipe") && $("#rsWipe").checked);
   // 1. snapshot what's here now, so a failed restore can be undone
-  const snap = {}; try { Object.keys(localStorage).filter(k => k.startsWith("tg.")).forEach(k => snap[k] = localStorage.getItem(k)); } catch(e){ toast("Couldn't restore: this browser blocked storage"); return; }
-  const rollback = () => { try { Object.keys(localStorage).filter(k => k.startsWith("tg.")).forEach(k => localStorage.removeItem(k)); Object.entries(snap).forEach(([k, v]) => localStorage.setItem(k, v)); } catch(e){} };
+  const snap = {}; try { Object.keys(LS).filter(k => k.startsWith("tg.")).forEach(k => snap[k] = LS.getItem(k)); } catch(e){ toast("Couldn't restore: this browser blocked storage"); return; }
+  const rollback = () => { try { Object.keys(LS).filter(k => k.startsWith("tg.")).forEach(k => LS.removeItem(k)); Object.entries(snap).forEach(([k, v]) => LS.setItem(k, v)); } catch(e){} };
   // 2. write the backup's settings and stories
   // settings the backup doesn't have (an older file with no globe style, say) are kept
-  try { Object.keys(snap).filter(k => k in d.keys).forEach(k => localStorage.removeItem(k)); Object.entries(d.keys).forEach(([k, v]) => { if (k.startsWith("tg.") && typeof v === "string") localStorage.setItem(k, v); }); if (wipe) [...Object.keys(DATA_KEYS), "tg.voiceKeys", "tg.voiceLen", "tg.realHome"].forEach(k => { if (!(k in d.keys)) localStorage.removeItem(k); }); }
+  try { Object.keys(snap).filter(k => k in d.keys).forEach(k => LS.removeItem(k)); Object.entries(d.keys).forEach(([k, v]) => { if (k.startsWith("tg.") && typeof v === "string") LS.setItem(k, v); }); if (wipe) [...Object.keys(DATA_KEYS), "tg.voiceKeys", "tg.voiceLen", "tg.realHome"].forEach(k => { if (!(k in d.keys)) LS.removeItem(k); }); }
   catch(e){ rollback(); toast("Couldn't restore (storage is full). Nothing was changed."); return; }
   // "already seen" flags never go backwards on restore, so a dismissed guide or welcome doesn't come back
-  try { ["tg.guideShown", "tg.guided", "tg.seen"].forEach(k => { if (snap[k] === "true") localStorage.setItem(k, "true"); }); } catch(e){}
+  try { ["tg.guideShown", "tg.guided", "tg.seen"].forEach(k => { if (snap[k] === "true") LS.setItem(k, "true"); }); } catch(e){}
   // 3. photos: replace old ones, count what made it
   const imgs = Object.entries(d.images || {}).filter(([k, v]) => v instanceof Blob ? v.size > 0 : typeof v === "string" && (v.startsWith("data:image/") || (String(k).startsWith("vn:") && v.startsWith("data:audio/")))); let ok = 0;
   // write the new photos first; old ones are only removed once every new one is safely saved
@@ -3905,7 +3909,7 @@ async function doRestore(){
   // photos of trips loaded from your phone stay unless this backup brings its own loaded trips
   const keepSet = new Set(imgs.map(x => x[0])), keepReal = !("tg.realTrips" in d.keys) && !wipe, keepVoice = !imgs.some(x => String(x[0]).startsWith("vn:")) && !wipe;
   if (ok === imgs.length){ try { await idb.clearPhotos(k => keepSet.has(k) || (keepReal && String(k).startsWith("rp:")) || (keepVoice && String(k).startsWith("vn:"))); } catch(e){} }
-  if (keepVoice) try { localStorage.setItem("tg.voiceKeys", snap["tg.voiceKeys"] || "[]"); localStorage.setItem("tg.voiceLen", snap["tg.voiceLen"] || "{}"); } catch(e){}
+  if (keepVoice) try { LS.setItem("tg.voiceKeys", snap["tg.voiceKeys"] || "[]"); LS.setItem("tg.voiceLen", snap["tg.voiceLen"] || "{}"); } catch(e){}
   let n = 0; try { n = JSON.parse(d.keys["tg.snaps"] || "[]").length; } catch(e){}
   try { sessionStorage.setItem("tgRestored", JSON.stringify({n, ok, of:imgs.length})); } catch(e){}
   location.reload();
@@ -4658,6 +4662,6 @@ if (store.get("seen", false)){ LIGHT_ORDER.forEach(id => lit.set(id, 1)); pinsSh
   else if (!store.get("guided", false) && !store.get("guideShown", false)) setTimeout(() => { if (!document.querySelector(".sheet")) openGuide(1); }, 900); }
 else if (!REAL_TRIPS.length){ $("#scan").hidden = true; introRunning = false; globeDark = true; store.set("seen", true); store.set("staged", true); setTimeout(openWelcome, 300); } // first open starts with your photos
 else { intro(); store.set("seen", true); }
-loadImages(); restoredNotice(); realAddedNotice(); sharedNotice(); openTripAfterReload(); if (FRIEND_TRY) setTimeout(() => { closeSheet(true); tryFriendFile(); }, 1500); setTimeout(journalCheck, 2500); if (REAL_TRIPS.length) $("#chipTag").textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample";
+if (PRACTICE) setTimeout(() => toast("Practice profile: this tab starts fresh and never touches your saved trips. Close the tab to leave it."), 400); loadImages(); restoredNotice(); realAddedNotice(); sharedNotice(); openTripAfterReload(); if (FRIEND_TRY) setTimeout(() => { closeSheet(true); tryFriendFile(); }, 1500); setTimeout(journalCheck, 2500); if (REAL_TRIPS.length) $("#chipTag").textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample";
 requestAnimationFrame(loop);
 </script>
