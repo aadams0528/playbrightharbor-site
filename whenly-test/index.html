@@ -124,7 +124,7 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 .ctext{padding:6px 8px 6px 12px;min-width:0;font-weight:700;font-size:19px;line-height:1.2;text-wrap:balance}
 .ctext small{display:block;font-weight:400;font-size:12.5px;color:var(--muted);margin-top:3px}
 .moves{display:flex;flex-direction:column;height:100%;border-left:1px solid var(--line)}
-.moves button{flex:1;width:42px;border:0;background:transparent;color:var(--muted);font-size:15px}
+.moves button{flex:1;width:42px;border:0;background:transparent;color:var(--muted);font-size:15px;min-height:0;padding:0;line-height:1;overflow:hidden}
 .moves button+button{border-top:1px solid var(--line)}
 .moves button:disabled{opacity:.25;cursor:default}
 .year{display:none;font-family:var(--mono);font-weight:700;font-size:19px;padding-inline:12px;letter-spacing:-.02em}
@@ -300,7 +300,7 @@ body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!importan
 .dist div{display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:center}
 .dist i{display:block;height:18px;background:var(--line);border-radius:4px;min-width:18px;text-align:right;padding-right:6px;font-style:normal;box-sizing:border-box;color:var(--ink);line-height:18px}
 .dist i.me{background:var(--accent);color:var(--accent-ink)}
-.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
+.toast.low{top:auto;bottom:calc(var(--nav-h) + 20px)}.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
 .coach{position:absolute;left:calc(var(--plate-w,var(--card-h))/2 - 15px);font-size:30px;pointer-events:none;z-index:6;animation:coach 1.6s ease-in-out infinite}
 @keyframes coach{0%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(-80px);opacity:1}100%{opacity:0;transform:translateY(-80px)}}
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
@@ -415,7 +415,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 66</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 67</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1417,7 +1417,7 @@ function cardH(){if(CH==null)fitCards();return CH}
 function slotTop(i){return i*(cardH()+GAP)}
 function build(){sel=null;
   list.innerHTML="";cardEls={};
-  fitCards();list.style.setProperty("--card-h",cardH()+"px");list.style.height=(slotTop(G.order.length)-GAP)+"px";fitNames();
+  fitCards();list.style.setProperty("--card-h",cardH()+"px");list.style.height=(slotTop(G.order.length)-GAP)+"px";fitNames();requestAnimationFrame(fitNames); /* again once the cards exist (Nikola, round 37) */
   G.order.forEach(id=>{
     const e=EVENTS[id],el=document.createElement("div");
     el.className="card";el.tabIndex=0;el.dataset.id=id;
@@ -1644,9 +1644,11 @@ addEventListener("resize",()=>fitMeta());
 // In a stacked header the tries line shares its row with "Show the answer": step its text down rather than wrap the row (Nikola, round 35).
 function fitTries(){const e=$("#tries");if(!e)return;e.style.fontSize="";if(!e.offsetParent||!$("#meta").classList.contains("stack"))return;let f=parseFloat(getComputedStyle(e).fontSize);while(f>12.5&&e.scrollWidth>e.clientWidth+1){f-=.5;e.style.fontSize=f+"px"}}
 function fitNames(){fitTries();if(G&&!G.done&&G.order&&G.order.every(id=>cardEls[id]))rnowUpdate();document.querySelectorAll(".card .ctext").forEach(t=>{t.style.fontSize="";t.style.paddingBlock="";
-  if(!t.offsetParent||t.scrollHeight<=t.clientHeight+1&&t.getBoundingClientRect().height<=t.parentElement.clientHeight+1)return;
+  /* the card's own inner height, so a two-line name never sits on the border at 47px (Nikola, round 37) */
+  const cd=t.closest(".card"),room=()=>cd?cd.clientHeight-2:t.parentElement.clientHeight+1;
+  if(!t.offsetParent||t.scrollHeight<=t.clientHeight+1&&t.getBoundingClientRect().height<=room())return;
   t.style.paddingBlock="2px";let f=parseFloat(getComputedStyle(t).fontSize);
-  while(f>12&&(t.scrollHeight>t.clientHeight+1||t.getBoundingClientRect().height>t.parentElement.clientHeight+1)){f-=.5;t.style.fontSize=f+"px"}});
+  while(f>12&&(t.scrollHeight>t.clientHeight+1||t.getBoundingClientRect().height>room())){f-=.5;t.style.fontSize=f+"px"}});
   // "Check my order" stays on one line: with Larger text it steps down a little instead of wrapping (Nikola, round 32).
   const b=$("#bLock");if(b&&b.offsetParent){b.style.fontSize="";let f=parseFloat(getComputedStyle(b).fontSize);const fmin=b.parentElement.classList.contains("four")?12:13;while(f>fmin&&b.scrollWidth>b.clientWidth+1){f-=.5;b.style.fontSize=f+"px"}}}
 let goalT;
@@ -1661,7 +1663,7 @@ function updateButtons(){
   // Its row is kept even before it appears, so the cards never jump down after the first check (Nikola, round 32).
   {const gu=$("#bGiveUp"),off=G.kind==="tutorial"||G.done,show=!off&&G.attempt>=2;gu.hidden=off;gu.classList.toggle("resv",!off&&!show);gu.tabIndex=show?0:-1;gu.setAttribute("aria-hidden",show?"false":"true")}
   const sb=$("#bSpot");sb.hidden=!spotOK()||G.done;sb.setAttribute("aria-disabled",G.spot?"true":"false");sb.classList.toggle("spent",!!G.spot);sb.setAttribute("aria-label",G.spot?"Spot check used":"Spot check, 1 left");if(picking!=="spot")sb.innerHTML=`<span class="ti">🎯</span>${G.spot?"Used":"Spot · 1"}`;
-  if(!sb.hidden&&!G.spot&&!S.spotSeen&&S.played>0&&G.attempt>1){S.spotSeen=1;save();const g0=G;setTimeout(()=>{if(G===g0&&!G.done)toast("New: 🎯 Spot check. Once per puzzle, tap it and then a card to learn if that card is in its final spot.")},6200)} /* after the Try banner, never over it (Nikola, round 36) */
+  if(!sb.hidden&&!G.spot&&!S.spotSeen&&!spotTipT&&S.played>0&&G.attempt>1){ /* marked seen only once it shows (Nikola, round 37) */spotTipT=1;const g0=G;setTimeout(()=>{spotTipT=0;if(G===g0&&!G.done&&!S.spotSeen){S.spotSeen=1;save();toast("New: 🎯 Spot check. Once per puzzle, tap it and then a card to learn if that card is in its final spot.")}},6200)} /* after the Try banner, never over it (Nikola, round 36) */
   const offerOn=!(G.kind==="tutorial"||G.tw==="nohelp"||G.attempt<3||G.offerUsed||G.done);
   // On a short screen the "Stuck?" box would sit under the button bar, so it moves into the bar as 📌 Place (Nikola, round 35).
   $("#offer").hidden=!offerOn||!!G.offerDock;$("#bPlace2").hidden=!offerOn||!G.offerDock;$("#play .actions").classList.toggle("four",!$("#bPlace2").hidden&&!$("#bSpot").hidden);
@@ -1687,7 +1689,7 @@ function check(){
   const ok=G.order.slice(0,-1).filter((a,i)=>yr(a)<=yr(G.order[i+1])).length;
   G.lastOk=ok;G.attempt++;layout();updateButtons();persist();feedbackLine();showGoal(G.kind==="tutorial"?0:6000);relayout();
   if(!hideTags())G.order.slice(0,-1).forEach((a,i)=>{const b=G.order[i+1];if(yr(a)>yr(b))[a,b].forEach(id=>{const el=cardEls[id];el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");setTimeout(()=>el.classList.remove("shake"),500)})});
-  $("#sr").textContent=`${ok} of ${G.order.length-1} neighbors are in order. Try ${G.attempt} of ${TRIES}.`;
+  $("#sr").textContent=`Try ${G.attempt-1}: ${ok} of ${G.order.length-1} pairs in order.`; /* the same words as the banner (Nikola, round 37) */
   if(hideTags())flashCount(ok,G.order.length-1);
   buzz(20);for(let k=0;k<ok;k++)sfx("ok",k);
   // If the last card sits under the Hint and Check bar, scroll it into view so you can see every tag (Muse, round 14).
@@ -1819,7 +1821,7 @@ function landYears(r){
 const REVEALS={
  29:"It took 333 years after {Columbus|Columbus reaches the Americas} for the {Erie Canal|Erie Canal opens} to open, and 73 years after the {Wright brothers' first flight|Wright brothers' first flight}, the {Concorde|Concorde starts passenger flights} was flying passengers at twice the speed of sound.",
  31:"The {Brooklyn Bridge|Brooklyn Bridge opens} was already 21 years old when {New York's first subway|New York City subway opens} opened, and the {Channel Tunnel|Channel Tunnel opens} didn't link Britain to France for another 90 years.",
- 33:"Just 11 years after {Sputnik|Sputnik, the first satellite}, {Apollo 8 astronauts|Earthrise photo from Apollo 8} were circling the Moon and took the Earthrise photo.",
+ 33:"{Apollo 8 astronauts|Earthrise photo from Apollo 8} were circling the Moon and taking the Earthrise photo 11 years after {Sputnik|Sputnik, the first satellite}.",
  39:"The {Grand Ole Opry|Grand Ole Opry's first broadcast} had already been on the radio for 26 years when {I Love Lucy|I Love Lucy premieres} first aired, and the Opry is still on today.",
  40:"{Basketball|Basketball is invented} was only 12 years old when the {first Tour de France|First Tour de France} set off.",
  41:"{Coca-Cola|Coca-Cola is invented} is 72 years older than {Pizza Hut|First Pizza Hut opens}, yet {Spam|Spam goes on sale}, Cheerios, McDonald's and Pizza Hut all arrived within 21 years of each other.",
@@ -1827,10 +1829,10 @@ const REVEALS={
  43:"{Women won the vote|US women win the right to vote} 133 years after the {Constitution was signed|US Constitution is signed}, and the {Civil Rights Act|Civil Rights Act is signed} came only 44 years after that.",
  44:"The {Wright brothers flew|Wright brothers' first flight} just 27 years after {Bell patented the telephone|Bell patents the telephone}, and the {polio vaccine|Polio vaccine is declared safe} came 52 years after that first flight.",
  45:"{Woodstock|Woodstock music festival} came 15 years after {Elvis recorded his first single|Elvis records his first single}, and {Napster|Napster lets people share songs} 30 years after Woodstock.",
- 46:"The {Berlin Wall fell|Berlin Wall falls} just 9 years after US college players beat the Soviets in the {Miracle on Ice|\"Miracle on Ice\"}.",
+ 46:"The {Berlin Wall fell|Berlin Wall falls} 9 years after US college players beat the Soviets in the {Miracle on Ice|\"Miracle on Ice\"}.",
  47:"Email is older than ready-to-use home computers: the {first one|First email between computers} was sent 6 years before the {Apple II|Apple II goes on sale} went on sale.",
  48:"{Mount Rushmore|Mount Rushmore is finished} is younger than the {Golden Gate Bridge|Golden Gate Bridge opens}: its four faces were finished 4 years after the bridge opened.",
- 49:"Just 8 years after the {first person in space|First person in space}, people {walked on the moon|First moon landing}. The {last moonwalk|Last people walk on the moon} came only 3 years later, and no one has been back since.",
+ 49:"Eight years after the {first person in space|First person in space}, people {walked on the moon|First moon landing}. The {last moonwalk|Last people walk on the moon} came only 3 years later, and no one has been back since.",
  50:"Dr. Seuss wrote {The Cat in the Hat|The Cat in the Hat is published} with only 236 different words, 393 years after {Shakespeare's birth year|William Shakespeare is born}. And the {Mona Lisa|Leonardo starts the Mona Lisa} is older than Shakespeare and all his plays.",
  51:"{Microwave ovens|First microwave oven is sold, to restaurants} and {Post-it notes|Post-it notes go on sale nationwide} both began as accidents, 33 years apart: one with a melted candy bar, the other with a glue that wasn't sticky enough.",
  52:"{Lincoln Logs|Lincoln Logs go on sale} are 17 years older than {Monopoly|Monopoly goes on sale} and 56 years older than the {Rubik's Cube|Rubik's Cube is invented}.",
@@ -1839,13 +1841,13 @@ const REVEALS={
  55:"{Hershey's Kisses|Hershey's Kisses are made} and the {Oreo|Oreo cookie is introduced} are just 5 years apart, and the Oreo is 36 years older than the {first In-N-Out|First In-N-Out Burger}.",
  56:"In the 10 years between the {Titanic sinking|The Titanic sinks} and the finding of {King Tut's tomb|King Tut's tomb is found}, the world fought a {world war|World War I begins} and tuned in to the {first radio station|First commercial radio station}.",
  57:"Four of the original {Magna Carta|Magna Carta is sealed} copies still survive, and the charter was already 561 years old when the {Declaration of Independence|Declaration of Independence} was adopted.",
- 58:"{Rosa Parks kept her seat|Rosa Parks keeps her bus seat} just 35 years after {women won the vote|US women win the right to vote}, and {Sally Ride flew|Sally Ride flies in space} 28 years after that.",
+ 58:"{Rosa Parks kept her seat|Rosa Parks keeps her bus seat} 35 years after {women won the vote|US women win the right to vote}, and {Sally Ride flew|Sally Ride flies in space} 28 years after that.",
  59:"The {Panama Canal|Panama Canal opens} opened 89 years after the {Erie Canal|Erie Canal opens}, but only 22 years before {Hoover Dam was finished|Hoover Dam is finished}.",
  79:"The {first helicopter on Mars|First helicopter flight on Mars} flew 60 years after the {first person went to space|First person in space}, carrying a scrap of cloth from the Wright brothers' plane.",
  80:"{Robert Goddard's first liquid-fueled rocket|First liquid-fueled rocket} came down in a cabbage field just 46 years before the {last moonwalkers|Last people walk on the moon} left the Moon.",
- 81:"{Neptune|Neptune is discovered} was found 236 years after {Galileo spotted Jupiter's moons|Galileo spots moons around Jupiter}, but {Curiosity|Curiosity rover lands on Mars} reached Mars just 54 years after {NASA was founded|NASA is founded}.",
- 82:"{Sputnik|Sputnik, the first satellite} was about the size of a beach ball, and just 12 years later people {walked on the moon|First moon landing}.",
- 83:"A {spacecraft reached Pluto|Spacecraft flies past Pluto} just 9 years after it was {demoted to a dwarf planet|Pluto is called a dwarf planet}, carrying some of the ashes of the man who discovered it.",
+ 81:"{Neptune|Neptune is discovered} was found 236 years after {Galileo spotted Jupiter's moons|Galileo spots moons around Jupiter}, but {Curiosity|Curiosity rover lands on Mars} reached Mars 54 years after {NASA was founded|NASA is founded}.",
+ 82:"{Sputnik|Sputnik, the first satellite} was about the size of a beach ball, and 12 years later people {walked on the moon|First moon landing}.",
+ 83:"A {spacecraft reached Pluto|Spacecraft flies past Pluto} 9 years after it was {demoted to a dwarf planet|Pluto is called a dwarf planet}, carrying some of the ashes of the man who discovered it.",
  84:"{Pluto was discovered|Pluto is discovered} just 1 year after {Hubble showed the universe is expanding|Hubble shows the universe is expanding}, and 876 years after Chinese astronomers spotted a 'guest star'."
 };
 function authored(){return (G.kind==="daily"||G.kind==="archive"||G.kind==="replay")&&!G.starter&&!!REVEALS[G.n]&&!earlierSet(G.n,G.ids)} // an earlier set has other cards too (Nikola, round 33) // a starter deal has other cards (Nikola, round 31)
@@ -2341,7 +2343,7 @@ function toast(t){
 function nextToast(){
   const wait=fxHold-performance.now();if(wait>0&&toastQ.length){toastNow="";setTimeout(()=>{toastNow=null;nextToast()},wait);return}
   const t=toastNow=toastQ.shift()??null;if(t==null)return;
-  const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);
+  const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent?" low":"");d.textContent=t; /* on a result screen, toasts sit low so they never cover its title (Nikola, round 37) */document.body.appendChild(d);
   setTimeout(()=>{d.remove();nextToast()},t.length>60?3600:2600);
 }
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
@@ -2489,7 +2491,7 @@ function sfx(kind,i=0){if(S.sound===false)return;try{
 }catch(e){}}
 function buzz(ms){try{if(NATIVE)PLUG.Haptics?.impact({style:ms<=10?"LIGHT":ms<=20?"MEDIUM":"HEAVY"});else navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 // Leaving a result clears its celebration at once (Cooper and Muse, round 29).
-let fxRun=0;function stopFx(){fxRun++;fxHold=0; /* a new screen's toasts never wait on an old burst (Nikola, round 35) */const c=$("#fx");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height);$("#decoFall")?.remove()}
+var spotTipT=0;let fxRun=0;function stopFx(){fxRun++;fxHold=0;placeArm=0; /* a new puzzle never inherits a half-pressed 📌 Place (Nikola, round 37) */ /* a new screen's toasts never wait on an old burst (Nikola, round 35) */const c=$("#fx");if(c)c.getContext("2d").clearRect(0,0,c.width,c.height);$("#decoFall")?.remove()}
 function fireworks(){
   if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
   const run=++fxRun,c=$("#fx"),x=c.getContext("2d"),W=c.width=innerWidth*devicePixelRatio,H=c.height=innerHeight*devicePixelRatio,P=[];
