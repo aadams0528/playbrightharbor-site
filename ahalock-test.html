@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.15 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.16 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -603,6 +603,7 @@ body:has(#ov) .toast{top:calc(var(--sat) + 10px);max-width:calc(100% - 128px);te
 .coach .cprac{font-weight:900;font-size:16px;color:var(--ink);background:#fff4d6;border-radius:10px;padding:4px 10px;margin:6px 0 0;display:inline-block}
 @media (max-height:620px){.coach .cprac{font-size:15px;padding:2px 8px;margin:4px 0 0}}
 @media (max-height:620px){.coach{padding-bottom:calc(var(--sab) + 6px)}.coach .cstep{font-size:11px;letter-spacing:.3px}.coach .crow .btn{min-height:40px;font-size:17px;padding:0 16px}.coach .ctext{font-size:15.5px}} /* Nikola R37: the lesson card leaves more board at 559 */
+@media (max-height:620px){#coach.coach .cmain{flex-direction:column;align-items:stretch;gap:2px}#coach.coach .cmain .tcue{text-align:right;padding:0;white-space:normal;max-width:none}#coach.coach .cmain .tcue br{display:none}#coach.coach .cprac{display:inline;padding:0 4px}#coach.coach .cmain .btn.cchk{align-self:flex-end}} /* Nikola R38: full-width text, so the card is shorter and the board shows 3+ rows */
 .picker.two .pk{font-size:14px;white-space:nowrap;letter-spacing:-.2px}
 .tmrw{background:#fff3c4;border:2px solid #f4c430;border-radius:16px;padding:12px 14px;margin:4px 0 14px;text-align:center;color:var(--ink);font-weight:700;font-size:16px;line-height:1.4}
 .tmrw b{display:block;font-family:var(--disp);font-size:22px;margin-bottom:2px}
@@ -900,13 +901,14 @@ html.big .status3 .third span{font-size:16px}
   function spotName(p) { return 'spot ' + (p + 1); }
 
   // Human-style explanation. Returns {steps:[{text, clues:[idx], fixed:{p:d}}], level, solved}
-  function explainLock(p) {
+  function explainLock(p, gen) { // gen: called by the generator, so step structure stays as it was
     const n = p.n;
     const dom = []; for (let i = 0; i < n; i++) dom.push(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
     const ins = new Set();
     const announced = new Set();
     const saidFixed = new Set();
     const saidRP = new Set();
+    let partialWhy = {}, outWhy = {};
     const steps = [], rmBy = {}; // Muse R37: which clues took each number out of each spot, so later lines can name them
     let level = 0;
     const solved = () => dom.every(s => s.size === 1);
@@ -920,7 +922,7 @@ html.big .status3 .third span{font-size:16px}
     if (wp.length) steps.push({ kind: 'wrongplace', clues: wp, text: (wp.length === 1 ? 'Clue ' + (wp[0] + 1) + ' says' : 'Clues ' + listWords(wp.map(k => String(k + 1))) + ' say') + ' "wrong place", so none of ' + (wp.length === 1 ? 'its' : 'their') + ' numbers can sit where ' + (wp.length === 1 ? 'it shows them' : 'those clues show them') + '.' });
     // Cooper/Nikola R37: a "must be in the code" step walks the trial without that number, one forced fact at a time.
     // When the forced facts run dry it tries one more number out as well (one level deep), so the walk stays short.
-    const lockTrial = (D, idxs) => {
+    const lockTrial = (D, idxs, at) => {
       const clues = idxs.concat(p.clues.map((c, i) => i).filter(i => idxs.indexOf(i) < 0));
       const run = (d2, in2, said, depth) => {
         const spotsOf = x => d2.map((s2, i) => s2.has(x) ? i : -1).filter(i => i >= 0);
@@ -932,6 +934,11 @@ html.big .status3 .third span{font-size:16px}
           if (in2.size > n) return 'that is ' + in2.size + ' different numbers for ' + n + ' spots';
           for (const ci of clues) { const c = p.clues[ci], need = c.a + c.b, have = c.g.filter(x => in2.has(x));
             if (have.length > need) return 'clue ' + (ci + 1) + ' would have ' + listWords(have.map(String)) + ', more than its ' + NUM[need].toLowerCase(); }
+          { const miss = clues.map(ci => { const c = p.clues[ci]; return { ci, k: c.a + c.b - c.g.filter(x => in2.has(x)).length, rest: c.g.filter(x => !in2.has(x) && live(x)) }; }).filter(o => o.k > 0);
+            const room = n - in2.size, pl = k => k === 1 ? 'one spot' : NUM[k].toLowerCase() + ' spots';
+            for (const o of miss) if (o.k > room) return 'clue ' + (o.ci + 1) + ' would still need ' + NUM[o.k].toLowerCase() + ' more of its numbers, but only ' + (room ? pl(room) + (room > 1 ? ' are' : ' is') : 'no spot is') + ' left';
+            for (let u = 0; u < miss.length; u++) for (let v = u + 1; v < miss.length; v++) { const A = miss[u], B = miss[v]; if (A.rest.some(x => B.rest.indexOf(x) >= 0) || A.k + B.k <= room) continue;
+              return 'clue ' + (A.ci + 1) + ' would still need ' + NUM[A.k].toLowerCase() + ' more and clue ' + (B.ci + 1) + ' ' + NUM[B.k].toLowerCase() + ' more, and they share none of those numbers, but only ' + pl(room) + (room > 1 ? ' are' : ' is') + ' left'; } }
           for (let i = 0; i < n && !ch; i++) if (d2[i].size === 1) { const v = [...d2[i]][0]; let rm = false;
             for (let j = 0; j < n; j++) if (j !== i && d2[j].has(v)) { d2[j].delete(v); rm = true; }
             if (!in2.has(v) || rm) { if (dom[i].size > 1) said.push(spotName(i) + ' would have to be ' + v); in2.add(v); ch = true; } }
@@ -943,7 +950,7 @@ html.big .status3 .third span{font-size:16px}
           for (const ci of clues) { const c = p.clues[ci], need = c.a + c.b; if (!need) continue;
             const cand = c.g.filter(live), have = c.g.filter(x => in2.has(x));
             if (cand.length < need) { const dead = c.g.filter(x => x !== D && !outBy.has(x) && !live(x) && dom.filter(s2 => s2.has(x)).length === 1).map(x => x + ' could only go in ' + spotName(dom.findIndex(s2 => s2.has(x))));
-              return 'clue ' + (ci + 1) + ' would need ' + NUM[need].toLowerCase() + ' of its numbers, but only ' + (cand.length ? listWords(cand.map(String)) + (cand.length > 1 ? ' are' : ' is') : 'none are') + ' left' + (dead.length ? ' (' + listWords(dead) + ')' : ''); }
+              return 'clue ' + (ci + 1) + ' would need ' + NUM[need].toLowerCase() + ' of its numbers, but ' + (cand.length ? 'only ' + listWords(cand.map(String)) + (cand.length > 1 ? ' are' : ' is') + ' left' : 'none of them are left') + (dead.length ? ' (' + listWords(dead) + ')' : ''); }
             if (have.length > need) return 'clue ' + (ci + 1) + ' would have ' + listWords(have.map(String)) + ', more than its ' + NUM[need].toLowerCase();
             if (c.b === 0) { for (const x of have) { const q = c.g.indexOf(x); if (!d2[q].has(x)) return 'clue ' + (ci + 1) + ' would have ' + x + ', but ' + x + ' can’t be in ' + spotName(q) + ', and the clue says right place';
               if (d2[q].size > 1) { d2[q] = new Set([x]); said.push('clue ' + (ci + 1) + ' would put ' + x + ' in ' + spotName(q)); ch = true; break; } } if (ch) break; }
@@ -972,10 +979,20 @@ html.big .status3 .third span{font-size:16px}
           if (!ch) break; }
         return '';
       };
-      const d2 = dom.map(x => new Set(x)); d2.forEach(x => x.delete(D)); const said = [];
-      const why = run(d2, new Set(ins), said, 0);
+      // Cooper R38: when one walk can't settle it, split on the cited clue with the fewest ways to make its count.
+      if (at === 'cases') { const live0 = x => ins.has(x) || x === D || dom.some(s2 => s2.has(x)); let best = null;
+        for (const ci of idxs) { const c = p.clues[ci], need = c.a + c.b; if (!need) continue; const have = c.g.filter(x => ins.has(x) || x === D), rest = c.g.filter(x => live0(x) && have.indexOf(x) < 0), k = need - have.length;
+          if (k <= 0 || rest.length <= k) continue; const opts = []; const rec = (j, cur) => { if (cur.length === k) { opts.push(cur.slice()); return; } for (let t = j; t < rest.length; t++) { cur.push(rest[t]); rec(t + 1, cur); cur.pop(); } }; rec(0, []);
+          if (opts.length <= 3 && (!best || opts.length < best.opts.length)) best = { ci, opts, rest }; }
+        if (!best) return ''; const parts = [];
+        for (const o of best.opts) { const e2 = dom.map(x => new Set(x)), f2 = new Set(ins); f2.add(D); o.forEach(x => f2.add(x)); best.rest.filter(x => o.indexOf(x) < 0).forEach(x => e2.forEach(s2 => s2.delete(x)));
+          const s3 = [], r = run(e2, f2, s3, 1); if (!r || s3.length > 2) return ''; parts.push('With ' + listWords(o.map(String)) + ', ' + s3.concat([r]).join(', then ') + '. '); }
+        const ow = best.opts.map(o => listWords(o.map(String))); const nm = (NUM[best.opts[0].length] || '').toLowerCase();
+        return 'Suppose ' + D + ' were in the code. Clue ' + (best.ci + 1) + ' would then need ' + (best.opts[0].length > 1 ? nm + ' more of its numbers: ' : '') + (ow.length > 2 ? ow.slice(0, -1).join(', ') + ' or ' + ow[ow.length - 1] : ow.join(' or ')) + '. ' + parts.join(''); }
+      const d2 = dom.map(x => new Set(x)), in0 = new Set(ins); if (at === undefined) d2.forEach(x => x.delete(D)); else if (at === 'in') in0.add(D); else { d2.forEach((x, i) => { if (i !== at) x.delete(D); }); d2[at] = new Set([D]); in0.add(D); } const said = [];
+      const why = run(d2, in0, said, 0);
       const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
-      return why && said.length <= 4 ? 'Suppose ' + D + ' is not in the code. ' + said.concat([why]).map(cap).join('. ') + '. ' : '';
+      return why && said.length <= (at === 'in' ? 5 : at === undefined ? 4 : 3) ? (at === undefined ? 'Suppose ' + D + ' is not in the code. ' : at === 'in' ? 'Suppose ' + D + ' were in the code. ' : 'Suppose ' + D + ' were in ' + spotName(at) + '. ') + said.concat([why]).map(cap).join('. ') + '. ' : '';
     };
     let guard = 0;
     while (!solved() && guard++ < 60) {
@@ -1004,6 +1021,7 @@ html.big .status3 .third span{font-size:16px}
         const spots = []; for (let i = 0; i < n; i++) if (dom[i].has(d)) spots.push(i);
         if (spots.length === 1 && dom[spots[0]].size > 1) {
           dom[spots[0]] = new Set([d]);
+          saidFixed.add(spots[0]); // Nikola R38: the next "Only D is still possible" row would just repeat this one
           steps.push({ kind: 'hidden', text: d + ' is in the code, and the only spot left for it is ' + spotName(spots[0]) + '.', clues: [] });
           progressed = true; break;
         }
@@ -1036,10 +1054,13 @@ html.big .status3 .third span{font-size:16px}
           let keepR = null, keepIn = null;
           // Cooper R36: say the clue's own consequence first ("6 is out"); a number the clue never shows is pinned on the next step.
           const inCl = d => idxs.some(i => p.clues[i].g.indexOf(d) >= 0);
-          if (pinnedIn.length && !inCl(pinnedIn[0]) && outD.some(inCl)) { const od = outD.filter(inCl); keepIn = []; keepR = removals.filter(([i, dd]) => od.indexOf(dd) >= 0); }
-          else if (pinnedIn.length) { const d = pinnedIn[0], sp = spotsOf(d)[0]; keepIn = [d]; keepR = removals.filter(([i, dd]) => dd === d || i === sp); }
+          // Cooper R38: a number pinned only by the pool waits; first place the clue's own number that the step pins.
+          const pinOwn = gen || pinnedIn.some(inCl) ? null : [...ins].find(d => inCl(d) && spotsOf(d).length === 1 && dom.filter(x => x.has(d)).length > 1);
+          if (pinnedIn.length && pinOwn !== undefined && pinOwn !== null && !outD.some(inCl)) { keepIn = []; keepR = removals.filter(([i, dd]) => dd === pinOwn); }
+          else if (pinnedIn.length && !inCl(pinnedIn[0]) && outD.some(inCl)) { const od = outD.filter(inCl); keepIn = []; keepR = removals.filter(([i, dd]) => od.indexOf(dd) >= 0); }
+          else if (pinnedIn.length) { const pc = gen ? [] : pinnedIn.filter(inCl), d = (pc.length ? pc : pinnedIn)[0], sp = spotsOf(d)[0]; keepIn = [d]; keepR = removals.filter(([i, dd]) => dd === d || i === sp); }
           else if (newIn.length) { keepIn = newIn.slice(); keepR = removals.filter(([i, dd]) => newIn.indexOf(dd) >= 0); }
-          else if (outD.length) { keepIn = []; keepR = removals.filter(([i, dd]) => outD.indexOf(dd) >= 0); }
+          else if (outD.length) { const oc = gen ? [] : outD.filter(inCl), od = oc.length ? oc : outD; keepIn = []; keepR = removals.filter(([i, dd]) => od.indexOf(dd) >= 0); } // Cooper R38: a number the cited clues don't show waits for its own step
           if (keepR) { removals.splice(0, removals.length, ...keepR); newIn.splice(0, newIn.length, ...keepIn); }
         }
         // what we already knew about these clues' numbers (the "because")
@@ -1051,23 +1072,24 @@ html.big .status3 .third span{font-size:16px}
         let fillText = null;
         if (!newIn.length && idxs.length === 1 && removals.length) {
           const cl = p.clues[idxs[0]], need = cl.a + cl.b;
-          const goneD = [...new Set(removals.map(r => r[1]))].sort((x, y) => x - y);
+          const goneD = [...new Set(removals.map(r => r[1]))].filter(d => !ins.has(d) && dom.every((s2, i) => !s2.has(d) || removals.some(r => r[0] === i && r[1] === d))).sort((x, y) => x - y); // Muse R38: only numbers gone from every spot
           const live = cl.g.filter(d => !ins.has(d) && dom.some(s2 => s2.has(d)));
           const needMore = need - cl.g.filter(d => ins.has(d)).length;
-          if (goneD.every(d => !mentionedD.has(d)) && ins.size + needMore === n && needMore > 0) {
+          if (goneD.length && goneD.every(d => !mentionedD.has(d)) && ins.size + needMore === n && needMore > 0) {
             const inList = [...ins].sort((x, y) => x - y).map(String);
             fillText = (inList.length ? listWords(inList) + (inList.length > 1 ? ' are' : ' is') + ' in the code, and c' : 'C') + 'lue ' + (idxs[0] + 1) + ' needs ' + (['', 'one', 'two', 'three'][needMore] + ' more') + ' of its numbers (' + listWords(live.map(String), 'or') + '). That fills all ' + n + ' spots, so ' + listWords(goneD.map(String)) + (goneD.length > 1 ? ' are' : ' is') + ' not in the code.';
           }
         }
         // Cooper R36: a pair that fills every spot says so before ruling the rest out.
         if (!fillText && !newIn.length && idxs.length === 2 && removals.length) {
-          const [c1, c2] = idxs.map(i => p.clues[i]), goneD = [...new Set(removals.map(r => r[1]))].sort((x, y) => x - y);
+          const [c1, c2] = idxs.map(i => p.clues[i]), goneD = [...new Set(removals.map(r => r[1]))].filter(d => !ins.has(d) && dom.every((s2, i) => !s2.has(d) || removals.some(r => r[0] === i && r[1] === d))).sort((x, y) => x - y); // Muse R38: only numbers gone from every spot
           const shared = c1.g.some(d => c2.g.indexOf(d) >= 0), sum = c1.a + c1.b + c2.a + c2.b;
-          if (!shared && sum === n && goneD.every(d => !mentionedD.has(d)) && [...ins].every(d => mentionedD.has(d)))
-            fillText = 'Clue ' + (idxs[0] + 1) + ' needs ' + (NUM[c1.a + c1.b] || '').toLowerCase() + ' of ' + listWords(c1.g.map(String)) + ', and clue ' + (idxs[1] + 1) + ' needs ' + (NUM[c2.a + c2.b] || '').toLowerCase() + ' of ' + listWords(c2.g.map(String)) + '. They share no numbers, so that fills all ' + n + ' spots, and ' + listWords(goneD.map(String)) + (goneD.length > 1 ? ' are' : ' is') + ' not in the code.';
+          const insOut = [...ins].filter(d => !mentionedD.has(d)).sort((x, y) => x - y); // Cooper R38: numbers already in the code count toward the spots too
+          if (!shared && sum + insOut.length === n && goneD.length && goneD.every(d => !mentionedD.has(d)))
+            fillText = 'Clue ' + (idxs[0] + 1) + ' needs ' + (NUM[c1.a + c1.b] || '').toLowerCase() + ' of ' + listWords(c1.g.map(String)) + ', and clue ' + (idxs[1] + 1) + ' needs ' + (NUM[c2.a + c2.b] || '').toLowerCase() + ' of ' + listWords(c2.g.map(String)) + '. They share no numbers' + (insOut.length ? ', and ' + listWords(insOut.map(String)) + (insOut.length > 1 ? ' are' : ' is') + ' in the code too' : '') + ', so that fills all ' + n + ' spots, and ' + listWords(goneD.map(String)) + (goneD.length > 1 ? ' are' : ' is') + ' not in the code.';
         }
         // Cooper R35: a pair step that puts a number in the code says the counting reason first.
-        let pairWhy = '';
+        let pairWhy = '', trialAll = null;
         // Cooper R36: a number in none of the cited clues is forced in by counting what those clues can supply.
         if (newIn.length === 1 && idxs.every(i => p.clues[i].g.indexOf(newIn[0]) < 0)) {
           const d = newIn[0], live = (x) => ins.has(x) || dom.some(s2 => s2.has(x)), inAny = x => idxs.some(i => p.clues[i].g.indexOf(x) >= 0);
@@ -1076,7 +1098,7 @@ html.big .status3 .third span{font-size:16px}
           if (sum < n && outside.length === n - sum && outside.indexOf(d) >= 0) {
             const cl = idxs.map((i, j) => 'clue ' + (i + 1) + ' has ' + (NUM[needs[j]] || String(needs[j])).toLowerCase() + ' of ' + listWords(p.clues[i].g.map(String)));
             const deadOut = []; for (let x = 0; x <= 9; x++) if (!inAny(x) && !live(x)) deadOut.push(x);
-            pairWhy = (w => w.charAt(0).toUpperCase() + w.slice(1))(listWords(cl)) + ', so ' + (idxs.length > 1 ? 'together they give' : 'it gives') + ' at most ' + (NUM[sum] || String(sum)).toLowerCase() + ' of the ' + (NUM[n] || String(n)).toLowerCase() + ' numbers. ' + (n - sum === 1 ? 'The last one must be a number in ' + (idxs.length > 1 ? 'neither clue' : 'no clue here') : 'The other ' + (n - sum) + ' must be numbers ' + (idxs.length > 1 ? 'in neither clue' : 'outside this clue')) + (deadOut.length ? ', and ' + listWords(deadOut.map(String)) + (deadOut.length > 1 ? ' are' : ' is') + ' out' : '') + '. ';
+            pairWhy = (w => w.charAt(0).toUpperCase() + w.slice(1))(listWords(cl)) + ', so ' + (idxs.length > 1 ? 'together they give' : 'it gives') + ' at most ' + (NUM[sum] || String(sum)).toLowerCase() + ' of the ' + (NUM[n] || String(n)).toLowerCase() + ' numbers. ' + (n - sum === 1 ? 'The last one must be a number in ' + (idxs.length > 1 ? 'neither clue' : 'no clue here') : 'The other ' + (n - sum) + ' must be numbers ' + (idxs.length > 1 ? 'in neither clue' : 'outside this clue')) + (deadOut.length ? ', and ' + listWords(deadOut.map(String)) + (deadOut.length > 1 ? ' are' : ' is') + ' out' : '') + (n - sum > 1 ? ', so they are ' + listWords(outside.map(String)) : '') + '. ';
           }
         }
         // Nikola R36: a single clue that forces a number in says how: what else could still fill its count.
@@ -1145,16 +1167,38 @@ html.big .status3 .third span{font-size:16px}
             if (why) pairWhy = 'Without ' + d + ', the only numbers that give clue ' + (idxs[0] + 1) + ' its ' + (NUM[C2[0].a + C2[0].b] || '').toLowerCase() + ' and clue ' + (idxs[1] + 1) + ' its ' + (NUM[C2[1].a + C2[1].b] || '').toLowerCase() + ' are ' + listWords(cb.map(String)) + (outIn.length ? ', with ' + listWords(outIn.map(String)) + ' already in the code' : '') + why + '. '; }
           else if (!cands.length) pairWhy = 'Without ' + d + ', no set of the other numbers gives clue ' + (idxs[0] + 1) + ' its ' + (NUM[C2[0].a + C2[0].b] || '').toLowerCase() + ' and clue ' + (idxs[1] + 1) + ' its ' + (NUM[C2[1].a + C2[1].b] || '').toLowerCase() + ' at the same time. ';
         }
+        // Nikola/Muse R38: a step that only moves a number out of some spots tries it there, so the row has its reason.
+        partialWhy = {};
+        if (!newIn.length && !fillText) { const byD = {}; removals.forEach(([i, d]) => (byD[d] = byD[d] || []).push(i));
+          for (const d in byD) { const qs = byD[d]; if (dom.every((s2, i) => !s2.has(+d) || qs.indexOf(i) >= 0)) continue; if (qs.length > 2) continue;
+            const rc = idxs.map(i => p.clues[i]).findIndex(c => c.b === 0 && c.a > 0 && c.g.indexOf(+d) >= 0 && qs.every(q => c.g[q] !== +d));
+            if (rc >= 0) { const c = p.clues[idxs[rc]]; partialWhy[d] = 'Clue ' + (idxs[rc] + 1) + ' says right place, so if ' + d + ' is in the code it sits in ' + spotName(c.g.indexOf(+d)) + ', as the clue shows. '; continue; }
+            const tws = qs.map(q => lockTrial(+d, idxs, q)); if (tws.every(Boolean) && tws.join('').length <= 420) partialWhy[d] = tws.join(''); } } // Nikola R38: rows stay near 400 characters
         // Cooper/Nikola R37: when "D must be in the code" has no stated reason (or only "no set works"), walk the
         // trial without D, one forced fact at a time, until a clue or the spots run out.
         if (newIn.length === 1 && !fillText && (!pairWhy || /no set of the other numbers/.test(pairWhy))) {
-          const tw = lockTrial(newIn[0], idxs); if (tw) pairWhy = tw;
+          const tw = lockTrial(newIn[0], idxs); if (tw && tw.length <= 480) { pairWhy = tw; const used = [...new Set((tw.match(/[Cc]lue (\d+)/g) || []).map(m => +m.split(' ')[1] - 1))]; trialAll = idxs.concat(used.filter(c => idxs.indexOf(c) < 0)).sort((a, b) => a - b); }
         }
+        // Cooper R38: a step that rules a number out of the code tries it in, so the row prints the count that removes it.
+        outWhy = {};
+        if (!gen && !newIn.length && !fillText && !pairWhy) { const goneD = [...new Set(removals.map(r => r[1]))].filter(d => !ins.has(d) && dom.every((s2, i) => !s2.has(d) || removals.some(r => r[0] === i && r[1] === d)));
+          const c0 = p.clues[idxs[0]], self = idxs.length === 1 && (c0.a + c0.b === 0 || (c0.b === 0 && c0.a > 0 && goneD.every(d => c0.g.indexOf(d) >= 0)) || c0.g.filter(d => ins.has(d)).length === c0.a + c0.b);
+          if (!self && goneD.length <= 4) { goneD.forEach(d => { let tw = lockTrial(d, idxs, 'in');
+              if (!tw || tw.length > 360) { const tc = lockTrial(d, idxs, 'cases'); if (tc && (!tw || tc.length < tw.length)) tw = tc; }
+              if (!tw) { const qs = dom.map((s2, i) => s2.has(d) ? i : -1).filter(i => i >= 0); // no single walk: try each spot it could still take
+                if (qs.length <= 2) { const ts = qs.map(q => lockTrial(d, idxs, q)); if (ts.every(Boolean)) tw = (qs.length > 1 ? d + ' could only go in spot ' + listWords(qs.map(q => String(q + 1)), 'or') + '. ' : '') + ts.join(''); } }
+              if (tw && tw.length <= 360) outWhy[d] = tw; });
+            let tot = 0; const has = goneD.filter(d => outWhy[d]).slice(0, 3).filter((d, j) => { const sm = Object.keys(outWhy).some(e => +e !== d && outWhy[e].replace('Suppose ' + e + ' ', '') === outWhy[d].replace('Suppose ' + d + ' ', '')); tot += sm && j ? 0 : outWhy[d].length; return j === 0 || tot <= 300; }); // long walks get a step each // keep the numbers whose reason we can print; the rest come back in their own step
+            if (has.length && has.length < goneD.length) { const drop = goneD.filter(d => has.indexOf(d) < 0); for (let k = removals.length - 1; k >= 0; k--) if (drop.indexOf(removals[k][1]) >= 0) removals.splice(k, 1); } } }
         // apply
         for (const [i, d] of removals) { dom[i].delete(d); if (!rmBy[d + '|' + i]) rmBy[d + '|' + i] = idxs.slice(); }
         newIn.forEach(d => ins.add(d));
         level = Math.max(level, lvl);
-        steps.push({ kind: 'clue', clues: idxs.slice(), text: fillText || describe(idxs, removals, newIn, ctx, pairWhy) });
+        { let tx = fillText || describe(idxs, removals, newIn, ctx, pairWhy), cl = idxs.slice();
+          // Nikola R38: a trial that leans on other clues names all of them in its header.
+          if (!fillText && /[Ss]uppose/.test(tx)) { const used = [...new Set((tx.slice(tx.search(/[Ss]uppose/)).match(/[Cc]lue (\d+)/g) || []).map(m => +m.split(' ')[1] - 1))]; trialAll = [...new Set((trialAll || idxs).concat(used))].sort((a, b) => a - b); }
+          if (trialAll && trialAll.length > idxs.length && !fillText) { const hm = tx.match(/^Clues? [^(:]*?(?: \([^)]*\))?: /); if (hm) { tx = 'Clues ' + listWords(trialAll.map(i => String(i + 1))) + ' together: ' + tx.slice(hm[0].length).replace(/^it says "right place"/, 'clue ' + (idxs[0] + 1) + ' says "right place"'); cl = trialAll.slice(); } }
+          steps.push({ kind: 'clue', clues: cl, text: tx }); }
         return true;
       };
       const lockContext = (idxs, focus) => {
@@ -1214,6 +1258,7 @@ html.big .status3 .third span{font-size:16px}
           if (pinned.has(d)) continue;
           let why = '';
           if (idxs.length === 1 && cl.a === 0 && spots.length === 1 && cl.g[spots[0]] === d) why = ' (the clue has it there, but says wrong place)';
+          if (!why && partialWhy[d] && !pairWhy) pairWhy = partialWhy[d];
           parts.push(d + ' can\'t go in ' + (spots.length === 1 ? spotName(spots[0]) : 'spots ' + listWords(spots.map(s => String(s + 1)))) + why);
           break; // one spot detail per step
         }
@@ -1253,9 +1298,11 @@ html.big .status3 .third span{font-size:16px}
         if (idxs.length === 1 && (rpos || (ctx || []).some(c => / needs .* still possible$/.test(c)))) pairWhy = '';
         if (pairWhy && ctx) ctx = ctx.filter(c => !/^the only numbers still possible/.test(c));
         if (full) pairWhy = '';
-        const tl = (pairWhy || '') + full + rpos + (tailNote ? tailNote.charAt(0).toUpperCase() + tailNote.slice(1) + '. ' : '');
-        if (ctx && ctx.length) return head + ': ' + rp + (rp ? 'We' : 'we') + ' already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '. ' + tl + 'So ' + body + '.';
-        return head + ': ' + rp + (tl || rp ? (rp ? tl : tl.replace(/^(Clues?|Without|Suppose)/, w => w.toLowerCase())) + 'So ' + body : body) + '.';
+        if (!pairWhy && !full && (!rp || out.some(d => !mentioned.has(d))) && !rpos && out.length && !newIn.length && out.every(d => outWhy[d])) { const g = new Map(); out.forEach(d => { const k = outWhy[d].replace('Suppose ' + d + ' were in the code. ', ''); if (!g.has(k)) g.set(k, []); g.get(k).push(d); }); // same reason for several numbers: say it once
+          pairWhy = [...g].map(([k, ds]) => ds.length > 1 && k !== outWhy[ds[0]] ? 'Suppose ' + listWords(ds.map(String), 'or') + ' were in the code. ' + k.replace(/^([A-Z])/, (m) => 'Either way, ' + m.toLowerCase()) : outWhy[ds[0]]).join(''); }
+        const tl = (pairWhy || '') + full + rpos; const tn = tailNote ? ' That leaves no spot for ' + tailNote.replace(/^counting every clue so far, that leaves no spot for /, '').replace(/, so (they are|it is) not in the code$/, '') + ', so ' + (/, so they are/.test(tailNote) ? 'they are' : 'it is') + ' not in the code.' : ''; // Nikola R38: the side note comes after the conclusion
+        if (ctx && ctx.length) return head + ': ' + rp + (rp ? 'We' : 'we') + ' already know ' + (ctx.length > 2 ? ctx.join('; ') : listWords(ctx)) + '. ' + tl + 'So ' + body + '.' + tn;
+        return head + ': ' + rp + (tl || rp ? (rp ? tl : tl.replace(/^(Clues?|Without|Suppose)/, w => w.toLowerCase())) + 'So ' + body : body) + '.' + tn;
       };
       let done = false;
       for (const i of order) { const c0 = p.clues[i]; if (c0.a + c0.b === 0 && c0.g.every(d => dom.every(s2 => !s2.has(d)))) continue; if (tryClues([i], 1)) { done = true; break; } }
@@ -1288,9 +1335,12 @@ html.big .status3 .third span{font-size:16px}
       if (A.kind === 'clue' && B.kind === 'clue' && A.clues.length === 1 && B.clues.length === 1 && A.clues[0] === B.clues[0]) {
         const at = B.text.indexOf('. So ');
         // Cooper R30: say what was just found, and keep the clue's own count ("needs two, and only 9 and 2 remain").
-        if (at > 0) { const rest = B.text.slice(at + 5); const ao = A.text.lastIndexOf('So '); const ac = A.text.lastIndexOf(': '), sm = A.text.match(/, so (.*)$/), af = ao >= 0 ? A.text.slice(ao + 3) : sm ? sm[1] : ac >= 0 ? A.text.slice(ac + 2) : ''; const found = af.split('. ')[0].replace(/\.$/, '');
+        if (at > 0) { const rest = B.text.slice(at + 5); const ao = A.text.lastIndexOf('So '); const ac = A.text.lastIndexOf(': '), sm = A.text.match(/, so (.*)$/), af = ao >= 0 ? A.text.slice(ao + 3) : sm ? sm[1] : ac >= 0 ? A.text.slice(ac + 2) : ''; const found = af.split('. ')[0].replace(/\.$/, '').replace(/^(\d) is in the code, and it must go in (spot \d)$/, '$1 is in $2');
           const need = (B.text.slice(0, at).match(/clue \d+ needs [^.;]*/) || [])[0];
-          B.text = 'Clue ' + (B.clues[0] + 1) + ' again' + (found ? ', now that ' + found : ', with what we just found') + ': ' + (need ? need + '. So ' + rest.charAt(0).toLowerCase() + rest.slice(1) : rest.charAt(0).toLowerCase() + rest.slice(1)); }
+          // Muse R38: keep the step's own reasoning (the right-place rule, a count or a trial), not just its conclusion.
+          const hm = B.text.match(/^Clues? [^(:]*?(?: \([^)]*\))?: /), mid = hm ? B.text.slice(hm[0].length, at + 1).replace(/^[Ww]e already know [^.]*\.\s*/, '').trim() : '';
+          const why = mid && !/^$/.test(mid) ? mid.replace(/^it says/, 'It says') + ' ' : need ? need.charAt(0).toUpperCase() + need.slice(1) + '. ' : '';
+          B.text = 'Clue ' + (B.clues[0] + 1) + ' again' + (found ? ', now that ' + found : ', with what we just found') + ': ' + (why ? why + 'So ' + rest.charAt(0).toLowerCase() + rest.slice(1) : rest.charAt(0).toLowerCase() + rest.slice(1)); }
       }
     }
     return { steps, level, solved: solved(), answer: dom.map(s => [...s][0]), rmBy };
@@ -1340,7 +1390,7 @@ html.big .status3 .third span{font-size:16px}
       // shuffle order (keep variety)
       cl = rng.shuffle(cl);
       const puz = { type: 'lock', n, clues: cl, code };
-      const ex = explainLock(puz);
+      const ex = explainLock(puz, true);
       if (!ex.solved || ex.level > 2) continue;
       const nz = cl.filter(c => c.a + c.b === 0).length;
       if (tier === 'E' && !(ex.level === 1 && cl.length <= 5)) continue;
@@ -3269,7 +3319,7 @@ function promoOver() { try { const g = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.forHelp() : []; return l.length ? '<div class="sub" style="margin:14px 0 6px"><b>More from Bright Harbor</b></div>' + l.map(g => BHPromo.card(g, 'help')).join('') : ''; } catch (e) { return ''; } }
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
-const VERSION_LINE = 'Ahalock prototype v0.28.15' + (TEST_BUILD ? ' · future days open for testing' : '');
+const VERSION_LINE = 'Ahalock prototype v0.28.16' + (TEST_BUILD ? ' · future days open for testing' : '');
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3591,7 +3641,7 @@ function keyText0(ex, pz) {
   { const i = st.findIndex((z, j) => /^Try /.test(z.text) && st[j + 1] && /^But /.test(st[j + 1].text));
     if (i >= 0) { ex._ki = i; const a = st[i].text, c = a.lastIndexOf(', '); return a.split('. ')[0] + (c > 0 ? ', and ' + a.slice(c + 2).replace(/^so /, '').replace(/\.$/, '') : '') + '. ' + st[i + 1].text + ''; } }
   const pins = st.filter(s => s.kind !== 'done' && s.kind !== 'wrongplace');
-  const last = x0 => { const x = x0.replace(/\. Counting every clue so far[^.]*\.?$/, '.'); return (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x; };
+  const last = x0 => { const x = x0.replace(/\. Counting every clue so far[^.]*\.?$/, '.').replace(/\. That leaves no spot for [^.]*\.$/, '.'); return (x.match(/(?:^|[.!”"] )([^.]*)\.?$/) || [])[1] || x; };
   // A clue that states the placement outright ("Owl finished 3rd") is not a turning point; skip it when another pin exists.
   const plain = z => { const q = z.text.match(/^Clue \d+ says “([^”]*)” So ([^.]*)\.$/); return !!q && q[1].includes(q[2].split(' ').pop()); };
   const isPin = s => { const f = last(s.text); return !/ or |can’t|can't|n’t|n't| not /.test(f) && /must| is the | is a knight| is a knave| are knights| are knaves| works the | lives in | heaviest| lightest| is in the code|go in spot/.test(f); }; const real = z => !/^(hidden|fix|all)$/.test(z.kind);
@@ -3974,13 +4024,17 @@ function fitBoard(keep) {
     requestAnimationFrame(() => requestAnimationFrame(unnest)); if (document.fonts && document.fonts.ready) document.fonts.ready.then(unnest);
   } else { if (keep) bd.scrollTop = keep[0] || 0; snug(); requestAnimationFrame(() => requestAnimationFrame(snug)); }
 }
+// Nikola R38: a window resize (rotation, split screen, a browser bar showing) re-fits the board without waiting for a tap.
+{ let rz = 0, lastH = innerHeight, lastW = innerWidth; const refit = () => { clearTimeout(rz); rz = setTimeout(() => { if (Math.abs(innerHeight - lastH) < 24 && innerWidth === lastW) return; lastH = innerHeight; lastW = innerWidth;
+    if (S.screen === 'puzzle' && P && !P.solved && !document.getElementById('ov') && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) renderPuzzle(); }, 160); };
+  window.addEventListener('resize', refit); }
 function renderPuzzle() {
   S.screen = 'puzzle';
   $app.classList.toggle('tut', !!P.tutorial);
   const pz = P.pz;
   const res = results()[P.ds];
   const SO = P.story ? STORY[P.story.s].objs[P.story.o] : null;
-  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.free ? freeLabel() + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3].map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span> ' + ideaTag(pz) : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? '<span class="oneln">Final lock · ' + STORY[P.story.s].name + '</span>' : TYPENAME[pz.type] + ' ' + ideaTag(pz)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
+  const head = '<div class="pz-top"><button class="back" id="bk" aria-label="Back">‹</button><div class="ttl"><h2>' + (SO ? SO.e + ' ' + SO.name : TYPENAME[pz.type]) + '</h2><div>' + (P.tutorial ? 'Example · your puzzle will be different' : P.free ? freeLabel() + ' <span class="tdots" role="img" aria-label="' + (P.free.tier === 'X' ? 'Expert' : TIERNAME[pz.tier]) + '">' + [1, 2, 3].map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (P.free.tier === 'X' ? ' 🧠' : '') + ' ' + ideaTag(pz) : P.bonus ? '⭐ ' + TWISTS[P.bonus.tw].n : SO ? (SO.fin ? '<span class="oneln">Final lock · ' + STORY[P.story.s].name + '</span>' : TYPENAME[pz.type] + ' ' + ideaTag(pz)) : (P.replay ? '🔁 Play again · ' : '') + (P.replay && !P.replay.all ? TYPENAME[pz.type] : '<span class="ofn">' + playPos() + ' of 3</span>') + ' <span class="tdots" role="img" aria-label="' + TIERNAME[pz.tier] + '">' + [1, 2, 3, 4].slice(0, pz.tier === 'X' ? 4 : 3).map(k => '<i class="' + (k <= TIERDOTS[pz.tier] ? 'on' : '') + '"></i>').join('') + '</span>' + (expertOn() ? ' · 🧠 Expert' : '') + ' ' + ideaTag(pz)) + '</div></div>' + (P.tutorial ? '' : '<button class="howq" id="howq" aria-label="How to play">?</button>') + '<div class="timer" id="tm">' + (P.tutorial || SO ? '' : fmtT(P.solved && P.solvedMs != null ? P.solvedMs : Date.now() - P.t0)) + '</div></div>' +
     (P.tutorial || SO || P.bonus || P.free ? '' : '<div class="progress">' + [0, 1, 2].map(i => '<i class="' + ((P.replay ? i < P.slot && P.replay.all : res && res.s[i]) ? 'ok' : i === P.slot ? 'on' : '') + '"></i>').join('') + '</div>');
   if (SO && !P.solved) { try { store.set('sdraft', { k: P.story.s + '-' + P.story.o, e: P.entry }); } catch (e) {} }
   const body = TYPES[pz.type].board();
@@ -4031,7 +4085,10 @@ function msgByClue() {
     m.classList.add('inb', 'nearc');
     // Nikola R37: on a short screen the miss note takes the rule line's place at the top, so the keypad doesn't move.
     const rl = $app.classList.contains('fit') ? bd.querySelector(':scope > .swrule') : null;
-    if (rl) { rl.style.display = 'none'; rl.before(m); m.classList.add('swmiss'); if (k === 'bad' && P.pz.type === 'wheels') m.textContent = '✕ Not quite: ' + (Array.isArray(P.entry) ? P.entry.join('') : P.entry) + ' doesn’t fit every wheel. Try another rule.'; return true; }
+    if (rl) { const rh = rl.offsetHeight; rl.style.display = 'none'; rl.before(m); m.classList.add('swmiss'); m.style.boxSizing = 'border-box';
+      const v = Array.isArray(P.entry) ? P.entry.join('') : P.entry, short = k === 'bad' ? { wheels: ' doesn’t fit every wheel.', pyramid: ' doesn’t fit. Each brick is the two under it added.' }[P.pz.type] : null;
+      if (short) { m.textContent = '✕ Not quite: ' + v + short; m.style.height = rh + 'px'; m.style.overflow = 'hidden'; } else m.style.minHeight = rh + 'px';
+      return true; }
     const ans = bd.querySelector('.ansrow');
     if (ans) { ans.before(m); return true; }
     bd.appendChild(m); return false;
@@ -4224,7 +4281,7 @@ function whyList(ex, extraCls) {
           const why = (wc.length ? 'clue' + (wc.length > 1 ? 's ' : ' ') + lw(wc) + ' show' + (wc.length > 1 ? '' : 's') + ' ' + d + ' in spot' + (wsp.length > 1 ? 's ' : ' ') + lw(wsp) + ' in the wrong place' : '') + (wc.length && tk.length ? ', and ' : '') + (tk.length ? (() => { // Muse R37: name what rules each spot out instead of "the steps above"
             const rp = [], taken = [], rest = [];
             tk.forEach(j => { const c = pz.clues.findIndex(c2 => c2.b === 0 && c2.a > 0 && c2.g.indexOf(+d) >= 0 && c2.g.indexOf(+d) !== j - 1);
-              const tkn = said.map(t => t.match(new RegExp('[Ss]pot ' + j + ' is (\\d)'))).filter(Boolean).pop();
+              const tkn = said.map(t => t.match(new RegExp('[Ss]pot ' + j + ' is (\\d)')) || t.match(new RegExp('(\\d) is in the code, and (?:it must go in|the only spot left for it is) spot ' + j + '\\b'))).filter(Boolean).pop();
               const by = !tkn && said.filter(t => new RegExp('(^|\\D)' + d + ' can.t go in spots? [^.]*\\b' + j + '\\b').test(t)).map(t => t.match(/^(Clues? [\d, and]+?)(?: together)?(?: \(|:| says)/)).filter(Boolean).pop();
               if (c >= 0) { if (rp.indexOf(c) < 0) rp.push(c); } else if (tkn) taken.push('spot ' + j + ' is ' + tkn[1]); else if (by) taken.push(by[1].replace(/^C/, 'c').trim() + ' ruled out spot ' + j); else if (ex.rmBy && ex.rmBy[d + '|' + (j - 1)]) { const cs = ex.rmBy[d + '|' + (j - 1)]; taken.push('clue' + (cs.length > 1 ? 's ' : ' ') + lw(cs.map(x => String(x + 1))) + (cs.length > 1 ? ' together rule' : ' rules') + ' out spot ' + j); } else rest.push(j); });
             return [rp.length ? rp.map(c => 'clue ' + (c + 1) + ' says right place, with ' + d + ' in spot ' + (pz.clues[c].g.indexOf(+d) + 1)).join(' and ') : '', taken.length ? lw(taken) : '', rest.length ? 'the steps above rule out spot' + (rest.length > 1 ? 's ' : ' ') + lw(rest) : ''].filter(Boolean).join(', and '); })() : '');
@@ -4235,7 +4292,7 @@ function whyList(ex, extraCls) {
   // Muse R35: a Why with no 🔑 steps says why instead of leaving the header out.
   // Muse R37: when the 🔑 card is a rule used in every step (no single row), say so instead of "no key".
   const ruleKey = pz && !keys.length && ex._ki < 0 && keyText(ex, pz);
-  const nok = ruleKey ? 'The 🔑 above is the rule every step uses, so no single step is marked. Follow them in order.' : body.length < 4 ? 'This one is short, so no step is marked 🔑. Each step follows straight from the one before.' : 'Here each clue gives its answer away, so no single step is the 🔑 key. Follow them in order.';
+  const nok = ruleKey && /^The key brick/.test(ruleKey) ? 'The 🔑 above is the last row, where taking away finds the ? brick.' : ruleKey ? 'The 🔑 above is the rule every step uses, so no single step is marked. Follow them in order.' : body.length < 4 ? 'This one is short, so no step is marked 🔑. Each step follows straight from the one before.' : 'Here each clue gives its answer away, so no single step is the 🔑 key. Follow them in order.';
   return (keys.length ? '<div class="whyhd">The 🔑 key steps crack it. The others fill in the rest. <button class="linkbtn jk" type="button">Jump to the first 🔑 key step</button></div>' : '<div class="whyhd nokey">' + nok + '</div>') + '<ol class="why">' + ex.steps.map(li).join('') + '</ol>';
 }
 // The next unsolved puzzle of that day, or the day's results once all three are done.
