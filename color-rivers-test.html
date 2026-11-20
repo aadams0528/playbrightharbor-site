@@ -174,7 +174,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 .tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
 .tog.on{background:#3fd68a}.tog.on::after{left:25px}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);transform:translateX(-50%);background:rgba(8,20,34,.92);border:1.5px solid rgba(255,255,255,.16);padding:8px 14px;border-radius:18px;font-weight:800;font-size:14px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:6;width:max-content;max-width:min(440px,calc(100vw - 48px));line-height:1.35;text-align:center;box-sizing:border-box}.toast{padding:10px 18px}.toast.ontools{background:#0b1a2b;max-width:calc(100vw - 16px);padding:7px 12px;line-height:1.3;min-height:58px;display:flex;align-items:center;justify-content:center} /* over the button row, full width so a long note stays two lines and off the board */
-.toast.show{opacity:1}
+.toast.show{opacity:1}.toast.ontools{background:rgba(11,26,43,.84)} /* the buttons show faintly through a message, and a touch on one clears it (Alan, Nov 20) */
 .notecard{position:fixed;z-index:4;display:flex;align-items:center;gap:10px;background:#16283a;border:2px solid rgba(255,210,122,.6);border-radius:14px;padding:5px 6px 5px 12px;box-sizing:border-box;box-shadow:0 -6px 24px rgba(0,0,0,.45);animation:coachIn .3s ease}
 .notecard[hidden]{display:none}.notecard .go:focus-visible{outline:3px solid #fff;outline-offset:2px}@media (max-width:340px){.notecard .go{min-width:52px;padding:0 8px}.notecard{gap:6px;padding-left:8px}} /* 320-wide phones: a short "OK" leaves the words room for two lines (Nikola, round 22) */
 .notecard .say{flex:1;min-width:0;font-weight:800;font-size:15px;line-height:1.3;color:#eef5fb;text-align:left}
@@ -184,7 +184,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.18<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.19<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -758,7 +758,7 @@ const chIdx=c=>LEVELS.map((L,i)=>L.ch===c?i:-1).filter(i=>i>=0);
 const chStars=c=>chIdx(c).reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
 const chGoal=c=>Math.ceil(chIdx(c).length*3*GOAL_SHARE);
 function gateOK(i){if(i<=0)return true;const P=LEVELS[i-1].ch;return P===LEVELS[i].ch||!P||chStars(P)>=chGoal(P);}
-let retraces=0,hintsUsed=0,hintSeen=false,hintGiven=new Set(),drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null,toolFx=null;
+let retraces=0,hintsUsed=0,hintSeen=false,hidByMe=false,hintGiven=new Set(),drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null,toolFx=null;
 // the system "reduce motion" setting also calms the board: no fireworks, color wash or waddle (Nikola, v0.57)
 const RM=(()=>{try{return matchMedia("(prefers-reduced-motion: reduce)");}catch(e){return null;}})(),calm=()=>!!(RM&&RM.matches);
 function fireworks(cell,mask){if(calm())return;
@@ -783,7 +783,7 @@ function startLevel(n,keep,cut,extra){
   const fits=keep&&keep.length===G.starts.length&&keep.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length));
   paths=fits?keep:G.starts.map(i=>[i]);if(!keep)saveDraft(true);undoStack=[];
   if(fits&&extra&&Array.isArray(extra.undo))undoStack=extra.undo.filter(st=>Array.isArray(st)&&st.length===G.starts.length&&st.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length)));
-  active=-1;headLinger=null;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];runs=[];retraces=0;hintsUsed=0;hintGiven=hgLoad();hintSeen=hintGiven.size>0;turnTold=false;
+  active=-1;headLinger=null;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];runs=[];retraces=0;hintsUsed=0;hintGiven=hgLoad();hintSeen=hintGiven.size>0;hidByMe=false;turnTold=false;
   drawn=paths.map(p=>p.slice());legendMix=!!L.mix||[3,5,6].some(c=>prog.seen&&prog.seen[c]);/* Alan, Nov 7: once you have mixed, the chart is on every board */clearToast();
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
@@ -1100,7 +1100,7 @@ function release(e){
     if(had&&t==="delta"){paths[active]=was[active].slice();undoStack.pop();afterChange(false);}
     else if(had){const m=G.sources[active]&&NAMES[G.sources[active].mask];toast(m?`Cleared the ${m} stream. Undo puts it back.`:"Cleared that stream. Undo puts it back.");}
     else undoStack.pop();}
-  snapHome(e);endDrag();warps=[];
+  snapHome(e);endDrag();warps=[];if(hints.length)updateHintBtn(); /* a tapped den turns Hide back into Hint for that stream */
 }
 // Lifted one cell short of a nest: let it in if the finger was in the near half of the cell,
 // or if the nest is straight ahead and would take this stream as it is.
@@ -1144,6 +1144,7 @@ function judgeRetrace(k){
 cv.addEventListener("contextmenu",e=>e.preventDefault()); /* Nikola, v0.74: a long press opened the browser menu over the board */
 cv.addEventListener("pointerup",release);window.addEventListener("pointerup",e=>{if(active>=0)release(e);}); // a finger lifted off the board still ends the stream and checks the nests (Muse, round 20: Level 258 filled only on a tap)
 cv.addEventListener("pointercancel",()=>{endDrag();warps=[];}); // own line: a comment once swallowed it (Nikola, round 21)
+document.addEventListener("pointerdown",e=>{if(toastOn&&!toastHeld&&e.target&&e.target.closest&&e.target.closest("#app>.tools"))clearToast();},true); /* reaching for a button clears the message off it at once (Nikola, rounds 23-25; Alan, Nov 20) */
 
 let lastCrossColors="";
 // The unfinished drawing is kept on the phone, so a call or a closed app doesn't wipe it (Muse, v0.30).
@@ -1241,8 +1242,8 @@ function win(){
   dayWin();session.wins++;retentionWin(s);decoFall();
   if(bonus&&bonus.long){longWon(ink);return;}
   if(bonus){const at=bonus,first=!prog.stars[bonus.id];prog.stars[bonus.id]=Math.max(prog.stars[bonus.id]||0,s);saveProg();store.set("onChal",null); // challenge stars stay out of the total and the chapter gates
-    setTimeout(()=>{if(bonus===at&&won)showBonusWin(s,ink,first);},800);return;}
-  if(daily){const at=daily;recordDaily(daily.day,s);setTimeout(()=>{if(daily===at&&won)showDailyWin(s,ink);},800);return;}
+    winLater(()=>bonus===at&&won,()=>showBonusWin(s,ink,first));return;}
+  if(daily){const at=daily;recordDaily(daily.day,s);winLater(()=>daily===at&&won,()=>showDailyWin(s,ink));return;}
   const id=ID(lv),fresh=!!LEVELS[lv].tangle&&!prog.trace[id],ending=lv===LEVELS.length-1&&!prog.stars[id];
   if(fresh)prog.trace[id]={retraces,hints:hintsUsed,pass:retraces===0&&hintsUsed===0};
   famBefore=(()=>{const C=CHAPTERS.find(c=>c.id===LEVELS[lv].ch),I=C&&chapterInfo(C);return I?{done:!!I.done,shiny:I.got===I.max}:null;})(); // replaying a finale says "already in your family" (Cooper, round 16)
@@ -1250,8 +1251,10 @@ function win(){
   if(lv+1>(prog.highest||0)){prog.highest=lv+1;prog.highestId=id;}
   prog.sinceAd=(prog.sinceAd||0)+1;
   saveProg();updateStars();
-  const at=lv;setTimeout(()=>{if(lv===at&&won){if(ending)playFinale(()=>showWin(s,ink,fresh));else showWin(s,ink,fresh);}},800);
+  const at=lv;winLater(()=>lv===at&&won,()=>{if(ending)playFinale(()=>showWin(s,ink,fresh));else showWin(s,ink,fresh);});
 }
+// the win card waits about 0.6 s more while a crossing ripple or the mix light is still playing, so the moment lands (Nikola, rounds 23-25; Alan, Nov 20)
+function winLater(ok,fn){setTimeout(()=>{if(!ok())return;setTimeout(()=>{if(ok())fn();},!calm()&&(sparks.length||runs.length)?600:0);},800);}
 // Bright Harbor cross-promo: at most every 3rd win, after the buttons, never beside a keep-playing offer; fails quietly
 function promoOver(offer){try{const g=BHPromo.forGameOver(offer&&!BHPromo.preview); /* ?promo shows the win-card game even beside the Daily invite, preview only (Cooper, round 10) */return g?BHPromo.card(g,"over"):"";}catch(e){return "";}}
 function starRow(s){return [1,2,3].map(i=>`<span class="${i<=s?"":"off"}">★</span>`).join("");}
@@ -1705,25 +1708,28 @@ function hgKey(){return daily?"daily":bonus?bonus.id:ID(lv);}
 function hgDay(){if(!prog.hg||prog.hg.d!==today())prog.hg={d:today(),u:{}};return prog.hg.u;}
 function hgLoad(){try{return new Set(hgDay()[hgKey()]||[]);}catch(e){return new Set();}}
 function hgSave(){hgDay()[hgKey()]=[...hintGiven];saveProg();}
-function hintAgain(){return !won&&!hints.length&&[...hintGiven].some(k=>!onRoute(k));}
+function hintAgain(){return !won&&!hints.length&&[...hintGiven].some(k=>!onRoute(k))&&!(hidByMe&&nextHint(hintGiven)>=0);}
+// after the player hides the dashes, Hint brings the routes already shown back (free) with one new one; coming back to the level, Again re-shows them free (Alan, Nov 20)
 function pruneHints(){hints=hints.filter(s=>!onRoute(s));}
 // The next hint goes to the unfinished stream whose route meets the most other routes (then the longest), not the
 // first den in the list (Cooper, Oct 20: a hint was spent on an obvious lone red route while the blue one was the puzzle).
-function nextHint(){let best=-1,top=-1;
-  for(let s=0;s<G.starts.length;s++){if(onRoute(s)||hints.includes(s))continue;const r=routeOf(s),mine=new Set(r.slice(1));
+function nextHint(skip){let best=-1,top=-1;
+  for(let s=0;s<G.starts.length;s++){if(onRoute(s)||hints.includes(s)||(skip&&skip.has(s)))continue;const r=routeOf(s),mine=new Set(r.slice(1));
     let meets=0;G.starts.forEach((_,t)=>{if(t!==s)meets+=routeOf(t).filter(c=>mine.has(c)).length;});
     const score=meets*100+r.length;if(score>top){top=score;best=s;}}
   return best;}
 function updateHintBtn(){const more=won||nextHint()>=0||!hints.length;refillHints();const n=hintsLeft();
-  $("hintBtn").innerHTML=hintAgain()?"<span>👀</span>Again":more?(n?`<span>💡</span>Hint · ${n}`:"<span>📺</span>Hints"):"<span>🙈</span>Hide";} /* one-word labels: a two-line label made the board jump (Nikola, round 19) */
+  $("hintBtn").innerHTML=hintAgain()?"<span>👀</span>Again":!won&&hints.length&&!(picked>=0&&!onRoute(picked)&&!hints.includes(picked))?"<span>🙈</span>Hide":more?(n?`<span>💡</span>Hint · ${n}`:"<span>📺</span>Hints"):"<span>🙈</span>Hide";} /* Hide comes after any hint, not only after every stream is shown (Nikola, rounds 23-25; Alan, Nov 20) */ /* one-word labels: a two-line label made the board jump (Nikola, round 19) */
 $("hintBtn").onclick=()=>{
   if(won)return;pruneHints();
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
   // a den the player just tapped picks the stream, so they can ask about the route they're stuck on (Alan, Oct 20)
   // the pick-a-stream note comes before the first automatic hint is spent (Cooper, Oct 20), so the player can still choose
+  if(picked<0&&hints.length){hints=[];hidByMe=true;updateHintBtn();return;}
   if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Stuck on one stream? Tap its den, then Hint.");} // the first tap still gives a hint (Nikola, v0.75: it showed only the note)
   // after Hide (or coming back to the level) the routes already shown come back first, free (Nikola, round 22)
-  if(picked<0&&hintAgain()){hints=[...hintGiven].filter(k=>!onRoute(k));updateHintBtn();toast("👀 Shown again, free.");return;}
+  if(picked<0&&hintAgain()){hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;updateHintBtn();toast("👀 Shown again, free.");return;}
+  if(picked<0&&hidByMe){hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;} /* the routes already shown come back with the new one, free */
   const mine=picked>=0&&!onRoute(picked)&&!hints.includes(picked),s=mine?picked:nextHint();
   // a picked stream that's already right (or already hinted) can't be the hint: say so instead of quietly picking another
   if(picked>=0&&!mine&&s>=0){const m=G.sources[picked]?NAMES[G.sources[picked].mask]:null;
