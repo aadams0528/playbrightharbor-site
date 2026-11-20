@@ -36,7 +36,7 @@
   --shadow:0 1px 0 rgba(0,0,0,.3),0 8px 22px -12px rgba(0,0,0,.8); color-scheme:dark}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
 .app{max-width:460px;margin:0 auto;padding-inline:12px;padding-block:calc(8px + env(safe-area-inset-top,0px)) calc(var(--nav-h) + 16px);display:flex;flex-direction:column;gap:10px;min-height:100%;box-sizing:border-box}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,.card:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -321,8 +321,8 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
 .tries:empty{display:none}
 .tries i{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
 .tries i.used{background:var(--accent)}
-.offer{background:color-mix(in srgb,var(--accent) 16%,var(--paper));border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:15px}
-.offer .btn{padding:10px 14px;font-size:15px}
+.offer{background:color-mix(in srgb,var(--accent) 16%,var(--paper));border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap;font-size:15px;line-height:1.3}.offer span{flex:1;min-width:0}
+.offer .btn{padding:10px 12px;font-size:15px;white-space:nowrap;flex:none}
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:16px;padding:4px}
 .cloudnote{color:var(--muted);font-size:16px;margin:6px 0 10px}
 .scoreline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
@@ -397,8 +397,8 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
   <p class="sr" id="sr" aria-live="polite"></p>
   <div id="play">
     <div class="offer" id="offer" hidden>
-      <span>Stuck? Put one card in its right spot. This gives up the ⭐ bonus.</span>
-      <button class="btn primary" id="bPlace">Place a card</button>
+      <span><b>Stuck?</b> Placing a card gives up the ⭐.</span>
+      <button class="btn primary" id="bPlace">📌 Place a card</button>
     </div>
     <div class="actions">
       <button class="btn ghost tool" id="bHint"><span class="ti">💡</span>Hint</button>
@@ -415,7 +415,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 65</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 66</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1399,11 +1399,20 @@ function fitCards(){
   if(!list.offsetParent||!G||!G.order||$("#play").hidden||getComputedStyle(nav).position!=="fixed")return;
   const n=G.order.length,top=list.getBoundingClientRect().top+scrollY,
     limit=getComputedStyle(bar).position==="fixed"?bar.getBoundingClientRect().top:nav.getBoundingClientRect().top-bar.offsetHeight-22;
-  const room=limit-top-6;let h=Math.floor((room-(n-1)*GAP)/n);
+  let room=limit-top-6;
+  /* Room for the "Stuck?" box is kept from the deal, so the cards never shrink when it appears on Try 3; a screen too short for it
+     docks 📌 Place in the bar instead, decided up front (Nikola, round 36) */
+  if(G.kind!=="tutorial"&&G.tw!=="nohelp"&&!G.done){const oh=offerH();if(Math.floor((room-oh-(n-1)*GAP)/n)>=72){room-=oh;G.offerDock=false} /* only where the cards stay big (Alan: big readable cards) */else{G.offerDock=true;room-=barGrow()}}
+  let h=Math.floor((room-(n-1)*GAP)/n);
   if(h>104){GAP=Math.min(26,GAP+Math.floor((room-n*104-(n-1)*GAP)/Math.max(1,n-1)));h=104}
   const minH=G.kind!=="tutorial"&&!hideTags()?44:48;if(h<minH&&GAP>4){GAP=4;h=Math.floor((room-(n-1)*GAP)/n)}
   CH=Math.max(minH,h); // the "Right now" row costs 20px, so a short screen's cards may go to 44px instead of hiding the last one (Alan, 11-19)
 }
+/* How much taller the button bar gets when 📌 Place joins it, so that room is kept from the deal (Nikola, round 36) */
+function barGrow(){const bar=$("#play .actions"),p2=$("#bPlace2");if(!bar||!p2||!p2.hidden)return 0;const h0=bar.getBoundingClientRect().height,f0=bar.classList.contains("four");
+  p2.style.visibility="hidden";p2.hidden=false;bar.classList.toggle("four",!$("#bSpot").hidden);const h1=bar.getBoundingClientRect().height;p2.hidden=true;p2.style.visibility="";bar.classList.toggle("four",f0);return Math.max(0,Math.ceil(h1-h0))}
+function offerH(){const o=$("#offer");if(!o)return 0;const was=o.hidden;if(was){o.style.visibility="hidden";o.hidden=false}
+  const h=o.getBoundingClientRect().height;if(was){o.hidden=true;o.style.visibility=""}return h?Math.ceil(h)+14:0}
 function cardH(){if(CH==null)fitCards();return CH}
 function slotTop(i){return i*(cardH()+GAP)}
 function build(){sel=null;
@@ -1475,6 +1484,7 @@ try{new ResizeObserver(()=>relayout()).observe(document.documentElement)}catch(_
 // Clues from earlier checks: for two cards that sit next to each other now, show ✓ if we know
 // that order is right and × if we know it's wrong. Nothing is shown for pairs you haven't checked.
 function drawChips(){
+  /* The Right now row always matches the tags, also after 📌 Place (Muse, round 36) */rnowUpdate();
   list.querySelectorAll(".chip").forEach(c=>c.remove());
   if(G.done||drag||hideTags())return;
   // A tight board (small cards or Larger text) shows just ✓ or ×, so a tag never hangs over a card name (Nikola, round 33).
@@ -1506,8 +1516,8 @@ function rnowUpdate(){const r=$("#rnow");if(!r)return;const on=!!G&&G.kind!=="tu
   if(G.lastOk==null){r.classList.add("empty");r.innerHTML="&nbsp;";return}
   const {ok,no,un}=nowCounts();r.classList.remove("empty");
   // Screen readers get the words in a hidden span; the ✓ and × are hidden from them (Nikola, round 35).
-  r.setAttribute("role","status");
-  const words=`<span class="sr-only">Right now: ${ok} ${ok===1?"pair":"pairs"} in order, ${no} out of order, ${un} not checked yet.</span>`,show=v=>`<span aria-hidden="true">${v}</span>`+words;
+  /* not a live region: card moves are not read out each time (Nikola, round 36) */
+  const words=`<span class="sr-only">Right now: ${[ok?`${ok} ${ok===1?"pair":"pairs"} in order`:"",no?`${no} out of order`:"",un?`${un} not checked yet`:""].filter(Boolean).join(", ")}.</span>`,show=v=>`<span aria-hidden="true">${v}</span>`+words;
   const fit=(m=13)=>{r.style.fontSize="";let f=parseFloat(getComputedStyle(r).fontSize);while(f>m&&r.scrollWidth>r.clientWidth+1){f-=.5;r.style.fontSize=f+"px"}return r.scrollWidth<=r.clientWidth+1};
   r.innerHTML=show(`<b>Right now:</b> `+[ok?`${ok} ✓ in order`:"",no?`${no} × wrong order`:"",un?`${un} not checked yet`:""].filter(Boolean).join(" · "));
   // A narrow screen gets the short form, so the row never wraps or cuts off.
@@ -1651,7 +1661,7 @@ function updateButtons(){
   // Its row is kept even before it appears, so the cards never jump down after the first check (Nikola, round 32).
   {const gu=$("#bGiveUp"),off=G.kind==="tutorial"||G.done,show=!off&&G.attempt>=2;gu.hidden=off;gu.classList.toggle("resv",!off&&!show);gu.tabIndex=show?0:-1;gu.setAttribute("aria-hidden",show?"false":"true")}
   const sb=$("#bSpot");sb.hidden=!spotOK()||G.done;sb.setAttribute("aria-disabled",G.spot?"true":"false");sb.classList.toggle("spent",!!G.spot);sb.setAttribute("aria-label",G.spot?"Spot check used":"Spot check, 1 left");if(picking!=="spot")sb.innerHTML=`<span class="ti">🎯</span>${G.spot?"Used":"Spot · 1"}`;
-  if(!sb.hidden&&!G.spot&&!S.spotSeen&&S.played>0&&G.attempt>1){S.spotSeen=1;save();toast("New: 🎯 Spot check. Once per puzzle, tap it and then a card to learn if that card is in its final spot.")}
+  if(!sb.hidden&&!G.spot&&!S.spotSeen&&S.played>0&&G.attempt>1){S.spotSeen=1;save();const g0=G;setTimeout(()=>{if(G===g0&&!G.done)toast("New: 🎯 Spot check. Once per puzzle, tap it and then a card to learn if that card is in its final spot.")},6200)} /* after the Try banner, never over it (Nikola, round 36) */
   const offerOn=!(G.kind==="tutorial"||G.tw==="nohelp"||G.attempt<3||G.offerUsed||G.done);
   // On a short screen the "Stuck?" box would sit under the button bar, so it moves into the bar as 📌 Place (Nikola, round 35).
   $("#offer").hidden=!offerOn||!!G.offerDock;$("#bPlace2").hidden=!offerOn||!G.offerDock;$("#play .actions").classList.toggle("four",!$("#bPlace2").hidden&&!$("#bSpot").hidden);
@@ -1807,16 +1817,16 @@ function landYears(r){
 // {shown words|Card title}: the title must be one of that day's cards; every number must be a year gap between that day's cards.
 // tests/handpicked-test.js checks both. Days without a line fall back to the worked-out sentence below.
 const REVEALS={
- 29:"It took 333 years after {Columbus|Columbus reaches the Americas} for the {Erie Canal|Erie Canal opens} to open, yet only 73 years after the {Wright brothers' first flight|Wright brothers' first flight}, the {Concorde|Concorde starts passenger flights} was flying passengers at twice the speed of sound.",
+ 29:"It took 333 years after {Columbus|Columbus reaches the Americas} for the {Erie Canal|Erie Canal opens} to open, and 73 years after the {Wright brothers' first flight|Wright brothers' first flight}, the {Concorde|Concorde starts passenger flights} was flying passengers at twice the speed of sound.",
  31:"The {Brooklyn Bridge|Brooklyn Bridge opens} was already 21 years old when {New York's first subway|New York City subway opens} opened, and the {Channel Tunnel|Channel Tunnel opens} didn't link Britain to France for another 90 years.",
  33:"Just 11 years after {Sputnik|Sputnik, the first satellite}, {Apollo 8 astronauts|Earthrise photo from Apollo 8} were circling the Moon and took the Earthrise photo.",
  39:"The {Grand Ole Opry|Grand Ole Opry's first broadcast} had already been on the radio for 26 years when {I Love Lucy|I Love Lucy premieres} first aired, and the Opry is still on today.",
  40:"{Basketball|Basketball is invented} was only 12 years old when the {first Tour de France|First Tour de France} set off.",
  41:"{Coca-Cola|Coca-Cola is invented} is 72 years older than {Pizza Hut|First Pizza Hut opens}, yet {Spam|Spam goes on sale}, Cheerios, McDonald's and Pizza Hut all arrived within 21 years of each other.",
- 42:"{Pac-Man|Pac-Man arcade game} is only 4 years older than {Tetris|Tetris is created}, and the {Game Boy|Nintendo Game Boy comes out} shipped with Tetris just 5 years after it was made.",
+ 42:"{Pac-Man|Pac-Man arcade game} is 4 years older than {Tetris|Tetris is created}, and the {Game Boy|Nintendo Game Boy comes out} shipped with Tetris 5 years after it was made.",
  43:"{Women won the vote|US women win the right to vote} 133 years after the {Constitution was signed|US Constitution is signed}, and the {Civil Rights Act|Civil Rights Act is signed} came only 44 years after that.",
- 44:"The {Wright brothers flew|Wright brothers' first flight} just 27 years after {Bell patented the telephone|Bell patents the telephone}, and the {polio vaccine|Polio vaccine is declared safe} came only 52 years after that first flight.",
- 45:"{Woodstock|Woodstock music festival} came only 15 years after {Elvis recorded his first single|Elvis records his first single}, and {Napster|Napster lets people share songs} 30 years after Woodstock.",
+ 44:"The {Wright brothers flew|Wright brothers' first flight} just 27 years after {Bell patented the telephone|Bell patents the telephone}, and the {polio vaccine|Polio vaccine is declared safe} came 52 years after that first flight.",
+ 45:"{Woodstock|Woodstock music festival} came 15 years after {Elvis recorded his first single|Elvis records his first single}, and {Napster|Napster lets people share songs} 30 years after Woodstock.",
  46:"The {Berlin Wall fell|Berlin Wall falls} just 9 years after US college players beat the Soviets in the {Miracle on Ice|\"Miracle on Ice\"}.",
  47:"Email is older than ready-to-use home computers: the {first one|First email between computers} was sent 6 years before the {Apple II|Apple II goes on sale} went on sale.",
  48:"{Mount Rushmore|Mount Rushmore is finished} is younger than the {Golden Gate Bridge|Golden Gate Bridge opens}: its four faces were finished 4 years after the bridge opened.",
@@ -1857,6 +1867,8 @@ const PLURAL=/^(Touch-tone phones|Twinkies|Post-it notes|X-rays|blue jeans|the V
 // one long gap, a halfway card, the two cards at an edge, or a card closer to us than to the oldest one.
 // Even and odd days word each idea differently.
 const NOW_YEAR=new Date().getFullYear();
+/* "a long" only for a big wait: 25 years or more and at least 3 times the other gap (Nikola, round 36) */
+const bigGap=(a,b)=>a>=25&&a>=3*b?"a long ":"";
 function lineShapes(ids,fam){
   const t=sortIds(ids),y=t.map(yr),n=t.length,span=y[n-1]-y[0],yrs=v=>v===1?"1 year":v+" years",T=i=>`<b>${shortName(t[i])}</b>`;
   const is=i=>PLURAL.test(shortName(t[i]))?"are":"is",out=[],add=(i,k,l,x)=>out.push(Object.assign({i,k,l},x||{}));
@@ -1884,7 +1896,7 @@ function lineShapes(ids,fam){
     if(exact)add("half","half0",lo===hi?`${T(m)} came exactly halfway between ${T(0)} and ${T(n-1)}, ${yrs(lo)} from each.`:`${T(m)} came almost exactly halfway between ${T(0)} and ${T(n-1)}: ${yrs(lo)} after the first and ${yrs(hi)} before the last.`); // both numbers when they differ (Nikola, round 32)
     else if(m>0&&Math.abs(y[m]-mid)<=span*.05)add("half","half0b",`${T(m)} came ${yrs(lo)} after ${T(0)} and ${yrs(hi)} before ${T(n-1)}, close to halfway.`); // both anchors named (Cooper, round 27)
     // Two plain facts, no "Only": "only" read as the board's smallest gap when it wasn't (Nikola, round 35).
-    const k=inner.find(i=>y[i]>mid&&near(y[n-1]-y[i],y[i]-y[0]));if(k)add("nearer","closer0",`${T(k)} came a long ${yrs(y[k]-y[0])} after ${T(0)}, but ${yrs(y[n-1]-y[k])} before ${T(n-1)}.`);
+    const k=inner.find(i=>y[i]>mid&&near(y[n-1]-y[i],y[i]-y[0]));if(k)add("nearer","closer0",`${T(k)} came ${bigGap(y[k]-y[0],y[n-1]-y[k])}${yrs(y[k]-y[0])} after ${T(0)}, but ${yrs(y[n-1]-y[k])} before ${T(n-1)}.`);
     if(an>0)add("anchor","anchor0",`From today, go back ${yrs(NOW_YEAR-y[an])} to ${T(an)}, then ${y[an]-y[0]} more to ${T(0)}.`); // two clear anchors, no "it" (Cooper, round 26)
     if(long&&!huge)add("gap","long0",`The biggest wait on today's line is the ${G1} from ${A} to ${B}, more than all the other gaps combined.`); // its own words, not a long-gap opening (Muse, round 26)
     // Only for the one smallest gap, in plain words ("closest finish" read as sports talk, and a tie named another pair: Nikola, round 34).
@@ -1895,7 +1907,7 @@ function lineShapes(ids,fam){
   }
   if(span<25)add("span","tight1",`Blink and you'd miss it: today's whole line spans just ${yrs(span)}, from ${T(0)} to ${T(n-1)}.`);
   // Two plain facts instead of "sits nearer to … than to …" (Nikola, round 34).
-  const k=[...inner].reverse().find(i=>y[i]<mid&&near(y[i]-y[0],y[n-1]-y[i]));if(k)add("nearer","nearer1",`${T(k)} came ${yrs(y[k]-y[0])} after ${T(0)}, but a long ${yrs(y[n-1]-y[k])} before ${T(n-1)}.`);
+  const k=[...inner].reverse().find(i=>y[i]<mid&&near(y[i]-y[0],y[n-1]-y[i]));if(k)add("nearer","nearer1",`${T(k)} came ${yrs(y[k]-y[0])} after ${T(0)}, but ${bigGap(y[n-1]-y[k],y[k]-y[0])}${yrs(y[n-1]-y[k])} before ${T(n-1)}.`);
   if(an>0)add("anchor","anchor1",`${T(0)} came ${yrs(y[an]-y[0])} before ${T(an)}. That is a longer stretch than the ${yrs(NOW_YEAR-y[an])} from ${T(an)} to today.`); // plainer than "we are closer in time to" (Nikola, round 32)
   if(exact||m>0)add("half","half1",`On today's line, ${T(m)} ${is(m)==="are"?"sit":"sits"} near the middle: ${yrs(lo)} after ${T(0)} and ${hi} before ${T(n-1)}.`);
   if(long&&!huge)add("gap","long1",`Between ${A} and ${B} lie ${G1}, more than all of today's other gaps put together.`); // its own words (Muse, round 26)
@@ -2167,7 +2179,7 @@ function setMode(m){
 }
 let lastArch=0; // the Archive opens back at the day you just played, highlighted (Cooper, round 30)
 function playArchive(n){
-  lastArch=n;
+  stopFx();lastArch=n; /* a new puzzle never waits on an old burst (Nikola, round 36) */
   ["Daily","Archive","Practice","Expert"].forEach(t=>$("#t"+t).setAttribute("aria-selected",t==="Archive"));
   $("#archive").hidden=true;$("#expert").hidden=true;$("#meta").hidden=$("#board").hidden=false;newArchive(n);render();scrollTo(0,0);
 }
