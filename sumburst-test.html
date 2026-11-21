@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
 <title>Sumburst (test version)</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,8 +17,6 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<title>Sumburst</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -408,20 +407,21 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
   ];
 
-  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  // BHPromo.init({ self, prefix, store, track, kids, test }) once at start-up, after the store helper exists.
   //   self:   this game's id (it is never promoted to itself)
   //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
   //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
   //   track:  optional analytics function (event, params); omit in kids games
+  //   test:   true only in test/beta builds (pass the game's test-build flag); false or missing in store builds
   // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
-  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game, only when test is true.
   const BHPromo = {
     games: BH_GAMES, opts: null, installed: {}, sessions: 0,
     init(opts) {
       this.opts = opts;
       const s = opts.store, k = opts.prefix + "promo-sessions";
       this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
-      this.preview = /[?&]promo\b/.test(location.search);
+      this.preview = !!opts.test && /[?&]promo\b/.test(location.search);
       const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
       if (L && p !== "web") for (const g of this.pool()) {
         const url = p === "ios" ? g.iosScheme : g.androidPkg;
@@ -1181,11 +1181,14 @@ function track(name,params={}){
 let sessionStart=Date.now(),sessionEnded=false;
 const sessionsPlayed=store.get('nb-sessions',0)+1;store.set('nb-sessions',sessionsPlayed);
 
+// Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
+const ADS_TESTING='beta'!=='release';
+
 // ---------- More from Bright Harbor: send players to our other live games ----------
 // The shared studio helper (bh-games.js) holds the game list and the rules: live in this phone's store only
 // (iPhone needs an App Store link), not in the first 3 sessions, at most every 3rd game over, never beside
-// the keep-playing offer, hidden when installed, 30-day rest after a tap. Add ?promo to preview every game.
-BHPromo.init({self:'sumburst',prefix:'nb-',store,track});
+// the keep-playing offer, hidden when installed, 30-day rest after a tap. Add ?promo to preview every game (test builds only).
+BHPromo.init({self:'sumburst',prefix:'nb-',store,track,test:ADS_TESTING});
 function endSession(){
   if(sessionEnded)return;sessionEnded=true;
   track('session_end',{mode,level,score,in_tutorial:!!tut,tutorial_step:tut?tut.step+1:0,board_fill:board.filter(Boolean).length,seconds:Math.round((Date.now()-sessionStart)/1000),
@@ -1779,8 +1782,6 @@ const AD_UNITS={
   android:{rewarded:'ca-app-pub-7780493483551677/3877267805',interstitial:'ca-app-pub-7780493483551677/8968803225'},
   ios:{rewarded:'ca-app-pub-7780493483551677/5006516646',interstitial:'ca-app-pub-7780493483551677/3693434974'},
 };
-// Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
-const ADS_TESTING='beta'!=='release';
 let adsReady=false;
 // Consent and start-up are separate steps, so a consent failure still lets ads run (as non-personalized).
 // Beta builds say which step failed, so a tester can report it.
