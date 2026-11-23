@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.9.34 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.9.35 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -108,7 +108,7 @@ html.big .hook { font-size: 20px; }
 #tray, #controls, .hud, .sheet button, .btn, .linkbtn { -webkit-user-select: none; user-select: none; } /* a double-click never selects tray words (Nikola R11 #4) */
 .lvname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; font-family: var(--font-display); font-size: 21px; font-weight: 800; line-height: 1.15; text-align: center; }
 .lvname span { display: block; font-size: 15px; font-weight: 600; color: var(--ink-soft); }
-.hud { display: flex; justify-content: center; gap: 10px; position: relative; flex-wrap: wrap; row-gap: 6px; } .hud .chip { white-space: nowrap; } /* a tight bar takes a second row instead of breaking a chip in two (320 with Larger text) */
+.hud { display: flex; justify-content: center; gap: 10px; position: relative; flex-wrap: nowrap; } /* always one line, so the board never changes size when a chip appears (Alan 11-23) */ .hud .chip { white-space: nowrap; } /* a tight bar takes a second row instead of breaking a chip in two (320 with Larger text) */
 .hud:has(#flagChip:not([hidden])) .chip { padding: 4px 11px; } .hud:has(#flagChip:not([hidden])):has(#capChip:not([hidden])) { gap: 6px; } .hud:has(#flagChip:not([hidden])):has(#capChip:not([hidden])) .chip { padding: 4px 8px; } /* four chips still fit at 320 with Larger text */
 .chip.capchip { background: rgba(255,214,90,.2); color: #ffe7a3; }
 .chip { background: rgba(255,255,255,.12); border-radius: 999px; padding: 4px 16px; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -253,7 +253,7 @@ html.calm #boardWrap.bump, html.calm .btn.pulse, html.calm #tray.shake { animati
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.34</span>
+    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.35</span>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -1069,14 +1069,21 @@ function startLevel(i) { if (i < LEVELS.length) store.set('lastLi', i);
   $('lvname').innerHTML = (i === DAILY_LI ? 'Today\'s lantern' : i === WEEKLY_LI ? 'Sparkler board' : isStar(i) ? 'Starlight ' + (i - STAR_LI0 + 1) : 'Level ' + (i + 1)) + '<span></span>';
   $('lvname').querySelector('span').textContent = i === DAILY_LI ? new Date(G.level.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : i === WEEKLY_LI ? 'Week of ' + shortDate(G.level.date) : G.level.name;
   $('par').textContent = G.level.par; $('testBtn').hidden = !tester;
-  show('game'); layout(); fitName(); refresh();
+  show('game'); fitHud(); layout(); fitName(); refresh();
   if (G.tut) showTut(); else tray((i >= LEVELS.length ? newThingTip() : '') || startTip() || (i >= LEVELS.length ? G.level.tip || defaultTip() : undefined));
 }
 
 function scripted() { var s = tutCur(); return !!(s && !s.free); }
+/* The HUD stays on one line: when chips would not fit, they shrink a step at a time instead of wrapping (a wrap made the board smaller mid-level, Alan 11-23). */
+function fitHud() { var h = document.querySelector('#game .hud'); if (!h || !h.clientWidth) return; var cs = [].slice.call(h.children);
+  cs.forEach(function (c) { c.style.fontSize = ''; c.style.paddingLeft = c.style.paddingRight = ''; var b = c.querySelector('b'); if (b) b.style.fontSize = ''; });
+  h.style.height = ''; h.style.height = h.offsetHeight + 'px'; /* the bar keeps its full height when chips shrink to fit, so the board never moves */
+  var st = getComputedStyle(h), gap = parseFloat(st.columnGap) || 0, avail = h.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+  var need = function () { var vis = cs.filter(function (c) { return !c.hidden; }); return vis.reduce(function (t, c) { return t + c.offsetWidth; }, 0) + gap * Math.max(0, vis.length - 1); };
+  for (var i = 0; i < 8 && need() > avail; i++) cs.forEach(function (c) { if (c.hidden) return; var cst = getComputedStyle(c); c.style.fontSize = (parseFloat(cst.fontSize) - 1) + 'px'; c.style.paddingLeft = c.style.paddingRight = Math.max(6, parseFloat(cst.paddingLeft) - 2) + 'px'; var b = c.querySelector('b'); if (b) b.style.fontSize = (parseFloat(getComputedStyle(b).fontSize) - 1) + 'px'; }); }
 function refresh() { $('matches').textContent = G.matches; kbLabel();
-  if (G.b) { $('flagChip').hidden = !G.b.marked; flagsNow(); }
-  var cc = $('capChip'), capOn = !!(G.hintUsed && !G.tut && !G.won); if (cc.hidden === capOn) { cc.hidden = !capOn; if (capOn) { cc.textContent = '★★ max'; } layout(); } /* shows the Hint cap while it holds, through Restart, Undo and a reload (Nikola R14) */ var mc = $('matches').parentNode, dark = G.b && !L.isWin(G.b, G.lit);
+  if (G.b) { var fc = $('flagChip'); if (fc.hidden === !!G.b.marked) { fc.hidden = !G.b.marked; fitHud(); } flagsNow(); }
+  var cc = $('capChip'), capOn = !!(G.hintUsed && !G.tut && !G.won); if (cc.hidden === capOn) { cc.hidden = !capOn; if (capOn) { cc.textContent = '★★ max'; } fitHud(); } /* shows the Hint cap while it holds, through Restart, Undo and a reload (Nikola R14) */ var mc = $('matches').parentNode, dark = G.b && !L.isWin(G.b, G.lit);
   mc.classList.toggle('atpar', !!dark && G.matches === G.level.par); mc.classList.toggle('over', G.matches > G.level.par); $('undoBtn').disabled = !G.hist.length || scripted(); $('restartBtn').disabled = scripted(); $('hintBtn').disabled = !!G.tut && scripted() || !!G.won; /* a lesson's free "Your turn" step can ask for a Hint (Nikola R12 R4) */ $('undoBtn').classList.remove('pulse'); }
 
 function tray(text, opts) {
@@ -1115,7 +1122,10 @@ function layout() {
   G.ox = pad; G.oy = pad; G.bw = bw; G.bh = bh; G.dpr = dpr; G.pad = pad; G.side = side;
   draw(performance.now());
 }
-window.addEventListener('resize', function () { layout(); if (!$('game').hidden) fitName(); drawScene(performance.now()); });
+window.addEventListener('resize', function () { layout(); if (!$('game').hidden) { fitName(); fitHud(); } drawScene(performance.now()); });
+/* the board follows its space if anything around it settles late (fonts, the phone's safe areas), so the first play and a replay always match (Alan 11-23) */
+if (window.ResizeObserver) { var boardRO_w = 0, boardRO_h = 0; new ResizeObserver(function (en) { var r = en[0].contentRect; if (Math.abs(r.width - boardRO_w) < 1 && Math.abs(r.height - boardRO_h) < 1) return; boardRO_w = r.width; boardRO_h = r.height; if (!$('game').hidden) layout(); }).observe($('boardWrap')); }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (!$('game').hidden) { layout(); fitName(); fitHud(); } });
 
 function cellXY(i) { var c = typeof i === 'number' ? G.b.cells[i] : i; return [G.ox + (c.c + 0.5) * G.S, G.oy + (c.r + 0.5) * G.S]; }
 
@@ -1478,8 +1488,8 @@ function drawFx(ctx, t) {
 // "Chain ×N!": a badge that counts up as a chain spreads (3 or more lanterns from one match), then fades.
 function drawChain(ctx, t) { // shown in the bar above the board, so it never covers the top row
   var C = G.chain, el = $('chainChip'), on = !!(C && C.n >= 3 && t - C.t <= 1300);
-  if (on) { var txt = 'Chain \u00d7' + C.n + '!'; if (el.textContent !== txt) { el.textContent = txt; clearTimeout(G.chainT); G.chainT = setTimeout(function () { $('chainChip').hidden = true; }, 1350 - (t - C.t)); } }
-  if (el.hidden === on) el.hidden = !on;
+  if (on) { var txt = 'Chain \u00d7' + C.n + '!'; if (el.textContent !== txt) { el.textContent = txt; clearTimeout(G.chainT); G.chainT = setTimeout(function () { $('chainChip').hidden = true; fitHud(); }, 1350 - (t - C.t)); } }
+  if (el.hidden === on) { el.hidden = !on; fitHud(); }
 }
 function star(ctx, x, y, r) {
   ctx.beginPath(); for (var i = 0; i < 10; i++) { var a = i / 10 * Math.PI * 2 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath();
