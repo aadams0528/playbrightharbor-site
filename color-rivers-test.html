@@ -172,7 +172,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 .set small{display:block;color:var(--ink-soft);font-weight:700;font-size:12.5px}
 .tog{width:52px;height:30px;border-radius:999px;border:0;background:rgba(255,255,255,.18);position:relative;flex:none}
 .tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
-.tog.on{background:#3fd68a}.tog.on::after{left:25px}
+.tog.on{background:#3fd68a}.tog.on::after{left:25px}.tog:disabled{opacity:.45;cursor:not-allowed} /* a switch that can't change looks it (Nikola, round 27: Vibration under reduced motion) */
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);transform:translateX(-50%);background:rgba(8,20,34,.92);border:1.5px solid rgba(255,255,255,.16);padding:8px 14px;border-radius:18px;font-weight:800;font-size:14px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:6;width:max-content;max-width:min(440px,calc(100vw - 48px));line-height:1.35;text-align:center;box-sizing:border-box}.toast{padding:10px 18px}.toast.ontools{background:#0b1a2b;max-width:calc(100vw - 16px);padding:7px 12px;line-height:1.3;min-height:58px;display:flex;align-items:center;justify-content:center} /* over the button row, full width so a long note stays two lines and off the board */
 .toast.show{opacity:1}.toast.ontools{background:rgba(11,26,43,.84)} /* the buttons show faintly through a message, and a touch on one clears it (Alan, Nov 20) */
 .notecard{position:fixed;z-index:4;display:flex;align-items:center;gap:10px;background:#16283a;border:2px solid rgba(255,210,122,.6);border-radius:14px;padding:5px 6px 5px 12px;box-sizing:border-box;box-shadow:0 -6px 24px rgba(0,0,0,.45);animation:coachIn .3s ease}
@@ -184,7 +184,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.19<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.20<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -1844,7 +1844,7 @@ function markTip(){if(daily||bonus)return;const z=isZap(lv),f=opts.expert;
   toast([z?(paid?"⚡ Bonus river: its +1 hint is already yours (⚡✓).":"⚡ Bonus river: your first ★★★ here pays +1 hint."):"",f?(lit?"🔥 Expert is on: you already have this river's 🔥.":"🔥 Expert is on: clear at ★★★ with no hint to earn a 🔥."):""].filter(Boolean).join(" "),3600);}
 function glowTip(){const tp=$("lvTip");if(!tp.classList.contains("float"))return;tp.classList.remove("glow","out");void tp.offsetWidth;tp.classList.add("glow");}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
-function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
+function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");if(!note&&hintPoolDue&&!won)hintPoolNote();}
 function lessonNext(){if(!lesson)return;if(!lesson.note)T("lesson_step",{level:lv+1,step:lesson.i+1,of:lesson.steps.length});lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   // a first-time note sits over the four buttons, two lines at most, until "Got it": never over the title, Ink, the chart or the board (Nikola, Muse, round 20)
@@ -1930,8 +1930,10 @@ function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hint
 const finUsed=()=>{if(!prog.fin||prog.fin.d!==today())prog.fin={d:today(),u:{}};return prog.fin.u;};
 const finaleSpare=()=>!daily&&!bonus&&isFinale(lv)&&G?Math.max(0,G.starts.length-(finUsed()[ID(lv)]||0)):0;
 const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0)+finaleSpare();
+let hintPoolDue=false;
+function hintPoolNote(){hintPoolDue=false;if(prog.seen.hintpool)return;prog.seen.hintpool=1;saveProg();const n=prog.hintsLeft+(prog.bonusHints||0);showNote(`Hints are shared by every level: ${n} left. Free hints refill each day.`);}
 function spendHint(){refillHints();if(finaleSpare()>0){const u=finUsed();u[ID(lv)]=(u[ID(lv)]||0)+1;saveProg();return true;}if(prog.hintsLeft>0)prog.hintsLeft--;else if(prog.bonusHints>0)prog.bonusHints--;else return false;
-  if(!prog.seen.hintpool&&!lesson){prog.seen.hintpool=1;const n=prog.hintsLeft+(prog.bonusHints||0);const t=`Hints are shared by every level: ${n} left. Free hints refill each day.`;showNote(t);} /* say once that hints come from one pool, on a Got it card so it can be read (Muse, rounds 23 and 24) */
+  if(!prog.seen.hintpool){if(lesson&&!lesson.note)hintPoolDue=true;else hintPoolNote();} /* a hint spent in a lesson waits for the lesson's end, so the card always shows (Nikola, round 27) */ /* say once that hints come from one pool, on a Got it card so it can be read (Muse, rounds 23 and 24) */
   saveProg();return true;}
 // between levels: none in the first chapter's worth of levels, then one every few clears, never two close together
 const teachingAt=i=>!!LEVELS[i]&&(!LEVELS[i].gen||!!LESSONS[LEVELS[i].name]||(i>0&&LEVELS[i-1].ch!==LEVELS[i].ch));
@@ -2560,11 +2562,6 @@ function draw(now){if(!(cs>=4))return; // no zero-size riverbed picture (drawIma
     }
     ctx.restore();
   });
-  // a wrong colour at a nest says what it got and what it needs, right beside it (path to elite, item 3)
-  G.nests.forEach((n,k)=>{const s=st[k];if(n.out||!(s.p>=0&&!s.ok&&s.color&&s.denOk!==false&&lastStatus[k]==="bad"))return;
-    const t=`needs ${NAMES[n.mask]}, not ${NAMES[s.color]}`,[cx,cy]=C(n.i),fs=Math.max(13,Math.round(cs*.24));ctx.save();ctx.font=`700 ${fs}px system-ui,sans-serif`;
-    const w=ctx.measureText(t).width+fs,h=fs*1.6,x=Math.max(2,Math.min(cs*G.w-w-2,cx-w/2)),y=cy-cs*.5-h>2?cy-cs*.5-h:cy+cs*.5;
-    rrect(x,y,w,h,h/2);ctx.fillStyle="rgba(20,30,45,.9)";ctx.fill();ctx.strokeStyle="#ff8a95";ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle="#fff";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(t,x+w/2,y+h/2+1);ctx.restore();});
   // critters walking the streams
   paths.forEach((path,p)=>{
     if(path.length<2)return;
@@ -2602,6 +2599,11 @@ function draw(now){if(!(cs>=4))return; // no zero-size riverbed picture (drawIma
     G.cells.forEach((c,i)=>{if(c.t==="filter"){const [x,y]=C(i);drawMarks(x+cs*.24,y+cs*.3,c.f,cs*.15);}});
   }
   drawSurface(now);drawStubs(now);drawHints(now);drawToolHint(live);drawLesson(live);drawNudge(live);drawHead(live);
+  // a wrong colour at a nest says what it got and what it needs, right beside it (path to elite, item 3); drawn after the dens and critters so a den never covers it (Nikola, round 27, Level 152)
+  G.nests.forEach((n,k)=>{const s=st[k];if(n.out||!(s.p>=0&&!s.ok&&s.color&&s.denOk!==false&&lastStatus[k]==="bad"))return;
+    const t=`needs ${NAMES[n.mask]}, not ${NAMES[s.color]}`,[cx,cy]=C(n.i),fs=Math.max(13,Math.round(cs*.24));ctx.save();ctx.font=`700 ${fs}px system-ui,sans-serif`;
+    const w=ctx.measureText(t).width+fs,h=fs*1.6,x=Math.max(2,Math.min(cs*G.w-w-2,cx-w/2)),up=cy-cs*.5-h,dn=cy+cs*.5,hitsDen=yy=>G.sources.some(o=>{const[ox,oy]=C(o.i);return ox+cs*.4>x&&ox-cs*.4<x+w&&oy+cs*.4>yy&&oy-cs*.4<yy+h;}),y=up>2&&(!hitsDen(up)||dn+h>cs*G.h-2||hitsDen(dn))?up:dn+h<=cs*G.h-2?dn:Math.max(2,up); /* above the nest, or below it when a den sits where it would go */
+    rrect(x,y,w,h,h/2);ctx.fillStyle="rgba(20,30,45,.9)";ctx.fill();ctx.strokeStyle="#ff8a95";ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle="#fff";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(t,x+w/2,y+h/2+1);ctx.restore();});
   // active tip
   if(active>=0){const tip=paths[active][paths[active].length-1];const [cx,cy]=C(tip);const c=col[active][col[active].length-1];
     ctx.save();ctx.strokeStyle=hexA(COLORS[c],.9);ctx.lineWidth=cs*.04;ctx.beginPath();ctx.arc(cx,cy,cs*.45,0,Math.PI*2);ctx.stroke();ctx.restore();}
