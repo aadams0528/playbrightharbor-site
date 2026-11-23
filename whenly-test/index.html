@@ -300,7 +300,7 @@ body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!importan
 .dist div{display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:center}
 .dist i{display:block;height:18px;background:var(--line);border-radius:4px;min-width:18px;text-align:right;padding-right:6px;font-style:normal;box-sizing:border-box;color:var(--ink);line-height:18px}
 .dist i.me{background:var(--accent);color:var(--accent-ink)}
-.toast.low{top:auto;bottom:calc(var(--nav-h) + 20px)}.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
+/* On a result screen a toast becomes a bar over the tab bar, its own lane, so it never covers the result (Nikola, round 39) */.toast.low{top:auto;bottom:0;left:0;right:0;transform:none;width:auto;max-width:none;min-height:var(--nav-h);padding:6px 12px env(safe-area-inset-bottom,0px);border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1.25}body.banner .toast.low{bottom:64px;padding-bottom:6px;min-height:calc(var(--nav-h) - env(safe-area-inset-bottom,0px))}.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
 .coach{position:absolute;left:calc(var(--plate-w,var(--card-h))/2 - 15px);font-size:30px;pointer-events:none;z-index:6;animation:coach 1.6s ease-in-out infinite}
 @keyframes coach{0%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(-80px);opacity:1}100%{opacity:0;transform:translateY(-80px)}}
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
@@ -415,7 +415,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 68</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 69</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1782,8 +1782,9 @@ function timeline(){
   if(x[x.length-1]>100){x[x.length-1]=100;for(let i=x.length-2;i>=0;i--)x[i]=Math.min(x[i],x[i+1]-15)}
   {const a=Math.min(...x),z=Math.max(...x)-a||1;for(let i=0;i<x.length;i++)x[i]=(x[i]-a)/z*100} // spreading can push the first dot below 0; bring all back to 0-100 (Muse, round 19)
   for(let i=0;i<x.length;i++)x[i]=10+x[i]*.8; // keep the end dots and their years well inside the card
-  let c=0;for(let i=1;i<y.length-1;i++)if(y[i+1]-y[i]<y[c+1]-y[c])c=i; // closest pair, as in the surprise line
-  return `<p class="tlhint">👆 Tap a year or a card for its story</p><div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline"><i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
+  let m=Infinity;for(let i=0;i<y.length-1;i++)m=Math.min(m,y[i+1]-y[i]); // closest gap, as in the surprise line
+  const pairs=y.slice(0,-1).map((v,i)=>i).filter(i=>y[i+1]-y[i]===m); // light every pair tied for closest (Nikola, round 39)
+  return `<p class="tlhint">👆 Tap a year or a card for its story</p><div class="tl" role="group" aria-label="${G.kind==="daily"?"Today's years":"The years"} on a timeline">${pairs.map(c=>`<i class="tlpair" style="left:${x[c].toFixed(1)}%;width:${(x[c+1]-x[c]).toFixed(1)}%"></i>`).join("")}${t.map((id,i)=>`<button class="${EVENTS[id][4]}${i%2?" up":""}" data-id="${id}" style="left:${x[i].toFixed(1)}%" aria-label="${y[i]}: ${EVENTS[id][2].replace(/"/g,"&quot;")}"><span>${y[i]}</span></button>`).join("")}</div>`;
 }
 // The answer in order with its years, in the first view (Muse, round 20). Each row opens that card's story.
 function answerList(){
@@ -1803,7 +1804,8 @@ function shareInView(r){const sh=r.querySelector("#share"),nav=document.querySel
 function landYears(r){
   const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;
   // Only a fresh finish lands the years and celebrates; reopening a saved result just shows it (Muse, round 30).
-  if(!G.celebrate)return;delete G.celebrate;persist();const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
+  if(!G.celebrate){setTimeout(()=>shareInView(r),60);return} // a reopened result also slides Share above the tab bar (Nikola, round 39)
+  delete G.celebrate;persist();const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,step=still?0:380;
   if(!still){tl.classList.add("landing");bs.forEach((b,i)=>b.style.animationDelay=(i*step/1000)+"s");if(perfect)bs[bs.length-1].classList.add("big")}
   bs.forEach((b,i)=>setTimeout(()=>sfx("land",i),i*step));
@@ -2216,8 +2218,8 @@ function drawExpert(){
   const x=$("#expert");
   const res=E.done?`<div class="result"><div class="scoreline"><span class="score">${E.score}<small>/100</small></span><span class="tier">${xTier()}</span></div><div class="pairs">${E.marks}</div><p class="star" style="margin:0">🎯 exact year · 🟩 within 5 years · 🟨 within 20 · 🟥 further off</p><div class="fact" id="xfact"></div><p class="star" style="margin:0">Tap any card below for its story.</p><div class="row"><button class="btn primary" id="xShare">Share result</button><button class="btn ghost" id="xNext">Next puzzle</button></div>${pointsLine(E.gain)}<p class="next">Expert best: <b>${S.xBest||0}</b> · Played: <b>${S.xPlayed||0}</b></p><textarea class="copy" id="copybox" rows="3" readonly hidden></textarea></div>`:"";
   x.innerHTML=`<h2>Expert: name the year</h2>`+(E.done?res:`<p class="star" style="margin:0"><b>This set: ${LEVELS[levelOf(E.ids)]}</b> · history points ×${LEVEL_MULT[levelOf(E.ids)]}, at half rate.<br>Type the year for each card. Exact earns 20 points, and you lose 1 point for every 2 years off.<br>${extraNote("expert")}</p>`)+
-    E.ids.map(id=>{const e=EVENTS[id],g=E.guess[id],d=E.done?Math.abs(g-e[0]):0;
-      return `<div class="xcard ${E.done?(d<=5?"g":d<=20?"n":"m"):""}" data-id="${id}"><div class="plate ${e[4]}" aria-hidden="true"><svg class="ico"><use href="#i-${e[1]}"/></svg></div><div class="ctext">${e[2]}</div>${E.done?`<div class="xres">${e[0]}<small>you: ${g}${d?` (${d} off)`:" 🎯"}</small></div>`:`<input type="number" inputmode="numeric" min="1000" max="2030" placeholder="Year" aria-label="Year for ${e[2].replace(/"/g,"")}" value="${g??""}">`}</div>`}).join("")+
+    E.ids.map((id,xi)=>{const e=EVENTS[id],g=E.guess[id],d=E.done?Math.abs(g-e[0]):0;
+      return `<div class="xcard ${E.done?(d<=5?"g":d<=20?"n":"m"):""}" data-id="${id}"><div class="plate ${e[4]}" aria-hidden="true"><svg class="ico"><use href="#i-${e[1]}"/></svg></div><div class="ctext">${e[2]}</div>${E.done?`<div class="xres">${e[0]}<small>you: ${g}${d?` (${d} off)`:" 🎯"}</small></div>`:`<input type="number" id="xy${xi}" name="xy${xi}" inputmode="numeric" min="1000" max="2030" placeholder="Year" aria-label="Year for ${e[2].replace(/"/g,"")}" value="${g??""}">`}</div>`}).join("")+
     (E.done?"":`<button class="btn primary" id="xLock">Lock in my years</button>`);
   x.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{const id=+inp.closest(".xcard").dataset.id,v=parseInt(inp.value,10);if(isNaN(v))delete E.guess[id];else E.guess[id]=v});
   if(!E.done)$("#xLock").onclick=lockExpert;
@@ -2271,6 +2273,7 @@ function settings(){
   <div class="setlist"><div id="textHelp"></div><div id="soundHelp"></div><div id="decoHelp"></div>
   ${NATIVE?`<label class="remindset">🔔 Daily reminder ${timeSelect("rSet",S.remind||"off",true)}</label>`:""}
   ${NATIVE?`<div class="row">${noAds()?"":`<button class="btn ghost noads" id="sNoAds">Remove ads · ${removePrice}</button>`}<button class="btn ghost" id="sRestore">Restore purchases</button></div>`:""}</div>
+  <p class="legal" style="font-size:15px;margin:0"><a href="https://playbrightharbor.com/privacy.html" target="_blank" rel="noopener">Privacy policy</a> · <a href="https://playbrightharbor.com/terms.html" target="_blank" rel="noopener">Terms</a> · <a href="mailto:support@playbrightharbor.com">Support</a></p>
   <p class="ver" style="color:var(--muted);font-size:15px;margin:0">${($("#foot .build")?.textContent||"").replace(/^\s*·\s*/,"")}</p>`);
   renderTextHelp();renderSoundHelp();renderDecoHelp();
   const rs=$("#rSet");if(rs)rs.onchange=()=>setRemind(rs.value==="off"?false:rs.value);
@@ -2343,7 +2346,8 @@ function toast(t){
 function nextToast(){
   const wait=fxHold-performance.now();if(wait>0&&toastQ.length){toastNow="";setTimeout(()=>{toastNow=null;nextToast()},wait);return}
   const t=toastNow=toastQ.shift()??null;if(t==null)return;
-  const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent?" low":"");d.textContent=t; /* on a result screen, toasts sit low so they never cover its title (Nikola, round 37) */document.body.appendChild(d);
+  const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent?" low":"");d.textContent=t; /* on a result screen, toasts sit on the tab bar so they never cover the result (Nikola, rounds 37 and 39) */document.body.appendChild(d);
+  if(d.classList.contains("low")){const nav=document.querySelector(".bnav"),h=nav&&nav.offsetParent?nav.offsetHeight:56;for(let f=15;f>13&&d.offsetHeight>h+1;)d.style.fontSize=(--f)+"px"} // a long line steps its text down so the bar stays inside the tab bar
   setTimeout(()=>{d.remove();nextToast()},t.length>60?3600:2600);
 }
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
@@ -2358,7 +2362,8 @@ function reportError(message,stack){
     crash.recordException({message:String(message).slice(0,500)}).catch(()=>{});
   }catch(e){}
 }
-addEventListener("error",e=>reportError(e.message||"Script error",e.error?.stack));
+// "ResizeObserver loop ..." is a harmless browser notice (the browser finishes the resize next frame); not sent as an error.
+addEventListener("error",e=>{if(!/ResizeObserver loop/i.test(String(e.message||"")))reportError(e.message||"Script error",e.error?.stack)});
 addEventListener("unhandledrejection",e=>reportError("Unhandled: "+(e.reason?.message||e.reason),e.reason?.stack));
 // ---------- daily reminder (apps only, opt-in) ----------
 // S.remind: undefined = not asked yet, false = off, "HH:MM" = on. The next 14 days are scheduled as
