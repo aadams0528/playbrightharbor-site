@@ -75,6 +75,8 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 .meta{position:relative}
 .goal{position:absolute;left:-4px;right:-4px;top:50%;transform:translateY(-50%);min-height:calc(100% + 4px);display:flex;align-items:center;padding:2px 6px;box-sizing:border-box;border-radius:12px;background:var(--bg);z-index:6;font-size:17px;line-height:1.3;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s,visibility 0s .45s}
 .goal.show{opacity:1;visibility:visible;transition:opacity .25s;animation:glow 1.6s ease-out}
+/* one line at a time: the title row fades in only after the instruction has faded out, so the two never overlap (Nikola, round 43) */
+.meta>:not(.goal),.meta .mleft>*,.meta .mright>*{transition:opacity .25s .45s}.meta:has(.goal.show)>:not(.goal),.meta:has(.goal.show) .mleft>*,.meta:has(.goal.show) .mright>*{opacity:0;transition:opacity .15s}
 .goal .hint-line{margin:0;width:100%;font-size:inherit;color:var(--ink);text-align:left;min-height:0}
 @keyframes glow{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 70%,transparent);background:color-mix(in srgb,var(--accent) 22%,var(--bg))}100%{box-shadow:0 0 0 10px transparent;background:var(--bg)}}
 /* The lesson has room to spare, so its instructions sit in their own row and stay up. */
@@ -156,6 +158,7 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 @keyframes countIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}20%{transform:translate(-50%,-50%) scale(1)}30%{transform:translate(-50%,-50%) scale(1.06)}38%{transform:translate(-50%,-50%) scale(1)}85%{opacity:1}100%{opacity:0}}
 
 .actions{display:flex;gap:8px}
+.morecue{position:fixed;left:50%;transform:translateX(-50%);z-index:8;border:0;border-radius:999px;padding:6px 14px;background:var(--ink);color:var(--paper);font:inherit;font-size:16px;font-weight:700;box-shadow:var(--shadow);cursor:pointer}
 .actions #bLock{flex:1;min-width:0;white-space:nowrap}
 .btn.tool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:78px;padding:6px 8px;font-size:15px;line-height:1.1}
 .btn.tool .ti{font-size:20px;line-height:1.1}
@@ -173,7 +176,7 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 /* Smaller phones (iPhone SE and below): tighter cards, gaps and header so all five cards clear the bar (Nikola and Cooper, round 11). */
 @media (max-height:680px){:root{--card-h:64px;--card-gap:12px;--nav-h:calc(54px + env(safe-area-inset-bottom,0px))}
 /* Short screens: a tighter result, so the score headline, the "Wait, really?" line and Share all fit above the tab bar (Nikola, round 40). */
-@media (max-height:680px){#result.result{gap:8px;padding:12px 14px}#result .score{font-size:36px}#result .tier{font-size:21px}#result .tlhint{margin:0}#result .hardnote .hn{display:none}} /* the Hard tag stays; its how-it-worked line is in the Hard help */
+@media (max-height:680px){#result.result{gap:8px;padding:12px 14px}#result .score{font-size:36px}#result .tier{font-size:21px}#result .tlhint{display:none}#result .hardnote .hn{display:none}} /* the Hard tag stays; its how-it-worked line is in the Hard help */
   .app{gap:8px;padding-top:calc(6px + env(safe-area-inset-top,0px))}
   .logo{font-size:24px}
   .icon{width:34px;height:34px}
@@ -400,6 +403,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
   <section id="stories" hidden><div class="fact" id="fact"></div><p class="star" style="margin:0" id="storyTip">Tap any card below for its story.</p></section>
   <p class="sr" id="sr" aria-live="polite"></p><p class="sr" id="srt" aria-live="polite"></p>
   <div id="play">
+    <button class="morecue" id="moreCue" hidden onclick="scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})"></button>
     <div class="offer" id="offer" hidden>
       <span><b>Stuck?</b> Placing a card gives up the ⭐.</span>
       <button class="btn primary" id="bPlace">📌 Place a card</button>
@@ -419,7 +423,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 72</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 73</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1475,12 +1479,26 @@ function playOverflow(){
   return Math.max(doc,b.bottom-navTop,last-(fixedBar?b.top:navTop),ob,0);
 }
 function guardFit(){
-  if(!G||G.done||drag||!G.order||!G.order.every(id=>cardEls[id]))return;
-  const n=G.order.length;
+  if(!G||G.done||drag||!G.order||!G.order.every(id=>cardEls[id])){moreCue();return}
+  const n=G.order.length;$("#play").style.paddingBottom="";
   for(let k=0;k<6;k++){const over=playOverflow();if(over<=1)break;
     if(CH>48)CH=Math.max(48,CH-Math.ceil((over+4)/n));else if(GAP>4)GAP=Math.max(4,GAP-Math.ceil((over+4)/(n-1)));else break;
     setBoardH();layout()}
+  moreRoom();
 }
+/* If even the smallest cards can't fit above the button bar (big system fonts at Larger text), the page gets just enough room to scroll the
+   last card clear of the bar, and a "1 more card ↓" cue shows until it is in view (Nikola, round 43) */
+function moreRoom(){const pl=$("#play");pl.style.paddingBottom="";const cue=$("#moreCue");
+  if(!G||G.done||pl.hidden||!list.offsetParent){if(cue)cue.hidden=true;return}
+  const bar=$("#play .actions"),fixed=getComputedStyle(bar).position==="fixed",edge=fixed?bar.getBoundingClientRect().top:$(".bnav").getBoundingClientRect().top;
+  const under=list.getBoundingClientRect().bottom+scrollY-edge+8;
+  if(under>1&&fixed){const base=document.documentElement.scrollHeight-innerHeight;pl.style.paddingBottom=Math.ceil(Math.max(1,under-base))+"px"}
+  moreCue()}
+function moreCue(){const cue=$("#moreCue");if(!cue)return;const pl=$("#play");
+  if(!G||G.done||pl.hidden||!list.offsetParent||!pl.style.paddingBottom){cue.hidden=true;return}
+  const bar=$("#play .actions").getBoundingClientRect(),hid=[...list.querySelectorAll(".card")].filter(c=>c.getBoundingClientRect().bottom>bar.top+1).length;
+  cue.hidden=!hid;if(hid){cue.textContent=hid===1?"1 more card ↓":`${hid} more cards ↓`;cue.style.bottom=(innerHeight-bar.top+6)+"px"}}
+addEventListener("scroll",()=>moreCue(),{passive:true});
 addEventListener("resize",relayout);document.fonts?.ready?.then(relayout);addEventListener("orientationchange",()=>setTimeout(relayout,250));
 // Phone web views can settle their final height a moment after start without a resize event; check again then.
 addEventListener("load",()=>{setTimeout(relayout,300);setTimeout(relayout,1200)});
@@ -1804,20 +1822,21 @@ function surpriseCard(){ // the card you had furthest from its spot (or the olde
 // lands its last year bigger, and only a Flawless 100 gets the full-screen confetti.
 // Every dot is drawn, faint, in the same frame as the result and the first one lands at once, so the line is never bare (Muse, round 22).
 // On a short screen the Share button can land under the tab bar; once the years land, the page slides up just enough to show it (Nikola, round 32).
+function safeTop(){const d=document.createElement("div");d.style.cssText="position:fixed;top:0;height:env(safe-area-inset-top,0px);visibility:hidden";document.body.appendChild(d);const h=d.getBoundingClientRect().height;d.remove();return h} /* the landing keeps clear of a notch (Nikola, round 43) */
 function shareInView(r,how){const sh=r.querySelector("#share"),nav=document.querySelector(".bnav");if(!sh||!nav||r.hidden)return;
   const sl=r.querySelector(".scoreline")||r; // never scroll the score headline off the top (Nikola, round 40)
   const over=Math.min(sh.getBoundingClientRect().bottom+8-nav.getBoundingClientRect().top,sl.getBoundingClientRect().top-8);
-  let top=over;const rt=r.getBoundingClientRect().top;if(top>0&&top<rt)top=Math.max(0,rt-6); /* land on a clean edge: the heading above the result goes fully off, never cut mid-letters; the score stays in view (Nikola, round 42) */
+  let top=over;const rt=r.getBoundingClientRect().top-safeTop();if(top>0&&top<rt)top=Math.max(0,rt-6);top=Math.min(top,document.documentElement.scrollHeight-innerHeight-scrollY); /* land on a clean edge: the heading above the result goes fully off, never cut mid-letters; the score stays in view (Nikola, round 42) */
   if(top>0)scrollBy({top,behavior:how||(matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth")})}
 /* a resize or turn re-fits a showing result the same way (Nikola, round 41) */
-let shareFitT=0,fitW=innerWidth,fitH=innerHeight;function refitResult(){clearTimeout(shareFitT);shareFitT=setTimeout(()=>{const r=$("#result");if(r&&!r.hidden&&r.offsetParent)shareInView(r,"auto")},100)}
+let shareFitT=0,fitW=innerWidth;function refitResult(){clearTimeout(shareFitT);shareFitT=setTimeout(()=>{const r=$("#result");if(r&&!r.hidden&&r.offsetParent)shareInView(r,"auto")},100)}
 let touchT=-1e9;addEventListener("touchmove",()=>{touchT=performance.now()},{passive:true});
-addEventListener("resize",()=>{const wOnly=innerWidth===fitW;fitW=innerWidth;fitH=innerHeight;if(wOnly&&performance.now()-touchT<1500)return;refitResult()}); /* a height change while the player is swiping is the phone's address bar showing or hiding, so it never moves the result; a turn or window resize still re-fits (Nikola, round 42) */
-{let hadBanner=document.body.classList.contains("banner");new MutationObserver(()=>{const b=document.body.classList.contains("banner");if(b!==hadBanner){hadBanner=b;refitResult()}}).observe(document.body,{attributes:true,attributeFilter:["class"]})} /* the ad banner showing or hiding re-fits a showing result too (Nikola, round 42) */
+addEventListener("resize",()=>{const wOnly=innerWidth===fitW;fitW=innerWidth;if(wOnly&&performance.now()-touchT<1500)return;refitResult()}); /* a height change while the player is swiping is the phone's address bar showing or hiding, so it never moves the result; a turn or window resize still re-fits (Nikola, round 42) */
 function landYears(r){
   const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;
   // Only a fresh finish lands the years and celebrates; reopening a saved result just shows it (Muse, round 30).
   if(!G.celebrate){requestAnimationFrame(()=>shareInView(r,"auto"));return} // a reopened result also slides Share above the tab bar (Nikola, round 39)
+  requestAnimationFrame(()=>shareInView(r,"auto")); /* a fresh finish is fitted at once too, so Share never waits for the years to land (Nikola, round 43) */
   delete G.celebrate;persist();const bs=[...tl.querySelectorAll("button")],perfect=!G.gaveUp&&G.marks.every(m=>m==="g");
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,step=still?0:380;
   if(!still){tl.classList.add("landing");bs.forEach((b,i)=>b.style.animationDelay=(i*step/1000)+"s");if(perfect)bs[bs.length-1].classList.add("big")}
@@ -2252,7 +2271,7 @@ function showCoach(){hideCoach();coachEl=document.createElement("div");coachEl.c
 function hideCoach(){if(coachEl){coachEl.remove();coachEl=null}}
 
 function sheet(html,btn="Got it"){const s=document.createElement("div");s.className="sheet";s.innerHTML=`<div role="dialog" aria-modal="true">${html}${btn?`<button class="btn primary" data-close>${btn}</button>`:""}</div>`;
-  s.addEventListener("click",e=>{if(e.target===s||e.target.hasAttribute("data-close"))s.remove()});document.body.appendChild(s);document.querySelectorAll(".toast.low").forEach(t=>{t.classList.remove("low");t.style.fontSize=""}); /* a toast already on the tab bar moves to the top when a sheet opens, so nothing covers the sheet's buttons (Nikola, round 42) */// Focus the close button without scrolling, so long sheets like How to play open at the top (Muse, round 16).
+  s.addEventListener("click",e=>{if(e.target===s||e.target.hasAttribute("data-close"))s.remove()});document.body.appendChild(s);if(toastEl){const t=toastEl.textContent;toastEl.remove();toastEl=null;if($("#srt")?.textContent===t)srtSay("");toastQ.unshift(t);toastNow=null;if(!toastWaitT)nextToast()} /* a toast showing when a sheet opens is taken down and plays again once the sheet closes, so nothing covers the sheet (Nikola, rounds 42 and 43) */// Focus the close button without scrolling, so long sheets like How to play open at the top (Muse, round 16).
   const c=s.querySelector("[data-close]");if(c)c.focus({preventScroll:true});s.firstElementChild.scrollTop=0;return s}
 function help(){sheet(`<h2>How to play</h2>
   <ol class="steps">
@@ -2356,13 +2375,15 @@ function toast(t){
   toastQ.push(t);if(toastQ.length>3)toastQ.shift();
   if(toastNow==null)nextToast();
 }
-let srtLast="";function srtSay(t){const l=$("#srt");if(!l)return;l.textContent="";if(t){srtLast=t;requestAnimationFrame(()=>{l.textContent=t})}} /* cleared first, so the same line said twice is read again (Nikola, round 42) */
+let srtLast="";function srtSay(t){const l=$("#srt");if(!l)return;l.textContent="";if(t){srtLast=t;setTimeout(()=>{if(srtLast===t)l.textContent=t},120)}} /* cleared first, so the same line said twice is read again (Nikola, round 42) */
+let toastEl=null,toastWaitT=0;
 function nextToast(){
+  if(toastQ.length&&document.querySelector(".sheet")){toastNow="";if(!toastWaitT)toastWaitT=setTimeout(()=>{toastWaitT=0;toastNow=null;nextToast()},300);return} /* toasts wait while a sheet is open and play once it closes (Nikola, round 43) */
   const wait=fxHold-performance.now();if(wait>0&&toastQ.length){toastNow="";setTimeout(()=>{toastNow=null;nextToast()},wait);return}
   const t=toastNow=toastQ.shift()??null;if(t==null)return;
-  const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent&&!document.querySelector(".sheet")?" low":""); /* with a sheet open the toast stays at the top, off the sheet's buttons (Nikola, round 41) */d.textContent=t;d.setAttribute("aria-hidden","true");srtSay(t); /* screen readers hear every toast through their own live line, apart from #sr (Cooper, round 41) */ /* on a result screen, toasts sit on the tab bar so they never cover the result (Nikola, rounds 37 and 39) */document.body.appendChild(d);
+  const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent&&!document.querySelector(".sheet")?" low":""); /* with a sheet open the toast stays at the top, off the sheet's buttons (Nikola, round 41) */d.textContent=t;d.setAttribute("aria-hidden","true");srtSay(t); /* screen readers hear every toast through their own live line, apart from #sr (Cooper, round 41) */ /* on a result screen, toasts sit on the tab bar so they never cover the result (Nikola, rounds 37 and 39) */toastEl=d;document.body.appendChild(d);
   if(d.classList.contains("low")){const nav=document.querySelector(".bnav"),h=nav?nav.getBoundingClientRect().height:56,f0=parseFloat(getComputedStyle(d).fontSize);for(let f=f0;f-.5>=f0*.9&&d.getBoundingClientRect().height>h+1;)d.style.fontSize=(f-=.5)+"px"} // a long line steps its text down a little (at most 10%, so it stays at the reader's size) to fit the tab bar (Nikola, round 40)
-  setTimeout(()=>{d.remove();if($("#srt")?.textContent===t)srtSay("");nextToast()},t.length>60?3600:2600);
+  setTimeout(()=>{if(toastEl!==d)return;toastEl=null;d.remove();if($("#srt")?.textContent===t)srtSay("");nextToast()},t.length>60?3600:2600);
 }
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
 const NATIVE=!!window.Capacitor?.isNativePlatform?.(),PLUG=NATIVE?window.Capacitor.Plugins:{};
@@ -2443,11 +2464,11 @@ function showAdOffer(){
   s.querySelector("#offerBuy").onclick=()=>{s.remove();buyNoAds()};
 }
 function showBanner(){
-  if(!adsAllowed()||bannerOn)return;bannerOn=true;document.body.classList.add("banner");
+  if(!adsAllowed()||bannerOn)return;bannerOn=true;document.body.classList.add("banner");refitResult();
   const u=AD_UNITS[PLATFORM]||AD_UNITS.android;
   AdMob.showBanner({adId:u.banner,adSize:"ADAPTIVE_BANNER",position:"BOTTOM_CENTER",margin:0,isTesting:ADS_TESTING}).catch(()=>{bannerOn=false;document.body.classList.remove("banner")});
 }
-function hideBanner(){if(!bannerOn)return;bannerOn=false;document.body.classList.remove("banner");AdMob?.removeBanner().catch(()=>{})}
+function hideBanner(){if(!bannerOn)return;bannerOn=false;document.body.classList.remove("banner");refitResult();AdMob?.removeBanner().catch(()=>{})}
 async function loadPrice(){
   if(!Purchases)return;
   try{
@@ -2523,12 +2544,14 @@ function fireworks(){
   for(let b=0;b<4;b++){const cx=L+BW*(.2+.2*b),cy=ty?ty-(b%2)*12*devicePixelRatio:H*(.22+.1*(b%2));for(let i=0;i<60;i++){const a=Math.random()*6.28,s=(2+Math.random()*5)*devicePixelRatio;P.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:110+Math.random()*40,c:cols[i%5],d:b*10})}}
   // A short burst on a wall clock, so a slow or busy screen never leaves pieces lying around (Muse, round 32).
   // Motion and life are counted in time (60ths of a second), so the burst looks and lasts the same at 60, 90 or 120 Hz (Nikola, round 34).
-  const t0=performance.now();let f=0,last=t0;(function step(){const now=performance.now(),k=Math.min(3,(now-last)/16.667);last=now;x.clearRect(0,0,W,H);if(run!==fxRun||now-t0>2900)return;let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx*k;p.y+=p.vy*k;p.vy+=.08*devicePixelRatio*k;p.vx*=Math.pow(.98,k);p.l-=k;x.globalAlpha=Math.max(0,Math.min(1,p.l/30));x.fillStyle=p.c;x.fillRect(p.x,p.y,6*devicePixelRatio,6*devicePixelRatio)}f+=k;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
+  /* confetti never draws over the result's words: the score and the "Wait, really?" box are cut out of the canvas each frame (Nikola, round 43) */
+  const keep=[...document.querySelectorAll("#result:not([hidden]) :is(.scoreline,.tlhint,.really,.closest,.fact)")];
+  const t0=performance.now();let f=0,last=t0;(function step(){const now=performance.now(),k=Math.min(3,(now-last)/16.667);last=now;x.clearRect(0,0,W,H);x.save();if(keep.length){x.beginPath();x.rect(0,0,W,H);for(const e of keep){const q=e.getBoundingClientRect();if(q.height)x.rect((q.left-4)*devicePixelRatio,(q.top-4)*devicePixelRatio,(q.width+8)*devicePixelRatio,(q.height+8)*devicePixelRatio)}x.clip("evenodd")}if(run!==fxRun||now-t0>2900){x.restore();return}let alive=0;for(const p of P){if(f<p.d){alive++;continue}if(p.l<=0)continue;alive++;p.x+=p.vx*k;p.y+=p.vy*k;p.vy+=.08*devicePixelRatio*k;p.vx*=Math.pow(.98,k);p.l-=k;x.globalAlpha=Math.max(0,Math.min(1,p.l/30));x.fillStyle=p.c;x.fillRect(p.x,p.y,6*devicePixelRatio,6*devicePixelRatio)}x.restore();f+=k;if(alive)requestAnimationFrame(step);else x.clearRect(0,0,W,H)})();
 }
 // Hidden tester tools: tap the footer 5 times. Test builds only; `npm run build:release` turns them off.
 let footTaps=0,footT=0;function testerTap(){if(!ADS_TESTING)return;const now=Date.now();if(now-footT>3000)footTaps=0;footT=now;if(++footTaps<5)return;footTaps=0;/* five taps within 3 seconds, so stray earlier taps don't count (Nikola, round 34) */document.querySelectorAll(".sheet").forEach(x=>x.remove());
   const s=sheet(`<h2>Tester tools</h2><p>Today is puzzle #${dayNum()} (offset ${S.offset} days).</p><div class="tester"><button class="btn ghost" data-t="next">Go to next day</button><button class="btn ghost" data-t="skip">Skip a day</button><button class="btn ghost" data-t="reset">Reset all progress</button><button class="btn ghost" data-t="old">Add an earlier-set save</button><button class="btn ghost" data-t="chal">${S.chalTest?"Lock":"Unlock"} ⚡ challenges</button><button class="btn ghost" data-t="toast">Show a sample toast</button><button class="btn ghost" data-t="toastsheet">Sample toast, then open Help</button><button class="btn ghost" data-t="banner">${document.body.classList.contains("banner")?"Hide":"Show"} the ad banner space</button></div><p class="star" style="margin:8px 0 4px">Play any puzzle by its number (Nikola, round 33):</p><div class="row"><input id="tDay" type="number" min="1" inputmode="numeric" placeholder="for example, 43" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tGo">Open puzzle</button></div><p class="star" style="margin:8px 0 4px">Find a card by any word in its title:</p><div class="row"><input id="tCard" placeholder="for example, microwave" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tFind">Show card</button></div><div id="tFact" class="star"></div><p class="star">Last toast read to screen readers: ${srtLast?"“"+srtLast.replace(/&/g,"&amp;").replace(/</g,"&lt;")+"”":"none yet"}</p><p class="star">Reports saved: ${S.reports.length}</p><p class="star">Funnel events on this device: ${Object.entries(S.ev||{}).map(([k,v])=>k+" "+v).join(" · ")||"none yet"}</p><button class="btn ghost" data-t="crowd">${S.fakeCrowd?"Hide":"Show"} sample crowd stats</button>`,"Close");
-  s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="chal")S.chalTest=!S.chalTest;if(t==="banner"){const on=!document.body.classList.contains("banner");document.body.classList.toggle("banner",on);document.body.classList.toggle("testbanner",on);s.remove();return} /* test builds only: tester tools never open in the release build */
+  s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="chal")S.chalTest=!S.chalTest;if(t==="banner"){const on=!document.body.classList.contains("banner");document.body.classList.toggle("banner",on);document.body.classList.toggle("testbanner",on);refitResult();s.remove();return} /* test builds only: tester tools never open in the release build */
     if(t==="toastsheet"){s.remove();setTimeout(()=>toast("🗓️ Weekly goal done: Score 80 or more with no help ⭐. +15 history points (1 of 5)"),400);setTimeout(help,1400);return} /* a toast already showing when a sheet opens (Nikola, round 42) */
     if(t==="toast"){s.remove();setTimeout(()=>toast("🗓️ Weekly goal done: Score 80 or more with no help ⭐. +15 history points (1 of 5)"),400);return} // lets reviewers see a toast on a result screen (Muse and Nikola, round 40)
     if(t==="old"){const m=seedEarlier();save();s.remove();setMode("daily");toast(m?`Puzzle #${m} now has an earlier-set save. Open it from the Archive.`:"Every themed day before today already has a save, so nothing was changed.");return}if(t==="reset"){S={days:{},tiers:{},streak:0,best:0,played:0,total:0,freezes:0,offset:0,reports:[],tutorialDone:true}}save();s.remove();setMode("daily");toast(`Now on puzzle #${dayNum()}`)});
