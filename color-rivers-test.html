@@ -184,7 +184,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.25<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.26<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -758,7 +758,7 @@ const chIdx=c=>LEVELS.map((L,i)=>L.ch===c?i:-1).filter(i=>i>=0);
 const chStars=c=>chIdx(c).reduce((a,i)=>a+(prog.stars[ID(i)]||0),0);
 const chGoal=c=>Math.ceil(chIdx(c).length*3*GOAL_SHARE);
 function gateOK(i){if(i<=0)return true;const P=LEVELS[i-1].ch;return P===LEVELS[i].ch||!P||chStars(P)>=chGoal(P);}
-let retraces=0,hintsUsed=0,hintSeen=false,hidByMe=false,hintGiven=new Set(),drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null,toolFx=null;
+let hintDone=new Set(),retraces=0,hintsUsed=0,hintSeen=false,hidByMe=false,hintGiven=new Set(),drawn=[],legendMix=false,toastTimer=0,turnTold=false,bridgeIntro=0,newTile=0,wash=null,parts=[],bed=null,toolFx=null;
 // the system "reduce motion" setting also calms the board: no fireworks, color wash or waddle (Nikola, v0.57)
 const RM=(()=>{try{return matchMedia("(prefers-reduced-motion: reduce)");}catch(e){return null;}})(),calm=()=>!!(RM&&RM.matches);
 function fireworks(cell,mask){if(calm())return;
@@ -783,7 +783,7 @@ function startLevel(n,keep,cut,extra){
   const fits=keep&&keep.length===G.starts.length&&keep.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length));
   paths=fits?keep:G.starts.map(i=>[i]);if(!keep)saveDraft(true);undoStack=[];
   if(fits&&extra&&Array.isArray(extra.undo))undoStack=extra.undo.filter(st=>Array.isArray(st)&&st.length===G.starts.length&&st.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length)));
-  active=-1;headLinger=null;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];runs=[];retraces=0;hintsUsed=0;hintGiven=hgLoad();hintSeen=hintGiven.size>0;hidByMe=false;turnTold=false;
+  active=-1;headLinger=null;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];runs=[];retraces=0;hintsUsed=0;hintGiven=hgLoad();hintDone=new Set();hintSeen=hintGiven.size>0;hidByMe=false;turnTold=false;
   drawn=paths.map(p=>p.slice());legendMix=!!L.mix||[3,5,6].some(c=>prog.seen&&prog.seen[c]);/* Alan, Nov 7: once you have mixed, the chart is on every board */clearToast();
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
@@ -908,7 +908,7 @@ function resize(){{const T=$("lvTitle");if(G&&T.scrollWidth-T.clientWidth>0&&!T.
   const wide=matchMedia("(min-width:900px) and (min-aspect-ratio:5/4)").matches;
   const maxH=wide?Math.max(200,window.innerHeight-document.querySelector(".top").offsetHeight-pad-24)
     :Math.max(window.innerHeight<640?160:200,window.innerHeight-kids.reduce((a,e)=>a+e.getBoundingClientRect().height,0)-10*kids.length-pad-2); // rendered heights, so Larger text (zoomed tip and buttons) is counted (Cooper, round 19)
-  const ncs=Math.floor(Math.min(r.width/G.w,maxH/G.h));
+  const ring=cv.parentElement.classList.contains("decorated")?10:0,ncs=Math.floor(Math.min(r.width/G.w,(maxH-2*ring)/G.h)); /* the holiday frame's rings sit above and below the board, so leave room for them before the buttons (Nikola, round 32) */
   if(ncs<4)return; // the board's box can be 0 wide for a moment (hidden, mid-rotation, emulator switch): keep the last size (v0.61 review)
   cs=ncs;
   dpr=Math.min(3,window.devicePixelRatio||1);
@@ -1291,7 +1291,7 @@ async function doShare(info,cv,kind){T("share_tap",{kind});
     if(file&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],text:info.text});return;}
     if(navigator.share){await navigator.share({text:info.text});return;}
   }catch(e){if(e&&e.name==="AbortError")return;}
-  try{await navigator.clipboard.writeText(info.text);toast("Copied. Paste it anywhere to share.");}catch(e){toast("Sharing isn't available here.");}}
+  try{await navigator.clipboard.writeText(info.text);toast("Copied. Paste it anywhere to share.",1900,true);}catch(e){toast("Sharing isn't available here.",1900,true);}}
 function showWin(s,ink,fresh){
   const last=lv===LEVELS.length-1,locked=!last&&!prog.all&&!gateOK(lv+1),nextCh=!last&&LEVELS[lv+1].ch!==LEVELS[lv].ch?CHAPTERS.find(c=>c.id===LEVELS[lv+1].ch):null;
   const fam=(()=>{const C=CHAPTERS.find(c=>c.id===LEVELS[lv].ch),I=C&&chapterInfo(C);return !I||!I.done?null:{id:C.id,t:C.title,n:critterName(C.id),shiny:I.got===I.max,low:I.ids.filter(i=>(prog.stars[ID(i)]||0)<3).map(i=>i+1)};})();
@@ -1593,7 +1593,7 @@ function showLevels(){
   const stops=chs.map((C,k)=>{const I=chapterInfo(C),[x,y]=pts[k],col=CH_COLORS[C.id]||"#cfe0ee";
     return `<button class="stop ${C.id===here?"here":""} ${I.locked?"locked":""} ${k%2?"r":"l"}" data-ch="${C.id}" style="left:${x}%;top:${y}px;--c:${col}">
       <span class="dot">${I.locked?"🔒":I.done&&I.got===I.max?"★":C.id?chNo(C.id):"✦"}</span>
-      <span class="lab"><b>${C.id?`Chapter ${chNo(C.id)}`:"Preview"}</b>${C.title}<small>★ ${I.got}/${I.max}${(()=>{const f=I.ids.find(isFinale);return f>=0&&f!==undefined?`&nbsp;·&nbsp;<span aria-label="finale, level ${f+1}">🏁&nbsp;${f+1}</span>`:"";})()}</small><i style="width:${I.max?Math.round(100*I.got/I.max):0}%"></i></span></button>`;}).join("");
+      <span class="lab"><b>${C.id?`Chapter ${chNo(C.id)}`:"Preview"}</b>${C.title}<small>★ ${I.got}/${I.max}${(()=>{const f=I.ids.find(isFinale);return f>=0&&f!==undefined?`&nbsp;·&nbsp;<span aria-label="finale, Level ${f+1}">🏁&nbsp;${f+1}</span>`:"";})()}</small><i style="width:${I.max?Math.round(100*I.got/I.max):0}%"></i></span></button>`;}).join("");
   const sk=streakNow(),gr=prog.streak&&prog.streak.grace>0;
   // the two "every day / every week" rivers side by side, one short line under them (simplicity rule; Muse, round 12: the map asked too much reading)
   const dl=dailyOpen()?`<button class="tile" id="goDaily"><b>☀︎ Daily River${dailyDone()?" ✓":""}</b><small>${sk?`🔥 ${sk}-day streak`:"New every day"}</small></button>`:`<button class="tile" disabled><b>☀︎ Daily River</b><small>Opens at Level ${DAILY_AT}</small></button>`;
@@ -1661,20 +1661,20 @@ function showSettings(){
   $("tSound").onclick=e=>{opts.sound=!opts.sound;e.currentTarget.classList.toggle("on",opts.sound);e.currentTarget.setAttribute("aria-checked",opts.sound);store.set("opts",opts);};
   $("tAds").onclick=()=>showRemoveAds();
   $("tExpert").onclick=e=>{opts.expert=!opts.expert;expertRun=false;e.currentTarget.classList.toggle("on",opts.expert);e.currentTarget.setAttribute("aria-checked",opts.expert);store.set("opts",opts);T("expert_toggle",{on:opts.expert?1:0,level:lv+1});
-    if(opts.expert){prog.seen["note:expert"]=1;saveProg();toast("🔥 Expert on: less help. Restart a river, then ★★★ with no hint earns a 🔥.",4500);}
+    if(opts.expert){prog.seen["note:expert"]=1;saveProg();toast("🔥 Expert on: less help. Restart a river, then ★★★ with no hint earns a 🔥.",4500,true);}
     setTitle(lv,LV());renderCoach();renderLegend();reserveTip();resize();};
   $("tBuzz").onclick=e=>{opts.buzz=opts.buzz===false;e.currentTarget.classList.toggle("on",opts.buzz);e.currentTarget.setAttribute("aria-checked",opts.buzz);store.set("opts",opts);if(opts.buzz)buzz(20);}; /* a switch for the taps (Nikola, round 24) */
   $("tBig").onclick=e=>{opts.big=!opts.big;e.currentTarget.classList.toggle("on",opts.big);e.currentTarget.setAttribute("aria-checked",opts.big);store.set("opts",opts);T("bigtext_toggle",{on:opts.big?1:0});applyBig();};
   $("tDeco").onclick=e=>{opts.deco=opts.deco===false;e.currentTarget.classList.toggle("on",opts.deco);e.currentTarget.setAttribute("aria-checked",opts.deco);store.set("opts",opts);T("deco_toggle",{on:opts.deco?1:0});applyDeco();};
   $("tLessons").onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Show all again?";return;} // a second tap confirms
-    Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:")||k.startsWith("note:filter"))delete prog.seen[k];});saveProg();toast("Lessons will show again");};
+    Object.keys(prog.seen).forEach(k=>{if(k.startsWith("lesson:")||k.startsWith("note:filter"))delete prog.seen[k];});saveProg();toast("Lessons will show again",1900,true);};
   try{BHPromo.wire($("card"),"help");}catch(e){}
   $("close").onclick=closeSheet;
   if(window.CR_NATIVE)CR_NATIVE.settings($("cloudBox")); // phone app: cloud save sign-in row
 }
 // While a card is up, the game behind it is inert, so Tab stays inside the card (Nikola, v0.34: Tab reached Hint behind the win card)
 let sheetFrom=null; // the button that opened a sheet gets focus back when it closes (Cooper, round 21)
-function openSheet(html){if($("sheet").hidden){const a=document.activeElement;sheetFrom=a&&a!==document.body&&$("app").contains(a)?a:null;}$("card").innerHTML=html;$("card").classList.toggle("win",html.includes('id="goRetry"'));$("sheet").hidden=false;$("card").scrollTop=0;$("app").inert=true;const b=$("card").querySelector("button,[href],input,select");if(b)b.focus({preventScroll:true});} /* focus without scrolling, so every sheet opens at its top (Nikola, round 18); the scroll resets after the sheet shows, since a hidden sheet can't scroll (round 31) */
+function openSheet(html){if($("sheet").hidden){const a=document.activeElement;sheetFrom=a&&a!==document.body&&$("app").contains(a)?a:null;}$("card").innerHTML=html;$("card").classList.toggle("win",html.includes('id="goRetry"'));$("sheet").hidden=false;$("card").scrollTop=0;$("app").inert=true;if(toastOn&&!toastOver){const t=toastOn;clearTimeout(toastTimer);$("toast").classList.remove("show");$("toast").textContent="";toastOn="";toastQ.unshift({t,ms:1900,held:true});toastHeld=true;} /* a message already up when a sheet opens waits under it (Nikola, round 32: title tap, then the gear) */const b=$("card").querySelector("button,[href],input,select");if(b)b.focus({preventScroll:true});} /* focus without scrolling, so every sheet opens at its top (Nikola, round 18); the scroll resets after the sheet shows, since a hidden sheet can't scroll (round 31) */
 function closeSheet(){$("sheet").hidden=true;$("app").inert=false;releaseToast();const f=sheetFrom;sheetFrom=null;if(f&&f.isConnected&&f.offsetParent!==null)f.focus({preventScroll:true});}
 document.addEventListener("keydown",e=>{if(!$("sheet").hidden||$("noteCard").hidden||!lesson||!lesson.note)return;if(e.key==="Escape"){e.preventDefault();lessonNext();}else if(e.key==="Tab"){e.preventDefault();$("noteCard").querySelector(".go").focus();}}); // Escape closes a Good to know card (Muse, round 22)
 $("sheet").addEventListener("keydown",e=>{if(e.key==="Escape"&&!won&&!$("adDone")){e.preventDefault();closeSheet();return;} /* Escape closes Settings and the other sheets (Nikola, round 20) */if(e.key!=="Tab")return;const f=[...$("card").querySelectorAll("button,[href],input,select")].filter(x=>!x.disabled&&x.offsetParent);if(!f.length)return;
@@ -1688,7 +1688,7 @@ let undoStack=[];
 function updateUndo(){$("undoBtn").disabled=won||!undoStack.some(s=>JSON.stringify(s)!==JSON.stringify(paths));}
 $("undoBtn").onclick=()=>{if(won||active>=0)return;const now=JSON.stringify(paths);let s;
   while(undoStack.length&&JSON.stringify(s=undoStack.pop())===now)s=null;if(!s)return updateUndo();
-  paths=s;drawn=paths.map(p=>p.slice());afterChange(true);saveDraft();updateUndo();sfx.step();};
+  paths=s;drawn=paths.map(p=>p.slice());if(!hidByMe)hintDone.forEach(k=>{if(!onRoute(k)&&!hints.includes(k)){hints.push(k);hintDone.delete(k);}}); /* undoing a hinted route brings its dashes back (Nikola, round 32) */afterChange(true);saveDraft();updateUndo();sfx.step();};
 // Hints stay on the board until that den's stream follows them. Each press adds the next den's route; once every
 // unfinished den has one, the button hides them all.
 const routeOf=s=>solPath(G,s,LV().sol[s]);
@@ -1711,7 +1711,7 @@ function hgLoad(){try{return new Set(hgDay()[hgKey()]||[]);}catch(e){return new 
 function hgSave(){hgDay()[hgKey()]=[...hintGiven];saveProg();}
 function hintAgain(){return !won&&!hints.length&&[...hintGiven].some(k=>!onRoute(k))&&!(hidByMe&&nextHint(hintGiven)>=0);}
 // after the player hides the dashes, Hint brings the routes already shown back (free) with one new one; coming back to the level, Again re-shows them free (Alan, Nov 20)
-function pruneHints(){hints=hints.filter(s=>!onRoute(s));}
+function pruneHints(){hints=hints.filter(s=>{if(onRoute(s)){hintDone.add(s);return false;}return true;});}
 // The next hint goes to the unfinished stream whose route meets the most other routes (then the longest), not the
 // first den in the list (Cooper, Oct 20: a hint was spent on an obvious lone red route while the blue one was the puzzle).
 function nextHint(skip){let best=-1,top=-1;
@@ -1726,7 +1726,7 @@ $("hintBtn").onclick=()=>{
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
   // a den the player just tapped picks the stream, so they can ask about the route they're stuck on (Alan, Oct 20)
   // the pick-a-stream note comes before the first automatic hint is spent (Cooper, Oct 20), so the player can still choose
-  if(picked<0&&hints.length){hints=[];hidByMe=true;updateHintBtn();return;}
+  if(picked<0&&hints.length){hints=[];hintDone.clear();hidByMe=true;updateHintBtn();return;}
   if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Stuck on one stream? Tap its den, then Hint.");} // the first tap still gives a hint (Nikola, v0.75: it showed only the note)
   // after Hide (or coming back to the level) the routes already shown come back first, free (Nikola, round 22)
   if(picked<0&&hintAgain()){hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;updateHintBtn();toast("👀 Shown again, free.");return;}
@@ -1963,13 +1963,13 @@ function offerHintAd(give){
 // On the web test page there is no store, so the sheet stays a stand-in and no money changes hands.
 const adsPrice=()=>window.CR_STORE?.price||ADS.price;
 function showRemoveAds(after,back){
-  if(prog.noAds){toast("Ads are already off");return;}
+  if(prog.noAds){toast("Ads are already off",1900,true);return;}
   const shop=window.CR_STORE,done=()=>after?after():closeSheet();
   openSheet(`<h3>Remove ads</h3><p>One payment of <b>${adsPrice()}</b> turns off the breaks between levels for good. Hint ads stay optional.</p>
     ${shop?"":`<p class="chnote">Prototype: no money changes hands. The app uses the App Store or Google Play here.</p>`}
     <button class="big" id="buy">Buy · ${adsPrice()}</button>${shop?`<button class="ghost" id="restore">Restore purchase</button>`:""}<button class="ghost" id="close">Not now</button>`);
   $("buy").onclick=()=>{
-    if(!shop){prog.noAds=true;saveProg();toast("Ads removed. Thank you!");done();return;}
+    if(!shop){prog.noAds=true;saveProg();toast("Ads removed. Thank you!",1900,true);done();return;}
     $("buy").disabled=true;shop.buy().then(ok=>ok?done():$("buy")&&($("buy").disabled=false));};
   if(shop)$("restore").onclick=()=>shop.restore().then(ok=>{if(ok)done();});
   $("close").onclick=back||done; // from inside an ad break, "Not now" goes back to the ad (Nikola, v0.57: it skipped it)
@@ -2088,7 +2088,7 @@ function weekTarget(k,color){if(k==="daily")return dailyOpen()&&!(prog.daily&&pr
 function weekCard(){const W=weekNow(),wk=wkNow(),c=wk.c,done=W.goals.filter(g=>wk.paid[g.k]).length;
   // one line on the River map until tapped, so the map isn't crowded (Cooper, round 7; Alan chose Nov 14)
   return `<details class="week" id="weekCard"><summary class="wh" aria-label="This week: ${W.theme.name}, ${done} of 5 goals"><b class="wn">🗓️ ${W.theme.emoji} ${W.theme.name}${dayShift?" (preview)":""}</b><span>${done}/5 ›</span></summary><ul>${W.goals.map(g=>{const ok=wk.paid[g.k],n=Math.min(g.n,c[g.k]||0),t=ok?null:weekTarget(g.k,W.theme.color);
-    return `<li class="${ok?"ok":""}${t!==null?" go":""}"${t!==null?` data-wg="${t}" role="button" tabindex="0"`:""}><div><b>${g.name}:</b> ${g.text}${g.k==="daily"&&!dailyOpen()?" (opens after Level 6)":""}${g.k==="color"&&firstColorLevel(W.theme.color)>prog.highest+1?` (from level ${firstColorLevel(W.theme.color)})`:""}${t!==null?` <i>${t==="daily"?"Play today's ›":`Level ${t+1} ›`}</i>`:""}</div><span>${ok?"✓":`${n}/${g.n}`}</span></li>`;}).join("")}</ul>
+    return `<li class="${ok?"ok":""}${t!==null?" go":""}"${t!==null?` data-wg="${t}" role="button" tabindex="0"`:""}><div><b>${g.name}:</b> ${g.text}${g.k==="daily"&&!dailyOpen()?" (opens after Level 6)":""}${g.k==="color"&&firstColorLevel(W.theme.color)>prog.highest+1?` (from Level ${firstColorLevel(W.theme.color)})`:""}${t!==null?` <i>${t==="daily"?"Play today's ›":`Level ${t+1} ›`}</i>`:""}</div><span>${ok?"✓":`${n}/${g.n}`}</span></li>`;}).join("")}</ul>
     <small>${dayShift?"Preview: these goals pay no hints":`+1 hint each · all 5: +5 hints${wk.mega?" ✓":""}`}</small></details>`;}
 function firstColorLevel(m){const i=LEVELS.findIndex(L=>L.map.some(r=>[...r].some(ch=>NEST[ch]===m)));return i<0?1:i+1;}
 function fireCount(){return Object.keys(prog.fire||{}).length;}
@@ -2100,7 +2100,7 @@ var DECOS={newyear:["🎆✨🥂","#ffd166","#7aa2ff","✨"],valentine:["💕�
 const HNAMES={newyear:"Happy New Year",valentine:"Happy Valentine's Day",stpat:"Happy St Patrick's Day",easter:"Happy Easter",july4:"Happy Fourth of July",
   halloween:"Happy Halloween",thanksgiving:"Happy Thanksgiving",christmas:"Merry Christmas"};
 function decoNow(){if(opts.deco===false)return null;const h=holidayNow();return h&&DECOS[h.key]?h:null;}
-function applyDeco(){try{const st=cv.parentElement,el=$("deco"),h=decoNow();st.classList.toggle("decorated",!!h);if(!h){el.textContent="";return;}
+function applyDeco(){try{const st=cv.parentElement,el=$("deco"),h=decoNow(),was=st.classList.contains("decorated");st.classList.toggle("decorated",!!h);if(was!==!!h&&G)resize();if(!h){el.textContent="";return;}
   const D=DECOS[h.key];st.style.setProperty("--f1",D[1]);st.style.setProperty("--f2",D[2]);
   el.textContent=Array(4).fill(D[0]).join(" ");requestAnimationFrame(()=>{const room=cv.offsetTop>=24;el.style.top=(cv.offsetTop-22)+"px";el.style.visibility=room?"visible":"hidden";});
   const gk="greet:"+h.year+h.key;if(h.today&&(dayShift||!prog.seen[gk])){if(!dayShift){prog.seen[gk]=1;saveProg();}toast(`${D[0].slice(0,2)} ${HNAMES[h.key]}!`,3500);}}catch(e){}}
@@ -2110,8 +2110,8 @@ function decoFall(){const h=decoNow();if(!h||calm())return;const bit=DECOS[h.key
 // One message at a time, each up for at least 1.9 s, so a second one never wipes the first before it's read.
 // Repeats are dropped and at most two wait their turn (the newest win).
 let toastQ=[],toastOn="";
-function toast(t,ms=1900){if(t===toastOn||toastQ.some(q=>q.t===t))return;const hold=!$("noteCard").hidden||sheetHolds();toastQ.push({t,ms:Math.max(ms,1900),held:hold});if(toastQ.length>2){const i=toastQ.findIndex(q=>!q.held);toastQ.splice(i<0?0:i,1);} /* a toast held for "Got it" is kept (Nikola, round 24) */if(!toastOn){if(hold)toastHeld=true;else nextToast();}} /* while a Good to know card is open, a message waits for it to close instead of laying over it (Nikola, round 30) */
-function nextToast(){const el=$("toast");if((!$("noteCard").hidden||!$("sheet").hidden)&&toastQ[0]&&toastQ[0].held){toastOn="";toastHeld=true;return;} /* a held message keeps waiting while the next card shows */const q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;
+function toast(t,ms=1900,over){if(t===toastOn||toastQ.some(q=>q.t===t))return;const hold=!over&&(!$("noteCard").hidden||!$("sheet").hidden);toastQ.push({t,ms:Math.max(ms,1900),held:hold,over:!!over});if(toastQ.length>2){const i=toastQ.findIndex(q=>!q.held);toastQ.splice(i<0?0:i,1);} /* a toast held for "Got it" is kept (Nikola, round 24) */if(!toastOn){if(hold)toastHeld=true;else nextToast();}} /* while a Good to know card is open, a message waits for it to close instead of laying over it (Nikola, round 30) */
+function nextToast(){const el=$("toast");let q;if(!$("noteCard").hidden||!$("sheet").hidden){const i=toastQ.findIndex(x=>!x.held);if(i<0){toastOn="";if(toastQ.length)toastHeld=true;return;}q=toastQ.splice(i,1)[0];} /* held messages keep waiting while a card or sheet shows; a sheet's own answer goes past them (Nikola, round 32) */else q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;toastOver=!!q.over;
   el.textContent=q.t;el.style.fontSize="";
   // sit over the four buttons at the bottom: never on the title, the color chart, the lesson's Skip and Next, or the board
   // (Nikola, round 19; buttons aren't needed while a note shows, and the note lets taps through). Taller notes grow upward.
@@ -2123,11 +2123,9 @@ function nextToast(){const el=$("toast");if((!$("noteCard").hidden||!$("sheet").
   {const nc=$("noteCard");if(lines===3&&el.offsetHeight>nc.offsetHeight+1){q.held=true;toastQ.unshift(q);toastOn="";el.textContent="";toastHeld=true;return;}} /* too tall to fit over the card (320 wide): it waits for "Got it" instead of poking out above it (Nikola, round 23) */
   el.classList.add("show");
   toastTimer=setTimeout(()=>{el.classList.remove("show");toastTimer=setTimeout(()=>{el.textContent="";nextToast();},300);},q.ms);}
-let toastHeld=false,toastRel=0,sheetAct=0;
-$("sheet").addEventListener("click",()=>{sheetAct=performance.now();},true);
-function sheetHolds(){return !$("sheet").hidden&&performance.now()-sheetAct>1500;} /* a level message waits under an open sheet, but a sheet button's own answer (Copied, Expert on) still shows (Nikola, round 31) */
+let toastHeld=false,toastRel=0,toastOver=false; /* a level message waits under an open sheet; a sheet button's own answer (Copied, Expert on) is marked over and shows on top (Nikola, rounds 31-32) */
 function releaseToast(){if(!toastHeld||toastRel)return;toastRel=setTimeout(()=>{toastRel=0;if(!$("noteCard").hidden||!$("sheet").hidden)return;toastHeld=false;if(!toastOn)nextToast();},350);} /* one timer per close, and a held message waits for every card and sheet to be gone (Nikola, round 31) */
-function clearToast(){clearTimeout(toastTimer);clearTimeout(toastRel);toastRel=0;toastQ=[];toastHeld=false;toastOn="";const el=$("toast");el.classList.remove("show");el.textContent="";}
+function clearToast(){clearTimeout(toastTimer);clearTimeout(toastRel);toastRel=0;toastOver=false;toastQ=[];toastHeld=false;toastOn="";const el=$("toast");el.classList.remove("show");el.textContent="";}
 function laterToast(t){const at=lv;setTimeout(()=>{if(lv===at&&!lesson)showNote(t);},400);} // a lesson says it better
 // First-time explanations stay up in the coach panel until "Got it" (Muse: a 2 s toast is easy to miss). After that
 // first time, the same message is a quick toast.
