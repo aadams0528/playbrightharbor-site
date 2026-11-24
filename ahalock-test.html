@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.25 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.26 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -825,6 +825,7 @@ html.big .status3 .third span{font-size:16px}
   #app.fit .board:has(> .lockwrap) > .keys .key{height:38px;font-size:22px}
   #app.fit .board:has(> .lockwrap) > .tools{margin-top:5px;gap:6px}
   #app.fit .board:has(> .lockwrap) > .tools .tool{height:36px}
+  #app.fit .board:has(> .lockwrap) > .fitscroll{padding-bottom:26px} /* Nikola R46: the last line of an open reason can scroll clear of the floating cue */
   #app.fit .board:has(> .lockwrap) > .fitscroll.more + .morecue{margin:-22px auto 0;padding:1px 12px 0;width:max-content;background:var(--panel);border-radius:999px;box-shadow:0 -2px 6px rgba(0,0,0,.08);opacity:1}
 }
 .hgrp{display:flex;flex-direction:column;gap:2px;margin:16px 0 4px;padding-top:10px;border-top:2px solid var(--line)}
@@ -3357,10 +3358,14 @@ const ROLEFACE = { K: { l: 'K', s: '♠', red: false }, Q: { l: 'Q', s: '♥', r
 let S = { screen: 'home', date: realToday };
 let timerInt = null;
 function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
-const TOASTQ = [];
+const TOASTQ = []; let SHEETRO = null; /* Nikola R46: a closed sheet drops its resize listener */
 // One toast at a time: later messages wait their turn, each keeping its own display time. Repeats already waiting are dropped.
-function toast(t, ms, pzt) { if (TOASTQ.some(q => q.t === t)) return; TOASTQ.push({ t, ms: ms || 1800, pzt: !!pzt }); if (TOASTQ.length === 1) toastNext(); }
-function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast' + (q.pzt ? ' pzt' : ''); d.textContent = q.t; document.body.appendChild(d); setTimeout(() => { d.remove(); TOASTQ.shift(); if (TOASTQ.length) setTimeout(toastNext, 150); }, q.ms); }
+// Nikola R46: puzzle tips (pzt) can be cleared, queued or showing, and a new puzzle tip replaces one already up. Toasts are announced politely.
+let TOASTCUR = null;
+function toast(t, ms, pzt) { if (TOASTQ.some(q => q.t === t)) return; if (pzt && TOASTCUR && TOASTCUR.q.pzt) { TOASTQ.splice(1).filter(q => !q.pzt).forEach(q => TOASTQ.push(q)); TOASTQ.splice(1, 0, { t, ms: ms || 1800, pzt: true }); toastEnd(); return; }
+  TOASTQ.push({ t, ms: ms || 1800, pzt: !!pzt }); if (TOASTQ.length === 1) toastNext(); }
+function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast' + (q.pzt ? ' pzt' : ''); d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite'); d.textContent = q.t; document.body.appendChild(d); TOASTCUR = { q, d, tm: setTimeout(toastEnd, q.ms) }; }
+function toastEnd(skipNext) { const c = TOASTCUR; if (!c) return; clearTimeout(c.tm); c.d.remove(); TOASTCUR = null; if (TOASTQ[0] === c.q) TOASTQ.shift(); if (!skipNext && TOASTQ.length) setTimeout(() => { if (!TOASTCUR) toastNext(); }, 150); }
 
 // ---------- ads and Remove ads (phone app only; the ad code is src/native.js, not on the test page) ----------
 // Calm rules: at most one ad every 3 finished puzzles, only after a Next tap, never in the first session,
@@ -3422,7 +3427,7 @@ function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
 // Store builds say the store version (1.0, as in the iPhone and Android projects); the test page keeps the prototype line.
-const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.25 · future days open for testing' : 'Ahalock 1.0.1 (0.28.25)';
+const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.26 · future days open for testing' : 'Ahalock 1.0.1 (0.28.26)';
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -4039,7 +4044,7 @@ function harborSvg(n, fresh, cls) {
 // =================== HOME ===================
 let titleTaps = 0;
 // Nikola R45: a puzzle's tip never stays up over Home.
-function clearPzToasts() { document.querySelectorAll('.toast.pzt').forEach(d => d.remove()); }
+function clearPzToasts() { const cur = TOASTCUR && TOASTCUR.q.pzt; for (let i = TOASTQ.length - 1; i >= (TOASTCUR ? 1 : 0); i--) if (TOASTQ[i].pzt) TOASTQ.splice(i, 1); if (cur) toastEnd(); }
 function renderHome() {
   clearSeed(); clearPzToasts();
   stopTimer(); removeCoach(); beaconCheck();
@@ -4200,7 +4205,7 @@ function renderPuzzle() {
     if (P.msg && P.msg !== P.shownMsg) {
       P.shownMsg = P.msg;
       const m = $app.querySelector('.msg.nearc');
-      if (near && P.msg.k === 'hint' && m) { const r = m.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : innerHeight; if (r.bottom > lim) window.scrollBy(0, r.bottom - lim); }
+      if (near && P.msg.k === 'hint' && m) { const co = $app.classList.contains('coached'), r = m.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : co ? $app.getBoundingClientRect().bottom - 8 : innerHeight; if (r.bottom > lim) (co ? $app : window).scrollBy(0, r.bottom - lim); }
       else if (!near) keepClear();
     }
   }
@@ -4361,7 +4366,8 @@ function check() {
     const V = pane.clientHeight - cue, cT = top0 - pr.top, nT = nr.top - pr.top, nB = nr.bottom - pr.top, d1 = cT - 6;
         pane.scrollTop += nB - d1 <= V ? d1 : Math.min(nB - V, nT - 6);
     if (P.tutorial) tutWrong(); return; }
-  const el = nm || document.getElementById(TYPES[pz.type].hid(P.bad)); if (el) { const r = el.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : innerHeight; if (r.bottom > lim) window.scrollBy({ top: Math.min(r.bottom - lim, r.top - 70), behavior: 'smooth' }); else if (r.top < 0) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  /* Muse R46: in a lesson the app box scrolls (the page is locked), so scroll that, not the window. */
+  const el = nm || document.getElementById(TYPES[pz.type].hid(P.bad)); if (el) { const co = $app.classList.contains('coached'), scr = co ? $app : window, box = co ? $app.getBoundingClientRect() : { top: 0, bottom: innerHeight }, r = el.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : box.bottom - 8; if (r.bottom > lim) scr.scrollBy({ top: Math.min(r.bottom - lim, r.top - box.top - 70), behavior: 'smooth' }); else if (r.top < box.top) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
   if (P.tutorial) tutWrong();
 }
 function hint() {
@@ -4746,13 +4752,13 @@ function openSheet(html) {
   // Muse R35: every sheet that runs on (a long Why, too) shows the same "Scroll down" pill. Muse R45: sheets with a pinned button (Help) use the strip under the sheet too.
   let wrapPill = false; if (!ft) { ft = document.createElement('div'); ft.className = 'shmore'; ft.setAttribute('aria-hidden', 'true'); sh.after(ft); wrapPill = true; }
   if (ft) { const wr = sh.parentElement; const upd = () => { if (wrapPill) { const runs = sh.scrollHeight - sh.clientHeight - (wr.classList.contains('hasmore') ? 44 : 0) > 6; if (wr.classList.contains('hasmore') !== runs) wr.classList.toggle('hasmore', runs); } const m = sh.scrollHeight - sh.scrollTop - sh.clientHeight > 6; if (ft.classList.contains('more') !== m) ft.classList.toggle('more', m); };
-    sh.addEventListener('scroll', upd, { passive: true }); new MutationObserver(upd).observe(sh, { childList: true, subtree: true, attributeFilter: ['class'] }); upd(); const ro = () => { if (!document.body.contains(sh)) return removeEventListener('resize', ro); upd(); }; addEventListener('resize', ro); }
+    sh.addEventListener('scroll', upd, { passive: true }); new MutationObserver(upd).observe(sh, { childList: true, subtree: true, attributeFilter: ['class'] }); upd(); const ro = () => { if (!document.body.contains(sh)) return removeEventListener('resize', ro); upd(); }; addEventListener('resize', ro); SHEETRO = ro; }
 }
 // Muse R36: a sheet can say where ✕ goes (the new-kind card goes back to the Free play menu, never to a stale solved board).
 let sheetClose = null;
 function sheetDismiss() { const f = sheetClose; closeSheet(); if (f) f(); else if (S.screen === 'home') renderHome(); }
 document.addEventListener('keydown', ev => { if (ev.key !== 'Escape') return; if (document.getElementById('ov')) sheetDismiss(); else if (document.getElementById('coach') && P && P.tutorial) endTutorial(true); });
-function closeSheet() { sheetClose = null; const o = document.getElementById('ov'); if (o) o.remove(); $app.classList.remove('veil'); }
+function closeSheet() { sheetClose = null; if (SHEETRO) { removeEventListener('resize', SHEETRO); SHEETRO = null; } const o = document.getElementById('ov'); if (o) o.remove(); $app.classList.remove('veil'); }
 
 // =================== TYPE LIBRARY ===================
 // Each puzzle type plugs in here: init (empty answer), explain, board, wire, check, answer, hid (element id to highlight).
@@ -5359,7 +5365,7 @@ function startStory(s, o) {
   if (O.why) { const done = P.ex.steps.filter(x => x.kind === 'done'); P.ex = { level: P.ex.level, solved: true, steps: O.why.map(([cl, t]) => ({ kind: 'clue', clues: cl, text: t })).concat(done) }; }
   if (O.fin) { const first = !sget().finSeen; const btw = pz.clues.some(c => c.t === 'between') ? ' “Between” means somewhere in between, not always next to it: A, B, C or C, B, A both fit “B is between A and C”.' : ''; P.tip = btw.trim(); P.intro = lastOf(s) ? { k: 'info', t: '🧾 The last lock of Chapter ' + (chOf(s) + 1) + '!' } : null; const st = sget(); st.finSeen = 1; sset(st); }
   renderPuzzle(); window.scrollTo(0, 0);
-  if (P.tip && $app.classList.contains('fit')) toast('💡 ' + P.tip, 6000); // Nikola R37: on a short screen the tip shows once on top instead of taking board space
+  if (P.tip && $app.classList.contains('fit')) toast('💡 ' + P.tip, 6000, true); // Nikola R37: on a short screen the tip shows once on top instead of taking board space
 }
 function storySolved() {
   const { s, o } = P.story; const O = STORY[s].objs[o];
