@@ -184,7 +184,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.20<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.21<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -1844,7 +1844,7 @@ function markTip(){if(daily||bonus)return;const z=isZap(lv),f=opts.expert;
   toast([z?(paid?"⚡ Bonus river: its +1 hint is already yours (⚡✓).":"⚡ Bonus river: your first ★★★ here pays +1 hint."):"",f?(lit?"🔥 Expert is on: you already have this river's 🔥.":"🔥 Expert is on: clear at ★★★ with no hint to earn a 🔥."):""].filter(Boolean).join(" "),3600);}
 function glowTip(){const tp=$("lvTip");if(!tp.classList.contains("float"))return;tp.classList.remove("glow","out");void tp.offsetWidth;tp.classList.add("glow");}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
-function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");if(!note&&hintPoolDue&&!won)hintPoolNote();}
+function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
 function lessonNext(){if(!lesson)return;if(!lesson.note)T("lesson_step",{level:lv+1,step:lesson.i+1,of:lesson.steps.length});lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   // a first-time note sits over the four buttons, two lines at most, until "Got it": never over the title, Ink, the chart or the board (Nikola, Muse, round 20)
@@ -1930,10 +1930,9 @@ function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hint
 const finUsed=()=>{if(!prog.fin||prog.fin.d!==today())prog.fin={d:today(),u:{}};return prog.fin.u;};
 const finaleSpare=()=>!daily&&!bonus&&isFinale(lv)&&G?Math.max(0,G.starts.length-(finUsed()[ID(lv)]||0)):0;
 const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0)+finaleSpare();
-let hintPoolDue=false;
-function hintPoolNote(){hintPoolDue=false;if(prog.seen.hintpool)return;prog.seen.hintpool=1;saveProg();const n=prog.hintsLeft+(prog.bonusHints||0);showNote(`Hints are shared by every level: ${n} left. Free hints refill each day.`);}
-function spendHint(){refillHints();if(finaleSpare()>0){const u=finUsed();u[ID(lv)]=(u[ID(lv)]||0)+1;saveProg();return true;}if(prog.hintsLeft>0)prog.hintsLeft--;else if(prog.bonusHints>0)prog.bonusHints--;else return false;
-  if(!prog.seen.hintpool){if(lesson&&!lesson.note)hintPoolDue=true;else hintPoolNote();} /* a hint spent in a lesson waits for the lesson's end, so the card always shows (Nikola, round 27) */ /* say once that hints come from one pool, on a Got it card so it can be read (Muse, rounds 23 and 24) */
+function hintPoolNote(){if(prog.seen.hintpool)return;prog.seen.hintpool=1;saveProg();const n=prog.hintsLeft+(prog.bonusHints||0);showNote(`Hints are shared by every level: ${n} left. Free hints refill each day.`);}
+function spendHint(){refillHints();if(lesson&&!lesson.note)return true; /* hints are free while a lesson is showing, so a beginner keeps the day's three (Alan chose, Nov 23) */if(finaleSpare()>0){const u=finUsed();u[ID(lv)]=(u[ID(lv)]||0)+1;saveProg();return true;}if(prog.hintsLeft>0)prog.hintsLeft--;else if(prog.bonusHints>0)prog.bonusHints--;else return false;
+  if(!prog.seen.hintpool)hintPoolNote(); /* lesson hints are free, so the first real spend says hints are shared (Nikola, round 27; Alan, Nov 23) */ /* say once that hints come from one pool, on a Got it card so it can be read (Muse, rounds 23 and 24) */
   saveProg();return true;}
 // between levels: none in the first chapter's worth of levels, then one every few clears, never two close together
 const teachingAt=i=>!!LEVELS[i]&&(!LEVELS[i].gen||!!LESSONS[LEVELS[i].name]||(i>0&&LEVELS[i-1].ch!==LEVELS[i].ch));
