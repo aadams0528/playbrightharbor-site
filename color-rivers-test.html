@@ -184,7 +184,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.21<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.22<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -801,7 +801,7 @@ function startLevel(n,keep,cut,extra){
   if(G.tool&&intro("tool:"+G.tool,G.tool==="saw"?"New: the beaver's saw cuts through a dam":"New: the mole's pick cracks a boulder clump"))newTile=performance.now();
   if(G.cells.some(c=>c.t==="delta")&&intro("delta","New: deltas split a stream in two"))newTile=performance.now();
   bridgeIntro=0;if(hasBridge&&!prog.seen.bridge){prog.seen.bridge=1;saveProg();bridgeIntro=performance.now();laterToast("Bridges let streams cross without mixing");}
-  lesson=null;$("noteCard").hidden=true;reserveTip();resize();glowTip();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily&&!bonus)store.set("cur",ID(n));
+  lesson=null;noteQ=[];pendingNote=null;$("noteCard").hidden=true;reserveTip();resize();glowTip();updateInk();updateStars();updateHintBtn();updateDailyBtn();if(!daily&&!bonus)store.set("cur",ID(n));
   // a chapter with no lesson level says what's new on its first board (Nikola, v0.57: Riverside and Wetlands opened cold)
   if(!daily&&!bonus&&!keep&&isFinale(n)&&!prog.seen["finhint:"+ID(n)]){prog.seen["finhint:"+ID(n)]=1;saveProg();setTimeout(()=>{if(lv===n&&!won&&$("sheet").hidden)toast(`This finale brings ${G.starts.length} hints of its own, one for each stream.`,3600);},700);} // say so once (Nikola, round 20)
   if(!daily&&!bonus&&!keep&&isZap(n)&&!prog.seen["note:zap"])teachOnce("zap","⚡ Bonus river: ★★★ on every third level pays a free hint.");
@@ -1132,7 +1132,7 @@ function endDrag(){if(active<0)return;
   // say why a stream stopped short: it can't end on a crossing (Muse, v0.64: the rule was never explained)
   const tp=paths[active][paths[active].length-1],onCross=paths[active].length>1&&others(paths,tp,active).length>0;
   if(!(pressed&&pressed.join()===paths[active].join())){settle(paths,active,G);if(onCross)teachOnce("crossend","A stream can't stop on a crossing. Go past or stop before.");}pressed=null;unfeed();sprout(); // a plain tap changes nothing (Muse: a tap on a tip another stream crosses used to trim it)
-  judgeRetrace(active);lastDrawn=active;headLinger={p:active,t:performance.now()};active=-1;afterChange(true);lastDrawn=-1;if(pendingNote&&!won){const t=pendingNote;pendingNote=null;showNote(t);}pendingNote=null;}
+  judgeRetrace(active);lastDrawn=active;headLinger={p:active,t:performance.now()};active=-1;afterChange(true);lastDrawn=-1;if(pendingNote&&!won){const n=pendingNote;pendingNote=null;showNote(n.t,n.key);}pendingNote=null;}
 // A re-trace is a change of mind: an earlier route of 2+ cells swapped for a different one.
 // Cutting back and carrying on the same way, or a press that slips a cell, doesn't count.
 function judgeRetrace(k){
@@ -1236,7 +1236,7 @@ function crossings(){
 
 // ---------- win / sheets ----------
 function win(){
-  won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
+  won=true;wonAt=performance.now();hints=[];clearToast();pendingNote=null;noteQ=[];if(lesson&&lesson.note){lesson=null;renderCoach();}updateHintBtn();sfx.win();buzz([20,30,20,30,40]);
   const ink=inkOf(paths),s=starsFor(ink,G.par);
   if(window.CR_NATIVE)CR_NATIVE.track("level_complete",{level:daily?"daily":bonus?bonus.id:lv+1,stars:s,ink,hints:hintsUsed});
   dayWin();session.wins++;retentionWin(s);decoFall();
@@ -1644,7 +1644,7 @@ function showSettings(){
   openSheet(`<h3>Settings</h3>
    <div class="set"><div>Critter shapes<small>Each den's critters keep their own shape after mixing</small></div><button class="tog ${opts.shapes?"on":""}" id="tShapes" role="switch" aria-checked="${!!opts.shapes}" aria-label="Critter shapes"></button></div>
    <div class="set"><div>Color marks<small>For colorblind players: red ▶︎, blue ◀︎, yellow /. Mixed colors show both marks.</small></div><button class="tog ${opts.marks?"on":""}" id="tMarks" role="switch" aria-checked="${!!opts.marks}" aria-label="Color marks"></button></div>
-   <div class="set"><div>Larger text<small>Bigger words on cards, messages and buttons</small></div><button class="tog ${opts.big?"on":""}" id="tBig" role="switch" aria-checked="${!!opts.big}" aria-label="Larger text"></button></div>
+   <div class="set"><div>Larger text<small>Bigger words on cards and messages</small></div><button class="tog ${opts.big?"on":""}" id="tBig" role="switch" aria-checked="${!!opts.big}" aria-label="Larger text"></button></div>
    <div class="set"><div>Sound</div><button class="tog ${opts.sound?"on":""}" id="tSound" role="switch" aria-checked="${!!opts.sound}" aria-label="Sound"></button></div>
    <div class="set"><div>Vibration<small>${calm()?"Off while your phone asks for reduced motion":"A light tap when streams mix or cross"}</small></div><button class="tog ${opts.buzz!==false&&!calm()?"on":""}" id="tBuzz" role="switch" aria-checked="${opts.buzz!==false&&!calm()}" ${calm()?"disabled":""} aria-label="Vibration"></button></div>
    <div class="set"><div>🔥 Expert<small>Less help: no floating goal line, colour chart or crossing nudge. The ★★★ ink target stays, and lessons still teach new things. Earn a 🔥 by clearing a river at ★★★ with Expert on from the start and no hint.</small></div><button class="tog ${opts.expert?"on":""}" id="tExpert" role="switch" aria-checked="${!!opts.expert}" aria-label="Expert"></button></div>
@@ -1844,7 +1844,7 @@ function markTip(){if(daily||bonus)return;const z=isZap(lv),f=opts.expert;
   toast([z?(paid?"⚡ Bonus river: its +1 hint is already yours (⚡✓).":"⚡ Bonus river: your first ★★★ here pays +1 hint."):"",f?(lit?"🔥 Expert is on: you already have this river's 🔥.":"🔥 Expert is on: clear at ★★★ with no hint to earn a 🔥."):""].filter(Boolean).join(" "),3600);}
 function glowTip(){const tp=$("lvTip");if(!tp.classList.contains("float"))return;tp.classList.remove("glow","out");void tp.offsetWidth;tp.classList.add("glow");}
 function startLesson(){const L=LESSONS[LV().name];if(!L){lesson=null;return renderCoach();}lesson={steps:L,i:0,t0:performance.now()};renderCoach();}
-function endLesson(done){if(!lesson)return;const note=lesson.note;lesson=null;if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
+function endLesson(done){if(!lesson)return;const note=lesson.note,key=lesson.key;lesson=null;if(note&&key){prog.seen[key]=1;saveProg();}if(note&&noteQ.length&&!won){const n=noteQ.shift();renderCoach();setTimeout(()=>{if(!won&&!lesson)showNote(n.t,n.key);else if(!won)noteQ.unshift(n);},0);return;} /* the next waiting card shows after Got it; a touch on the board that closed the card holds it until the finger lifts */if(!note){prog.seen[lessonKey()]=1;saveProg();if(!won)saveDraft();}renderCoach();if(done===false&&!note)toast("Lesson skipped. Tap \"Replay lesson\" to see it again");}
 function lessonNext(){if(!lesson)return;if(!lesson.note)T("lesson_step",{level:lv+1,step:lesson.i+1,of:lesson.steps.length});lesson.i++;lesson.t0=performance.now();if(lesson.i>=lesson.steps.length)endLesson(true);else{renderCoach();saveDraft();}}
 function renderCoach(){
   // a first-time note sits over the four buttons, two lines at most, until "Got it": never over the title, Ink, the chart or the board (Nikola, Muse, round 20)
@@ -1930,7 +1930,7 @@ function refillHints(){if(prog.hintDay!==today()){prog.hintDay=today();prog.hint
 const finUsed=()=>{if(!prog.fin||prog.fin.d!==today())prog.fin={d:today(),u:{}};return prog.fin.u;};
 const finaleSpare=()=>!daily&&!bonus&&isFinale(lv)&&G?Math.max(0,G.starts.length-(finUsed()[ID(lv)]||0)):0;
 const hintsLeft=()=>(prog.hintsLeft||0)+(prog.bonusHints||0)+finaleSpare();
-function hintPoolNote(){if(prog.seen.hintpool)return;prog.seen.hintpool=1;saveProg();const n=prog.hintsLeft+(prog.bonusHints||0);showNote(`Hints are shared by every level: ${n} left. Free hints refill each day.`);}
+function hintPoolNote(){if(prog.seen.hintpool||noteHas("hintpool"))return;const n=prog.hintsLeft+(prog.bonusHints||0);showNote(`Hints are shared by every level: ${n} left. Free hints refill each day.`,"hintpool");}
 function spendHint(){refillHints();if(lesson&&!lesson.note)return true; /* hints are free while a lesson is showing, so a beginner keeps the day's three (Alan chose, Nov 23) */if(finaleSpare()>0){const u=finUsed();u[ID(lv)]=(u[ID(lv)]||0)+1;saveProg();return true;}if(prog.hintsLeft>0)prog.hintsLeft--;else if(prog.bonusHints>0)prog.bonusHints--;else return false;
   if(!prog.seen.hintpool)hintPoolNote(); /* lesson hints are free, so the first real spend says hints are shared (Nikola, round 27; Alan, Nov 23) */ /* say once that hints come from one pool, on a Got it card so it can be read (Muse, rounds 23 and 24) */
   saveProg();return true;}
@@ -2134,9 +2134,10 @@ const FILTER_SAY={1:"Red filter: purple comes out blue, orange comes out yellow.
 function filterNote(fl){const fresh=fl.filter(f=>!prog.seen["note:filter"+f]);if(!fresh.length)return;
   fresh.forEach(f=>prog.seen["note:filter"+f]=1);saveProg();if(lesson&&!lesson.note)return; // a lesson level already teaches it
   showNote(fresh.length>1?"Each filter takes its colour out. Tap one in the chart.":FILTER_SAY[fresh[0]]);} /* two or three new filters at once get one short note, so it stays two lines (Muse, round 22) */
-function teachOnce(key,t){if(!lesson&&!prog.seen["note:"+key]){prog.seen["note:"+key]=1;saveProg();showNote(t);}else toast(t);}
-let pendingNote=null; // held until the finger lifts, so a note never pops up over a drag
-function showNote(t){if(active>=0){pendingNote=t;return;}if(lesson&&!lesson.note)return toast(t);lesson={steps:[{say:t}],i:0,t0:performance.now(),note:true};clearToast();renderCoach();}
+function teachOnce(key,t){if(noteHas("note:"+key))return;if(!lesson&&!prog.seen["note:"+key])showNote(t,"note:"+key);else toast(t);} /* the seen flag is saved when the card is closed, so a card a win sweeps away comes back (Nikola, round 29) */
+let pendingNote=null,noteQ=[]; // held until the finger lifts, so a note never pops up over a drag
+const noteHas=k=>!!k&&((lesson&&lesson.note&&lesson.key===k)||(pendingNote&&pendingNote.key===k)||noteQ.some(n=>n.key===k));
+function showNote(t,key){if(active>=0){if(pendingNote&&key)noteQ.push({t,key});else pendingNote={t,key};return;}if(lesson&&!lesson.note)return toast(t);if(key&&lesson&&lesson.note){noteQ.push({t,key});return;} /* a second Good to know card from the same tap waits for Got it instead of replacing the first (Nikola, round 29: the den-then-Hint tip never showed) */lesson={steps:[{say:t}],i:0,t0:performance.now(),note:true,key};clearToast();renderCoach();}
 
 // ---------- drawing ----------
 const C=(i)=>{const x=i%G.w,y=(i-x)/G.w;return [(x+.5)*cs,(y+.5)*cs];};
