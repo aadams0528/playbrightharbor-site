@@ -172,6 +172,8 @@ body.banner #play:not([hidden]) .actions{bottom:calc(var(--nav-h) + 64px + env(s
 @media (max-height:740px){:root{--card-h:70px}}
 /* Smaller phones (iPhone SE and below): tighter cards, gaps and header so all five cards clear the bar (Nikola and Cooper, round 11). */
 @media (max-height:680px){:root{--card-h:64px;--card-gap:12px;--nav-h:calc(54px + env(safe-area-inset-bottom,0px))}
+/* Short screens: a tighter result, so the score headline, the "Wait, really?" line and Share all fit above the tab bar (Nikola, round 40). */
+@media (max-height:680px){#result.result{gap:8px;padding:12px 14px}#result .score{font-size:36px}#result .tier{font-size:21px}#result .tlhint{margin:0}#result .hardnote .hn{display:none}} /* the Hard tag stays; its how-it-worked line is in the Hard help */
   .app{gap:8px;padding-top:calc(6px + env(safe-area-inset-top,0px))}
   .logo{font-size:24px}
   .icon{width:34px;height:34px}
@@ -300,7 +302,7 @@ body.banner{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!importan
 .dist div{display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:center}
 .dist i{display:block;height:18px;background:var(--line);border-radius:4px;min-width:18px;text-align:right;padding-right:6px;font-style:normal;box-sizing:border-box;color:var(--ink);line-height:18px}
 .dist i.me{background:var(--accent);color:var(--accent-ink)}
-/* On a result screen a toast becomes a bar over the tab bar, its own lane, so it never covers the result (Nikola, round 39) */.toast.low{top:auto;bottom:0;left:0;right:0;transform:none;width:auto;max-width:none;min-height:var(--nav-h);padding:6px 12px env(safe-area-inset-bottom,0px);border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1.25}body.banner .toast.low{bottom:64px;padding-bottom:6px;min-height:calc(var(--nav-h) - env(safe-area-inset-bottom,0px))}.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
+/* On a result screen a toast becomes a bar over the tab bar, its own lane, so it never covers the result (Nikola, round 39) */.toast.low{top:auto;bottom:0;left:50%;width:min(460px,100%);max-width:none;min-height:var(--nav-h);padding:6px 10px env(safe-area-inset-bottom,0px);border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1.25}body.banner .toast.low{bottom:calc(64px + env(safe-area-inset-bottom,0px));padding-bottom:6px;min-height:calc(var(--nav-h) - env(safe-area-inset-bottom,0px))}.toast{pointer-events:none;position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:700;z-index:30;width:max-content;max-width:90vw;box-sizing:border-box;text-align:center}
 .coach{position:absolute;left:calc(var(--plate-w,var(--card-h))/2 - 15px);font-size:30px;pointer-events:none;z-index:6;animation:coach 1.6s ease-in-out infinite}
 @keyframes coach{0%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(-80px);opacity:1}100%{opacity:0;transform:translateY(-80px)}}
 canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:25;width:100%;height:100%}
@@ -415,7 +417,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 69</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 70</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1754,7 +1756,9 @@ function nearMiss(){
   const lead=really().replace(/<[^>]+>/g,"").toLowerCase(),said=i=>lead.includes(shortName(t[i]).toLowerCase())&&lead.includes(shortName(t[i+1]).toLowerCase()); // any case: a name can open the sentence (Muse, round 28)
   // A hand-written lead names its own cards, so skip when it already gives the closest gap (Muse, round 30: day 39 had none).
   if(authored()&&new RegExp(`\\b${min} years?\\b`).test(lead))return "";
-  const ties=g.map((v,i)=>v===min&&!said(i)?i:-1).filter(i=>i>=0);if(!ties.length)return "";
+  // When two or more pairs tie, name every one of them, so the line matches the spans the timeline lights (Cooper and Nikola, round 40);
+  // a single closest pair the lead already compared is still skipped.
+  const all=g.map((v,i)=>v===min?i:-1).filter(i=>i>=0),ties=all.length>1?all:all.filter(i=>!said(i));if(!ties.length)return "";
   const swapped=G.finalOrder&&ties.some(i=>G.finalOrder.indexOf(t[i])>G.finalOrder.indexOf(t[i+1]));
   const N=i=>`<b>${shortName(t[i])}</b>`,yrs=min===1?"1 year":min+" years",list=a=>a.length===2?a.join(" and "):a.slice(0,-1).join(", ")+" and "+a[a.length-1];
   const today="";let line;
@@ -1799,7 +1803,8 @@ function surpriseCard(){ // the card you had furthest from its spot (or the olde
 // Every dot is drawn, faint, in the same frame as the result and the first one lands at once, so the line is never bare (Muse, round 22).
 // On a short screen the Share button can land under the tab bar; once the years land, the page slides up just enough to show it (Nikola, round 32).
 function shareInView(r){const sh=r.querySelector("#share"),nav=document.querySelector(".bnav");if(!sh||!nav||r.hidden)return;
-  const over=sh.getBoundingClientRect().bottom+8-nav.getBoundingClientRect().top;
+  const sl=r.querySelector(".scoreline")||r; // never scroll the score headline off the top (Nikola, round 40)
+  const over=Math.min(sh.getBoundingClientRect().bottom+8-nav.getBoundingClientRect().top,sl.getBoundingClientRect().top-8);
   if(over>0)scrollBy({top:over,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}
 function landYears(r){
   const tl=r.querySelector(".tl");if(!tl)return;const run=fxRun;
@@ -1984,7 +1989,7 @@ function showResult(){
   const daily=G.kind==="daily",dorA=daily||G.kind==="archive";
   r.innerHTML=`${G.milestone?`<div class="milestone">🎉 ${G.milestone}-day streak!</div>`:""}
     <div class="scoreline"><span class="score">${G.score}<small>/100</small></span><span class="tier">${tier(G.score)}</span></div>
-    ${hideTags()?`<p class="hardnote"><span class="hardtag">${G.tw?"⚡ Challenge":"Hard"} · counts only</span> Your checks showed how many pairs were in order, not which.</p>`:""}
+    ${hideTags()?`<p class="hardnote"><span class="hardtag">${G.tw?"⚡ Challenge":"Hard"} · counts only</span> <span class="hn">Your checks showed how many pairs were in order, not which.</span></p>`:""}
     ${G.rows&&G.rows.length?`<div class="pairs rows" aria-label="Your tries, one row per try">${G.rows.map(r=>`<span>${r}</span>`).join("")}</div>`:`<div class="pairs" aria-label="Your result">${G.tiles}</div>`}
     ${missFix()}
     ${timeline()}
@@ -2347,7 +2352,7 @@ function nextToast(){
   const wait=fxHold-performance.now();if(wait>0&&toastQ.length){toastNow="";setTimeout(()=>{toastNow=null;nextToast()},wait);return}
   const t=toastNow=toastQ.shift()??null;if(t==null)return;
   const d=document.createElement("div");d.className="toast"+(G&&G.done&&!$("#play").offsetParent?" low":"");d.textContent=t; /* on a result screen, toasts sit on the tab bar so they never cover the result (Nikola, rounds 37 and 39) */document.body.appendChild(d);
-  if(d.classList.contains("low")){const nav=document.querySelector(".bnav"),h=nav&&nav.offsetParent?nav.offsetHeight:56;for(let f=15;f>13&&d.offsetHeight>h+1;)d.style.fontSize=(--f)+"px"} // a long line steps its text down so the bar stays inside the tab bar
+  if(d.classList.contains("low")){const nav=document.querySelector(".bnav"),h=nav?nav.getBoundingClientRect().height:56,f0=parseFloat(getComputedStyle(d).fontSize);for(let f=f0;f>f0*.9+.1&&d.getBoundingClientRect().height>h+1;)d.style.fontSize=(f-=.5)+"px"} // a long line steps its text down a little (at most 10%, so it stays at the reader's size) to fit the tab bar (Nikola, round 40)
   setTimeout(()=>{d.remove();nextToast()},t.length>60?3600:2600);
 }
 // In the iPhone and Android apps, Capacitor provides Haptics, Share and Clipboard (iPhones ignore navigator.vibrate).
@@ -2513,8 +2518,9 @@ function fireworks(){
 }
 // Hidden tester tools: tap the footer 5 times. Test builds only; `npm run build:release` turns them off.
 let footTaps=0,footT=0;function testerTap(){if(!ADS_TESTING)return;const now=Date.now();if(now-footT>3000)footTaps=0;footT=now;if(++footTaps<5)return;footTaps=0;/* five taps within 3 seconds, so stray earlier taps don't count (Nikola, round 34) */document.querySelectorAll(".sheet").forEach(x=>x.remove());
-  const s=sheet(`<h2>Tester tools</h2><p>Today is puzzle #${dayNum()} (offset ${S.offset} days).</p><div class="tester"><button class="btn ghost" data-t="next">Go to next day</button><button class="btn ghost" data-t="skip">Skip a day</button><button class="btn ghost" data-t="reset">Reset all progress</button><button class="btn ghost" data-t="old">Add an earlier-set save</button><button class="btn ghost" data-t="chal">${S.chalTest?"Lock":"Unlock"} ⚡ challenges</button></div><p class="star" style="margin:8px 0 4px">Play any puzzle by its number (Nikola, round 33):</p><div class="row"><input id="tDay" type="number" min="1" inputmode="numeric" placeholder="for example, 43" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tGo">Open puzzle</button></div><p class="star" style="margin:8px 0 4px">Find a card by any word in its title:</p><div class="row"><input id="tCard" placeholder="for example, microwave" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tFind">Show card</button></div><div id="tFact" class="star"></div><p class="star">Reports saved: ${S.reports.length}</p><p class="star">Funnel events on this device: ${Object.entries(S.ev||{}).map(([k,v])=>k+" "+v).join(" · ")||"none yet"}</p><button class="btn ghost" data-t="crowd">${S.fakeCrowd?"Hide":"Show"} sample crowd stats</button>`,"Close");
-  s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="chal")S.chalTest=!S.chalTest;if(t==="old"){const m=seedEarlier();save();s.remove();setMode("daily");toast(m?`Puzzle #${m} now has an earlier-set save. Open it from the Archive.`:"Every themed day before today already has a save, so nothing was changed.");return}if(t==="reset"){S={days:{},tiers:{},streak:0,best:0,played:0,total:0,freezes:0,offset:0,reports:[],tutorialDone:true}}save();s.remove();setMode("daily");toast(`Now on puzzle #${dayNum()}`)});
+  const s=sheet(`<h2>Tester tools</h2><p>Today is puzzle #${dayNum()} (offset ${S.offset} days).</p><div class="tester"><button class="btn ghost" data-t="next">Go to next day</button><button class="btn ghost" data-t="skip">Skip a day</button><button class="btn ghost" data-t="reset">Reset all progress</button><button class="btn ghost" data-t="old">Add an earlier-set save</button><button class="btn ghost" data-t="chal">${S.chalTest?"Lock":"Unlock"} ⚡ challenges</button><button class="btn ghost" data-t="toast">Show a sample toast</button></div><p class="star" style="margin:8px 0 4px">Play any puzzle by its number (Nikola, round 33):</p><div class="row"><input id="tDay" type="number" min="1" inputmode="numeric" placeholder="for example, 43" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tGo">Open puzzle</button></div><p class="star" style="margin:8px 0 4px">Find a card by any word in its title:</p><div class="row"><input id="tCard" placeholder="for example, microwave" style="flex:1;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost" id="tFind">Show card</button></div><div id="tFact" class="star"></div><p class="star">Reports saved: ${S.reports.length}</p><p class="star">Funnel events on this device: ${Object.entries(S.ev||{}).map(([k,v])=>k+" "+v).join(" · ")||"none yet"}</p><button class="btn ghost" data-t="crowd">${S.fakeCrowd?"Hide":"Show"} sample crowd stats</button>`,"Close");
+  s.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const t=b.dataset.t;if(t==="next")S.offset++;if(t==="skip")S.offset+=2;if(t==="crowd")S.fakeCrowd=!S.fakeCrowd;if(t==="chal")S.chalTest=!S.chalTest;if(t==="toast"){s.remove();setTimeout(()=>toast("🗓️ Weekly goal done: Score 80 or more with no help ⭐. +15 history points (1 of 5)"),400);return} // lets reviewers see a toast on a result screen (Muse and Nikola, round 40)
+    if(t==="old"){const m=seedEarlier();save();s.remove();setMode("daily");toast(m?`Puzzle #${m} now has an earlier-set save. Open it from the Archive.`:"Every themed day before today already has a save, so nothing was changed.");return}if(t==="reset"){S={days:{},tiers:{},streak:0,best:0,played:0,total:0,freezes:0,offset:0,reports:[],tutorialDone:true}}save();s.remove();setMode("daily");toast(`Now on puzzle #${dayNum()}`)});
 
   const find=()=>{const q=$("#tCard").value.trim().toLowerCase();const ids=EVENTS.map((e,i)=>i).filter(i=>q&&EVENTS[i][2].toLowerCase().includes(q));
     if(!ids.length){$("#tFact").textContent="No card matches.";return}showFact(ids[0],$("#tFact"));if(ids.length>1)$("#tFact").insertAdjacentHTML("beforeend",` <i>(${ids.length-1} more match; type more of the title)</i>`)};
