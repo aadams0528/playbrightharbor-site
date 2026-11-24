@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect x=%2722%27 y=%276%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3Cellipse cx=%2732%27 cy=%2733%27 rx=%2722%27 ry=%2720%27 fill=%27%23ff9a2e%27 stroke=%27%237a3410%27 stroke-width=%273%27/%3E%3Crect x=%2722%27 y=%2752%27 width=%2720%27 height=%276%27 rx=%272%27 fill=%27%23222%27/%3E%3C/svg%3E">
 <meta name="robots" content="noindex, nofollow">
-<!-- Lantern Chain prototype v0.9.37 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
+<!-- Lantern Chain prototype v0.9.38 (working title; idea pipeline 2026-11-17). Unlisted test page: not linked from the site. -->
 <title>Lantern Chain (test version)</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2350">
@@ -95,6 +95,8 @@ html.big .hook { font-size: 20px; }
 .done b { display: block; font-family: var(--font-display); font-size: 24px; }
 .done p { margin: 2px 0 0; font-size: 18px; }
 .ver { text-align: center; margin: 4px 0 0; font-size: 15px; color: var(--ink-soft); }
+.cardbtns.guard .btn { animation: btnIn 650ms ease-out both; } @keyframes btnIn { 0%, 40% { opacity: .45; } 100% { opacity: 1; } } html.calm .cardbtns.guard .btn { animation-timing-function: steps(1, end); }
+#lvResBtn { min-height: 40px; margin: -4px auto; align-self: center; color: #8a4a12; }
 .linkbtn { font: inherit; font-size: 18px; font-weight: 700; color: var(--ink); background: none; border: 0; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; padding: 0 10px; cursor: pointer; }
 
 /* game */
@@ -174,7 +176,7 @@ html.calm .finsum li i { animation: none; }
 .chainchip { background: rgba(255,140,40,.92) !important; color: #fff6d6 !important; font-weight: 800; position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); white-space: nowrap; z-index: 2; pointer-events: none; } /* never catches a tap meant for the top row; just under the bar, over the board edge: Matches, Par and Flags never move */
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 #skipCue { position: fixed; inset: 0; z-index: 29; cursor: pointer; }
-#rulesBox.setonly #rulesTitle, #rulesBox.setonly #rulesList { display: none; } #rulesBox.setonly #lookBtn[aria-pressed="true"] { background: linear-gradient(#ffe08a, #ffc53d); box-shadow: 0 0 0 3px rgba(255,214,90,.55); }
+#rulesBox.setonly #rulesTitle, #rulesBox.setonly #rulesList { display: none; } #lookBtn[aria-pressed="true"] { background: linear-gradient(#ffe08a, #ffc53d); box-shadow: 0 0 0 3px rgba(255,214,90,.55); }
 #festBox .sheet { width: min(560px, 100%); }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; text-align: center; } .stats div { background: #fff6df; border: 1.5px solid var(--card-edge); border-radius: 14px; padding: 6px 2px; } .stats b { display: block; font-size: 24px; font-family: var(--font-display); } .stats small { font-size: 14px; color: var(--card-ink); opacity: .8; } /* a small stats view: streak, best streak, dailies at par, best chain (Nikola best-in-class F1) */
 #street { display: block; width: 100%; margin: 6px 0; border-radius: 16px; }
@@ -257,7 +259,7 @@ html.calm #boardWrap.bump, html.calm .btn.pulse, html.calm #tray.shake { animati
       <p>Tester tools are on: every level is open.</p>
       <div class="row"><button class="btn" id="resetBtn">Reset save</button><button class="btn" id="testerOff">Tester off</button></div>
     </div>
-    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.37</span>
+    <p class="ver"><button class="linkbtn" id="titleFest">My festival<span class="newdot" id="festDot" hidden></span></button><button class="linkbtn" id="titleRules">How to play</button><button class="linkbtn" id="titleSettings">Settings</button></p><span id="ver">v0.9.38</span>
   </section>
 
   <section id="game" class="screen" hidden>
@@ -288,6 +290,7 @@ html.calm #boardWrap.bump, html.calm .btn.pulse, html.calm #tray.shake { animati
     <h2 id="winTitle">All lit!</h2>
     <div class="stars" id="winStars">★★★</div>
     <p id="winText">1 match. Par 1.</p>
+    <button class="linkbtn lvres" id="lvResBtn" hidden>See level result</button>
     <ul class="finsum" id="finSum" hidden></ul>
     <div class="cardbtns">
     <button class="btn primary" id="nextBtn">Next level</button>
@@ -898,6 +901,7 @@ function ruleReminder() {
 }
 function startTip() {
   if (G.hintUsed && !G.tut) return defaultTip(); /* a Restart on a capped board says so first (Muse R14) */
+  if (!seen.teal && !G.tut && G.b && G.b.cells.some(function (c) { return c.kind === 'portal' && c.ch === 'Q'; })) { seen.teal = true; store.set('seen', seen); return 'New: teal portals. Each one pairs with the other teal portal. ' + (G.level.tip || ruleReminder() || defaultTip()); } /* the second portal pair gets its own line the first time it shows up (Nikola R20) */
   var rem = G.li < LEVELS.length ? ruleReminder() : ''; if (rem && !G.level.tip) return rem;
   if (!seen.shyLook && G.li > FIRST_SHY && G.li < LEVELS.length && hasShy() && !G.level.tip && !G.tut) return 'Unsure about a shy lantern? Tap the eye, then a lantern: red means it wakes one.';
   if (!seen.preview && G.li >= 2 && G.li < LEVELS.length && !G.level.tip) return 'Tip: hold a lantern (or tap the eye) to see where its flames land. No match used.'; /* from L3, and it names the ring (Nikola best-in-class U2) */
@@ -1083,7 +1087,7 @@ function fitHud() { var h = document.querySelector('#game .hud'); if (!h || !h.c
   cs.forEach(function (c) { c.style.fontSize = ''; c.style.paddingLeft = c.style.paddingRight = ''; var b = c.querySelector('b'); if (b) b.style.fontSize = ''; });
   h.style.height = ''; h.style.height = h.offsetHeight + 'px'; /* the bar keeps its full height when chips shrink to fit, so the board never moves */
   var st = getComputedStyle(h), gap = parseFloat(st.columnGap) || 0, avail = h.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
-  var need = function () { var vis = cs.filter(function (c) { return !c.hidden; }); return vis.reduce(function (t, c) { return t + c.offsetWidth; }, 0) + gap * Math.max(0, vis.length - 1); };
+  var need = function () { var vis = cs.filter(function (c) { return !c.hidden && getComputedStyle(c).position !== 'absolute'; }); /* the Chain pill sits under the bar, so it never squeezes the chips (Muse R20) */ return vis.reduce(function (t, c) { return t + c.offsetWidth; }, 0) + gap * Math.max(0, vis.length - 1); };
   for (var i = 0; i < 8 && need() > avail; i++) cs.forEach(function (c) { if (c.hidden) return; var cst = getComputedStyle(c); c.style.fontSize = (parseFloat(cst.fontSize) - 1) + 'px'; c.style.paddingLeft = c.style.paddingRight = Math.max(6, parseFloat(cst.paddingLeft) - 2) + 'px'; var b = c.querySelector('b'); if (b) b.style.fontSize = (parseFloat(getComputedStyle(b).fontSize) - 1) + 'px'; }); }
 function refresh() { $('matches').textContent = G.matches; kbLabel();
   if (G.b) { var fc = $('flagChip'); if (fc.hidden === !!G.b.marked) { fc.hidden = !G.b.marked; fitHud(); } flagsNow(); }
@@ -1351,6 +1355,17 @@ function draw(t) {
   G.marks = (G.marks || []).filter(function (m) { return t - m.t < 450; }); // tap acknowledged during a chain
   G.marks.forEach(function (m) { var q = cellXY(m.idx), k = (t - m.t) / 450;
     ctx.strokeStyle = 'rgba(255,224,120,' + (1 - k) + ')'; ctx.lineWidth = 4 * (1 - k) + 1; ctx.beginPath(); ctx.arc(q[0], q[1], S * (0.3 + 0.35 * k), 0, 7); ctx.stroke(); });
+  drawLeft(ctx, t);
+}
+// "1 to go" or "2 to go": after 5 quiet seconds the last dark lanterns pulse once, so nobody hunts for them (Nikola R20 B18).
+// With Less motion on, they get a still ring instead.
+function drawLeft(ctx, t) {
+  var idle = t - (G.lastInput || 0); if (!G.b || G.busy || G.won || G.tut || G.preview || G.fail || idle < 5000 || (!reduced && idle > 6600)) return;
+  var left = []; G.b.lanterns.forEach(function (x, k) { var cc = G.b.cells[x]; if (!cc.shy && (!G.b.marked || cc.mark) && !G.lit[k]) left.push(x); });
+  if (!left.length || left.length > 2) return;
+  var S = G.S, k = reduced ? 0.5 : (idle - 5000) / 1600, a = Math.sin(Math.PI * Math.min(1, k));
+  ctx.save(); ctx.strokeStyle = 'rgba(255,214,90,' + (0.35 + 0.6 * a) + ')'; ctx.lineWidth = Math.max(3, S * 0.07); ctx.shadowColor = '#ffd65a'; ctx.shadowBlur = S * 0.3 * a;
+  left.forEach(function (x) { var q = cellXY(x); ctx.beginPath(); ctx.arc(q[0], q[1], S * (0.4 + 0.1 * a), 0, 7); ctx.stroke(); }); ctx.restore();
 }
 // A shy lantern a flame reached but couldn't wake (its dome was down): a mint ring and a check badge, so a
 // saved shy reads differently from one no flame has reached (dome only) and a woken one (red ring and "!").
@@ -1598,7 +1613,8 @@ function doTap(idx, t) {
   G.padHit = res.events.some(function (e) { var c = e.end >= 0 && G.b.cells[e.end]; return e.result === 'water' && c && c.kind === 'lantern' && !c.shy && !res.lit[c.li]; });
   var li = G.b.lidx[idx]; G.disp[li] = true; G.pops[li] = t; addFx('burst', cellXY(idx), t); SFX.strike(); SFX.light(0); buzz(); G.chain = { n: 1, t: t, t0: t };
   G.anim = buildAnim(res, t); G.anim.fail = !!G.fail; G.busy = true; refresh(); wake();
-  if (!G.tut && !L.isWin(G.b, res.lit)) tray(G.fail ? 'Watch the flames\u2026' : toGoCount(res.lit) + ' to go.'); // the tray moves at the strike, not 2-3 s later (Nikola R9 #3); afterMove adds the note when the chain lands
+  var lo = G.lookOffNote ? 'Free look off. ' : ''; G.lookOffNote = false; /* "Light it" ends free look, and the tip says so (Nikola R20 B17) */
+  if (!G.tut && !L.isWin(G.b, res.lit)) tray(lo + (G.fail ? 'Watch the flames\u2026' : toGoCount(res.lit) + ' to go.')); // the tray moves at the strike, not 2-3 s later (Nikola R9 #3); afterMove adds the note when the chain lands
   if (G.tut && L.isWin(G.b, res.lit) && tutCur() && tutCur().target) tray('Every lantern lit! Watch the flames\u2026'); /* the lesson's 'tap this' line never lingers on a won board (Muse R11, L46) */
   if (!G.tut && L.isWin(G.b, res.lit)) fastForward(t + 120, 450); // the winning chain plays brisk, so the card comes quickly
   return true;
@@ -1659,7 +1675,7 @@ $('board').addEventListener('pointerup', function (ev) {
 $('board').addEventListener('pointercancel', function () { endPress(); if (G.preview) { G.preview = null; wake(); } });
 $('board').addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
 function setLook(on) { G.look = !!on; $('lookBtn').setAttribute('aria-pressed', G.look ? 'true' : 'false'); if (!G.look && G.preview) { G.preview = null; wake(); } if (!G.look) showStrike(-1); }
-function showStrike(idx) { var b = $('strikeBtn'); b.hidden = idx < 0; b.classList.remove('pulse'); b.onclick = idx < 0 ? null : function () { if (!G.preview || G.preview.idx !== idx) return; G.preview = null; setLook(false); tapCell(idx); }; }
+function showStrike(idx) { var b = $('strikeBtn'); b.hidden = idx < 0; b.classList.remove('pulse'); b.onclick = idx < 0 ? null : function () { if (!G.preview || G.preview.idx !== idx) return; G.preview = null; setLook(false); G.lookOffNote = true; tapCell(idx); }; }
 $('lookBtn').onclick = function () { if (!G.b || G.won) return; setLook(!G.look);
   if (G.look) { if (!seen.preview) { seen.preview = true; store.set('seen', seen); } tray('Free look: tap a dark lantern to see where its flames land. No match used.'); }
   else { tray('Tap a lantern to light it.'); var s = tutCur(); if (s) tray(s.text); } };
@@ -1676,14 +1692,14 @@ function showPreview(idx) {
   if (tr) tr.events.forEach(function (e) { if (e.depth === 0 && e.end >= 0) first[e.end] = e.result; if (e.result === 'shy' && e.depth > 0) chainWake = true; });
   fl.forEach(function (f) { if ((f.res === 'shy' || f.res === 'hid') && first[f.end]) f.res = first[f.end] === 'shy' ? 'shy' : 'hid'; });
   var shy = fl.some(function (f) { return f.res === 'shy'; }), saveNow = fl.some(function (f) { return f.res === 'hid'; });
-  var wakes = shy || chainWake, safeN = all - allShy, dome = saveNow ? ' A flame reaches a shy lantern, but its dome keeps it safe.' : '';
-  var msg = wakes ? 'Lights ' + safeN + ' safely; wakes ' + Math.max(1, allShy) + ' shy. This move fails.' + (shy ? ' Red: its own flame lands on a shy lantern.' : ' Careful: further along, the chain reaches a shy lantern with no dome.')
+  var wakes = shy || chainWake, safeN = all - allShy, dome = saveNow ? ' A dome keeps the shy lantern it reaches safe.' : '';
+  var wk = Math.max(1, allShy), msg = wakes ? (safeN > 0 ? 'Lights ' + safeN + ' but wakes ' + wk + ' shy: this move fails.' : 'Wakes ' + wk + ' shy: this move fails.') + (shy ? ' Red: its flame lands on a shy lantern.' : ' Later, the chain reaches a shy lantern with no dome.')
     : all <= 1 ? 'Lights only this lantern.' + dome
-    : 'Lights ' + all + ' in all: ' + n + ' right away (gold ' + (n === 1 ? 'ring' : 'rings') + ')' + (all > n + 1 ? ', the rest along the chain.' : '.') + dome;
+    : 'Lights ' + all + ' in all: ' + n + ' at once (gold ' + (n === 1 ? 'ring' : 'rings') + ')' + (all > n + 1 ? ', the rest by chain.' : '.') + dome;
   var gi = G.level.gold; if (gi != null && b.lidx[gi] != null && !G.lit[b.lidx[gi]]) msg += idx === gi ? ' This is the sparkler: a match here means no \u2728.' : tr && tr.lit[b.lidx[gi]] ? ' \u2728 This chain catches the sparkler!' : ''; // the preview says whether a chain catches it (Cooper R10)
   var ts = tutCur(), gated = scripted() && !(ts.target && ts.target[0] * b.w + ts.target[1] === idx); // the lesson only lets its glowing lantern light
-  tray(msg + (gated ? ' The lesson wants the glowing lantern first.' : G.look ? '' : G.kbPrev ? ' Enter or Space lights it · Esc cancels.' : ' Let go to cancel: your match is safe.'));
-  if (G.look) { $('trayText').textContent = 'Free look: no match used. ' + $('trayText').textContent.trim(); showStrike(idx); }
+  tray((G.look ? 'Free look: ' : '') + msg + (gated ? ' The lesson wants the glowing lantern first.' : G.look ? '' : G.kbPrev ? ' Enter or Space lights it · Esc cancels.' : ' Let go to cancel: your match is safe.')); /* the whole verdict is fitted in one go, so nothing is cut (Nikola R20 B16) */
+  if (G.look) showStrike(idx);
   wake();
 }
 function drawPreview(ctx, t) {
@@ -1889,17 +1905,20 @@ function win() { if (G.chainRec) { G.chainRec = false; store.set('progress', pro
     var nxs = nextStar(sk); $('nextBtn').textContent = nxs >= 0 ? 'Next: Starlight ' + (nxs + 1) : 'Back to levels'; G.toStar = nxs;
   } else G.toStar = -1;
   if (newCard) $('winText').textContent += ' New postcard in My festival!';
-  $('finSum').hidden = true; $('findBtn').hidden = true;
+  $('finSum').hidden = true; $('findBtn').hidden = true; $('lvResBtn').hidden = true;
   if (last) { // the game-complete card: every world with its stars, then where to go next
     var tot = 0, atPar = 0, nLit = 0, rows = WORLDS.map(function (wn, w) { var ws = 0; worldLevels(w).forEach(function (i) { var v = progress.stars[LEVELS[i].id] || 0; ws += v; if (v === 3) atPar++; if (v) nLit++; }); tot += ws; return [wn, ws, worldLevels(w).length * 3]; });
     $('finSum').innerHTML = ''; rows.concat([['All 4 worlds', tot, LEVELS.length * 3]]).forEach(function (r) { var li = document.createElement('li'); li.className = 'wl ' + (r[1] >= r[2] ? 'full' : r[1] > 0 ? 'part' : 'dark'); li.innerHTML = '<i aria-hidden="true"></i><span></span><b></b>'; li.children[1].textContent = r[0]; li.lastChild.textContent = '★ ' + r[1] + ' / ' + r[2]; li.style.setProperty('--d', (li.parentNode ? 0 : $('finSum').children.length) * 0.25 + 's'); var wk = $('finSum').children.length; li.style.setProperty('--hue', [0, 95, 190, 290, 40][wk] + 'deg'); if (wk < 4) { var cv = document.createElement('canvas'), cd = 2; cv.width = 26 * cd; cv.height = 32 * cd; var cx2 = cv.getContext('2d'); cx2.setTransform(cd, 0, 0, cd, 0, 0); var full = r[1] >= r[2], part = !full && r[1] > 0; drawLantern(cx2, 13, 16, 30, { n: 1, col: WORLD_COL[wk], lit: full, dim: !full, noLabel: true, seed: wk }); if (part) { cx2.save(); cx2.beginPath(); cx2.rect(0, 17, 26, 15); cx2.clip(); drawLantern(cx2, 13, 16, 30, { n: 1, col: WORLD_COL[wk], lit: true, noLabel: true, seed: wk }); cx2.restore(); } li.children[0].className = 'cv'; li.children[0].appendChild(cv); } /* one hex per world, drawn like the share picture (Nikola R13 R8) */ $('finSum').appendChild(li); }); /* each world its own lantern colour (Muse R11) */
     $('finSum').hidden = false;
+    var lvT = WORLDS[worldOf(G.li)] + ', level ' + (G.li + 1) + ': ' + (G.b.marked ? 'every flag is lit!' : 'all lit!'), lvX = $('winText').textContent; /* the level's own result, one tap away (Muse R20, Alan 11-24) */
     $('winTitle').textContent = nLit === LEVELS.length ? 'The whole festival is lit!' : 'Harbor Lights finale lit!';
     $('winText').textContent = (nLit === LEVELS.length ? 'You lit all ' + LEVELS.length + ' levels. ' : 'You have lit ' + nLit + ' of ' + LEVELS.length + ' levels. ') + (atPar === LEVELS.length ? 'Every one a clean par (★★★). Wow!' : atPar + (atPar === 1 ? ' clean par' : ' clean pars') + ' (★★★) so far: replay any level for 3 stars.') + ' A new lantern waits every day.';
     var dDone = daily.done[today()];
     $('nextBtn').textContent = dDone ? 'Play Starlight' : 'Play today\'s lantern'; G.toDaily = !dDone; if (dDone) G.toStar = nextStar();
     $('winText').textContent += ' 30 Starlight boards are now open.';
     $('findBtn').hidden = nLit === LEVELS.length;
+    var finT = $('winTitle').textContent, finX = $('winText').textContent, lb = $('lvResBtn'); lb.hidden = false; lb.textContent = 'See level result';
+    lb.onclick = function () { var toLv = !$('finSum').hidden; $('finSum').hidden = toLv; $('winTitle').textContent = toLv ? lvT : finT; $('winText').textContent = toLv ? lvX : finX; lb.textContent = toLv ? 'Back to the summary' : 'See level result'; };
   } else G.toDaily = false;
   if (!isDaily) G.toWeekly = false; if (!isWeekly) G.toFest = false;
   var dkey = G.level.date || today();
@@ -1961,7 +1980,7 @@ function gameShareText() { // one lantern per world on the picture (lit, partly 
   return 'Lantern Chain · ' + (all ? 'The whole festival is lit!' : 'Harbor Lights finale lit!') + '\n' + shortDate(today()) + ' · ' + scopeLine(LEVELS) + '\n' + lines.join(' · ') + '\n' + row + '\n' + SHARE_URL;
 }
 var cardAt = 0;
-function guardCard() { cardAt = performance.now(); }
+function guardCard() { cardAt = performance.now(); var cb = document.querySelector('#winBox .cardbtns'); cb.classList.remove('guard'); void cb.offsetWidth; cb.classList.add('guard'); } /* the buttons fade in over the guard, so a tap that does nothing never looks ignored (Cooper R20) */
 function cardGuarded() { return performance.now() - cardAt < 650; } // a tap that was meant for the celebration never lands on the card's buttons
 $('nextBtn').onclick = function () { if (cardGuarded()) return; G.noTapUntil = performance.now() + 350; /* a double-tap on Next never strikes the next board (Nikola R10) */ $('winBox').hidden = true; if (G.resultMode) { G.resultMode = false; $('replayBtn').textContent = 'Play again'; return; } if (G.toDaily) { G.toDaily = false; startLevel(DAILY_LI); return; } if (G.toWeekly) { G.toWeekly = false; startLevel(WEEKLY_LI); return; } if (G.toStar != null && G.toStar >= 0) { var ts = G.toStar; G.toStar = -1; startLevel(STAR_LI0 + ts); return; } if (G.toFest) { G.toFest = false; show('title'); showFest(); return; } if (G.li >= LEVELS.length) { show('title'); return; } if (G.li < LEVELS.length - 1) { var nli = G.li + 1; adNext(nli, function () { startLevel(nli); }); } else show('title'); };
 $('findBtn').onclick = function () { if (cardGuarded()) return; var u = LEVELS.findIndex(function (lv) { return !progress.stars[lv.id]; }); $('winBox').hidden = true; viewWorld = u >= 0 ? worldOf(u) : null; show('title'); };
@@ -1978,7 +1997,7 @@ function shareText(st, m, par, date) {
 var SHARE_URL = 'playbrightharbor.com';
 // A finished daily opens its result card (with Share), not a fresh board.
 function showDailyResult() {
-  $('finSum').hidden = true; $('findBtn').hidden = true;
+  $('finSum').hidden = true; $('findBtn').hidden = true; $('lvResBtn').hidden = true;
   var r = daily.res; G.resultMode = true;
   $('winTitle').textContent = 'Today\'s lantern is lit!';
   $('winStars').innerHTML = '★'.repeat(r.st) + '<span class="off">' + '★'.repeat(3 - r.st) + '</span>'; $('winStars').setAttribute('aria-label', r.st + ' of 3 stars');
@@ -2117,7 +2136,7 @@ function newThingTip() { if (G.tut || !G.b) return ''; var h = boardHas(), m = m
   ['shy', 'water', 'wind', 'portal'].some(function (f) { if (h[f] && m <= NEW_TIPS[f][0]() && !seen['new_' + f]) { seen['new_' + f] = true; store.set('seen', seen); out = NEW_TIPS[f][1]; return true; } return false; });
   return out; }
 function showRules(fromTitle, setOnly) { renderAdsRow(); try { if (window.LC_NATIVE) LC_NATIVE.settings($('cloudRow')); } catch (e) {}
-  var ol = $('rulesList'); ol.innerHTML = ''; $('rulesBox').classList.toggle('setonly', !!setOnly);
+  var ol = $('rulesList'); ol.innerHTML = ''; $('rulesBox').classList.toggle('setonly', !!setOnly); document.querySelector('#rulesBox .sheet').setAttribute('aria-labelledby', setOnly ? 'setHead' : 'rulesTitle'); /* Settings is announced as Settings (Muse R20) */
   var met = fromTitle ? 0 : G.li >= LEVELS.length ? [2, INTRO.shy, INTRO.water, INTRO.wind][G.level.tier] : G.li; LEVELS.forEach(function (lv, i) { if (progress.stars[lv.id]) met = Math.max(met, i); });
   var has = !fromTitle && G.b ? boardHas() : {};
   var m0 = metIdx(), fresh = ['shy', 'water', 'wind', 'portal'].filter(function (f) { return has[f] && m0 <= NEW_TIPS[f][0](); });
