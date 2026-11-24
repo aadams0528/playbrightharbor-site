@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.26 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.27 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -753,6 +753,7 @@ html.hc .pip.g::after{content:"✓"} html.hc .pip.y::after{content:"↔";color:#
 #app.fit:has(> .board) > .actions.stick{flex:none}
 .morecue{position:relative;z-index:2;line-height:1.35;padding-bottom:2px;display:none;text-align:center;font-size:14px;font-weight:800;color:var(--ink);opacity:.75;margin-top:2px}
 #app.fit:has(> .board) .fitscroll.more + .morecue{display:block}
+#app.fit:has(> .board) .fitscroll.ropen{padding-bottom:10px}#app.fit:has(> .board) .fitscroll.ropen + .morecue{display:none!important} /* Nikola R47: an open reason has no cue over it */
 /* Cooper R45: on a tall screen the Code Lock keypad sits at the foot of the board, so a miss note that grows the clue list uses the spare room above it and the keypad never moves. */
 #app.fit > .board:has(> .lockwrap){flex:1 1 auto}#app.fit > .board:has(> .lockwrap) > .keys{margin-top:auto}
 .htray{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:6px}
@@ -3362,9 +3363,13 @@ const TOASTQ = []; let SHEETRO = null; /* Nikola R46: a closed sheet drops its r
 // One toast at a time: later messages wait their turn, each keeping its own display time. Repeats already waiting are dropped.
 // Nikola R46: puzzle tips (pzt) can be cleared, queued or showing, and a new puzzle tip replaces one already up. Toasts are announced politely.
 let TOASTCUR = null;
-function toast(t, ms, pzt) { if (TOASTQ.some(q => q.t === t)) return; if (pzt && TOASTCUR && TOASTCUR.q.pzt) { TOASTQ.splice(1).filter(q => !q.pzt).forEach(q => TOASTQ.push(q)); TOASTQ.splice(1, 0, { t, ms: ms || 1800, pzt: true }); toastEnd(); return; }
-  TOASTQ.push({ t, ms: ms || 1800, pzt: !!pzt }); if (TOASTQ.length === 1) toastNext(); }
-function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast' + (q.pzt ? ' pzt' : ''); d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite'); d.textContent = q.t; document.body.appendChild(d); TOASTCUR = { q, d, tm: setTimeout(toastEnd, q.ms) }; }
+// Nikola R47: one persistent polite status node speaks every toast.
+function toastSay(t) { let n = document.getElementById('tlive'); if (!n) { n = document.createElement('div'); n.id = 'tlive'; n.setAttribute('role', 'status'); n.setAttribute('aria-live', 'polite'); n.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap'; document.body.appendChild(n); } n.textContent = ''; setTimeout(() => { n.textContent = t; }, 30); }
+function toast(t, ms, pzt) { if (TOASTQ.some(q => q.t === t)) return; const item = { t, ms: ms || 1800, pzt: !!pzt };
+  if (pzt && TOASTCUR && TOASTCUR.q.pzt) { TOASTQ.splice(1).filter(q => !q.pzt).forEach(q => TOASTQ.push(q)); TOASTQ.splice(1, 0, item); toastEnd(true); toastNext(); return; }
+  if (pzt && TOASTQ.length > 1) { for (let i = TOASTQ.length - 1; i >= 1; i--) if (TOASTQ[i].pzt) TOASTQ.splice(i, 1); TOASTQ.splice(1, 0, item); return; } /* Nikola R47: a puzzle tip goes ahead of other waiting toasts */
+  TOASTQ.push(item); if (TOASTQ.length === 1) toastNext(); }
+function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast' + (q.pzt ? ' pzt' : ''); d.setAttribute('aria-hidden', 'true'); d.textContent = q.t; document.body.appendChild(d); toastSay(q.t); TOASTCUR = { q, d, tm: setTimeout(toastEnd, q.ms) }; }
 function toastEnd(skipNext) { const c = TOASTCUR; if (!c) return; clearTimeout(c.tm); c.d.remove(); TOASTCUR = null; if (TOASTQ[0] === c.q) TOASTQ.shift(); if (!skipNext && TOASTQ.length) setTimeout(() => { if (!TOASTCUR) toastNext(); }, 150); }
 
 // ---------- ads and Remove ads (phone app only; the ad code is src/native.js, not on the test page) ----------
@@ -3427,7 +3432,7 @@ function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
 // Store builds say the store version (1.0, as in the iPhone and Android projects); the test page keeps the prototype line.
-const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.26 · future days open for testing' : 'Ahalock 1.0.1 (0.28.26)';
+const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.27 · future days open for testing' : 'Ahalock 1.0.1 (0.28.27)';
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -4205,7 +4210,9 @@ function renderPuzzle() {
     if (P.msg && P.msg !== P.shownMsg) {
       P.shownMsg = P.msg;
       const m = $app.querySelector('.msg.nearc');
-      if (near && P.msg.k === 'hint' && m) { const co = $app.classList.contains('coached'), r = m.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : co ? $app.getBoundingClientRect().bottom - 8 : innerHeight; if (r.bottom > lim) (co ? $app : window).scrollBy(0, r.bottom - lim); }
+      if (near && P.msg.k === 'hint' && m) { /* Nikola R47: never push the row the hint names off the top */ const co = $app.classList.contains('coached'), sp = m.closest('.fitscroll'), r = m.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), hd = $app.querySelector('.pz-top'), lim = sp ? sp.getBoundingClientRect().bottom - 26 : bar ? bar.getBoundingClientRect().top - 8 : co ? $app.getBoundingClientRect().bottom - 8 : innerHeight;
+        const top0 = sp ? sp.getBoundingClientRect().top : Math.max(co ? $app.getBoundingClientRect().top : 0, hd && getComputedStyle(hd).position === 'sticky' ? hd.getBoundingClientRect().bottom : 0), hl = $app.querySelector('.hl') || m, room = hl.getBoundingClientRect().top - top0 - 6;
+        if (r.bottom > lim) { const d = Math.max(0, Math.min(r.bottom - lim, room)); if (d) (sp || (co ? $app : window)).scrollBy(0, d); } }
       else if (!near) keepClear();
     }
   }
@@ -4360,7 +4367,7 @@ function check() {
     // Nikola R43/R44: if the clue and the whole reason can't both fit on a short screen, show a one-line verdict under the clue; a tap reads the rest.
     if (nm.offsetHeight + (cl ? cl.offsetHeight + 10 : 0) > pane.clientHeight - cue && P.bad !== null && P.bad !== undefined && Array.isArray(P.entry)) { const full = nm.innerHTML, again = /tried that one/.test(nm.textContent);
       nm.innerHTML = ic('xmark') + ' ' + (again ? 'Tried already: breaks' : 'Breaks') + ' clue ' + (P.bad + 1) + '. <u>Why?</u>'; /* Nikola R45: one line, so the clue above it keeps its top in view */ nm.classList.add('mverd'); nm.setAttribute('role', 'button'); nm.tabIndex = 0;
-      const open = () => { nm.innerHTML = full; nm.classList.remove('mverd'); nm.removeAttribute('role'); nm.onclick = nm.onkeydown = null; const c2 = cl || nm; pane.scrollTop += c2.getBoundingClientRect().top - pane.getBoundingClientRect().top - 6; };
+      const open = () => { nm.innerHTML = full; nm.classList.remove('mverd'); nm.removeAttribute('role'); nm.onclick = nm.onkeydown = null; pane.classList.add('ropen'); /* Nikola R47: no cue over an open reason; the clue shows if it fits, else the reason's last line does */ const pt = pane.getBoundingClientRect().top, c2 = cl || nm, toClue = c2.getBoundingClientRect().top - pt - 6, toEnd = nm.getBoundingClientRect().bottom - pt - pane.clientHeight + 8; pane.scrollTop += toEnd > toClue ? toEnd : toClue; };
       nm.onclick = open; nm.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }; }
     const pr = pane.getBoundingClientRect(), nr = nm.getBoundingClientRect(), top0 = cl ? cl.getBoundingClientRect().top : nr.top;
     const V = pane.clientHeight - cue, cT = top0 - pr.top, nT = nr.top - pr.top, nB = nr.bottom - pr.top, d1 = cT - 6;
