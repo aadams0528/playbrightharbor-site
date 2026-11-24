@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.28.24 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.28.25 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -321,8 +321,8 @@ button.tile{font:inherit;color:inherit;cursor:pointer;width:100%;display:block}
 @media (prefers-reduced-motion:no-preference){.mshake{animation:shake .32s ease-in-out}}
 /* Nikola R43: an empty spot glows once when you lock in too early (outline only, so nothing moves) */
 .epulse{outline:3px solid var(--amber);outline-offset:1px}
-@media (prefers-reduced-motion:no-preference){.epulse{animation:epulse .7s ease-out}}
-@keyframes epulse{0%{outline-color:transparent}30%{outline-color:var(--amber)}100%{outline-color:transparent}}
+@media (prefers-reduced-motion:no-preference){.epulse{animation:epulse 1.4s ease-out}}
+@keyframes epulse{0%{outline-color:transparent}15%,70%{outline-color:var(--amber)}100%{outline-color:transparent}}
 @keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
 .rules-mini{display:flex;justify-content:center;gap:14px;font-size:13px;color:var(--ink2);font-weight:700;margin-bottom:8px;flex-wrap:wrap}
 .pip{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:3px}
@@ -753,6 +753,8 @@ html.hc .pip.g::after{content:"✓"} html.hc .pip.y::after{content:"↔";color:#
 #app.fit:has(> .board) > .actions.stick{flex:none}
 .morecue{position:relative;z-index:2;line-height:1.35;padding-bottom:2px;display:none;text-align:center;font-size:14px;font-weight:800;color:var(--ink);opacity:.75;margin-top:2px}
 #app.fit:has(> .board) .fitscroll.more + .morecue{display:block}
+/* Cooper R45: on a tall screen the Code Lock keypad sits at the foot of the board, so a miss note that grows the clue list uses the spare room above it and the keypad never moves. */
+#app.fit > .board:has(> .lockwrap){flex:1 1 auto}#app.fit > .board:has(> .lockwrap) > .keys{margin-top:auto}
 .htray{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:6px}
 .htray .chip{flex-direction:column;justify-content:center;gap:1px;padding:4px 2px;min-height:58px;min-width:0;line-height:1.1}
 @media (max-height:760px){
@@ -830,8 +832,6 @@ html.big .status3 .third span{font-size:16px}
 .sheet h2 + .hgrp{border-top:0;padding-top:0;margin-top:6px}
 .sheet .tgl{display:flex;align-items:center;justify-content:flex-start;gap:10px;text-align:left;margin:6px 0}
 .sheet .tnote{text-align:left;font-size:15px;margin:0 0 4px 34px}
-.sfoot.more::before,.pindone.more::before{content:"↓ Scroll down for the rest";display:block;align-self:center;text-align:center;font-size:14px;font-weight:800;color:#7a5a00;margin:-2px auto 6px;padding:4px 14px;border-radius:999px;background:#ffe08a;border:2px solid var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.18)}
-.sfoot.more,.pindone.more{background:var(--panel)}
 /* Nikola R37/R43/R44: the "Scroll down" pill sits in its own strip under the sheet, so it never covers a line or a button. */
 .shwrap > .shmore{display:none;height:44px;align-items:center;justify-content:center;pointer-events:none}.shwrap.hasmore > .shmore{display:flex}.shwrap > .shmore::before{content:"↓ Scroll down for the rest";font-size:14px;font-weight:800;color:#7a5a00;padding:4px 14px;border-radius:999px;background:#ffe08a;border:2px solid var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.18)}.shwrap > .shmore:not(.more)::before{visibility:hidden}
 .shwrap.hasmore > .sheet{max-height:calc(min(88vh, calc(100vh - var(--sat) - var(--sab) - 84px)) - 44px)}
@@ -2258,7 +2258,7 @@ html.big .status3 .third span{font-size:16px}
     return null;
   }
   function checkChests(pz, t) {
-    if (t === null || t === undefined) return { ok: false, msg: 'Tap the chest you think has the treasure.' };
+    if (t === null || t === undefined) return { ok: false, empty: true, msg: 'Tap the chest you think has the treasure.' };
     if (t === pz.sol) return { ok: true };
     return { ok: false, clue: t, msg: chestWhy(pz, t) };
   }
@@ -2931,7 +2931,7 @@ html.big .status3 .third span{font-size:16px}
   }
   function checkLetters(pz, e) {
     const v = Array.isArray(e) ? e.join('') : (e || '');
-    if (v.length < pz.sol.length) return { ok: false, msg: pz.pairs ? 'Pick both letters first.' : 'Pick a letter first.' };
+    if (v.length < pz.sol.length) return { ok: false, empty: true, msg: pz.pairs ? 'Pick both letters first.' : 'Pick a letter first.' };
     if (v === pz.sol) return { ok: true };
     return { ok: false, rule: true, msg: v + ' doesn’t continue the pattern. ' + (pz.pairs ? 'Look at the first letters on their own, then the second letters.' : 'Use the alphabet strip: count how far each letter jumps.') };
   }
@@ -3359,8 +3359,8 @@ let timerInt = null;
 function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
 const TOASTQ = [];
 // One toast at a time: later messages wait their turn, each keeping its own display time. Repeats already waiting are dropped.
-function toast(t, ms) { if (TOASTQ.some(q => q.t === t)) return; TOASTQ.push({ t, ms: ms || 1800 }); if (TOASTQ.length === 1) toastNext(); }
-function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast'; d.textContent = q.t; document.body.appendChild(d); setTimeout(() => { d.remove(); TOASTQ.shift(); if (TOASTQ.length) setTimeout(toastNext, 150); }, q.ms); }
+function toast(t, ms, pzt) { if (TOASTQ.some(q => q.t === t)) return; TOASTQ.push({ t, ms: ms || 1800, pzt: !!pzt }); if (TOASTQ.length === 1) toastNext(); }
+function toastNext() { const q = TOASTQ[0]; if (!q) return; const d = document.createElement('div'); d.className = 'toast' + (q.pzt ? ' pzt' : ''); d.textContent = q.t; document.body.appendChild(d); setTimeout(() => { d.remove(); TOASTQ.shift(); if (TOASTQ.length) setTimeout(toastNext, 150); }, q.ms); }
 
 // ---------- ads and Remove ads (phone app only; the ad code is src/native.js, not on the test page) ----------
 // Calm rules: at most one ad every 3 finished puzzles, only after a Next tap, never in the first session,
@@ -3422,7 +3422,7 @@ function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
 // Store builds say the store version (1.0, as in the iPhone and Android projects); the test page keeps the prototype line.
-const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.24 · future days open for testing' : 'Ahalock 1.0.1 (0.28.24)';
+const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.28.25 · future days open for testing' : 'Ahalock 1.0.1 (0.28.25)';
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -4038,8 +4038,10 @@ function harborSvg(n, fresh, cls) {
 }
 // =================== HOME ===================
 let titleTaps = 0;
+// Nikola R45: a puzzle's tip never stays up over Home.
+function clearPzToasts() { document.querySelectorAll('.toast.pzt').forEach(d => d.remove()); }
 function renderHome() {
-  clearSeed();
+  clearSeed(); clearPzToasts();
   stopTimer(); removeCoach(); beaconCheck();
   // Coming back from a puzzle, results or Story, home shows today again (picking a day on the week strip keeps it).
   if (S.screen && S.screen !== 'home') S.date = realToday;
@@ -4330,10 +4332,10 @@ function check() {
   if (P.solved) return;
   const pz = P.pz;
   const r = TYPES[pz.type].check(pz, P.entry);
-  SFX.click(); buzz('tap');
+  if (!r.empty) { SFX.click(); buzz('tap'); }
   if (r.ok) { solved(); return; }
   // Nikola R43: an empty entry costs nothing, so it gets a quiet tip that moves nothing: no ✕, no red bar, no miss sound.
-  if (r.empty) { toast(r.msg, 2200); const es = $app.querySelectorAll('.board .slot:empty, .board .gslot .box:not(.full)'); es.forEach(e => { e.classList.remove('epulse'); void e.offsetWidth; e.classList.add('epulse'); setTimeout(() => e.classList.remove('epulse'), 700); }); return; }
+  if (r.empty) { toast(r.msg, 2200, true); const es = $app.querySelectorAll('.board .slot:empty, .board .gslot .box:not(.full)'); es.forEach(e => { e.classList.remove('epulse'); void e.offsetWidth; e.classList.add('epulse'); setTimeout(() => e.classList.remove('epulse'), 1500); }); return; }
   setTimeout(() => { SFX.miss(); buzz('bad'); }, 90);
   // Nikola R40: locking in the very same wrong answer again doesn't count a second miss.
   const tryKey = JSON.stringify(P.entry); P.tried = P.tried || []; const again = P.tried.indexOf(tryKey) >= 0; // Muse R41: any answer already tried, not just the last one
@@ -4352,13 +4354,13 @@ function check() {
   if (pane) { const cl = document.getElementById(TYPES[pz.type].hid(P.bad)), cue = 26;
     // Nikola R43/R44: if the clue and the whole reason can't both fit on a short screen, show a one-line verdict under the clue; a tap reads the rest.
     if (nm.offsetHeight + (cl ? cl.offsetHeight + 10 : 0) > pane.clientHeight - cue && P.bad !== null && P.bad !== undefined && Array.isArray(P.entry)) { const full = nm.innerHTML, again = /tried that one/.test(nm.textContent);
-      nm.innerHTML = ic('xmark') + ' ' + (again ? 'Tried already' : 'Not quite') + ': ' + esc(P.entry.join(' ')) + ' breaks clue ' + (P.bad + 1) + '. <u>Tap to read why</u>'; nm.classList.add('mverd'); nm.setAttribute('role', 'button'); nm.tabIndex = 0;
-      const open = () => { nm.innerHTML = full; nm.classList.remove('mverd'); nm.removeAttribute('role'); nm.onclick = nm.onkeydown = null; pane.scrollTop += nm.getBoundingClientRect().top - pane.getBoundingClientRect().top - 6; };
+      nm.innerHTML = ic('xmark') + ' ' + (again ? 'Tried already: breaks' : 'Breaks') + ' clue ' + (P.bad + 1) + '. <u>Why?</u>'; /* Nikola R45: one line, so the clue above it keeps its top in view */ nm.classList.add('mverd'); nm.setAttribute('role', 'button'); nm.tabIndex = 0;
+      const open = () => { nm.innerHTML = full; nm.classList.remove('mverd'); nm.removeAttribute('role'); nm.onclick = nm.onkeydown = null; const c2 = cl || nm; pane.scrollTop += c2.getBoundingClientRect().top - pane.getBoundingClientRect().top - 6; };
       nm.onclick = open; nm.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }; }
     const pr = pane.getBoundingClientRect(), nr = nm.getBoundingClientRect(), top0 = cl ? cl.getBoundingClientRect().top : nr.top;
     const V = pane.clientHeight - cue, cT = top0 - pr.top, nT = nr.top - pr.top, nB = nr.bottom - pr.top, d1 = cT - 6;
-    pane.scrollTop += nB - d1 <= V ? d1 : Math.min(nB - V, nT - 6);
-    if (!P.tutorial) return; }
+        pane.scrollTop += nB - d1 <= V ? d1 : Math.min(nB - V, nT - 6);
+    if (P.tutorial) tutWrong(); return; }
   const el = nm || document.getElementById(TYPES[pz.type].hid(P.bad)); if (el) { const r = el.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), lim = bar ? bar.getBoundingClientRect().top - 8 : innerHeight; if (r.bottom > lim) window.scrollBy({ top: Math.min(r.bottom - lim, r.top - 70), behavior: 'smooth' }); else if (r.top < 0) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
   if (P.tutorial) tutWrong();
 }
@@ -4740,11 +4742,11 @@ function openSheet(html) {
   document.getElementById('shx').onclick = sheetDismiss;
   ov.addEventListener('click', ev => { if (ev.target === ov) sheetDismiss(); });
   // Nikola R33: when text runs on under a pinned button, say so, so a keeper's line never looks cut off.
-  const sh = ov.querySelector('.sheet'); let ft = sh.querySelector('.sfoot, .pindone');
-  // Muse R35: every sheet that runs on (a long Why, too) shows the same "Scroll down" pill.
+  const sh = ov.querySelector('.sheet'); let ft = null;
+  // Muse R35: every sheet that runs on (a long Why, too) shows the same "Scroll down" pill. Muse R45: sheets with a pinned button (Help) use the strip under the sheet too.
   let wrapPill = false; if (!ft) { ft = document.createElement('div'); ft.className = 'shmore'; ft.setAttribute('aria-hidden', 'true'); sh.after(ft); wrapPill = true; }
-  if (ft) { const wr = sh.parentElement; const upd = () => { if (wrapPill && sh.scrollHeight - sh.clientHeight > 6) wr.classList.add('hasmore'); const m = sh.scrollHeight - sh.scrollTop - sh.clientHeight > 6; if (ft.classList.contains('more') !== m) ft.classList.toggle('more', m); };
-    sh.addEventListener('scroll', upd, { passive: true }); new MutationObserver(upd).observe(sh, { childList: true, subtree: true, attributeFilter: ['class'] }); upd(); }
+  if (ft) { const wr = sh.parentElement; const upd = () => { if (wrapPill) { const runs = sh.scrollHeight - sh.clientHeight - (wr.classList.contains('hasmore') ? 44 : 0) > 6; if (wr.classList.contains('hasmore') !== runs) wr.classList.toggle('hasmore', runs); } const m = sh.scrollHeight - sh.scrollTop - sh.clientHeight > 6; if (ft.classList.contains('more') !== m) ft.classList.toggle('more', m); };
+    sh.addEventListener('scroll', upd, { passive: true }); new MutationObserver(upd).observe(sh, { childList: true, subtree: true, attributeFilter: ['class'] }); upd(); const ro = () => { if (!document.body.contains(sh)) return removeEventListener('resize', ro); upd(); }; addEventListener('resize', ro); }
 }
 // Muse R36: a sheet can say where ✕ goes (the new-kind card goes back to the Free play menu, never to a stale solved board).
 let sheetClose = null;
