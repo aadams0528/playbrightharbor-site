@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
-<!-- Ahalock prototype v0.29.1 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
+<!-- Ahalock prototype v0.29.2 (formerly Truthlock; daily logic puzzles). Unlisted test page: not linked from the site. Built from the ahalock repo src/game.html. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ahalock (test version)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
@@ -625,7 +625,7 @@ body:has(#ov) .toast{top:calc(var(--sat) + 10px);max-width:calc(100% - 128px);te
 @media (max-height:620px){.coach .cprac{font-size:15px;padding:2px 8px;margin:4px 0 0}}
 @media (max-height:620px){.coach{padding-bottom:calc(var(--sab) + 6px)}.coach .cstep{font-size:11px;letter-spacing:.3px}.coach .crow .btn{min-height:40px;font-size:17px;padding:0 16px}.coach .ctext{font-size:15.5px}} /* Nikola R37: the lesson card leaves more board at 559 */
 #coach .ctuck{background:none;border:0;color:var(--ink2);white-space:nowrap;font:inherit;font-size:15px;font-weight:800;padding:6px 8px;margin-left:auto;cursor:pointer;min-height:36px}
-#coach.tuck .ctext{display:none}
+#coach.tuck .ctext{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
 .coach .ctop .ctuck + .skip{margin-left:0}
 #coach.tuck .cmain:not(:has(.btn,.tcue)){display:none}
 @media (max-height:620px){#coach.coach .cmain{flex-direction:column;align-items:stretch;gap:2px}#coach.coach .cmain .tcue{text-align:right;padding:0;white-space:normal;max-width:none}#coach.coach .cmain .tcue br{display:none}#coach.coach .cprac{display:inline;padding:0 4px}#coach.coach .cmain .btn.cchk{align-self:flex-end}} /* Nikola R38: full-width text, so the card is shorter and the board shows 3+ rows */
@@ -762,6 +762,8 @@ html.hc .pip.g::after{content:"✓"} html.hc .pip.y::after{content:"↔";color:#
 #app.fit:has(> .board) > .board > .fitscroll{flex:0 1 auto;min-height:104px;overflow-y:auto;overscroll-behavior:contain;margin-left:-4px;margin-right:-4px;padding:2px 4px}
 #app.fit:has(> .board) > .board > .fitscroll.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 26px),rgba(0,0,0,.25));mask-image:linear-gradient(#000 calc(100% - 26px),rgba(0,0,0,.25))}
 #app.fit:has(> .board) > .actions.stick{flex:none}
+.bdcue{position:sticky;bottom:0;height:0;overflow:visible;display:flex;justify-content:center;pointer-events:none;visibility:hidden;z-index:3}
+.bdcue.on{visibility:visible}.bdcue span{position:absolute;bottom:4px;padding:2px 12px;border-radius:999px;background:var(--panel);color:var(--ink);font-size:14px;font-weight:800;box-shadow:0 -2px 8px rgba(0,0,0,.18);white-space:nowrap}
 .morecue{position:relative;z-index:2;line-height:1.35;padding-bottom:2px;display:none;text-align:center;font-size:14px;font-weight:800;color:var(--ink);opacity:.75;margin-top:2px}
 #app.fit:has(> .board) .fitscroll.more + .morecue{display:block}
 #app.fit:has(> .board) .fitscroll.ropen{padding-bottom:10px}#app.fit:has(> .board) .fitscroll.ropen + .morecue{display:none!important} /* Nikola R47: an open reason has no cue over it */
@@ -792,7 +794,7 @@ html.hc .pip.g::after{content:"✓"} html.hc .pip.y::after{content:"↔";color:#
 .status3 .third span{font-size:15px;color:#d9dcef;font-weight:700;line-height:1.2}
 html.big .status3 .third span{font-size:16px}
 .freebtn{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:2px;padding:11px 14px;border:0;border-radius:16px;background:rgba(255,255,255,.1);color:#fff;box-shadow:0 4px 0 rgba(0,0,0,.25);font:inherit;cursor:pointer}
-.frow{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.frow{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .frow .freebtn{grid-column:auto;margin-top:2px;padding:11px 8px;gap:6px}.frow .freebtn .fb2{display:none}.frow .freebtn .fb1{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .frow .freebtn .fb1 svg{flex:none}
 @media (max-width:359px){.frow .freebtn .fb1{font-size:15px;gap:3px}.frow .freebtn{padding:11px 4px}}
@@ -3030,10 +3032,14 @@ html.big .hcap{white-space:normal;line-height:17px;padding:2px 8px}
   function explainPyramid(pz) {
     const { K, steps } = pyrSolve(pz.n, pyrKnown(pz));
     const need = pyrNeeded(steps, pz.q);
+    const seen = new Set(); // Muse R50: two different bricks can sit on the same pair of numbers; the second one says "the other"
     const out = need.map((s, i) => {
       const last = i === need.length - 1;
-      if (s.t === 'add') return { kind: last ? 'done' : 'clue', clues: [s.a, s.b, s.p], text: 'The brick on top of ' + K[s.a] + ' and ' + K[s.b] + ' is ' + K[s.a] + ' + ' + K[s.b] + ' = ' + K[s.p] + '.' + (last ? ' The answer is ' + K[s.p] + '.' : '') };
-      return { kind: last ? 'done' : 'clue', clues: [s.p, s.o, s.x], text: K[s.p] + ' sits on ' + K[s.o] + ' and one more brick, so that brick is ' + K[s.p] + ' − ' + K[s.o] + ' = ' + K[s.x] + '.' + (last ? ' The answer is ' + K[s.x] + '.' : '') };
+      const an = v => (/^(8|11|18)$|^8\d$/.test(String(v)) ? 'an ' : 'a ') + v;
+      if (s.t === 'add') { const key = '+' + K[s.a] + '|' + K[s.b], again = seen.has(key); seen.add(key);
+        return { kind: last ? 'done' : 'clue', clues: [s.a, s.b, s.p], text: (again ? 'The other brick on top of ' + an(K[s.a]) + ' and ' + an(K[s.b]) + ' is also ' : 'The brick on top of ' + K[s.a] + ' and ' + K[s.b] + ' is ') + K[s.a] + ' + ' + K[s.b] + ' = ' + K[s.p] + '.' + (last ? ' The answer is ' + K[s.p] + '.' : '') }; }
+      const key = '-' + K[s.p] + '|' + K[s.o], again = seen.has(key); seen.add(key);
+      return { kind: last ? 'done' : 'clue', clues: [s.p, s.o, s.x], text: (again ? 'The other ' + K[s.p] + ' sits on ' + an(K[s.o]) : K[s.p] + ' sits on ' + K[s.o]) + ' and one more brick, so that brick is ' + (again ? 'also ' : '') + K[s.p] + ' − ' + K[s.o] + ' = ' + K[s.x] + '.' + (last ? ' The answer is ' + K[s.x] + '.' : '') };
     });
     return { steps: out, level: pz.level, solved: K[pz.q] === pz.sol };
   }
@@ -3282,7 +3288,8 @@ function cleanStreak() {
 // Lock of the day (Nikola R47, Alan yes 11-24): one Code Lock a day, the same for everyone. Practice only: it never
 // touches the Daily Three, the 🔥 streak or goals. Its seed is the day number, so its Puzzle ID is lock-T-9xxxxx.
 // Clean Expert solves anywhere (Daily, Free play, Lock of the day), for the gold stamp count in Help. Replays don't count.
-function xcleanCount(pz, clean) { if (clean && pz && pz.tier === 'X' && !(P && P.replay)) store.set('xclean', (+store.get('xclean', 0) || 0) + 1); }
+function xcleanCount(pz, clean) { if (!clean || !pz || pz.tier !== 'X' || (P && P.replay)) return; const id = pz.seedN !== undefined ? pz.type + '-X-' + pz.seedN : 'd' + P.ds + '/' + P.slot; /* Nikola R50: each puzzle counts once */
+  const ids = store.get('xcleanIds', []); const a = Array.isArray(ids) ? ids : []; if (a.indexOf(id) >= 0) return; a.push(id); store.set('xcleanIds', a.slice(-2000)); store.set('xclean', a.length); }
 function xstamp(pz, clean) { return pz.tier === 'X' ? '<div class="xstampw"><span class="xchip big' + (clean ? ' gold' : '') + '">' + (clean ? '🏅 Expert · clean' : '🧠 Expert') + '</span></div>' : ''; }
 // Expert solves label the Why as the shortcut: the 🔑 key steps first, the rest folded in between.
 function whyLabel(pz) { return pz.tier === 'X' ? '🔑 See the shortcut: the key steps' : 'Why? Show me step by step'; }
@@ -3429,7 +3436,7 @@ function toastNear(d) { const bd = $app.querySelector('.board'); if (!bd) return
   const sl = a.matches('.lockwrap') && a.querySelector('.slot'), nx = a.nextElementSibling, gapMid = b => nx && nx.offsetHeight ? (b + nx.getBoundingClientRect().top) / 2 - h / 2 : b + 2;
   let y = sl ? gapMid(sl.getBoundingClientRect().bottom) : a.matches('.cardrow, .isles, .chestrow') ? gapMid(ar.bottom) : ar.top - h - 4; if (y < top0) y = gapMid(ar.bottom);
   d.style.top = Math.round(Math.max(top0, Math.min(y, bot0 - h))) + 'px'; }
-function toastEnd(skipNext) { const c = TOASTCUR; if (!c) return; clearTimeout(c.tm); c.d.remove(); TOASTCUR = null; if (TOASTQ[0] === c.q) TOASTQ.shift(); if (!skipNext && TOASTQ.length) setTimeout(() => { if (!TOASTCUR) toastNext(); }, 150); }
+function toastEnd(skipNext) { const c = TOASTCUR; if (!c) return; clearTimeout(c.tm); c.d.remove(); TOASTCUR = null; { const lv = document.getElementById('tlive'); if (lv && lv.textContent === c.q.t) lv.textContent = ''; } /* Cooper R50: the status line empties when the tip goes */ if (TOASTQ[0] === c.q) TOASTQ.shift(); if (!skipNext && TOASTQ.length) setTimeout(() => { if (!TOASTCUR) toastNext(); }, 150); }
 
 // ---------- ads and Remove ads (phone app only; the ad code is src/native.js, not on the test page) ----------
 // Calm rules: at most one ad every 3 finished puzzles, only after a Next tap, never in the first session,
@@ -3491,7 +3498,7 @@ function promoHelp() { try { const l = window.BHPromo && BHPromo.opts ? BHPromo.
 function promoWire(where) { try { if (window.BHPromo && BHPromo.opts) BHPromo.wire(document.querySelector('.sheet'), where); } catch (e) {} }
 // Help & settings: the 12 lessons and the two switches in one place, so home keeps a single row.
 // Store builds say the store version (1.0, as in the iPhone and Android projects); the test page keeps the prototype line.
-const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.29.1 · future days open for testing' : 'Ahalock 1.0.1 (0.29.1)';
+const VERSION_LINE = TEST_BUILD ? 'Ahalock prototype v0.29.2 · future days open for testing' : 'Ahalock 1.0.1 (0.29.2)';
 function showHelp() {
   const cl = cleanAll();
   // Muse R22: one home for every setting, in groups, with Done pinned so Larger text never buries it.
@@ -3967,7 +3974,7 @@ function freeSolved(ms) {
   xcleanCount(P.pz, clean);
   track('free_done', { type: t, misses: P.miss, hints: P.hints, seconds: Math.round(ms / 1000) });
   const more = fi + 1 < F.q.length; const end = !more && F.q.length > 1;
-  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div>' + takeaway(P.ex, P.pz) + xstamp(P.pz, clean) + '<div class="fpnote">' + (lotd ? '🔒 Lock of the day · a new one tomorrow' : (F.q.length > 1 ? (fi + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · streak unchanged') + (P.pz.seedN !== undefined ? '<br><span class="fpid">Puzzle ID <b>' + t + '-' + F.tier + '-' + P.pz.seedN + '</b></span>' : '') + '</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
+  openSheet('<h2>' + solvedHead(t) + '</h2><div class="sub">' + esc(TYPES[t].answer(P.pz)) + '</div>' + takeaway(P.ex, P.pz) + xstamp(P.pz, clean) + '<div class="fpnote">' + (lotd ? '🔒 Lock of the day · practice only · a new one tomorrow' : (F.q.length > 1 ? (fi + 1) + ' of ' + F.q.length + ' · ' : '') + 'Practice only · streak unchanged') + (P.pz.seedN !== undefined ? '<br><span class="fpid">Puzzle ID <b>' + t + '-' + F.tier + '-' + P.pz.seedN + '</b></span>' : '') + '</div>' + (newly ? '<div class="sub" style="font-size:17px;font-weight:800">🏅 ' + TYPENAME[t] + ' mastered!</div>' + masteredLine() : clean && before + 1 === MASTER_N - 1 ? '<div class="sub" style="font-size:16px;font-weight:800">One clean solve to master ' + TYPENAME[t] + '</div>' : '') +
     '<div class="statrow"><div class="stat"><b>' + fmtT(ms) + '</b><span>TIME</span></div><div class="stat"><b>' + P.miss + '</b><span>' + (P.miss === 1 ? 'MISS' : 'MISSES') + '</span></div><div class="stat"><b>' + (clean ? '✅' : '👍') + '</b><span>' + (clean ? 'CLEAN' : 'SOLVED') + '</span></div></div>' +
     (end ? '<div class="sub" style="font-size:16px">All ' + F.q.length + ' solved · ' + F.clean + ' clean · ' + fmtT(F.ms.reduce((a, x) => a + (x || 0), 0)) + '</div>' : '') +
     (F.tier === 'X' && clean ? '<button class="btn wide" id="xshare" style="margin:2px 0 8px">Share this clean Expert solve</button>' : '') +
@@ -4136,7 +4143,7 @@ function renderHome() {
     // Update B (Alan 11-18): one status row under the Today card. Each part is one tap: Lantern Week goals, Story, and This week
     // (the week strip, the countdown, tomorrow's puzzles and the bonus line live in that sheet).
     // Free play (Alan 11-19): one slim full-width row under the status tiles on phones, a fourth tile on wider screens.
-    '<div class="status3">' + weekRow() + storyCard() + weekPill(wk, all) + '<div class="frow"><button class="freebtn" id="free"><span class="fb1">🔀 Free play</span><span class="fb2">Shuffle or pick puzzles</span></button>' + (() => { const ld = lotdDone(); return '<button class="freebtn lotdbtn' + (ld ? ' done' : '') + '" id="lotd" aria-label="Lock of the day' + (ld ? ', solved' + (ld.clean ? ' clean' : '') : '') + '"><span class="fb1">🔒 Lock of the day' + (ld ? ' ' + (ld.clean ? '✅' : '👍') : '') + '</span><span class="fb2">' + (ld ? (ld.clean ? 'Solved clean' : 'Solved') + ' · ' + fmtT(ld.ms) : 'One for everyone') + '</span></button>'; })() + '</div></div>' +
+    '<div class="status3">' + weekRow() + storyCard() + weekPill(wk, all) + '<div class="frow"><button class="freebtn" id="free"><span class="fb1">🔀 Free play</span><span class="fb2">Shuffle or pick puzzles</span></button>' + (() => { const ld = lotdDone(); return '<button class="freebtn lotdbtn' + (ld ? ' done' : '') + '" id="lotd" aria-label="Lock of the day' + (ld ? ', solved' + (ld.clean ? ' clean' : '') : '') + '"><span class="fb1">🔒 Lock of the day' + (ld ? ' ' + (ld.clean ? '✅' : '👍') : '') + '</span><span class="fb2">' + (ld ? (ld.clean ? 'Solved clean' : 'Solved') + ' · ' + fmtT(ld.ms) : 'Practice · same for everyone') + '</span></button>'; })() + '</div></div>' +
     '');
   document.getElementById('go').onclick = () => { if (next === -1) return showDaySummary(ds); if (next === 0) { const f = firstSlot(ds); if (f > 0) return startPuzzle(ds, f); if (f < 0) { track('warmup', {}); return startTutorial('trail', () => startPuzzle(ds, 0)); } } startPuzzle(ds, next); };
   document.getElementById('story').onclick = () => renderMap();
@@ -4196,6 +4203,14 @@ function startPuzzle(ds, slot, replay) {
 }
 // Update B, part 1: fit the puzzle to the screen. The clue list (or the people, wheels or scales)
 // is the one part that may scroll; the header, controls and Lock it in! never leave the screen.
+// Nikola R50: when the whole board scrolls as one (short screens with Larger text), a "More below ↓" pill rides the board's
+// bottom edge until the end (the keypad) is in view, so the player knows the rest is there.
+function boardCue(bd) {
+  if (bd.querySelector(':scope > .bdcue')) return;
+  const c = document.createElement('div'); c.className = 'bdcue'; c.setAttribute('aria-hidden', 'true'); c.innerHTML = '<span>More below ↓</span>'; bd.appendChild(c);
+  const up = () => c.classList.toggle('on', bd.scrollHeight - bd.scrollTop - bd.clientHeight > 4);
+  bd.addEventListener('scroll', up, { passive: true }); up(); requestAnimationFrame(up);
+}
 function fitBoard(keep) {
   const on = !P.tutorial && S.screen === 'puzzle';
   $app.classList.toggle('fit', on);
@@ -4224,7 +4239,7 @@ function fitBoard(keep) {
     const pend = !!$app.querySelector('.actmsg .msg');
     const unnest = () => { snug(); const c0 = sc.classList.contains('clues') && sc.firstElementChild, tiny = c0 && sc.clientHeight < Math.min(c0.offsetHeight, 150) - 2; // the pane must hold at least one whole clue, or the board scrolls as one
       if (!sc.classList.contains('fitscroll') || (!tiny && bd.scrollHeight - bd.clientHeight <= (bd.classList.contains('fin') ? 60 : 4) && sc.scrollHeight - sc.clientHeight > 12)) return false; // final locks: evidence scrolls, the slots and parts stay in view
-      sc.classList.remove('fitscroll', 'more'); sc.removeEventListener('scroll', upd); cue.remove(); if (keep) bd.scrollTop = keep[0] || 0; snug(); requestAnimationFrame(snug); return true; };
+      sc.classList.remove('fitscroll', 'more'); sc.removeEventListener('scroll', upd); cue.remove(); if (keep) bd.scrollTop = keep[0] || 0; snug(); requestAnimationFrame(snug); boardCue(bd); return true; };
     if (!pend && unnest()) return;
     requestAnimationFrame(() => requestAnimationFrame(() => { upd(); unnest(); })); if (document.fonts && document.fonts.ready) document.fonts.ready.then(unnest);
   } else { if (keep) bd.scrollTop = keep[0] || 0; snug(); requestAnimationFrame(() => requestAnimationFrame(snug)); if (document.fonts && document.fonts.ready) document.fonts.ready.then(snug); setTimeout(snug, 300); }
@@ -4411,7 +4426,7 @@ function check() {
   if (!r.empty) { SFX.click(); buzz('tap'); }
   if (r.ok) { solved(); return; }
   // Nikola R43: an empty entry costs nothing, so it gets a quiet tip that moves nothing: no ✕, no red bar, no miss sound.
-  if (r.empty) { toast(r.msg, 1500, true, true); const es = $app.querySelectorAll('.board .slot:empty, .board .gslot .box:not(.full)'); es.forEach(e => { e.classList.remove('epulse'); void e.offsetWidth; e.classList.add('epulse'); setTimeout(() => e.classList.remove('epulse'), 1500); }); return; }
+  if (r.empty) { toast(r.msg, 1500, true, true); let es = [...$app.querySelectorAll('.board .slot:empty, .board .gslot .box:not(.full)')]; if (!es.length) es = [...$app.querySelectorAll('.board .ansrow, .board .wires, .board .cardrow, .board .isles, .board .chestrow, .board .abc')].slice(0, 1); /* Muse R50: every kind glows its answer */ es.forEach(e => { e.classList.remove('epulse'); void e.offsetWidth; e.classList.add('epulse'); setTimeout(() => e.classList.remove('epulse'), 1500); }); return; }
   setTimeout(() => { SFX.miss(); buzz('bad'); }, 90);
   // Nikola R40: locking in the very same wrong answer again doesn't count a second miss.
   const tryKey = JSON.stringify(P.entry); P.tried = P.tried || []; const again = P.tried.indexOf(tryKey) >= 0; // Muse R41: any answer already tried, not just the last one
@@ -4476,7 +4491,7 @@ function wireInView() {
   let sc = w.parentElement; while (sc && sc !== document.body && !(sc.scrollHeight > sc.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
   const win = !sc || sc === document.body, box = win ? { top: 0, bottom: innerHeight } : sc.getBoundingClientRect(), bar = $app.querySelector('.actions.stick'), hd = $app.querySelector('.pz-top');
   const lim = Math.min(box.bottom, bar ? bar.getBoundingClientRect().top : innerHeight) - 8, top0 = Math.max(box.top, win && hd ? hd.getBoundingClientRect().bottom : 0);
-  const t = $app.querySelector('.board .hl:not(.wire)'), room = t ? t.getBoundingClientRect().top - top0 - 6 : 1e9, d = Math.min(w.getBoundingClientRect().bottom - lim, Math.max(0, room));
+  const tops = [...$app.querySelectorAll('.board .hl:not(.wire), .board .msg.nearc')].map(e => e.getBoundingClientRect().top), room = tops.length ? Math.min(...tops) - top0 - 6 : 1e9, /* Nikola R50: the hint note stays in view too */ d = Math.min(w.getBoundingClientRect().bottom - lim, Math.max(0, room));
   if (d > 0) (win ? window : sc).scrollBy(0, d);
 }
 // The Story goal counts whole stops: true only when this solve finishes a stop's last room for the first time.
@@ -4692,10 +4707,13 @@ function shareCanvas(ds, pic, icons) {
   g.fillStyle = '#ffe08a'; g.font = '800 ' + (pic ? 34 : 36) + 'px ' + body; g.fillText('Three little logic puzzles a day · playbrightharbor.com', W / 2, Y.foot);
   return c;
 }
-async function shareDay(ds) {
+async function dayShareFile(ds) {
   const sh = shareText(ds); const [pic, icons] = await shareAssets(ds); const c = shareCanvas(ds, pic, icons);
   const blob = c ? await new Promise(r => { try { c.toBlob(r, 'image/png'); } catch (e) { r(null); } }) : null;
-  const file = blob && typeof File === 'function' ? new File([blob], 'ahalock-' + ds + '.png', { type: 'image/png' }) : null;
+  return { sh, file: blob && typeof File === 'function' ? new File([blob], 'ahalock-' + ds + '.png', { type: 'image/png' }) : null };
+}
+async function shareDay(ds, ready) { /* Nikola R50: built when the results card opens, so the first tap shares at once */
+  const { sh, file } = ready || await dayShareFile(ds);
   try {
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: sh.text }); track('share', { kind: 'picture' }); return; }
     if (navigator.share) { await navigator.share({ text: sh.text }); track('share', { kind: 'text' }); return; }
@@ -4756,7 +4774,7 @@ function showDaySummary(ds) {
   const pw = document.getElementById('fpdw'); if (pw) pw.onclick = () => { const wk = weakestKind(); track('keep_going', { to: 'practice' }); if (wk) startFree([wk.t], freeGet().t, 'practice'); };
   { const bn = document.getElementById('bon'); if (bn) bn.onclick = () => { track('keep_going', { to: 'bonus' }); startBonus(); }; }
   wireRemindAsk(() => showDaySummary(ds));
-  document.getElementById('share').onclick = () => shareDay(ds);
+  { let ready = null; dayShareFile(ds).then(r => { ready = r; }).catch(() => {}); document.getElementById('share').onclick = () => shareDay(ds, ready); }
   shareAssets(ds).then(([pic, icons]) => { const card = document.getElementById('card'); const cv = card && shareCanvas(ds, pic, icons);
     if (card && cv) { try { const im = new Image(); im.className = 'sharepic'; im.alt = shareAlt(ds); im.src = cv.toDataURL('image/png'); card.replaceWith(im); } catch (e) {} } });
   document.getElementById('home').onclick = () => { closeSheet(); S.date = realToday; renderHome(); };
@@ -5654,7 +5672,7 @@ function tutAfterRender() {
   const last = tutState.i === tutState.def.steps.length - 1;
   const needs = st.wait && !st.wait();
   // One-screen lessons (Alan 11-18): one slim top line (step, practice label, Skip, ✕), the words, then Next or the cue.
-  box.innerHTML = '<div class="cbox"><div class="ctop"><span class="cstep">Step ' + (tutState.i + 1) + ' of ' + tutState.def.steps.length + '</span>' + (innerHeight < 620 ? '<button class="ctuck" id="ttuck" aria-expanded="true" aria-label="Hide the lesson words">▾ Hide</button>' : '') + '<button class="skip" id="tskip">Skip lesson</button><button class="shx" id="tx" aria-label="Skip lesson">✕</button></div><div class="cmain"><div class="ctext">' + (tutState.i === 0 ? '<span class="cprac">This is a practice example.</span> ' : '') + iconize(st.t) + '</div>' +
+  box.innerHTML = '<div class="cbox"><div class="ctop"><span class="cstep">Step ' + (tutState.i + 1) + ' of ' + tutState.def.steps.length + '</span>' + (innerHeight < 620 ? '<button class="ctuck" id="ttuck" aria-expanded="' + !tutState.tuck + '" aria-label="' + (tutState.tuck ? 'Show' : 'Hide') + ' the lesson words">' + (tutState.tuck ? '▴ Show' : '▾ Hide') + '</button>' : '') + '<button class="skip" id="tskip">Skip lesson</button><button class="shx" id="tx" aria-label="Skip lesson">✕</button></div><div class="cmain"><div class="ctext">' + (tutState.i === 0 ? '<span class="cprac">This is a practice example.</span> ' : '') + iconize(st.t) + '</div>' +
     (needs ? '<div class="tcue">Your turn: tap above ↑</div>' : last ? '<div class="tcue">Your turn</div>' : '<button class="btn small" id="tnext">Next</button>') + '</div></div>';
   document.body.appendChild(box);
   // One-screen lessons: the Lock it in! button rides in the card on the last step, so the board, the card and
@@ -5664,7 +5682,7 @@ function tutAfterRender() {
     if (last && ck) { const cue = box.querySelector('.cmain .tcue'); if (cue) cue.replaceWith(ck); else box.querySelector('.cmain').appendChild(ck); ck.classList.add('cchk'); } }
   coachFit(last);
   // Nikola R47 (Alan yes 11-24): on a short phone the lesson words fold away to one line so the board shows; Next and Lock it in! stay.
-  { const tb = document.getElementById('ttuck'); if (tb) tb.onclick = () => { const t = box.classList.toggle('tuck'); tb.textContent = t ? '▴ Show' : '▾ Hide'; tb.setAttribute('aria-expanded', String(!t)); tb.setAttribute('aria-label', t ? 'Show the lesson words' : 'Hide the lesson words'); coachFit(last); }; }
+  { const tb = document.getElementById('ttuck'); if (tb && tutState.tuck) { box.classList.add('tuck'); coachFit(last); } if (tb) tb.onclick = () => { const t = box.classList.toggle('tuck'); tutState.tuck = t; /* Nikola R50: stays folded from step to step */ tb.textContent = t ? '▴ Show' : '▾ Hide'; tb.setAttribute('aria-expanded', String(!t)); tb.setAttribute('aria-label', t ? 'Show the lesson words' : 'Hide the lesson words'); coachFit(last); }; }
   document.getElementById('tskip').onclick = () => endTutorial(true);
   document.getElementById('tx').onclick = () => endTutorial(true);
   const nb = document.getElementById('tnext');
