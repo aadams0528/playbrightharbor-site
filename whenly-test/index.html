@@ -340,7 +340,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
 .pairs{display:flex;gap:6px;font-size:30px;line-height:1}
 .near{font-size:15px;border-left:4px solid var(--near);padding:4px 0 4px 10px}
 .card .year{font-size:22px}
-.card.done .tagwrap{display:none}.card.tagplate:not(.done) .tagwrap{display:flex;position:absolute;left:0;top:0;bottom:0;width:var(--plate-w,var(--card-h));flex-direction:column;align-items:center;justify-content:center;pointer-events:none}.card.tagplate .tagwrap br{display:none}.card.tagplate .tagwrap .tag{margin:0;font-size:11px;padding:2px 4px;line-height:1.1;text-align:center;white-space:normal;overflow-wrap:anywhere;max-width:calc(100% - 4px);border-radius:8px}.card.tagplate:not(.done) .plate>*{visibility:hidden} /* a hint tag shown on the picture when the name has no room for it (Nikola, round 49) */
+.card.done .tagwrap{display:none}.pbr,.hs{display:none}.card.tagplate .pbr{display:inline}.card.tagplate .hs{display:inline}.card.tagplate .hl{display:none}.card.tagplate:not(.done) .hwrap{display:flex;position:absolute;left:0;top:0;bottom:0;width:var(--plate-w,var(--card-h));flex-direction:column;align-items:center;justify-content:center;pointer-events:none}.card.tagplate .hwrap br{display:none}.card.tagplate .hwrap .tag{margin:0;font-size:11px;padding:2px 4px;line-height:1.1;text-align:center;white-space:normal;overflow-wrap:normal;max-width:calc(100% - 4px);border-radius:8px} /* only the hint tag moves onto the picture; a placed or spot tag stays under the name; never broken mid-word (Nikola, round 50) */.card.tagplate:not(.done) .plate>*{visibility:hidden} /* a hint tag shown on the picture when the name has no room for it (Nikola, round 49) */
 .milestone{font-family:var(--display);font-weight:800;font-size:18px;color:var(--accent)}
 .tester{display:flex;gap:8px;flex-wrap:wrap}
 .tester .btn{padding:8px 12px;font-size:14px}
@@ -423,7 +423,7 @@ textarea.copy{width:100%;font:inherit;font-size:14px;border:1px solid var(--line
     <button role="tab" id="tPractice" aria-selected="false"><span class="ni">🎲</span>Practice</button>
     <button role="tab" id="tExpert" aria-selected="false"><span class="ni">🏆</span>Expert</button>
   </nav>
-  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 79</span></footer>
+  <footer id="foot" hidden><span class="build"> · Whenly 1.0 test 80</span></footer>
 </div>
 
 <script id="bh-games">
@@ -1454,6 +1454,7 @@ function layout(){
     const kids=[...list.querySelectorAll(".card")].map(c=>+c.dataset.id);
     if(kids.some((id,i)=>id!==G.order[i])){const act=document.activeElement;G.order.forEach(id=>cardEls[id]&&list.appendChild(cardEls[id]));if(act&&list.contains(act))act.focus()}
   }
+  let tagsChanged=0;
   list.classList.toggle("done",!!G.done);
   const n=G.order.length;
   G.order.forEach((id,i)=>{
@@ -1461,8 +1462,10 @@ function layout(){
     const [up,dn]=el.querySelectorAll(".moves button"),fr=G.order.filter(x=>!isPlaced(x)),fi=fr.indexOf(id);up.disabled=fi<=0;dn.disabled=fi<0||fi===fr.length-1;
     const tw=el.querySelector(".tagwrap"),ht=hintText(id),pl=G.placed.includes(id);
     const sp=G.spot&&G.spot.id===id&&i===G.spot.slot&&!pl?`<span class="tag spot-${G.spot.ok?"ok":"no"}">🎯 ${G.spot.ok?"right spot":"not its spot"}</span>`:"";
-    tw.innerHTML=(ht||pl||sp)?`<br>${ht?`<span class="tag">💡 ${ht}</span> `:""}${pl?`<span class="tag">📌 placed</span>`:""}${sp}`:"";
+    const th=(ht?`<span class="hwrap"><br><span class="tag">${ht==="21st century"?`<span class="hl">💡 21st century</span><span class="hs">💡 21st c.</span>`:`💡 ${ht}`}</span> </span>${pl||sp?`<br class="pbr">`:""}`:pl||sp?"<br>":"")+(pl?`<span class="tag">📌 placed</span>`:"")+sp;
+    if(tw.innerHTML!==th){tw.innerHTML=th;tagsChanged=1} /* a card's tags changed (hint, spot check, place): its name is fitted again right away (Nikola, round 50) */
   });
+  if(tagsChanged)fitNames();
   drawChips();
 }
 // Phones rotate and browser bars come and go, which can switch card sizes; re-place the cards so none hide under the bar (Cooper, round 12).
@@ -1671,7 +1674,7 @@ addEventListener("resize",()=>fitMeta());
 // In a stacked header the tries line shares its row with "Show the answer": step its text down rather than wrap the row (Nikola, round 35).
 function fitTries(){const e=$("#tries");if(!e)return;e.style.fontSize="";if(!e.offsetParent||!$("#meta").classList.contains("stack"))return;let f=parseFloat(getComputedStyle(e).fontSize);if(e.scrollWidth>e.clientWidth+1){f=Math.max(12.5,Math.floor(f*e.clientWidth/e.scrollWidth*2)/2+.5);e.style.fontSize=f+"px"}while(f>12.5&&e.scrollWidth>e.clientWidth+1){f-=.5;e.style.fontSize=f+"px"}} /* one estimate, then half steps (Nikola, round 47) */
 function fitNames(){fitTries();if(G&&!G.done&&G.order&&G.order.every(id=>cardEls[id]))rnowUpdate();document.querySelectorAll(".card .ctext").forEach(t=>{const cd=t.closest(".card");cd&&cd.classList.remove("tagplate");const f0=parseFloat((t.style.fontSize="",getComputedStyle(t).fontSize)),f1=fitName(t,cd);
-  if(cd&&f1<f0&&t.querySelectorAll(".tag").length===1){cd.classList.add("tagplate");if(fitName(t,cd)<=f1){cd.classList.remove("tagplate");fitName(t,cd)}}}); /* when a hint tag would shrink a card's name, the tag moves onto the card's picture instead, so the name keeps its size (Nikola, round 49) */
+  if(cd&&f1<f0&&t.querySelector(".hwrap")){cd.classList.add("tagplate");if(fitName(t,cd)<=f1){cd.classList.remove("tagplate");fitName(t,cd)}}}); /* when a hint tag would shrink a card's name, the tag moves onto the card's picture instead, so the name keeps its size (Nikola, round 49) */
   function fitName(t,cd){t.style.fontSize="";t.style.paddingBlock="";
   /* the card's own inner height, so a two-line name never sits on the border at 47px (Nikola, round 37) */
   const room=()=>cd?cd.clientHeight-2:t.parentElement.clientHeight+1;
