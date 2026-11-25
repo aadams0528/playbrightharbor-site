@@ -67,7 +67,8 @@ button.pill{color:inherit;font-family:inherit;cursor:pointer;flex:none;white-spa
 #lvTip.float{position:absolute;left:-3px;right:-3px;top:-4px;z-index:4;background:#16283a;border:1.5px solid rgba(255,210,122,.55);border-radius:14px;padding:9px 12px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;visibility:hidden;pointer-events:none}
 #lvTip.float.glow{animation:tipGlow 7s ease-out forwards}#lvTip.float.glow.out{animation:tipOut .35s ease-out forwards}@keyframes tipOut{0%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}} /* up to 7 s, but it fades as soon as you start drawing (Alan, Nov 19, from Nikola round 21) */
 @keyframes tipGlow{0%{opacity:0;visibility:visible;box-shadow:0 0 0 3px var(--lantern),0 0 22px rgba(255,210,122,.6)}6%{opacity:1;visibility:visible}20%{box-shadow:0 8px 24px rgba(0,0,0,.4)}80%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}
-@media (prefers-reduced-motion:reduce){#lvTip.float.glow{animation:tipGlow 7s steps(1,end) forwards}}
+.tip:has(#lvTip.float.glow:not(.out))>.head{animation:headAway 7s ease-out forwards}.tip:has(#lvTip.float.glow.out)>.head{animation:headBack .35s ease-out forwards}@keyframes headAway{0%{opacity:1}6%{opacity:0}80%{opacity:0}100%{opacity:1}}@keyframes headBack{0%{opacity:0}100%{opacity:1}} /* the title row fades out as the goal line fades in, so the two never show through each other (Nikola, round 34) */
+@media (prefers-reduced-motion:reduce){#lvTip.float.glow{animation:tipGlow 7s steps(1,end) forwards}.tip:has(#lvTip.float.glow:not(.out))>.head{animation:headAway 7s steps(1,end) forwards}}
 .head h2{cursor:pointer}.fwait #lvTitle{visibility:hidden}
 .coach{display:flex;flex-direction:column;gap:5px;padding:8px 12px;border-radius:14px;background:rgba(255,210,122,.09);border:1.5px solid rgba(255,210,122,.35);animation:coachIn .35s ease}
 .coach .step{font-size:13px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--lantern)}
@@ -184,7 +185,7 @@ canvas{display:block;width:100%;touch-action:none;border-radius:20px;-webkit-tou
 
 <div id="app">
   <div class="top">
-    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.27<span class="lvls"> · 258 levels</span></small></div>
+    <div class="brand" id="brand">Color Rivers<small><span class="proto">Prototype </span>v0.99.28<span class="lvls"> · 258 levels</span></small></div>
     <button class="pill" id="dailyBtn" hidden aria-label="Daily River"></button>
     <button class="pill" id="starPill" aria-label="Total stars in all chapters"><span class="st">★</span><span id="totalStars">0</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙</button>
@@ -784,7 +785,7 @@ function startLevel(n,keep,cut,extra){
   paths=fits?keep:G.starts.map(i=>[i]);if(!keep)saveDraft(true);undoStack=[];
   if(fits&&extra&&Array.isArray(extra.undo))undoStack=extra.undo.filter(st=>Array.isArray(st)&&st.length===G.starts.length&&st.every((p,k)=>Array.isArray(p)&&p[0]===G.starts[k]&&p.every(c=>Number.isInteger(c)&&c>=0&&c<G.cells.length)));
   active=-1;headLinger=null;won=false;hints=[];picked=-1;bloom=G.nests.map(()=>0);sparks=[];runs=[];retraces=0;hintsUsed=0;hintGiven=hgLoad();hintDone=new Set();hintSeen=hintGiven.size>0;hidByMe=false;turnTold=false;
-  if(fits&&extra&&Array.isArray(extra.hs))hints=extra.hs.filter(k=>Number.isInteger(k)&&hintGiven.has(k)&&!onRoute(k)); /* hint dashes come back with the level draft (Nikola, round 33) */
+  if(fits&&extra&&Array.isArray(extra.hs))hints=extra.hs.filter(k=>Number.isInteger(k)&&hintGiven.has(k)&&!onRoute(k));if(fits&&extra&&extra.hb===true)hidByMe=true; /* hint dashes come back with the level draft (Nikola, round 33) */
   drawn=paths.map(p=>p.slice());legendMix=!!L.mix||[3,5,6].some(c=>prog.seen&&prog.seen[c]);/* Alan, Nov 7: once you have mixed, the chart is on every board */clearToast();
   if(!keep){prog.plays[L.id]=(prog.plays[L.id]||0)+1;saveProg();}
   recolor();lastStatus=nestStatus(G,paths,col).map(s=>s.ok);
@@ -1155,10 +1156,10 @@ function saveDraft(clear){
   // a challenge river keeps its own draft, like the Daily, so a reload mid-challenge keeps the drawing (Cooper, v0.64)
   // a Long River keeps both boards, what was sent down and each board's Undo, so a reload picks it up (Cooper, v0.69)
   if(bonus&&bonus.long){if(!clear)longSave();return;}
-  if(bonus){store.set("cdraw",clear||won?null:{id:bonus.id,paths,undo:undoStack.slice(-20)});return;}
-  if(daily){store.set("ddraw",clear||won?null:{day:daily.day,paths,undo:undoStack.slice(-20)});return;}
+  if(bonus){store.set("cdraw",clear||won?null:{id:bonus.id,paths,undo:undoStack.slice(-20),hs:hints.slice(),hb:hidByMe});return;}
+  if(daily){store.set("ddraw",clear||won?null:{day:daily.day,paths,undo:undoStack.slice(-20),hs:hints.slice(),hb:hidByMe});return;}
   store.set("draw",clear||won?null:{id:ID(lv),paths,cut:G.toolUsed&&G.cutAt!=null?G.cutAt:null,
-  undo:undoStack.slice(-20),ls:lesson&&!lesson.note?lesson.i:null,hs:hints.slice()});}
+  undo:undoStack.slice(-20),ls:lesson&&!lesson.note?lesson.i:null,hs:hints.slice(),hb:hidByMe});}
 // A free nudge on boards that turn on one crossing (Muse, v0.74: Dabchick, Beaver steps and Otter falls read as unfair, not hard):
 // after two Restarts, or a minute and a quarter and six strokes without a win, the crossing the best route uses glows for a few seconds.
 let nudge=null;
@@ -1519,7 +1520,7 @@ const longOpen=R=>chalOpen({after:R.after});
 const longPar=k=>{const R=LONGX[k];return parseLevel({map:R.up.map,sol:R.up.sol}).par+parseLevel({map:R.down.map.map(r=>r.replace(/\*/g,"Y")),sol:R.down.sol}).par;};
 // the board being left keeps its drawing and its Undo (Cooper, v0.69: Undo was lost on every switch)
 function longSync(){if(!longRun||!bonus||!bonus.long)return;const d=paths.map(p=>p.slice()),u=undoStack.slice(-20);
-  if(bonus.long.stage){longRun.down=d;longRun.downUndo=u;}else{longRun.up=d;longRun.upUndo=u;}}
+  if(bonus.long.stage){longRun.down=d;longRun.downUndo=u;longRun.downHs=hints.slice();longRun.downHb=hidByMe;}else{longRun.up=d;longRun.upUndo=u;longRun.upHs=hints.slice();longRun.upHb=hidByMe;}} /* each board keeps its hint dashes too (Nikola, round 34) */
 function longSave(){longSync();const L=bonus.long,id=LONGX[L.k].id,v=won&&L.stage?null:{...longRun,id,stage:L.stage};store.set("ldraw",v);
   const all=store.get("ldraws",{})||{};if(v)all[id]=v;else delete all[id];store.set("ldraws",all);} // one draft per river (Muse, v0.74: reopening Beaver from the map after Heron lost its drawing)
 // from the River map or a reload: an unfinished Long River carries on where it was left
@@ -1529,8 +1530,8 @@ function resumeLong(k){let ld=store.get("ldraw",null);if(!ld||ld.id!==LONGX[k].i
   else{longRun=null;startLong(k);const st=prog.stars[LONGX[k].id];if(st)toast(`Your best ${"★".repeat(st)} is saved. This is a new run, and it can't lower your best.`,2600);}} // Nikola, v0.76: a cleared river reopened blank with no word why; v0.77: "stars are kept" was unclear
 function startLong(k,stage=0){
   if(!longRun||longRun.k!==k)longRun={k,up:null,colors:null,down:null,upInk:0};
-  if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined,null,{undo:longRun.downUndo});}
-  else{bonus=longLevel(k,0);startLevel("bonus",longRun.up||undefined,null,{undo:longRun.upUndo});}
+  if(stage){bonus=longLevel(k,1,longRun.colors);startLevel("bonus",longRun.down||undefined,null,{undo:longRun.downUndo,hs:longRun.downHs,hb:longRun.downHb});}
+  else{bonus=longLevel(k,0);startLevel("bonus",longRun.up||undefined,null,{undo:longRun.upUndo,hs:longRun.upHs,hb:longRun.upHb});}
   updateInk();
   // the first downstream board: the ★ dens are where you start, not nests (Muse, round 19: the red ★ den read as a nest)
   if(stage&&!prog.seen["note:downden"])setTimeout(()=>{if(bonus&&bonus.long&&bonus.long.stage)teachOnce("downden","Down here, draw from each ★ den to the nest of its color.");},400);
@@ -1727,10 +1728,10 @@ $("hintBtn").onclick=()=>{
   if(G.tool&&!G.toolUsed&&LV().cut&&!toolHint){const go=()=>{toolHint=performance.now();hintsUsed++;updateHintBtn();toast(`Use the ${CREW[G.tool].name.toLowerCase()} here`);};if(spendHint())go();else offerHintAd(go);return;}
   // a den the player just tapped picks the stream, so they can ask about the route they're stuck on (Alan, Oct 20)
   // the pick-a-stream note comes before the first automatic hint is spent (Cooper, Oct 20), so the player can still choose
-  if(picked<0&&hints.length){hints=[];hintDone.clear();hidByMe=true;updateHintBtn();return;}
+  if(picked<0&&hints.length){hints=[];hintDone.clear();hidByMe=true;updateHintBtn();saveDraft();return;}
   if(picked<0&&!lesson&&!prog.seen["note:pickhint"]&&nextHint()>=0){teachOnce("pickhint","Stuck on one stream? Tap its den, then Hint.");} // the first tap still gives a hint (Nikola, v0.75: it showed only the note)
   // after Hide (or coming back to the level) the routes already shown come back first, free (Nikola, round 22)
-  if(picked<0&&hintAgain()){hintGiven.forEach(k=>{if(onRoute(k))hintDone.add(k);});hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;updateHintBtn();toast("👀 Shown again, free.");return;}
+  if(picked<0&&hintAgain()){hintGiven.forEach(k=>{if(onRoute(k))hintDone.add(k);});hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;updateHintBtn();saveDraft();toast("👀 Shown again, free.");return;}
   if(picked<0&&hidByMe){hintGiven.forEach(k=>{if(onRoute(k))hintDone.add(k);});hints=[...hintGiven].filter(k=>!onRoute(k));hidByMe=false;} /* the routes already shown come back with the new one, free */
   const mine=picked>=0&&!onRoute(picked)&&!hints.includes(picked),s=mine?picked:nextHint();
   // a picked stream that's already right (or already hinted) can't be the hint: say so instead of quietly picking another
@@ -1746,7 +1747,7 @@ $("hintBtn").onclick=()=>{
     // so two hints can never seem to disagree about a shared cell (Muse, round 16)
     const used=new Set(hints.flatMap(h=>routeOf(h).slice(1)));
     G.starts.forEach((_,t)=>{if(!hints.includes(t)&&!onRoute(t)&&(paths[t]||[]).slice(1).some(c=>used.has(c)))add(t);});
-    hgSave();if(!free)hintsUsed++;updateHintBtn();};
+    hgSave();if(!free)hintsUsed++;updateHintBtn();saveDraft();}; /* a reload straight after Hint, Hide or Again keeps the dashes (Nikola, round 34) */
   // a route already shown on this level comes back free after Hide (Nikola, round 21: L258 charged twice)
   if(hintGiven.has(s)){give(true);toast("That route again, free: no hint used.");return;}
   if(spendHint())give();else offerHintAd(give);
@@ -2111,7 +2112,7 @@ function decoFall(){const h=decoNow();if(!h||calm())return;const bit=DECOS[h.key
 // One message at a time, each up for at least 1.9 s, so a second one never wipes the first before it's read.
 // Repeats are dropped and at most two wait their turn (the newest win).
 let toastQ=[],toastOn="";
-function toast(t,ms=1900,over){if(t===toastOn||toastQ.some(q=>q.t===t))return;const hold=!over&&(!$("noteCard").hidden||!$("sheet").hidden);toastQ.push({t,ms:Math.max(ms,1900),held:hold,over:!!over});if(toastQ.length>2){const i=toastQ.findIndex((q,j)=>!q.held&&j<toastQ.length-1);if(i>=0)toastQ.splice(i,1);else if(toastQ.length>4)toastQ.shift();} /* a toast held for "Got it" or a sheet is kept, up to four waiting (Nikola, rounds 24 and 33) */if(!toastOn){if(hold)toastHeld=true;else nextToast();}} /* while a Good to know card is open, a message waits for it to close instead of laying over it (Nikola, round 30) */
+function toast(t,ms=1900,over){if(t===toastOn||toastQ.some(q=>q.t===t))return;const hold=!over&&(!$("noteCard").hidden||!$("sheet").hidden);toastQ.push({t,ms:Math.max(ms,1900),held:hold,over:!!over});if(toastQ.length>2){const i=toastQ.findIndex((q,j)=>!q.held&&j<toastQ.length-1);if(i>=0)toastQ.splice(i,1);else if(toastQ.length>6)toastQ.shift();} /* a toast held for "Got it" or a sheet is kept, up to six waiting (Nikola, rounds 24, 33 and 34) */if(!toastOn){if(hold)toastHeld=true;else nextToast();}} /* while a Good to know card is open, a message waits for it to close instead of laying over it (Nikola, round 30) */
 function nextToast(){const el=$("toast");let q;if(!$("noteCard").hidden||!$("sheet").hidden){const i=toastQ.findIndex(x=>!x.held);if(i<0){toastOn="";if(toastQ.length)toastHeld=true;return;}q=toastQ.splice(i,1)[0];} /* held messages keep waiting while a card or sheet shows; a sheet's own answer goes past them (Nikola, round 32) */else q=toastQ.shift();if(!q){toastOn="";return;}toastOn=q.t;toastOver=!!q.over;toastMs=q.ms;
   el.textContent=q.t;el.style.fontSize="";
   // sit over the four buttons at the bottom: never on the title, the color chart, the lesson's Skip and Next, or the board
