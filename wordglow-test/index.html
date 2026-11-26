@@ -736,7 +736,11 @@ const pick = arr => arr[Math.floor(rng() * arr.length)];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} if (!LOCAL_ONLY.test(k)) window.BHCloud?.changed(); } };
 // Kept on this phone only, never in the cloud save: daily free-ad allowance, session count, promo snooze, delivered purchases.
-const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$|remind$|tmr-over$|week-seen$|deco-greet$)/;   // the reminder is per phone (its permission is)
+const LOCAL_ONLY = /^wb-(free-ads-|sessions$|promo-|granted-tx$|remind$|tmr-over$|week-seen$|deco-greet$|analytics-ok$|first-launch-sent$)/;   // the reminder is per phone (its permission is), and so is the analytics consent
+// Analytics events wait here until the consent step has switched analytics on (see track and initAds).
+// Declared up here because the game logs its first events (game_start) while the page is still starting.
+let analyticsState = "waiting";   // "waiting" | "on" | "off"
+const pendingEvents = [];
 
 const VOWELS = "aaaaeeeeeiiiooou";
 const EASY_CONS = "rrrsssttttnnnlllddcmpbgh";
@@ -3220,7 +3224,7 @@ const AD_UNITS = {
 // Shown at the bottom of Help so players and reviewers can quote it. Keep in step with versionName (Android) and MARKETING_VERSION (iOS).
 const APP_VERSION = "1.3";
 // Filled in by the build with the commit and build time, so testers can tell builds apart.
-const BUILD_STAMP = "a969936 2026-11-22 22:36Z";
+const BUILD_STAMP = "ade3d16 2026-11-26 23:33Z";
 let adsReady = false;
 
 // Test builds say which ad step failed, so a tester can report it; store builds stay quiet.
@@ -3238,9 +3242,15 @@ async function initAds() {
     // the consent step is done: answered where it's required (EU, UK), or not needed at all.
     if (info.status === "OBTAINED" || info.status === "NOT_REQUIRED") {
       await window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({ enabled: true }).catch(() => {});
+      store.set("wb-analytics-ok", true);
+      analyticsReady(true);
       track("day_n", { day: daysSinceFirst() });   // which day since the first launch the player came back
-    }
-  } catch (e) { adProblem("consent", e); }
+    } else analyticsReady(false);
+  } catch (e) {
+    adProblem("consent", e);
+    // Offline or a consent hiccup: a phone that already said yes keeps counting (Firebase holds the events until it's online).
+    analyticsReady(store.get("wb-analytics-ok", false));
+  }
   if (PLATFORM === "ios") await AdMob.requestTrackingAuthorization().catch(() => {});
   try {
     await AdMob.initialize({ initializeForTesting: ADS_TESTING });
@@ -3381,8 +3391,26 @@ function whereNow() {
   if (!document.getElementById("modal").hidden && document.getElementById("next")) return "level_card";
   return "playing";
 }
+// Analytics starts switched off and turns on only after the consent step (see initAds). Events from the first
+// minutes of a brand-new install (lessons, level 1) used to be lost because they were logged before that, so
+// Firebase saw almost no new Wordglow players (Alan's fresh-install test, 2026-11-26). They now wait here and are
+// sent once analytics is on, or dropped if the player said no.
 function track(name, params = {}) {
-  try { window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({ name, params }); } catch {}
+  try {
+    if (!window.Capacitor?.isNativePlatform?.() || analyticsState === "off") return;
+    if (analyticsState === "waiting") { if (pendingEvents.length < 60) pendingEvents.push([name, params]); return; }
+    window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({ name, params });
+  } catch {}
+}
+function analyticsReady(on) {
+  analyticsState = on ? "on" : "off";
+  const waiting = pendingEvents.splice(0);
+  // Test builds say when analytics turned on, so a fresh-install check can tell a slow consent step from a lost event.
+  if (ADS_TESTING) toast(`Ad test: analytics ${on ? "on" : "off"} after ${((performance.now()) / 1000).toFixed(1)}s\n${waiting.length} early events ${on ? "sent" : "dropped"}`, false, READ_MS);
+  if (!on) return;
+  // Our own once-per-install event, so new players can be counted even if Firebase's first_open was missed.
+  if (!store.get("wb-first-launch-sent", false)) { store.set("wb-first-launch-sent", true); track("first_launch", { day: daysSinceFirst() }); }
+  waiting.forEach(([n, p]) => track(n, p));
 }
 // Crash reporting (Firebase Crashlytics in the apps). Native crashes are caught by the plugin itself;
 // this also sends game script errors as non-fatal reports, at most 5 per session so a loop can't spam.
@@ -3397,7 +3425,10 @@ function reportError(message, stack) {
     crash.recordException({ message: String(message).slice(0, 500) }).catch(() => {});
   } catch {}
 }
-window.addEventListener("error", e => reportError(e.message || "Script error", e.error?.stack));
+// "ResizeObserver loop ..." is a harmless browser notice (a refit changed a size inside the observer, so the
+// browser finishes it next frame). Nothing breaks for the player, so it isn't sent as an error report.
+const harmless = m => /ResizeObserver loop/i.test(String(m || ""));
+window.addEventListener("error", e => { if (!harmless(e.message)) reportError(e.message || "Script error", e.error?.stack); });
 window.addEventListener("unhandledrejection", e => reportError("Unhandled: " + (e.reason?.message || e.reason), e.reason?.stack));
 const noAds = () => store.get("wb-noads", false);
 // Welcome offer: the first coin pack a player buys gives double coins.
