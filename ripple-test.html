@@ -452,20 +452,21 @@ body[data-theme="moon"] #winCard .btn:not(.primary){background:#eef4ff;color:#20
       android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
   ];
 
-  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  // BHPromo.init({ self, prefix, store, track, kids, test }) once at start-up, after the store helper exists.
   //   self:   this game's id (it is never promoted to itself)
   //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
   //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
   //   track:  optional analytics function (event, params); omit in kids games
+  //   test:   true only in test/beta builds (pass the game's test-build flag); false or missing in store builds
   // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
-  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game, only when test is true.
   const BHPromo = {
     games: BH_GAMES, opts: null, installed: {}, sessions: 0,
     init(opts) {
       this.opts = opts;
       const s = opts.store, k = opts.prefix + "promo-sessions";
       this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
-      this.preview = /[?&]promo\b/.test(location.search);
+      this.preview = !!opts.test && /[?&]promo\b/.test(location.search);
       const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
       if (L && p !== "web") for (const g of this.pool()) {
         const url = p === "ios" ? g.iosScheme : g.androidPkg;
@@ -776,6 +777,9 @@ var CHAL = [{"k":0,"src":4,"tf":"mirror","level":{"w":5,"h":5,"big":0,"name":"St
 <script>
 (function () {
 'use strict';
+// Set first, before anything else in the game can fail: an error later in start-up must never hide cloud save
+// (same fix as Wordglow #117 and Sumburst #48). Sign in with Apple is set up for Pebble Pond (ios/App/App/App.entitlements).
+if (window.BHCloud && BHCloud.config) BHCloud.config.appleReady = true;
 var L = window.RippleLogic;
 
 /* ---------- save: one tiny store helper, everything under one key prefix ---------- */
@@ -3034,7 +3038,7 @@ $('btnNext').addEventListener('click', function () {
 $('btnChapterClose').addEventListener('click', function () { $('chapterCard').classList.add('hidden'); showSelect(); });
 $('btnHowTo').addEventListener('click', function () { $('howCard').classList.remove('hidden'); });
 try { // v0.14.5 (Alan 11-15): shared Bright Harbor cross-promo; its promo-* keys stay on this phone (not in cloudData)
-  if (window.BHPromo) { BHPromo.init({ self: 'pebblepond', prefix: '', store: store });
+  if (window.BHPromo) { BHPromo.init({ self: 'pebblepond', prefix: '', store: store, test: tester });
     var bhList = BHPromo.forHelp(); if (bhList.length) { $('bhMoreList').innerHTML = bhList.map(function (g) { return BHPromo.card(g, 'help'); }).join(''); BHPromo.wire($('bhMoreList'), 'help'); $('bhMore').classList.remove('hidden'); } }
 } catch (e) {}
 $('btnHowClose').addEventListener('click', function () { $('howCard').classList.add('hidden'); });
@@ -3551,7 +3555,6 @@ function renderCloud() {
       .then(renderCloud); };
 }
 if (window.BHCloud) {
-  BHCloud.config.appleReady = true; // Sign in with Apple entitlement is in the iPhone app (ios/App/App/App.entitlements)
   if (BHCloud.onChange) BHCloud.onChange(renderCloud);
   BHCloud.init().then(function () { afterSync(); renderCloud(); }, function () {});
   document.addEventListener('visibilitychange', function () { if (document.hidden) BHCloud.flush(); });
