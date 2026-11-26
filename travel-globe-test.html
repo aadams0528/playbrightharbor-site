@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="robots" content="noindex, nofollow">
-<!-- Tripsake v0.32.21 (round 55 fixes) -->
+<!-- Tripsake v0.32.22 (start screen, one-tap sample trips) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#060a14">
@@ -560,8 +560,15 @@ button.x{min-width:44px;min-height:44px}
 @media (max-width:899px){.grab{padding:14px 0 12px;min-height:40px;align-items:center}.grab i{width:56px;height:6px}.stats{touch-action:none}}
 .brand h1,.layersbtn{white-space:nowrap}
 @media (max-width:380px){.brand h1{font-size:calc(24px * var(--fs,1))}.layersbtn{padding:0 12px;font-size:calc(17px * var(--fs,1))}}
+#boot{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:radial-gradient(circle at 50% 42%,rgba(242,178,74,.16),transparent 55%),var(--space);transition:opacity .25s ease;animation:bootout 0s 4s forwards}
+#boot h1{margin:0;font-family:var(--display);font-weight:400;font-size:44px;line-height:1;color:var(--ink)}#boot h1 em{color:var(--lit-soft)}
+#boot p{margin:0;font-size:18px;color:var(--muted)}
+#boot.go{opacity:0;pointer-events:none}
+@keyframes bootout{to{opacity:0;visibility:hidden;pointer-events:none}}
+@media (prefers-reduced-motion:reduce){#boot{transition:none}}
 </style>
 
+<div id="boot" aria-hidden="true"><h1>Trip<em>sake</em></h1><p>Lighting up your globe…</p></div><!-- a quick branded start screen instead of the empty shell (Nikola r55, Alan yes 11-26); it hides itself after 4 s even if the page fails -->
 </head><body>
 <div class="app">
   <div class="stage" id="stage">
@@ -1631,7 +1638,7 @@ function renderBody(){
     h += `<button class="morerow" data-tips-again><div class="flag ring">?</div><div class="txt"><div class="t">Show tips again</div><div class="s">Bring back the help lines you've already seen</div></div></button>`;
     });
   }
-  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.32.21${PRACTICE ? " · practice profile (this tab only)" : ""} · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
+  if (tab === "more") h += `<div class="foot">Tripsake prototype v0.32.22${PRACTICE ? " · practice profile (this tab only)" : ""} · sample data · photos are drawn placeholders · place names from GeoNames (CC BY 4.0)</div>`;
   b.innerHTML = h; watchFirst();
 }
 const firstRO = typeof ResizeObserver === "function" ? new ResizeObserver(() => { if (typeof sheetPos !== "undefined" && sheetPos === "half") halfAgain(); }) : null;
@@ -2198,7 +2205,7 @@ function openLoader(){
     <div id="ldCustom" hidden style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="l" for="ldFrom">From</label><input type="date" id="ldFrom"></div><div><label class="l" for="ldTo">To</label><input type="date" id="ldTo"></div></div>
     ${NATIVE_LIB ? `<button class="btn primary ldgo" data-ld-native>Get my photos</button><p class="ldhow" style="margin:0">Tripsake looks through your photos from that time and finds the trips. Nothing is uploaded.</p>` : `<label class="btn primary ldgo" style="cursor:pointer">Choose photos<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>
     <p class="ldhow" style="margin:0">On iPhone, tap <b>Options</b> at the top of the picker and turn on <b>Location</b>, or the trips can't be placed.</p>`}
-    ${REAL_TRIPS.length ? "" : `<button class="btn" data-sample-photos style="justify-content:center;min-height:52px">▶ No photos handy? Practice with the sample set</button>`}
+    ${REAL_TRIPS.length ? "" : `<button class="btn" data-sample-photos data-quick style="justify-content:center;min-height:52px">▶ No photos handy? Add 4 sample trips</button>`}
     <details class="ldtips"><summary>More help and other ways</summary><p class="note" style="margin:6px 0">Select a lot at once, or all of them. Only photos inside your time period are used. <b>In the phone app there's no picking:</b> it reads your photo library for these dates by itself. A web page isn't allowed to open your album, so here you choose the photos. A computer works too.</p>
     <div class="row-btns" style="margin:0">${NATIVE_LIB ? `<label class="btn" style="cursor:pointer">Pick photos myself<input type="file" id="ldFiles" accept="image/*,.heic,.heif" multiple hidden></label>` : ""}${REAL_TRIPS.length ? `<button class="btn" data-sample-photos>Practice with the sample set</button>` : ""}<button class="btn" data-ld-manual>Make one trip by hand</button></div></details>
     <div id="ldProg" class="note" style="margin:0"></div></div>`, "loader");
@@ -2338,8 +2345,9 @@ function memFinish(pts, o, prog){ const {noLoc, noLocNames, noLocPts, outside, w
     const tr = buildTrip(pts); tr.keep = true; const nm = o.title != null ? o.title : ($("#ldManTitle") || {}).value; if (nm && nm.trim()) tr.title = nm.trim().slice(0, 80); else if (loadState.homeMem) tr.title = `${tr.stops[0].name}, ${fmtShort(tr.start)}`; if (loadState.homeMem) tr.homeMem = true; loadState.trips = [tr]; }
   else loadState.trips = findTrips(pts, loadState.home);
   if (!loadState.homeOk && !loadState.manual && !loadState.sample){ openHomeSheet("review"); return; } // ask where home is, rather than guessing it from the photos
-  loadState.homeOk = true; openReview();
+  loadState.homeOk = true; openReview(); if (loadState.quick) quickAdd();
 }
+function quickAdd(tries = 0){ const L = loadState; if (!L || !L.quick) return; const b = document.querySelector("[data-ld-add]"); if (b && !b.disabled && !L.lastChecking && document.querySelector("[data-ld-keep]:checked")){ addRealTrips(); return; } if (tries < 60) setTimeout(() => quickAdd(tries + 1), 100); } /* add every found sample trip as soon as the review has finished checking */
 const blobURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
 // iPhone HEIC photos: Chrome, Edge and Firefox read their date and place but can't draw them, so convert those on this device
 const isHeic = f => /\.(heic|heif)$/i.test(f.name || "") || /hei[cf]/i.test(f.type || "");
@@ -2705,7 +2713,7 @@ async function addRealTripsRun(L, pick, names, hideSample){
   if (!L.sample && (!L.manual || store.get("realHome", null))) store.set("realHome", {lat:L.home.lat, lon:L.home.lon, label:L.home.label}); /* a trip made by hand never sets your home by guessing */
   if (L.manual) try { sessionStorage.removeItem("tgManName"); } catch(e){}
   store.set("hideSample", hideSample);
-  try { sessionStorage.setItem("tgRealAdded", JSON.stringify({n:out.length, ids:out.map(t => t.id), joined, failed, heicFails, heicUsed, saved:Math.max(0, done - failed), already:L.lastAlready || 0, left:L.leftNote || "", first:!store.get("launchSeen", false)})); } catch(e){}
+  try { sessionStorage.setItem("tgRealAdded", JSON.stringify({n:out.length, ids:out.map(t => t.id), joined, failed, heicFails, heicUsed, saved:Math.max(0, done - failed), already:L.lastAlready || 0, left:L.leftNote || "", first:!store.get("launchSeen", false), quick:!!L.quick})); } catch(e){}
   SAVING = false; closeSheet(true); await refreshTrips(); realAddedNotice();
 }
 const addedCount = v => { const ts = (v.ids || []).map(id => TRIPS.find(t => t.id === id)).filter(Boolean); return ts.length === v.n ? tmCount(ts) : plural(v.n, "trip"); }; /* a memory added is counted as a memory */
@@ -2719,6 +2727,7 @@ function realAddedNotice(){ let v = null; try { v = JSON.parse(sessionStorage.ge
 function openLaunchpad(v){
   const ids = [...(v.ids || []), ...(v.joined || []).map(j => j.id)].filter((id, k, a) => id && a.indexOf(id) === k); const pc = u => stopsOf(u).reduce((a, s) => a + s.photos.length, 0); const trips = ids.map(id => TRIPS.find(t => t.id === id)).filter(Boolean).sort((a, b) => pc(b) - pc(a)); if (!trips.length) return false; /* the biggest trip leads */
   store.set("launchSeen", true); store.set("staged", false); /* your first trip is in: the extras under More show from now on */
+  if (v.quick){ closeSheet(true); tab = "trips"; store.set("tab", tab); renderTabs(); renderBody(); showList(); $("#tabbody").scrollTop = 0; setSheet("half"); toast(`Added ${tmCount(trips)} from the sample set`); return true; } /* one tap: straight to Trips, no ready screen */
   const t = trips[0], st = stopsOf(t), n = st.reduce((a, s) => a + s.photos.length, 0), onlyJoin = !v.n;
   const mem = trips.every(u => u.homeMem), head = trips.length > 1 ? `Your ${tmCount(trips)} are ready` : onlyJoin ? "Your trip is updated" : mem ? "Your memory is ready" : "Your trip is ready";
   const receipt = [`${plural(v.saved || 0, "photo")} saved`, v.already ? `${v.already.toLocaleString()} already on your globe, so not saved twice` : "", v.failed ? `${plural(v.failed, "photo")} couldn't be opened here${v.heicFails ? " (iPhone HEIC; try Safari)" : ""}, so ${v.failed === 1 ? "it wasn't" : "they weren't"} saved. The ${v.failed === 1 ? "original is" : "originals are"} still safe in your photo library` : "", v.left ? `left out: ${v.left}` : "", "nothing on your phone was changed"].filter(Boolean).join(" · ");
@@ -4487,7 +4496,7 @@ document.addEventListener("click", e => {
   if (g("[data-pr-rot]")){ prRotate(); return; }
   if (g("[data-pr-cover]")){ COVERS[prev.trip.id] = prev.list[prev.i].id; store.set("covers", COVERS); toast("Cover set"); drawPhotoReview(); return; }
   if (g("[data-pr-done]")){ prDone(); return; }
-  if (g("[data-sample-photos]")){ trySamplePhotos(); return; }
+  if ((b = g("[data-sample-photos]"))){ trySamplePhotos(b.hasAttribute("data-quick")); return; }
   if (g("[data-ld-native]")){ nativeImport(); return; }
   if (g("[data-open-settings]")){ try { window.location.href = "app-settings:"; } catch(er){} return; }
   if (g("[data-sample-look]")){ store.set("guideShown", true); /* "just look around" means one dismissal, not a second sheet; the guide waits under More (Muse r33) */ globeDark = false; closeSheet(); $("#scan").hidden = false; introRunning = true; intro(); return; }
@@ -4631,8 +4640,8 @@ function samplePhotoFiles(){
   return L.map((p, i) => { const durl = photo(p.scene, "sample-import-" + i, 800, 600); const bin = atob(durl.split(",")[1]); const raw = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) raw[k] = bin.charCodeAt(k);
     return new File([exifJPEG(raw, p.t, p.lat, p.lon)], p.name, {type:"image/jpeg", lastModified:p.t}); });
 }
-async function trySamplePhotos(){
-  openLoader(); loadState.period = "all"; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x.dataset.ldPeriod === "all"));
+async function trySamplePhotos(quick){ /* quick: one tap adds the 4 sample trips and lands on Trips (Nikola r55, Alan yes 11-26); the Add tab's "Practice adding photos" still walks through each step */
+  openLoader(); if (quick) loadState.quick = true; loadState.period = "all"; document.querySelectorAll("[data-ld-period]").forEach(x => x.setAttribute("aria-pressed", x.dataset.ldPeriod === "all"));
   $("#ldProg").textContent = "Making sample photos…"; await new Promise(r => setTimeout(r, 30));
   let files = []; try { files = samplePhotoFiles(); } catch(e){ $("#ldProg").textContent = "Couldn't make the sample photos in this browser."; return; }
   loadState.sample = true; processFiles(files);
@@ -4646,7 +4655,7 @@ function openWelcome(){ /* the guided first run: three plain steps; home is aske
     <p class="ldfound">Tripsake turns the photos from your trips into a story you can watch, on a globe.</p>
     <ol class="firstrun"><li><b>Pick photos</b> from a trip, or from a whole year</li><li><b>Check</b> the trips we find</li><li><b>Watch</b> your trip as a story</li></ol>
     ${loadState && loadState.awaitHome && loadState.pts && loadState.pts.length ? `<button class="btn primary ldgo" data-resume-review>Carry on with my ${plural(loadState.total || loadState.pts.length, "photo")}</button><button class="btn" data-load-photos style="align-self:stretch;justify-content:center;min-height:52px">Pick different photos</button>` : `<button class="btn primary ldgo" data-load-photos>Start: pick my photos</button>`}
-    <button class="btn" data-sample-photos style="align-self:stretch;justify-content:center;min-height:52px">Try it with sample photos</button>
+    <button class="btn" data-sample-photos data-quick style="align-self:stretch;justify-content:center;min-height:52px">Try it with sample trips</button>
     <button class="btn" data-sample-look style="align-self:stretch;justify-content:center;min-height:48px">Skip for now, just look around</button>
     <label class="linkbtn" style="cursor:pointer;align-self:center;text-align:center">New phone or computer? Restore from a backup file<input type="file" accept="application/json,.json,application/zip,.zip" id="importFileW" style="position:absolute;width:1px;height:1px;opacity:0"></label>
     <p class="ldhow">🔒 Your photos stay on this device. Nothing is uploaded, and there's no account.</p></div>`, "welcome");
@@ -4709,4 +4718,5 @@ else if (!REAL_TRIPS.length){ $("#scan").hidden = true; introRunning = false; gl
 else { intro(); store.set("seen", true); }
 if (PRACTICE) document.body.classList.add("practice"); if (PRACTICE){ let seen = false; try { seen = !!sessionStorage.getItem("tgPracticeSaid"); sessionStorage.setItem("tgPracticeSaid", "1"); } catch(e){} if (!seen) setTimeout(() => toast("Practice profile: this tab starts fresh and never touches your saved trips. To leave it, close the tab or tap Leave practice in More."), 400); } /* once per tab (Nikola r44) */ else { let left = false; try { left = !!sessionStorage.getItem("tgLeftPractice"); sessionStorage.removeItem("tgLeftPractice"); } catch(e){} if (left) setTimeout(() => toast("Back on your saved trips. The practice is gone."), 400); } setTimeout(tidyPracticeDBs, 3000); setTimeout(checkUndoSnap, 800); loadImages(); restoredNotice(); realAddedNotice(); sharedNotice(); openTripAfterReload(); if (FRIEND_TRY) setTimeout(() => { closeSheet(true); tryFriendFile(); }, 1500); setTimeout(journalCheck, 2500); if (REAL_TRIPS.length) $("#chipTag").textContent = NOSAMPLE ? "Prototype · your trips" : "Prototype · your trips + sample";
 requestAnimationFrame(loop);
+requestAnimationFrame(() => requestAnimationFrame(() => { const b = document.getElementById("boot"); if (!b) return; b.classList.add("go"); setTimeout(() => b.remove(), REDUCED() ? 0 : 300); })); /* the page is drawn: lift the start screen */
 </script>
