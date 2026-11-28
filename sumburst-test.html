@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <!-- Built from aadams0528/number-blast src/game.html (beta build) by scripts/build-test-pages.mjs. Unlisted test page: not linked from the site. Don't edit by hand; change the game repo instead. -->
 <title>Sumburst (test version)</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <!-- Google Analytics (Firebase web app "Bright Harbor site"): counts visits and the game's track() events from testers. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVY0M2MBJV"></script>
 <script>
@@ -16,8 +17,6 @@ gtag('config','G-WVY0M2MBJV',{page_title:'Sumburst test'});
 </script>
 </head>
 <body>
-<title>Sumburst</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -408,20 +407,21 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       android: "", ios: "", web: "https://playpebblepond.com", iosScheme: "pebblepond://", androidPkg: "com.playbrightharbor.pebblepond" },
   ];
 
-  // BHPromo.init({ self, prefix, store, track, kids }) once at start-up, after the store helper exists.
+  // BHPromo.init({ self, prefix, store, track, kids, test }) once at start-up, after the store helper exists.
   //   self:   this game's id (it is never promoted to itself)
   //   prefix: this game's storage prefix, e.g. "wb-" (keys <prefix>promo-*; keep them phone-only)
   //   store:  the game's store helper ({ get(key, fallback), set(key, value) })
   //   track:  optional analytics function (event, params); omit in kids games
+  //   test:   true only in test/beta builds (pass the game's test-build flag); false or missing in store builds
   // Then: BHPromo.forGameOver(offerShown) -> game or null; BHPromo.forHelp() -> list; BHPromo.card(game, where) -> HTML;
-  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game.
+  //       BHPromo.wire(rootEl, where) after inserting the HTML. ?promo in the URL previews every game, only when test is true.
   const BHPromo = {
     games: BH_GAMES, opts: null, installed: {}, sessions: 0,
     init(opts) {
       this.opts = opts;
       const s = opts.store, k = opts.prefix + "promo-sessions";
       this.sessions = s.get(k, 0) + 1; s.set(k, this.sessions);
-      this.preview = /[?&]promo\b/.test(location.search);
+      this.preview = !!opts.test && /[?&]promo\b/.test(location.search);
       const L = window.Capacitor?.Plugins?.AppLauncher, p = this.platform();
       if (L && p !== "web") for (const g of this.pool()) {
         const url = p === "ios" ? g.iosScheme : g.androidPkg;
@@ -465,12 +465,19 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 </script>
 <script>
 (function(){
+// Set first, before anything else in the game can fail: an error later in start-up must never hide cloud save
+// (Wordglow 1.3 TestFlight on Alan's iPhone showed no cloud save at all, 2026-11-22).
+if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple is set up for Sumburst (App.entitlements)
 const N=8, $=id=>document.getElementById(id);
 const boardEl=$('board'), trayEl=$('tray');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
              set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(!cloudApplying&&!DEVICE_ONLY.test(k))window.BHCloud?.changed?.()}};
 // Kept on this phone only, never sent to the cloud save: sound, ad and promo counters, delivered purchases.
-const DEVICE_ONLY=/^nb-(muted|sessions|promo-|free-ads-|granted-tx|reminder|tomorrow-seen)/;   // reminders need each phone's own permission
+const DEVICE_ONLY=/^nb-(muted|sessions|promo-|free-ads-|granted-tx|reminder|tomorrow-seen|analytics-ok|first-launch-sent)/;   // reminders need each phone's own permission, and so does analytics consent
+// Analytics events wait here until the consent step has switched analytics on (see track and initAds).
+// Declared up here because the game logs its first events while the page is still starting.
+let analyticsState='waiting';   // 'waiting' | 'on' | 'off'
+const pendingEvents=[];
 let cloudApplying=false;
 const esc=t=>String(t).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 
@@ -1174,18 +1181,40 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&actx&&!mu
 // ---------- analytics ----------
 // Events show where testers stop: each tutorial step, each level reached, and where a session ends.
 // Firebase in the apps; in a browser it goes to Google Analytics only if the page has set it up (gtag).
+// Analytics starts switched off in the apps and turns on only after the consent step (see initAds). Events from a
+// brand-new install's first minutes (the lessons, level 1) used to be logged before that and lost (found in Wordglow
+// and Color Rivers, 2026-11-26). They now wait here and are sent once analytics is on, or dropped if the player says no.
 function track(name,params={}){
-  try{window.Capacitor?.isNativePlatform?.()&&window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({name,params})}catch{}
+  try{
+    if(window.Capacitor?.isNativePlatform?.()&&analyticsState!=='off'){
+      if(analyticsState==='waiting'){if(pendingEvents.length<60)pendingEvents.push([name,params])}
+      else window.Capacitor.Plugins.FirebaseAnalytics?.logEvent({name,params});
+    }
+  }catch{}
   try{window.gtag?.('event',name,params)}catch{}
+}
+function analyticsReady(on){
+  analyticsState=on?'on':'off';
+  const waiting=pendingEvents.splice(0);
+  // Test builds say when analytics turned on, so a fresh-install check can tell a slow consent step from a lost event.
+  if(ADS_TESTING)toast(`Ad test: analytics ${on?'on':'off'} after ${(performance.now()/1000).toFixed(1)}s\n${waiting.length} early events ${on?'sent':'dropped'}`,false,READ_MS);
+  if(!on)return;
+  const fb=window.Capacitor?.Plugins?.FirebaseAnalytics;
+  // Our own once-per-install event, so new players are counted even if Firebase's own first_open was missed.
+  if(!store.get('nb-first-launch-sent',false)){store.set('nb-first-launch-sent',true);try{fb?.logEvent({name:'first_launch',params:{}})}catch{}}
+  waiting.forEach(([name,params])=>{try{fb?.logEvent({name,params})}catch{}});
 }
 let sessionStart=Date.now(),sessionEnded=false;
 const sessionsPlayed=store.get('nb-sessions',0)+1;store.set('nb-sessions',sessionsPlayed);
 
+// Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
+const ADS_TESTING='beta'!=='release';
+
 // ---------- More from Bright Harbor: send players to our other live games ----------
 // The shared studio helper (bh-games.js) holds the game list and the rules: live in this phone's store only
 // (iPhone needs an App Store link), not in the first 3 sessions, at most every 3rd game over, never beside
-// the keep-playing offer, hidden when installed, 30-day rest after a tap. Add ?promo to preview every game.
-BHPromo.init({self:'sumburst',prefix:'nb-',store,track});
+// the keep-playing offer, hidden when installed, 30-day rest after a tap. Add ?promo to preview every game (test builds only).
+BHPromo.init({self:'sumburst',prefix:'nb-',store,track,test:ADS_TESTING});
 function endSession(){
   if(sessionEnded)return;sessionEnded=true;
   track('session_end',{mode,level,score,in_tutorial:!!tut,tutorial_step:tut?tut.step+1:0,board_fill:board.filter(Boolean).length,seconds:Math.round((Date.now()-sessionStart)/1000),
@@ -1779,8 +1808,6 @@ const AD_UNITS={
   android:{rewarded:'ca-app-pub-7780493483551677/3877267805',interstitial:'ca-app-pub-7780493483551677/8968803225'},
   ios:{rewarded:'ca-app-pub-7780493483551677/5006516646',interstitial:'ca-app-pub-7780493483551677/3693434974'},
 };
-// Test ads for beta builds. `npm run build:release` sets this to false; the plugin then shows real ads.
-const ADS_TESTING='beta'!=='release';
 let adsReady=false;
 // Consent and start-up are separate steps, so a consent failure still lets ads run (as non-personalized).
 // Beta builds say which step failed, so a tester can report it.
@@ -1790,8 +1817,15 @@ async function initAds(){
     let info=await AdMob.requestConsentInfo();
     if(info.isConsentFormAvailable&&info.status==='REQUIRED')info=await AdMob.showConsentForm();
     // Analytics starts switched off (Info.plist, AndroidManifest.xml) and turns on once consent is answered or not needed.
-    if(info.status==='OBTAINED'||info.status==='NOT_REQUIRED')window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({enabled:true}).catch(()=>{});
-  }catch(e){console.warn('Ad consent failed',e);if(ADS_TESTING)toast('Ads: consent step failed',false,READ_MS)}
+    if(info.status==='OBTAINED'||info.status==='NOT_REQUIRED'){
+      await window.Capacitor.Plugins.FirebaseAnalytics?.setEnabled({enabled:true}).catch(()=>{});
+      store.set('nb-analytics-ok',true);analyticsReady(true);
+    }else analyticsReady(false);
+  }catch(e){
+    // Offline or a consent hiccup: a phone that already said yes keeps counting (Firebase holds events until it's online).
+    analyticsReady(store.get('nb-analytics-ok',false));
+    console.warn('Ad consent failed',e);if(ADS_TESTING)toast('Ads: consent step failed',false,READ_MS);   // last, so testers see which step failed
+  }
   if(PLATFORM==='ios')await AdMob.requestTrackingAuthorization().catch(()=>{});
   try{await AdMob.initialize({initializeForTesting:ADS_TESTING});adsReady=true}
   catch(e){console.warn('Ads unavailable',e);if(ADS_TESTING)toast('Ads: start-up failed',false,READ_MS)}
@@ -2037,7 +2071,12 @@ function renderExpertHelp(){
 }
 // "Save progress to the cloud" at the top of Help, only in the phone apps (see cloudsave.js).
 function renderCloudBox(){
-  const C=window.BHCloud,sheet=$('sheet');if(!C?.available||openTab!=='help')return;
+  const C=window.BHCloud,sheet=$('sheet');if(openTab!=='help')return;
+  if(!C?.available){
+    // A test build on a phone says why cloud save is missing, so a tester's screenshot shows the cause (Wordglow 2026-11-22).
+    const cap=window.Capacitor;
+    if(ADS_TESTING&&cap?.isNativePlatform?.()&&!sheet.querySelector('.cloudbox'))$('help-links').insertAdjacentHTML('beforebegin',`<div class="cloudbox"><small>Cloud save is off on this test build (${['cloudsave '+(C?'yes':'no'),'sign-in '+(cap.Plugins?.FirebaseAuthentication?'yes':'no'),'saves '+(cap.Plugins?.FirebaseFirestore?'yes':'no'),'Apple '+(C?.config?.appleReady?'yes':'no'),cap.getPlatform?.()].join(', ')}).</small></div>`);
+    return}
   sheet.querySelector('.cloudbox')?.remove();
   const who=C.user?.email||C.user?.displayName||'';
   $('help-links').insertAdjacentHTML('beforebegin',C.user
@@ -2356,9 +2395,8 @@ if(!welcomeBack())checkStreakAtRisk();
 weeklyHello();applyDeco();
 // A new day, week or holiday while the app was away; a phone left open overnight still gets the day-2 gift (Nikola round 11).
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){applyDeco();weeklyHello();if(!busy&&!drag&&$('modal').hidden)welcomeBack()}});
-scheduleReminders();   // pushes the next 7 days of reminders forward from today
-if(window.BHCloud?.config)BHCloud.config.appleReady=true;  // Sign in with Apple is set up for Sumburst (App.entitlements)
-window.BHCloud?.init?.();  // signed in before: fetch, merge and upload quietly
+try{scheduleReminders().catch(()=>{})}catch(e){}   // pushes the next 7 days of reminders forward from today; a reminder problem must not stop start-up
+try{window.BHCloud?.init?.()}catch(e){console.warn('Cloud save start failed',e)}  // signed in before: fetch, merge and upload quietly
 initAds();
 // Test hook for the playtest bot, only when the page is opened with ?test
 if(/[?&]test\b/.test(location.search))window.__nb={get S(){return {board,tray,target:T,level,score,erasers,shuffles,rotates,rotating,specials,over,busy,chain,mode,goals,tut,levelsSinceAd,movable:movable?movable.keys:null}},set:o=>{if('level'in o)level=o.level;if('score'in o)score=o.score;if('specials'in o)specials=o.specials;if('levelsSinceAd'in o)levelsSinceAd=o.levelsSinceAd;if('halfPaid'in o)halfPaid=o.halfPaid},findRuns,turned,fitsTurned,set2:o=>{if('rotates'in o)rotates=o.rotates;if('shuffles'in o)shuffles=o.shuffles;if('tray'in o)tray=o.tray;if('board'in o)board=o.board;if('coins'in o)addCoins(o.coins);if('toShuffle'in o)toShuffle=o.toShuffle},overNudge:k=>overNudge(k),finishTurn:()=>finishTurn(),newTray:()=>newTray(),checkGoals:e=>checkGoals(e),fill:()=>board.filter(Boolean).length,render:()=>renderAll(),levelUp:()=>levelUp(),dailyStars:c=>dailyStars(c),weekStars:()=>weekStars(),coins:()=>coins,mode:m=>{if(m)mode=m;return mode},gameOver:()=>gameOver(),openSheet:h=>openSheet(h),closeSheet:()=>closeSheet(),longSumTip:()=>longSumTip(),singleGaps:()=>singleGaps(),blast:()=>blast(),setChain:c=>{chain=c},startTut:()=>startTutorial(),endTut:k=>endTutorial(k),rotateIntro:()=>rotateIntro(),switchMode:m=>switchMode(m),setHint:()=>setHint(),giveTool:k=>giveTool(k),setLongPlaced:k=>{longPlaced=k},lesson:n=>{if(!tut)startTutorial();tut.step=n;loadLesson()},markPlayed:()=>markPlayed(),endSession:()=>endSession(),
